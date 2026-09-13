@@ -1,6 +1,7 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
 package dev.tachyonmcp.core.server;
 
+import static dev.tachyonmcp.core.test.TestUtils.parseJson;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.tachyonmcp.api.server.domain.RequestId;
@@ -8,9 +9,17 @@ import dev.tachyonmcp.core.server.internal.ServerEngine;
 import dev.tachyonmcp.core.server.session.SessionEvent;
 import java.util.Map;
 import java.util.function.Consumer;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 class McpDispatcherTest {
+
+    static Stream<Arguments> jsonNodeParams() {
+        return Stream.of(Arguments.of("{\"key\":\"value\"}"), Arguments.of("[1,\"two\"]"), Arguments.of("\"scalar\""));
+    }
 
     private static McpDispatcher.DispatchResult.Response asResponse(McpDispatcher.DispatchResult result) {
         assertThat(result).isInstanceOf(McpDispatcher.DispatchResult.Response.class);
@@ -103,6 +112,27 @@ class McpDispatcherTest {
                     .join());
             var body = result.responseBodyString();
             assertThat(body).contains("result");
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource("jsonNodeParams")
+    void requestEventRetainsJsonNodeParams(String paramsJson) {
+        try (ServerEngine server = newEngine(b -> b.session(s -> s.enabled(true)))) {
+            var session = server.createSession("sess_params");
+            session.activate();
+            var dispatcher = new McpDispatcher(server, server.executor());
+
+            dispatcher
+                    .dispatchRequestAsync(RequestId.of(1), "ping", parseJson(paramsJson), session.id())
+                    .join();
+
+            var requestEvent = server.replay(session.id(), -1).stream()
+                    .filter(SessionEvent.RequestEvent.class::isInstance)
+                    .map(SessionEvent.RequestEvent.class::cast)
+                    .findFirst()
+                    .orElseThrow();
+            assertThat(requestEvent.paramsJson()).isEqualTo(paramsJson);
         }
     }
 
