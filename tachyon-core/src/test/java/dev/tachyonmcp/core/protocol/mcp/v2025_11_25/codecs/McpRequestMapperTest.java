@@ -277,8 +277,8 @@ class McpRequestMapperTest {
         assertThat(empty.toolsListChanged()).isFalse();
         assertThat(empty.resourceSubscriptions()).isEmpty();
 
-        var filtered = mapper.subscriptionsListen(
-                Map.of("notifications", Map.of("toolsListChanged", true, "resourceSubscriptions", List.of("file:///a"))));
+        var filtered = mapper.subscriptionsListen(Map.of(
+                "notifications", Map.of("toolsListChanged", true, "resourceSubscriptions", List.of("file:///a"))));
         assertThat(filtered.toolsListChanged()).isTrue();
         assertThat(filtered.resourceSubscriptions()).containsExactly("file:///a");
     }

@@ -7,6 +7,7 @@ Output: <BASE>/java/<PACKAGE_PATH>/ (models/, codecs/, protocol/)
 #  Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors.
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -51,6 +52,94 @@ JSON_TREE_TYPES = (
 )
 
 STRING_NUMBER_UNIONS = {"ProgressToken", "RequestId"}
+
+CACHE_DIR_NAME = "ts2java-cache"
+
+
+# --- Incremental generation cache ---
+#
+# Staleness is checked via filesystem attributes (mtime + size) of the TS spec, the config
+# file, and this script itself, plus the CLI args that affect output shape. No file content
+# is hashed — stat() is cheap and sufficient, and matches what the pom.xml executions need
+# (skip re-running python3 + full TS parse when nothing relevant changed).
+#
+# Cache files live under <target>/ts2java-cache/, a sibling of generated-sources/ — never
+# under <base-dir>/java/, which is added as a compiler source root and must contain only
+# generated .java files. Each distinct invocation (ts file + output packages) gets its own
+# cache file so the three pom.xml executions sharing one base-dir don't clobber each other.
+
+
+def _stat_fingerprint(path):
+    if not path or not os.path.isfile(path):
+        return None
+    st = os.stat(path)
+    return {"path": os.path.abspath(path), "mtime_ns": st.st_mtime_ns, "size": st.st_size}
+
+
+def _find_target_dir(base_dir):
+    """Walk up from base_dir to the nearest ancestor named 'target' (Maven's build dir)."""
+    abs_base = os.path.abspath(base_dir)
+    parts = abs_base.split(os.sep)
+    if "target" in parts:
+        idx = parts.index("target")
+        return os.sep.join(parts[: idx + 1]) or os.sep
+    return abs_base
+
+
+def _cache_path_for(ts_path, base_dir, pkg_models, pkg_codecs, pkg_protocol):
+    stem = re.sub(r"[^A-Za-z0-9_.-]+", "_", os.path.splitext(os.path.basename(ts_path))[0])
+    ident = "|".join(
+        [
+            os.path.abspath(ts_path),
+            os.path.abspath(base_dir),
+            pkg_models or "",
+            pkg_codecs or "",
+            pkg_protocol or "",
+        ]
+    )
+    digest = hashlib.sha256(ident.encode("utf-8")).hexdigest()[:12]
+    cache_dir = os.path.join(_find_target_dir(base_dir), CACHE_DIR_NAME)
+    return os.path.join(cache_dir, f"{stem}-{digest}.json")
+
+
+def _build_fingerprint(ts_path, config_path, unknown_type):
+    return {
+        "script": _stat_fingerprint(os.path.abspath(__file__)),
+        "ts": _stat_fingerprint(ts_path),
+        "config": _stat_fingerprint(config_path) if config_path else None,
+        "unknown_type": unknown_type,
+    }
+
+
+def _dir_has_any_file(path):
+    if not os.path.isdir(path):
+        return False
+    for _root, _dirs, files in os.walk(path):
+        if files:
+            return True
+    return False
+
+
+def _load_cache(cache_path):
+    try:
+        with open(cache_path) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+def _is_cache_fresh(cache_data, fingerprint):
+    if not cache_data or cache_data.get("fingerprint") != fingerprint:
+        return False
+    output_dirs = cache_data.get("output_dirs") or []
+    return all(_dir_has_any_file(d) for d in output_dirs)
+
+
+def _save_cache(cache_path, fingerprint, output_dirs):
+    os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+    with open(cache_path, "w") as f:
+        json.dump({"fingerprint": fingerprint, "output_dirs": output_dirs}, f, indent=2)
+        f.write("\n")
 
 
 # --- TS Parser ---
@@ -3064,30 +3153,49 @@ if __name__ == "__main__":
         default=None,
         help="Path to JSON config file with typeMappings and additionalProperties",
     )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Ignore the incremental-generation cache and regenerate unconditionally",
+    )
     args = parser.parse_args()
 
     pkg = args.pkg_default
-
-    config = {}
-    if args.config:
-        with open(args.config) as f:
-            config = json.load(f)
-
-    type_mappings = config.get("typeMappings")
-    additional_properties = config.get("additionalProperties", {})
-    ignore_properties = config.get("ignoreProperties", {})
-
-    gen = Generator(
-        ts_path=args.ts,
-        base_dir=args.base_dir,
-        pkg_models=args.pkg_models or f"{pkg}.models",
-        pkg_codecs=args.pkg_codecs if args.pkg_codecs is not None else f"{pkg}.codecs",
-        pkg_protocol=(
-            args.pkg_protocol if args.pkg_protocol is not None else f"{pkg}.protocol"
-        ),
-        unknown_type=args.unknown_type,
-        type_mappings=type_mappings,
-        additional_properties=additional_properties,
-        ignore_properties=ignore_properties,
+    pkg_models = args.pkg_models or f"{pkg}.models"
+    pkg_codecs = args.pkg_codecs if args.pkg_codecs is not None else f"{pkg}.codecs"
+    pkg_protocol = (
+        args.pkg_protocol if args.pkg_protocol is not None else f"{pkg}.protocol"
     )
-    gen.generate()
+
+    cache_path = _cache_path_for(
+        args.ts, args.base_dir, pkg_models, pkg_codecs, pkg_protocol
+    )
+    fingerprint = _build_fingerprint(args.ts, args.config, args.unknown_type)
+
+    if not args.force and _is_cache_fresh(_load_cache(cache_path), fingerprint):
+        print(f"ts2java: up to date, skipping generation for {args.ts}")
+    else:
+        config = {}
+        if args.config:
+            with open(args.config) as f:
+                config = json.load(f)
+
+        type_mappings = config.get("typeMappings")
+        additional_properties = config.get("additionalProperties", {})
+        ignore_properties = config.get("ignoreProperties", {})
+
+        gen = Generator(
+            ts_path=args.ts,
+            base_dir=args.base_dir,
+            pkg_models=pkg_models,
+            pkg_codecs=pkg_codecs,
+            pkg_protocol=pkg_protocol,
+            unknown_type=args.unknown_type,
+            type_mappings=type_mappings,
+            additional_properties=additional_properties,
+            ignore_properties=ignore_properties,
+        )
+        gen.generate()
+
+        output_dirs = [d for d in (gen.dir_models, gen.dir_codecs, gen.dir_protocol) if d]
+        _save_cache(cache_path, fingerprint, output_dirs)

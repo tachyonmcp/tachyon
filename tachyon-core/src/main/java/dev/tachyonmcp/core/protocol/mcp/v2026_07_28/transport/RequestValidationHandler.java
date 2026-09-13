@@ -152,9 +152,7 @@ public final class RequestValidationHandler extends ChannelInboundHandlerAdapter
         if (methodRejection != null) return methodRejection;
 
         if (NAME_REQUIRED_METHODS.contains(method)) {
-            var bodyName = "resources/read".equals(method)
-                    ? asString(params.get("uri"))
-                    : asString(params.get("name"));
+            var bodyName = "resources/read".equals(method) ? asString(params.get("uri")) : asString(params.get("name"));
             var headerName = decodeName(req.headers().get(McpHeaderNames.MCP_NAME));
             if (headerName == null || !headerName.equals(bodyName)) {
                 return ServerErrors.headerMismatch("Header mismatch: " + McpHeaderNames.MCP_NAME + " header value '"
