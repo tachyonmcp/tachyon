@@ -2,6 +2,7 @@
 package dev.tachyonmcp.core.protocol.mcp.v2026_07_28.codecs;
 
 import dev.tachyonmcp.api.json.PayloadDeserializer;
+import dev.tachyonmcp.core.protocol.mcp.AbstractMcpRequestMapper;
 import dev.tachyonmcp.core.protocol.mcp.v2026_07_28.models.SubscriptionsListenRequestParams;
 import java.util.Objects;
 import java.util.Set;
@@ -15,7 +16,7 @@ import tools.jackson.databind.JsonNode;
  * <p>MCP 2026-07-28 ignores the legacy {@code tools/call.task} parameter. Task creation is
  * server-directed through the tasks extension (SEP-2663).
  */
-public final class McpRequestMapper extends dev.tachyonmcp.core.protocol.mcp.v2025_11_25.codecs.McpRequestMapper {
+public final class McpRequestMapper extends AbstractMcpRequestMapper {
 
     @Override
     public ToolCallRequest callTool(@Nullable Object params, PayloadDeserializer payloadDeserializer) {
@@ -23,13 +24,16 @@ public final class McpRequestMapper extends dev.tachyonmcp.core.protocol.mcp.v20
     }
 
     /**
-     * Prefers this version's codecs, falling back to 2025-11-25's for the request shapes inherited
-     * unchanged from the superclass, whose models come from that version's package.
+     * Prefers this version's codecs, falling back to 2025-11-25's for inherited request shapes,
+     * whose models come from that version's package.
      */
     @Override
     protected <T> T convert(JsonNode node, Class<T> type) {
-        var codec = CodecRegistry.codecFor(type);
-        return codec == null ? super.convert(node, type) : decodeParams(node, type, codec::decode);
+        final var codec = CodecRegistry.codecFor(type);
+        if (codec != null) return decodeParams(node, type, codec::decode);
+        final var fallback = dev.tachyonmcp.core.protocol.mcp.v2025_11_25.codecs.CodecRegistry.codecFor(type);
+        if (fallback == null) throw invalidParams("Unsupported params type " + type.getSimpleName());
+        return decodeParams(node, type, fallback::decode);
     }
 
     @Override
