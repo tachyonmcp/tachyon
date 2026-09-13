@@ -1,0 +1,45 @@
+---
+title: Testing
+tags: [module, testing, e2e, conformance]
+sources: [e2e/src/test/, conformance/, Makefile, tachyon-core/src/test/, .github/workflows/build.yml]
+updated: 2026-09-13
+commit: 5821ad56
+---
+
+# ✅ Testing
+
+Verdict: E2E-first (AGENTS.md). Real server on port 0, clients = official MCP Java SDK (`mcp-core` 2.0.1, `pom.xml:75`) **and** raw testkit clients. E2E packages split by protocol version. Conformance via `@modelcontextprotocol/conformance` with baselines.
+
+## 🏃 Run
+
+| Want | Command |
+|---|---|
+| all + lint + revapi (CI) | `make ci` (CI matrix runs this `.github/workflows/build.yml`) |
+| unit + e2e | `make test` |
+| one module | `mvn -q test -pl tachyon-core -am` |
+| Kotlin | `mvn test -pl tachyon-kotlin -am` |
+| conformance | `make conformance` |
+| format/lint | `make format` / `make lint` (Spotless + Detekt; SpotBugs in build) |
+
+`e2e`, `conformance`, `reports` are profile modules in root `pom.xml` — not in default module list.
+
+## 🗂️ e2e layout (`e2e/src/test/java/dev/tachyonmcp/e2e/mcp/`)
+
+| Dir | Content |
+|---|---|
+| root | version-agnostic + abstract contracts: `AbstractMcpE2eTest`, `AbstractStatelessMcpE2eTest`, `Abstract*ContractTest` (resource, schema validation, string schema, tool capabilities, tool errors), `SharedE2eServer`, `SharedStatelessE2eServer`, `AcceptHeaderValidationTest`, `DnsRebindingTest`, `MaxContentLengthTest`, `ListPaginationE2eTest`, `ProgressKeepAliveTest`, `SseHeartbeatTest`, `ShutdownDrainTest`, `PostStartRegistrationTest`, `TypedToolRegistrationTest`, `PayloadSerdeTest`, `NativeTransportDetectionTest`, `McpSdkContract` |
+| `v2025_11_25/` | stateful: sessions lifecycle, janitor, SSE polling/retry/replay-per-stream/POST reconnect redelivery, cancellation, logging, tasks (augmented, core, extension, optional ops), custom session id, extensions, input-required, SDK tests; concrete subclasses of abstract contracts |
+| `v2026_07_28/` | stateless: discover, meta validation, header validation (+custom `Mcp-Param`), removed methods, unsupported version, extension negotiation, missing capability, log-level gating, subscriptions/listen, tasks extension, caching hints, structured output schema shape, contracts |
+| `e2e/src/test/kotlin/dev/tachyonmcp/e2e/` | Kotlin DSL e2e |
+
+Pattern: abstract contract in root, one subclass per protocol package → same behavior asserted on both wires.
+
+## 📏 Conformance
+
+`conformance/src/test/java/dev/tachyonmcp/conformance/`: `DefaultConformanceServer` + `EdgeConformanceServer`, `*ServerConformanceTest`, `ConformanceRunner`, `ConformanceReportWriter`. Baselines `conformance/conformance-baseline-0.1.yml`, `-0.2.yml` (known failures).
+
+## 🧪 Unit tests
+
+See module pages: [[tachyon-core]], [[tachyon-api]], [[tachyon-kotlin]], [[tachyon-extensions]]. Rules (AGENTS.md): JUnit 6, AssertJ (Java) / Kotest (Kotlin), Awaitility, `@TempDir`, `TachyonServer` as SUT, many asserts per test, no tautologies; drop unit test when e2e covers.
+
+Related: [[tachyon-testkit]].
