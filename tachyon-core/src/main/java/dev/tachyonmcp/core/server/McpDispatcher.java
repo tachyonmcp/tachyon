@@ -257,6 +257,8 @@ public class McpDispatcher {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(method, "method");
 
+        logger.trace("Dispatching request for method {}", method);
+
         var kind = METHOD_INITIALIZE.equals(method) ? OperationKind.INITIALIZE : OperationKind.REQUEST;
         var info = newOperationInfo(kind, method, id, sessionId, params, channelContext);
         var observation = Observation.start(observationListeners(), info);
@@ -329,7 +331,10 @@ public class McpDispatcher {
     private @Nullable RpcMethodHandler<?, ?> lookupHandler(String method, Object params, DispatchContext ic) {
         var owningExtensionId = server.extensionForMethod(method);
         if (owningExtensionId != null) {
-            if (!ic.isExtensionEnabled(owningExtensionId)) return null;
+            if (!ic.isExtensionEnabled(owningExtensionId)) {
+                logger.trace("Extension {} is disabled", owningExtensionId);
+                return null;
+            }
             if (server.extensionRequiresMeta(owningExtensionId)
                     && !ic.requestMapper().hasMetaKey(params, owningExtensionId)) return null;
         }

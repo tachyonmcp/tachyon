@@ -80,6 +80,11 @@ public final class SkillsExtension implements ServerExtension {
     }
 
     @Override
+    public boolean requiresMetaEnvelope() {
+        return false;
+    }
+
+    @Override
     public AdvertiseMode advertiseMode() {
         return AdvertiseMode.ALWAYS;
     }
