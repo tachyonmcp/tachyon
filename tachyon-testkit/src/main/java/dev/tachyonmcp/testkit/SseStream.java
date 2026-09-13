@@ -11,7 +11,9 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
+import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -47,7 +49,7 @@ public final class SseStream extends QueueSubscriber<SseFrame> implements AutoCl
 
     private @Nullable Socket socket;
     private @Nullable CompletableFuture<Void> responseConsumer;
-    private final StringBuilder rawResponse = new StringBuilder();
+    private final Queue<String> rawChunks = new ConcurrentLinkedQueue<>();
     private volatile boolean stopped;
 
     /**
@@ -211,8 +213,8 @@ public final class SseStream extends QueueSubscriber<SseFrame> implements AutoCl
      *
      * @return the raw response text
      */
-    public synchronized String rawResponse() {
-        return rawResponse.toString();
+    public String rawResponse() {
+        return String.join("", rawChunks);
     }
 
     /**
@@ -242,9 +244,7 @@ public final class SseStream extends QueueSubscriber<SseFrame> implements AutoCl
                 if (n < 0) break;
                 if (n == 0) continue;
                 var chunk = new String(buf, 0, n, StandardCharsets.UTF_8);
-                synchronized (this) {
-                    rawResponse.append(chunk);
-                }
+                rawChunks.add(chunk);
                 lineBuf.append(chunk);
                 int newline;
                 while ((newline = lineBuf.indexOf("\n")) >= 0) {
