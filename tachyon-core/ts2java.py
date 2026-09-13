@@ -1548,23 +1548,18 @@ class Generator:
         emit_import("tools.jackson.core.JsonGenerator")
         emit_import("tools.jackson.core.JsonParser")
         emit_import("tools.jackson.core.JsonToken")
-        emit_import("tools.jackson.databind.JsonNode")
         if self.unknown_type == "TokenBuffer":
             emit_import("tools.jackson.databind.util.TokenBuffer")
-        if self.unknown_type == "byte[]":
-            emit_import("tools.jackson.databind.util.TokenBuffer")
-            emit_import("java.io.ByteArrayOutputStream")
-            emit_import("java.io.ByteArrayInputStream")
-            emit_import("tools.jackson.core.ObjectReadContext")
-            emit_import("tools.jackson.core.ObjectWriteContext")
-            emit_import("tools.jackson.core.json.JsonFactory")
         if any("java.util.List" in c[0] for c in components):
             emit_import("java.util.ArrayList")
             emit_import("java.util.List")
         if has_additional or any("java.util.Map" in c[0] for c in components):
-            emit_import("java.util.LinkedHashMap")
             emit_import("java.util.Map")
-        emit_import("java.io.IOException")
+            emit_import("tools.jackson.databind.JsonNode")
+        if has_additional:
+            emit_import("java.util.LinkedHashMap")
+        if any(c[0] in JSON_TREE_TYPES or "java.util.List<tools.jackson.databind" in c[0] for c in components):
+            emit_import("tools.jackson.databind.JsonNode")
         emit_import("javax.annotation.processing.Generated")
         if is_inner:
             owner = self.top_owner(model_name)
@@ -1623,9 +1618,8 @@ class Generator:
         out.append(f"    public {codec_name}() {{}}\n\n")
 
         # --- DECODE ---
-        out.append(
-            f"    public {qname} decode(JsonParser parser) throws IOException {{\n"
-        )
+        out.append("    @Override\n")
+        out.append(f"    public {qname} decode(JsonParser parser) {{\n")
         for typ, fname, optional, _, _ in regular:
             if "java.util.List" in typ:
                 item = typ.split("<")[1][:-1]
@@ -1672,99 +1666,90 @@ class Generator:
                 )
             if is_raw_json_str:
                 out.append(
-                    f"                    {fname} = parser.readValueAsTree().toString();\n"
+                    f"                    {fname} = CodecSupport.readRawJson(parser);\n"
                 )
             elif typ == "String":
-                out.append(f"                    {fname} = parser.getString();\n")
-            elif typ in ("boolean", "Boolean"):
-                out.append(f"                    {fname} = parser.getBooleanValue();\n")
-            elif typ in ("long", "Long"):
-                out.append(f"                    {fname} = parser.getLongValue();\n")
-            elif typ in ("double", "Double"):
-                out.append(f"                    {fname} = parser.getDoubleValue();\n")
+                out.append(f"                    {fname} = CodecSupport.decodeString(parser);\n")
+            elif typ == "boolean":
+                out.append(f"                    {fname} = CodecSupport.decodeBoolean(parser, false);\n")
+            elif typ == "Boolean":
+                out.append(f"                    {fname} = CodecSupport.decodeBoolean(parser);\n")
+            elif typ == "long":
+                out.append(f"                    {fname} = CodecSupport.decodeLong(parser, 0L);\n")
+            elif typ == "Long":
+                out.append(f"                    {fname} = CodecSupport.decodeLong(parser);\n")
+            elif typ == "double":
+                out.append(f"                    {fname} = CodecSupport.decodeDouble(parser, 0.0);\n")
+            elif typ == "Double":
+                out.append(f"                    {fname} = CodecSupport.decodeDouble(parser);\n")
             elif typ == "byte[]":
-                out.append(f"                    {fname} = parser.getBinaryValue();\n")
+                out.append(f"                    {fname} = CodecSupport.decodeBinary(parser);\n")
             elif typ == "java.time.Instant":
-                if optional and not is_nullable_required:
-                    out.append(
-                        f"                    {fname} = parser.currentToken() == JsonToken.VALUE_NULL\n"
-                        f"                            ? null\n"
-                        f"                            : java.time.Instant.parse(parser.getString());\n"
-                    )
-                else:
-                    out.append(
-                        f"                    {fname} = java.time.Instant.parse(parser.getString());\n"
-                    )
+                out.append(
+                    f"                    {fname} = parser.currentToken() == JsonToken.VALUE_NULL\n"
+                    f"                            ? null\n"
+                    f"                            : java.time.Instant.parse(parser.getString());\n"
+                )
             elif typ == "java.time.Duration":
-                if optional and not is_nullable_required:
-                    out.append(
-                        f"                    {fname} = parser.currentToken() == JsonToken.VALUE_NULL\n"
-                        f"                            ? null\n"
-                        f"                            : java.time.Duration.ofMillis(parser.getLongValue());\n"
-                    )
-                else:
-                    out.append(
-                        f"                    {fname} = java.time.Duration.ofMillis(parser.getLongValue());\n"
-                    )
+                out.append(
+                    f"                    {fname} = parser.currentToken() == JsonToken.VALUE_NULL\n"
+                    f"                            ? null\n"
+                    f"                            : java.time.Duration.ofMillis(parser.getLongValue());\n"
+                )
             elif "java.util.List" in typ:
                 item = typ.split("<")[1][:-1]
                 item_ref = self.ref_for_type(item, model_name)
+                is_scalar_item = item_ref in (
+                    "String", "boolean", "Boolean", "long", "Long", "double", "Double",
+                    *JSON_TREE_TYPES)
+                is_enum_item = self.is_enum_type(item)
                 out.append(
                     f"                    if (parser.currentToken() == JsonToken.START_ARRAY) {{\n"
                 )
                 out.append(
                     f"                        var list = new ArrayList<{item_ref}>();\n"
                 )
+                if not is_scalar_item and not is_enum_item:
+                    out.append(
+                        f"                        var {fname}Codec = CodecRegistry.<{item_ref}>codecFor({item_ref}.class);\n"
+                    )
                 out.append(
                     f"                        while (parser.nextToken() != JsonToken.END_ARRAY) {{\n"
                 )
-                if item_ref in (
-                        "String", "boolean", "Boolean", "long", "Long", "double", "Double",
-                        *JSON_TREE_TYPES):
+                if is_scalar_item:
                     out.append(
-                        f"                            list.add(decodeValue(parser, {item_ref}.class));\n"
+                        f"                            list.add(CodecSupport.decodeValue(parser, {item_ref}.class));\n"
                     )
-                elif self.is_enum_type(item):
+                elif is_enum_item:
                     out.append(
-                        f"                            list.add({item_ref}.fromValue(parser.getString()));\n"
+                        f"                            var {fname}Value = CodecSupport.decodeString(parser);\n"
+                        f"                            if ({fname}Value != null) list.add({item_ref}.fromValue({fname}Value));\n"
                     )
                 else:
                     out.append(
-                        f"                            list.add(CodecRegistry.<{item_ref}>codecFor({item_ref}.class).decode(parser));\n"
+                        f"                            list.add({fname}Codec.decode(parser));\n"
                     )
                 out.append(f"                        }}\n")
                 out.append(f"                        {fname}List = list;\n")
+                out.append(f"                    }} else if (parser.currentToken() != JsonToken.VALUE_NULL) {{\n")
+                out.append(
+                    f'                        throw CodecSupport.wrongType(parser, "{json_name}", "an array");\n'
+                )
                 out.append(f"                    }}\n")
             elif typ in JSON_TREE_TYPES:
                 out.append(
-                    f"                    {fname} = decodeValue(parser, {typ}.class);\n"
+                    f"                    {fname} = CodecSupport.decodeValue(parser, {typ}.class);\n"
                 )
             elif "java.util.Map" in typ:
-                vt = typ.split("<")[1].split(">")[0].split(",")[-1].strip()
                 out.append(
-                    f"                    if (parser.currentToken() == JsonToken.START_OBJECT) {{\n"
+                    f'                    {fname}Map = CodecSupport.readTreeMap(parser, "{json_name}");\n'
                 )
-                out.append(
-                    f"                        var map = new LinkedHashMap<String, {vt}>();\n"
-                )
-                out.append(
-                    f"                        while (parser.nextToken() != JsonToken.END_OBJECT) {{\n"
-                )
-                out.append(
-                    f"                            String key = parser.currentName();\n"
-                )
-                out.append(f"                            parser.nextToken();\n")
-                out.append(
-                    f"                            map.put(key, parser.readValueAsTree());\n"
-                )
-                out.append(f"                        }}\n")
-                out.append(f"                        {fname}Map = map;\n")
-                out.append(f"                    }}\n")
             else:
                 base_type = self.registry_ref(typ, model_name)
                 if self.is_enum_type(typ):
                     out.append(
-                        f"                    {fname} = {base_type}.fromValue(parser.getString());\n"
+                        f"                    var raw{fname} = CodecSupport.decodeString(parser);\n"
+                        f"                    {fname} = raw{fname} == null ? null : {base_type}.fromValue(raw{fname});\n"
                     )
                 else:
                     out.append(
@@ -1773,8 +1758,10 @@ class Generator:
                     out.append(
                         f"                        {fname} = CodecRegistry.<{base_type}>codecFor({base_type}.class).decode(parser);\n"
                     )
-                    out.append(f"                    }} else {{\n")
-                    out.append(f"                        parser.skipChildren();\n")
+                    out.append(f"                    }} else if (parser.currentToken() != JsonToken.VALUE_NULL) {{\n")
+                    out.append(
+                        f'                        throw CodecSupport.wrongType(parser, "{json_name}", "an object");\n'
+                    )
                     out.append(f"                    }}\n")
             if is_nullable_required:
                 out.append("                    }\n")
@@ -1786,7 +1773,7 @@ class Generator:
                 "                    if (additionalProperties == null) additionalProperties = new LinkedHashMap<>();\n"
             )
             out.append(
-                "                    additionalProperties.put(fieldName, parser.readValueAsTree());\n"
+                "                    additionalProperties.put(fieldName, CodecSupport.readTree(parser));\n"
             )
             out.append("                }\n")
         else:
@@ -1812,9 +1799,8 @@ class Generator:
         out.append("    }\n\n")
 
         # --- ENCODE ---
-        out.append(
-            f"    public void encode(JsonGenerator gen, {qname} value) throws IOException {{\n"
-        )
+        out.append("    @Override\n")
+        out.append(f"    public void encode(JsonGenerator gen, {qname} value) {{\n")
         out.append("        gen.writeStartObject();\n")
         for typ, fname, optional, _, json_name in regular:
             acc = f"value.{fname}()"
@@ -1830,7 +1816,7 @@ class Generator:
             ):
                 # Required-but-nullable scalar: encodeValue writes the value, or a JSON null literal.
                 out.append(f'        gen.writeName("{json_name}");\n')
-                out.append(f"        encodeValue(gen, {acc});\n")
+                out.append(f"        CodecSupport.encodeValue(gen, {acc});\n")
                 continue
             if (
                 json_name in self.nullable_required.get(model_name, set())
@@ -1855,7 +1841,11 @@ class Generator:
                 ind = "        "
             if typ == "String" and self.field_type_mappings.get(f"{model_name}.{json_name}") == "String":
                 out.append(f'{ind}gen.writeName("{json_name}");\n')
-                out.append(f"{ind}gen.writeRawValue({acc});\n")
+                out.append(f"{ind}if ({acc} != null) {{\n")
+                out.append(f"{ind}    gen.writeRawValue({acc});\n")
+                out.append(f"{ind}}} else {{\n")
+                out.append(f"{ind}    gen.writeNull();\n")
+                out.append(f"{ind}}}\n")
             elif typ == "String":
                 out.append(f'{ind}gen.writeStringProperty("{json_name}", {acc});\n')
             elif typ in ("boolean", "Boolean"):
@@ -1871,31 +1861,32 @@ class Generator:
             elif typ == "java.time.Duration":
                 out.append(f'{ind}gen.writeNumberProperty("{json_name}", {acc}.toMillis());\n')
             elif "java.util.List" in typ:
-                out.append(f'{ind}gen.writeArrayPropertyStart("{json_name}");\n')
-                out.append(f"{ind}for (var item : {acc}) {{\n")
                 item = typ.split("<")[1][:-1]
                 item_ref = self.ref_for_type(item, model_name)
-                if item_ref in (
-                        "String", "boolean", "Boolean", "long", "Long", "double", "Double",
-                        *JSON_TREE_TYPES):
-                    out.append(f"{ind}    encodeValue(gen, item);\n")
-                elif self.is_enum_type(item):
+                is_scalar_item = item_ref in (
+                    "String", "boolean", "Boolean", "long", "Long", "double", "Double",
+                    *JSON_TREE_TYPES)
+                is_enum_item = self.is_enum_type(item)
+                if not is_scalar_item and not is_enum_item:
+                    out.append(
+                        f"{ind}var {fname}Codec = CodecRegistry.<{item_ref}>codecFor({item_ref}.class);\n"
+                    )
+                out.append(f'{ind}gen.writeArrayPropertyStart("{json_name}");\n')
+                out.append(f"{ind}for (var item : {acc}) {{\n")
+                if is_scalar_item:
+                    out.append(f"{ind}    CodecSupport.encodeValue(gen, item);\n")
+                elif is_enum_item:
                     out.append(f"{ind}    gen.writeString(item.getValue());\n")
                 else:
-                    out.append(
-                        f"{ind}    CodecRegistry.<{item_ref}>codecFor({item_ref}.class).encode(gen, item);\n"
-                    )
+                    out.append(f"{ind}    {fname}Codec.encode(gen, item);\n")
                 out.append(f"{ind}}}\n")
                 out.append(f"{ind}gen.writeEndArray();\n")
             elif typ in JSON_TREE_TYPES:
                 out.append(f'{ind}gen.writeName("{json_name}");\n')
-                out.append(f"{ind}encodeValue(gen, {acc});\n")
+                out.append(f"{ind}CodecSupport.encodeValue(gen, {acc});\n")
             elif "java.util.Map" in typ:
                 out.append(f'{ind}gen.writeObjectPropertyStart("{json_name}");\n')
-                out.append(f"{ind}for (var entry : {acc}.entrySet()) {{\n")
-                out.append(f"{ind}    gen.writeName(entry.getKey());\n")
-                out.append(f"{ind}    gen.writeRawValue(entry.getValue().toString());\n")
-                out.append(f"{ind}}}\n")
+                out.append(f"{ind}CodecSupport.writeTreeEntries(gen, {acc});\n")
                 out.append(f"{ind}gen.writeEndObject();\n")
             else:
                 base_type = self.registry_ref(typ, model_name)
@@ -1909,7 +1900,7 @@ class Generator:
                     )
                     out.append(
                         f"{ind}CodecRegistry.<{base_type}>codecFor({base_type}.class).encode(gen, {acc});\n"
-                    )
+                    )  # noqa: E501
             if optional:
                 if json_name in self.nullable_required.get(model_name, set()):
                     # Required-but-nullable: write the key as JSON null instead of omitting it.
@@ -1922,119 +1913,12 @@ class Generator:
 
         if has_additional:
             out.append("        if (value.additionalProperties() != null) {\n")
-            out.append(
-                "            for (var entry : value.additionalProperties().entrySet()) {\n"
-            )
-            out.append("                gen.writeName(entry.getKey());\n")
-            out.append("                gen.writeRawValue(entry.getValue().toString());\n")
-            out.append("            }\n")
+            out.append("            CodecSupport.writeTreeEntries(gen, value.additionalProperties());\n")
             out.append("        }\n")
 
         out.append("        gen.writeEndObject();\n")
         out.append("    }\n")
 
-        # decodeValue helper
-        out.append('\n    @SuppressWarnings("unchecked")\n')
-        out.append(
-            "    private static <T> T decodeValue(JsonParser parser, Class<T> type) throws IOException {\n"
-        )
-        out.append("        if (parser.currentToken() == JsonToken.VALUE_NULL) return null;\n")
-        out.append("        if (type == String.class) return (T) parser.getString();\n")
-        out.append(
-            "        if (type == Boolean.class || type == boolean.class) return (T) Boolean.valueOf(parser.getBooleanValue());\n"
-        )
-        out.append(
-            "        if (type == Long.class || type == long.class) return (T) Long.valueOf(parser.getLongValue());\n"
-        )
-        out.append(
-            "        if (type == Double.class || type == double.class) return (T) Double.valueOf(parser.getDoubleValue());\n"
-        )
-        out.append(
-            "        if (type == JsonNode.class) return (T) parser.readValueAsTree();\n"
-        )
-        if self.unknown_type == "TokenBuffer":
-            out.append("        if (type == TokenBuffer.class) {\n")
-            out.append("            TokenBuffer buf = TokenBuffer.forBuffering(parser, parser.objectReadContext());\n")
-            out.append("            buf.copyCurrentStructure(parser);\n")
-            out.append("            return (T) buf;\n")
-            out.append("        }\n")
-        if self.unknown_type == "byte[]":
-            out.append("        if (type == byte[].class) {\n")
-            out.append("            TokenBuffer buf = TokenBuffer.forBuffering(parser, parser.objectReadContext());\n")
-            out.append("            buf.copyCurrentStructure(parser);\n")
-            out.append(
-                "            ByteArrayOutputStream baos = new ByteArrayOutputStream();\n"
-            )
-            out.append(
-                "            try (JsonGenerator tmpGen = new JsonFactory().createGenerator(ObjectWriteContext.empty(), baos)) {\n"
-            )
-            out.append("                buf.serialize(tmpGen);\n")
-            out.append("            }\n")
-            out.append("            return (T) baos.toByteArray();\n")
-            out.append("        }\n")
-        out.append("        return (T) parser.readValueAsTree();\n")
-        out.append("    }\n")
-        out.append('\n')
-        out.append(
-            "    /**\n"
-        )
-        out.append(
-            "     * Writes a value to the generator, handling primitives, enums, and null.\n"
-        )
-        out.append(
-            "     *\n"
-        )
-        out.append(
-            "     * @param <T> the type of the value to write\n"
-        )
-        out.append(
-            "     * @param gen the JSON generator\n"
-        )
-        out.append(
-            "     * @param value the value to write\n"
-        )
-        out.append(
-            "     * @throws IOException if writing fails\n"
-        )
-        out.append(
-            "     */\n"
-        )
-        out.append('    @SuppressWarnings("unchecked")\n')
-        out.append(
-            "    protected static <T> void encodeValue(JsonGenerator gen, T value) throws IOException {\n"
-        )
-        out.append("        if (value == null) { gen.writeNull(); return; }\n")
-        out.append(
-            "        if (value instanceof String s) { gen.writeString(s); return; }\n"
-        )
-        out.append(
-            "        if (value instanceof Boolean b) { gen.writeBoolean(b); return; }\n"
-        )
-        out.append(
-            "        if (value instanceof Long l) { gen.writeNumber(l); return; }\n"
-        )
-        out.append(
-            "        if (value instanceof Double d) { gen.writeNumber(d); return; }\n"
-        )
-        out.append(
-            "        if (value instanceof JsonNode n) { gen.writeRawValue(n.toString()); return; }\n"
-        )
-        if self.unknown_type == "TokenBuffer":
-            out.append(
-                "        if (value instanceof TokenBuffer tb) { tb.serialize(gen); return; }\n"
-            )
-        if self.unknown_type == "byte[]":
-            out.append("        if (value instanceof byte[] b) {\n")
-            out.append(
-                "            JsonParser subParser = new JsonFactory().createParser(ObjectReadContext.empty(), new ByteArrayInputStream(b));\n"
-            )
-            out.append(
-                "            while (subParser.nextToken() != null) { gen.copyCurrentEvent(subParser); }\n"
-            )
-            out.append("            return;\n")
-            out.append("        }\n")
-        out.append("        gen.writeString(value.toString());\n")
-        out.append("    }\n")
         out.append("}\n")
         self.codec_files[codec_name] = "".join(out)
 
@@ -2138,7 +2022,6 @@ class Generator:
             "tools.jackson.core.JsonParser",
             "tools.jackson.core.JsonToken",
             "tools.jackson.databind.util.TokenBuffer",
-            "java.io.IOException",
             "javax.annotation.processing.Generated",
             f"{self.pkg_models}.{union_name}",
         }
@@ -2154,7 +2037,8 @@ class Generator:
         out.append(f"    public {codec_name}() {{}}\n\n")
 
         # --- DECODE ---
-        out.append(f"    public {union_name} decode(JsonParser parser) throws IOException {{\n")
+        out.append("    @Override\n")
+        out.append(f"    public {union_name} decode(JsonParser parser) {{\n")
         out.append("        var tb = TokenBuffer.forBuffering(parser, parser.objectReadContext());\n")
         out.append("        tb.copyCurrentStructure(parser);\n\n")
         out.append("        String type = null;\n")
@@ -2170,20 +2054,21 @@ class Generator:
         out.append("            }\n")
         out.append("        }\n")
         out.append("        if (type == null) {\n")
-        out.append(f'            throw new IOException("Missing {discriminator} discriminator");\n')
+        out.append(f'            throw new IllegalArgumentException("Missing {discriminator} discriminator");\n')
         out.append("        }\n")
         out.append("        try (JsonParser dp = tb.asParser()) {\n")
         out.append("            dp.nextToken();\n")
         out.append("            return switch (type) {\n")
         for vn, lit in variants:
             out.append(f'                case "{lit}" -> CodecRegistry.<{vn}>codecFor({vn}.class).decode(dp);\n')
-        out.append('                default -> throw new IOException("Unknown ' + union_name + ' type: " + type);\n')
+        out.append('                default -> throw new IllegalArgumentException("Unknown ' + union_name + ' type: " + type);\n')
         out.append("            };\n")
         out.append("        }\n")
         out.append("    }\n\n")
 
         # --- ENCODE ---
-        out.append(f"    public void encode(JsonGenerator gen, {union_name} value) throws IOException {{\n")
+        out.append("    @Override\n")
+        out.append(f"    public void encode(JsonGenerator gen, {union_name} value) {{\n")
         first = True
         for vn, _ in variants:
             prefix = "if" if first else "} else if"
@@ -2205,7 +2090,6 @@ class Generator:
             "tools.jackson.core.JsonParser",
             "tools.jackson.core.JsonToken",
             "tools.jackson.databind.util.TokenBuffer",
-            "java.io.IOException",
             "javax.annotation.processing.Generated",
             f"{self.pkg_models}.{union_name}",
         }
@@ -2219,7 +2103,8 @@ class Generator:
         out.append(f"    /** Default constructor. */\n")
         out.append(f"    public {codec_name}() {{}}\n\n")
 
-        out.append(f"    public {union_name} decode(JsonParser parser) throws IOException {{\n")
+        out.append("    @Override\n")
+        out.append(f"    public {union_name} decode(JsonParser parser) {{\n")
         out.append("        var tb = TokenBuffer.forBuffering(parser, parser.objectReadContext());\n")
         out.append("        tb.copyCurrentStructure(parser);\n\n")
         for vn, field in variant_field_map.items():
@@ -2243,12 +2128,13 @@ class Generator:
                 out.append(f"            }} else if (has{field}) {{\n")
             out.append(f"                return CodecRegistry.<{vn}>codecFor({vn}.class).decode(dp);\n")
         out.append("            } else {\n")
-        out.append(f'                throw new IOException("Cannot determine {union_name} variant");\n')
+        out.append(f'                throw new IllegalArgumentException("Cannot determine {union_name} variant");\n')
         out.append("            }\n")
         out.append("        }\n")
         out.append("    }\n\n")
 
-        out.append(f"    public void encode(JsonGenerator gen, {union_name} value) throws IOException {{\n")
+        out.append("    @Override\n")
+        out.append(f"    public void encode(JsonGenerator gen, {union_name} value) {{\n")
         first = True
         for vn in variant_field_map:
             prefix = "if" if first else "} else if"
@@ -2267,60 +2153,414 @@ class Generator:
         out = [self.pkg(self.pkg_codecs), "\n"]
         for i in sorted(
             [
+                "tools.jackson.core.JacksonException",
                 "tools.jackson.core.JsonGenerator",
                 "tools.jackson.core.JsonParser",
                 "tools.jackson.core.JsonToken",
-                "tools.jackson.core.ObjectReadContext",
-                "tools.jackson.core.ObjectWriteContext",
                 "tools.jackson.core.json.JsonFactory",
-                "java.io.ByteArrayOutputStream",
-                "java.io.IOException",
-                "java.io.UncheckedIOException",
                 "javax.annotation.processing.Generated",
             ]
         ):
             out.append(f"import {i};\n")
         out.append("\n")
-        out.append('@Generated("ts2java")\n')
         out.append("/** Codec for serializing and deserializing model types. */\n")
+        out.append('@Generated("ts2java")\n')
         out.append("public interface Codec<T> {\n")
-        out.append("    JsonFactory FACTORY = new JsonFactory();\n\n")
+        out.append("    /** Shared streaming factory; prefer {@link CodecSupport} for tree-aware parsing. */\n")
+        out.append("    JsonFactory FACTORY = CodecSupport.FACTORY;\n\n")
         out.append("    /**\n")
         out.append("     * Deserializes a value from JSON.\n")
         out.append("     *\n")
         out.append("     * @param parser the JSON parser positioned at a value\n")
         out.append("     * @return the decoded value\n")
-        out.append("     * @throws IOException on parse failure\n")
+        out.append("     * @throws JacksonException on parse failure\n")
         out.append("     */\n")
-        out.append("    T decode(JsonParser parser) throws IOException;\n")
+        out.append("    T decode(JsonParser parser);\n\n")
         out.append("    /**\n")
         out.append("     * Serializes a value to JSON.\n")
         out.append("     *\n")
         out.append("     * @param gen   the JSON generator to write to\n")
         out.append("     * @param value the value to serialize\n")
-        out.append("     * @throws IOException on write failure\n")
+        out.append("     * @throws JacksonException on write failure\n")
         out.append("     */\n")
-        out.append("    void encode(JsonGenerator gen, T value) throws IOException;\n\n")
+        out.append("    void encode(JsonGenerator gen, T value);\n\n")
+        out.append("    /**\n")
+        out.append("     * Serializes a value to a UTF-8 JSON byte array.\n")
+        out.append("     *\n")
+        out.append("     * @param value the value to serialize\n")
+        out.append("     * @return the UTF-8 encoded JSON\n")
+        out.append("     * @throws JacksonException on write failure\n")
+        out.append("     */\n")
         out.append("    default byte[] encodeToBytes(T value) {\n")
-        out.append("        try (var baos = new ByteArrayOutputStream(256);\n")
-        out.append("                var gen = FACTORY.createGenerator(ObjectWriteContext.empty(), baos)) {\n")
-        out.append("            encode(gen, value);\n")
-        out.append("            gen.flush();\n")
-        out.append("            return baos.toByteArray();\n")
-        out.append("        } catch (IOException e) {\n")
-        out.append("            throw new UncheckedIOException(\"Failed to encode\", e);\n")
-        out.append("        }\n")
+        out.append("        return CodecSupport.writeToBytes(gen -> encode(gen, value));\n")
         out.append("    }\n\n")
-        out.append("    default T decodeFromBytes(byte[] data) throws IOException {\n")
-        out.append("        try (var parser = FACTORY.createParser(ObjectReadContext.empty(), data)) {\n")
+        out.append("    /**\n")
+        out.append("     * Deserializes a value from a UTF-8 JSON byte array.\n")
+        out.append("     *\n")
+        out.append("     * @param data the UTF-8 encoded JSON object\n")
+        out.append("     * @return the decoded value\n")
+        out.append("     * @throws JacksonException on parse failure\n")
+        out.append("     */\n")
+        out.append("    default T decodeFromBytes(byte[] data) {\n")
+        out.append("        try (var parser = CodecSupport.createParser(data)) {\n")
         out.append("            if (parser.nextToken() != JsonToken.START_OBJECT) {\n")
-        out.append("                throw new IllegalArgumentException(\"Expected JSON object\");\n")
+        out.append('                throw new IllegalArgumentException("Expected JSON object");\n')
         out.append("            }\n")
         out.append("            return decode(parser);\n")
         out.append("        }\n")
         out.append("    }\n")
         out.append("}\n")
         self.codec_files[name] = "".join(out)
+
+    def add_codec_support(self):
+        name = "CodecSupport"
+        if name in self.codec_files:
+            return
+        out = [self.pkg(self.pkg_codecs), "\n"]
+        for i in sorted(
+            [
+                "java.io.ByteArrayOutputStream",
+                "java.io.StringWriter",
+                "java.util.LinkedHashMap",
+                "java.util.Map",
+                "javax.annotation.processing.Generated",
+                "org.jspecify.annotations.Nullable",
+                "tools.jackson.core.JacksonException",
+                "tools.jackson.core.JsonGenerator",
+                "tools.jackson.core.JsonParser",
+                "tools.jackson.core.JsonToken",
+                "tools.jackson.core.ObjectReadContext",
+                "tools.jackson.core.json.JsonFactory",
+                "tools.jackson.databind.DeserializationFeature",
+                "tools.jackson.databind.exc.MismatchedInputException",
+                "tools.jackson.databind.JsonNode",
+                "tools.jackson.databind.json.JsonMapper",
+            ]
+        ):
+            out.append(f"import {i};\n")
+        out.append("\n")
+        out.append("""/**
+ * Streaming helpers shared by every generated {@link Codec}.
+ *
+ * <p>All reads tolerate an explicit JSON {@code null} in place of a value: the wire allows it for
+ * any optional property, and the streaming accessors ({@code getString}, {@code getBooleanValue},
+ * &hellip;) either coerce it to nonsense or throw. All tree reads and writes go through a
+ * databind-backed context, so they work no matter which {@code ObjectReadContext} produced the
+ * parser.
+ */""")
+        out.append("\n")
+        out.append('@Generated("ts2java")\n')
+        out.append("public final class CodecSupport {\n\n")
+        out.append(
+            "    /**\n"
+            "     * Reads and writes sub-trees of a larger stream, so the trailing-token check that guards a\n"
+            "     * whole-document bind must be off.\n"
+            "     */\n"
+        )
+        out.append(
+            "    private static final JsonMapper MAPPER = JsonMapper.builder()\n"
+            "            .disable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)\n"
+            "            .build();\n\n"
+        )
+        out.append("    /** Streaming factory shared by the generated codecs. */\n")
+        out.append("    public static final JsonFactory FACTORY = new JsonFactory();\n\n")
+        out.append("    private CodecSupport() {}\n\n")
+        out.append("""    /** Writes JSON into a generator. */
+    @FunctionalInterface
+    public interface JsonWriter {
+        /**
+         * Writes one JSON value.
+         *
+         * @param gen the generator to write to
+         */
+        void write(JsonGenerator gen);
+    }
+
+    /**
+     * Creates a tree-capable parser over UTF-8 JSON bytes.
+     *
+     * @param data the UTF-8 encoded JSON
+     * @return a parser whose {@code readValueAsTree} is backed by databind
+     */
+    public static JsonParser createParser(byte[] data) {
+        return MAPPER.createParser(data);
+    }
+
+    /**
+     * Creates a tree-capable parser over a JSON string.
+     *
+     * @param json the JSON text
+     * @return a parser whose {@code readValueAsTree} is backed by databind
+     */
+    public static JsonParser createParser(String json) {
+        return MAPPER.createParser(json);
+    }
+
+    /**
+     * Serializes JSON written by {@code writer} to a UTF-8 byte array.
+     *
+     * @param writer writes the JSON value
+     * @return the UTF-8 encoded JSON
+     */
+    public static byte[] writeToBytes(JsonWriter writer) {
+        var out = new ByteArrayOutputStream(256);
+        try (var gen = MAPPER.createGenerator(out)) {
+            writer.write(gen);
+        }
+        return out.toByteArray();
+    }
+
+    /**
+     * Reads the value at the parser's current token as a tree, regardless of the parser's own
+     * {@code ObjectReadContext}.
+     *
+     * @param parser the parser positioned at a value
+     * @return the parsed tree
+     */
+    public static JsonNode readTree(JsonParser parser) {
+        return MAPPER.readTree(parser);
+    }
+
+    /**
+     * Writes a tree to the generator without an intermediate string.
+     *
+     * @param gen  the generator to write to
+     * @param node the tree to write
+     */
+    public static void writeTree(JsonGenerator gen, @Nullable JsonNode node) {
+        if (node == null) {
+            gen.writeNull();
+            return;
+        }
+        try (JsonParser p = node.traverse(ObjectReadContext.empty())) {
+            p.nextToken();
+            gen.copyCurrentStructure(p);
+        }
+    }
+
+    /**
+     * Writes each entry of a tree map as a property of the current object.
+     *
+     * @param gen     the generator, positioned inside an object
+     * @param entries the properties to write
+     */
+    public static void writeTreeEntries(JsonGenerator gen, Map<String, JsonNode> entries) {
+        for (var entry : entries.entrySet()) {
+            gen.writeName(entry.getKey());
+            writeTree(gen, entry.getValue());
+        }
+    }
+
+    /**
+     * Reads a JSON object into a map of trees. An explicit JSON null yields {@code null}; any other
+     * non-object token is a client error.
+     *
+     * @param parser the parser positioned at the value
+     * @param field  the property being read, for the error message
+     * @return the property map, or {@code null}
+     */
+    public static @Nullable Map<String, JsonNode> readTreeMap(JsonParser parser, String field) {
+        if (parser.currentToken() == JsonToken.VALUE_NULL) return null;
+        if (parser.currentToken() != JsonToken.START_OBJECT) throw wrongType(parser, field, "an object");
+        var map = new LinkedHashMap<String, JsonNode>();
+        while (parser.nextToken() != JsonToken.END_OBJECT) {
+            String key = parser.currentName();
+            parser.nextToken();
+            map.put(key, readTree(parser));
+        }
+        return map;
+    }
+
+    /**
+     * Reports a property whose JSON type does not match the schema.
+     *
+     * <p>The generated codecs skip properties they do not model, but a property they <em>do</em>
+     * model arriving with the wrong type is a client error, not something to drop silently.
+     *
+     * @param parser   the parser positioned at the offending value
+     * @param field    the property name
+     * @param expected a description of the expected shape, e.g. {@code "an object"}
+     * @return the exception to throw
+     */
+    public static MismatchedInputException wrongType(JsonParser parser, String field, String expected) {
+        return MismatchedInputException.from(
+                parser, Object.class, "Property '" + field + "' expects " + expected);
+    }
+
+    /**
+     * Copies the value at the current token out as raw JSON text, without building a tree.
+     *
+     * @param parser the parser positioned at a value
+     * @return the raw JSON, or {@code null} for an explicit JSON null
+     */
+    public static @Nullable String readRawJson(JsonParser parser) {
+        if (parser.currentToken() == JsonToken.VALUE_NULL) return null;
+        var writer = new StringWriter();
+        try (JsonGenerator gen = FACTORY.createGenerator(tools.jackson.core.ObjectWriteContext.empty(), writer)) {
+            gen.copyCurrentStructure(parser);
+        }
+        return writer.toString();
+    }
+
+    /**
+     * Reads a string, tolerating an explicit JSON null.
+     *
+     * @param parser the parser positioned at a value
+     * @return the string, or {@code null}
+     */
+    public static @Nullable String decodeString(JsonParser parser) {
+        return parser.currentToken() == JsonToken.VALUE_NULL ? null : parser.getString();
+    }
+
+    /**
+     * Reads a boolean, tolerating an explicit JSON null.
+     *
+     * @param parser the parser positioned at a value
+     * @return the boolean, or {@code null}
+     */
+    public static @Nullable Boolean decodeBoolean(JsonParser parser) {
+        return parser.currentToken() == JsonToken.VALUE_NULL ? null : parser.getBooleanValue();
+    }
+
+    /**
+     * Reads a long, tolerating an explicit JSON null.
+     *
+     * @param parser the parser positioned at a value
+     * @return the long, or {@code null}
+     */
+    public static @Nullable Long decodeLong(JsonParser parser) {
+        return parser.currentToken() == JsonToken.VALUE_NULL ? null : parser.getLongValue();
+    }
+
+    /**
+     * Reads a double, tolerating an explicit JSON null.
+     *
+     * @param parser the parser positioned at a value
+     * @return the double, or {@code null}
+     */
+    public static @Nullable Double decodeDouble(JsonParser parser) {
+        return parser.currentToken() == JsonToken.VALUE_NULL ? null : parser.getDoubleValue();
+    }
+
+    /**
+     * Reads a primitive boolean, substituting {@code fallback} for an explicit JSON null.
+     *
+     * @param parser   the parser positioned at a value
+     * @param fallback the value to use for a JSON null
+     * @return the boolean
+     */
+    public static boolean decodeBoolean(JsonParser parser, boolean fallback) {
+        return parser.currentToken() == JsonToken.VALUE_NULL ? fallback : parser.getBooleanValue();
+    }
+
+    /**
+     * Reads a primitive long, substituting {@code fallback} for an explicit JSON null.
+     *
+     * @param parser   the parser positioned at a value
+     * @param fallback the value to use for a JSON null
+     * @return the long
+     */
+    public static long decodeLong(JsonParser parser, long fallback) {
+        return parser.currentToken() == JsonToken.VALUE_NULL ? fallback : parser.getLongValue();
+    }
+
+    /**
+     * Reads a primitive double, substituting {@code fallback} for an explicit JSON null.
+     *
+     * @param parser   the parser positioned at a value
+     * @param fallback the value to use for a JSON null
+     * @return the double
+     */
+    public static double decodeDouble(JsonParser parser, double fallback) {
+        return parser.currentToken() == JsonToken.VALUE_NULL ? fallback : parser.getDoubleValue();
+    }
+
+    /**
+     * Reads base64 binary, tolerating an explicit JSON null.
+     *
+     * @param parser the parser positioned at a value
+     * @return the decoded bytes, or {@code null}
+     */
+    public static byte @Nullable [] decodeBinary(JsonParser parser) {
+        return parser.currentToken() == JsonToken.VALUE_NULL ? null : parser.getBinaryValue();
+    }
+
+    /**
+     * Reads a value of one of the scalar or tree types the generated codecs use.
+     *
+     * @param <T>    the value type
+     * @param parser the parser positioned at a value
+     * @param type   the expected type
+     * @return the decoded value, or {@code null} for an explicit JSON null
+     */
+    @SuppressWarnings("unchecked")
+    public static <T> @Nullable T decodeValue(JsonParser parser, Class<T> type) {
+        if (parser.currentToken() == JsonToken.VALUE_NULL) return null;
+        if (type == String.class) return (T) parser.getString();
+        if (type == Boolean.class || type == boolean.class) return (T) Boolean.valueOf(parser.getBooleanValue());
+        if (type == Long.class || type == long.class) return (T) Long.valueOf(parser.getLongValue());
+        if (type == Double.class || type == double.class) return (T) Double.valueOf(parser.getDoubleValue());
+%%DECODE_UNKNOWN%%        return (T) readTree(parser);
+    }
+
+    /**
+     * Writes a scalar, tree, or {@code null} value to the generator.
+     *
+     * @param gen   the generator to write to
+     * @param value the value to write
+     */
+    public static void encodeValue(JsonGenerator gen, @Nullable Object value) {
+        switch (value) {
+            case null -> gen.writeNull();
+            case String s -> gen.writeString(s);
+            case Boolean b -> gen.writeBoolean(b);
+            case Long l -> gen.writeNumber(l);
+            case Double d -> gen.writeNumber(d);
+            case JsonNode n -> writeTree(gen, n);
+%%ENCODE_UNKNOWN%%            default -> gen.writeString(value.toString());
+        }
+    }
+}
+""")
+        text = "".join(out)
+        decode_unknown = ""
+        encode_unknown = ""
+        extra_imports = ""
+        if self.unknown_type == "TokenBuffer":
+            decode_unknown = (
+                "        if (type == TokenBuffer.class) {\n"
+                "            TokenBuffer buf = TokenBuffer.forBuffering(parser, parser.objectReadContext());\n"
+                "            buf.copyCurrentStructure(parser);\n"
+                "            return (T) buf;\n"
+                "        }\n"
+            )
+            encode_unknown = "            case TokenBuffer tb -> tb.serialize(gen);\n"
+            extra_imports = "import tools.jackson.databind.util.TokenBuffer;\n"
+        elif self.unknown_type == "byte[]":
+            decode_unknown = (
+                "        if (type == byte[].class) {\n"
+                "            return (T) writeToBytes(gen -> {\n"
+                "                gen.copyCurrentStructure(parser);\n"
+                "            });\n"
+                "        }\n"
+            )
+            encode_unknown = (
+                "            case byte[] b -> {\n"
+                "                try (JsonParser sub = createParser(b)) {\n"
+                "                    sub.nextToken();\n"
+                "                    gen.copyCurrentStructure(sub);\n"
+                "                }\n"
+                "            }\n"
+            )
+        text = text.replace("%%DECODE_UNKNOWN%%", decode_unknown)
+        text = text.replace("%%ENCODE_UNKNOWN%%", encode_unknown)
+        if extra_imports:
+            text = text.replace(
+                "import tools.jackson.databind.json.JsonMapper;\n",
+                "import tools.jackson.databind.json.JsonMapper;\n" + extra_imports,
+                1,
+            )
+        self.codec_files[name] = text
 
     def add_codec_registry(self):
         name = "CodecRegistry"
@@ -2330,7 +2570,7 @@ class Generator:
         # Collect model class references for imports
         model_imports = set()
         for codec_name in self.codec_files:
-            if codec_name in ("Codec", "CodecRegistry"):
+            if codec_name in ("Codec", "CodecRegistry", "CodecSupport"):
                 continue
             model_part = codec_name[:-5]
             if "_" in model_part:
@@ -2347,6 +2587,7 @@ class Generator:
         out.append("import java.util.Collections;\n")
         out.append("import java.util.LinkedHashMap;\n")
         out.append("import java.util.Map;\n")
+        out.append("import java.util.concurrent.ConcurrentHashMap;\n")
         out.append("import javax.annotation.processing.Generated;\n\n")
         out.append('@Generated("ts2java")\n')
         out.append(f"public class {name} {{\n")
@@ -2355,11 +2596,14 @@ class Generator:
             "    private static final Map<Class<?>, Codec<?>> CODECS = new LinkedHashMap<>();\n\n"
         )
         out.append(
-            "    private static final Map<Class<?>, Codec<?>> OVERRIDES = new LinkedHashMap<>();\n\n"
+            "    /** Runtime overrides; concurrent because {@code registerOverride} runs after publication. */\n"
+        )
+        out.append(
+            "    private static final Map<Class<?>, Codec<?>> OVERRIDES = new ConcurrentHashMap<>();\n\n"
         )
         out.append("    static {\n")
         for codec_name in self.codec_files:
-            if codec_name in ("Codec", "CodecRegistry"):
+            if codec_name in ("Codec", "CodecRegistry", "CodecSupport"):
                 continue
             model_part = codec_name[:-5]
             model_class = model_part.replace("_", ".")
@@ -2367,13 +2611,28 @@ class Generator:
                 f"        CODECS.put({model_class}.class, new {codec_name}());\n"
             )
         out.append("    }\n\n")
+        out.append("    /**\n")
+        out.append("     * Looks up the codec registered for a model type.\n")
+        out.append("     *\n")
+        out.append("     * @param <T>        the model type\n")
+        out.append("     * @param modelClass the model type\n")
+        out.append("     * @return the codec, or {@code null} if none is registered\n")
+        out.append("     */\n")
         out.append('    @SuppressWarnings("unchecked")\n')
         out.append("    public static <T> Codec<T> codecFor(Class<T> modelClass) {\n")
-        out.append("        var override = (Codec<T>) OVERRIDES.get(modelClass);\n")
-        out.append("        if (override != null) return override;\n")
+        out.append("        if (!OVERRIDES.isEmpty()) {\n")
+        out.append("            var override = (Codec<T>) OVERRIDES.get(modelClass);\n")
+        out.append("            if (override != null) return override;\n")
+        out.append("        }\n")
         out.append("        return (Codec<T>) CODECS.get(modelClass);\n")
         out.append("    }\n\n")
-        out.append('    @SuppressWarnings("unchecked")\n')
+        out.append("    /**\n")
+        out.append("     * Replaces the codec used for a model type.\n")
+        out.append("     *\n")
+        out.append("     * @param <T>        the model type\n")
+        out.append("     * @param modelClass the model type\n")
+        out.append("     * @param codec      the codec to use instead of the generated one\n")
+        out.append("     */\n")
         out.append("    public static <T> void registerOverride(Class<T> modelClass, Codec<T> codec) {\n")
         out.append("        OVERRIDES.put(modelClass, codec);\n")
         out.append("    }\n\n")
@@ -2687,6 +2946,7 @@ class Generator:
 
         # 8. Codec interface + codecs for all models
         if not self.skip_codecs:
+            self.add_codec_support()
             self.add_codec_interface()
             for model_name in list(self.model_files.keys()):
                 if model_name in self.type_mappings:

@@ -84,6 +84,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
+import dev.tachyonmcp.core.server.json.JacksonObjectJsonFactory;
+import tools.jackson.databind.node.ObjectNode;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -571,7 +573,15 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
         });
     }
 
+    /**
+     * Wraps raw {@code params} for an extension method. A parsed tree is wrapped in place rather
+     * than flattened: {@link dev.tachyonmcp.core.transport.jsonrpc.JsonRpcCodec} already parsed it.
+     */
     private static JsonObject toJsonObject(@Nullable Object params) {
+        if (params instanceof ObjectNode node
+                && JacksonObjectJsonFactory.INSTANCE.toJsonDocument(node) instanceof JsonObject object) {
+            return object;
+        }
         if (params instanceof Map<?, ?> map) {
             @SuppressWarnings("unchecked")
             var typed = (Map<String, ?>) map;

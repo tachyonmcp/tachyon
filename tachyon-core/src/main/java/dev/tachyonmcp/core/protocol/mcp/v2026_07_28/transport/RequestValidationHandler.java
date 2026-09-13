@@ -24,9 +24,11 @@ import io.netty.handler.codec.http.HttpResponseStatus;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
+import tools.jackson.databind.JsonNode;
 
 /**
  * Validates every 2026-07-28 POST request against the requirements that only apply once a request
@@ -118,21 +120,24 @@ public final class RequestValidationHandler extends ChannelInboundHandlerAdapter
             return ServerErrors.methodNotFound("Method not found");
         }
 
-        var paramsMap = request.params() instanceof Map<?, ?> m ? m : Map.of();
-        var meta = paramsMap.get(META) instanceof Map<?, ?> mm ? mm : null;
-        if (meta == null) {
+        var params = paramsNode(request.params());
+        var meta = params.get(META);
+        if (meta == null || !meta.isObject()) {
             return ServerErrors.invalidParams("Missing required " + META);
         }
-        if (!(meta.get(PROTOCOL_VERSION_KEY) instanceof String metaProtocolVersion)) {
+        var rawProtocolVersion = meta.get(PROTOCOL_VERSION_KEY);
+        if (rawProtocolVersion == null || !rawProtocolVersion.isString()) {
             return ServerErrors.invalidParams(META + " missing required field: " + PROTOCOL_VERSION_KEY);
         }
-        if (meta.containsKey(CLIENT_INFO_KEY)
-                && !(meta.get(CLIENT_INFO_KEY) instanceof Map<?, ?> clientInfo
-                        && clientInfo.get("name") instanceof String
-                        && clientInfo.get("version") instanceof String)) {
+        var metaProtocolVersion = rawProtocolVersion.stringValue();
+        var clientInfo = meta.get(CLIENT_INFO_KEY);
+        if (clientInfo != null
+                && !(clientInfo.isObject()
+                        && clientInfo.path("name").isString()
+                        && clientInfo.path("version").isString())) {
             return ServerErrors.invalidParams(META + " invalid field: " + CLIENT_INFO_KEY);
         }
-        if (!(meta.get(CLIENT_CAPABILITIES_KEY) instanceof Map<?, ?>)) {
+        if (!meta.path(CLIENT_CAPABILITIES_KEY).isObject()) {
             return ServerErrors.invalidParams(META + " missing required field: " + CLIENT_CAPABILITIES_KEY);
         }
 
@@ -147,8 +152,9 @@ public final class RequestValidationHandler extends ChannelInboundHandlerAdapter
         if (methodRejection != null) return methodRejection;
 
         if (NAME_REQUIRED_METHODS.contains(method)) {
-            var bodyName =
-                    "resources/read".equals(method) ? asString(paramsMap.get("uri")) : asString(paramsMap.get("name"));
+            var bodyName = "resources/read".equals(method)
+                    ? asString(params.get("uri"))
+                    : asString(params.get("name"));
             var headerName = decodeName(req.headers().get(McpHeaderNames.MCP_NAME));
             if (headerName == null || !headerName.equals(bodyName)) {
                 return ServerErrors.headerMismatch("Header mismatch: " + McpHeaderNames.MCP_NAME + " header value '"
@@ -160,7 +166,7 @@ public final class RequestValidationHandler extends ChannelInboundHandlerAdapter
         if (charRejection != null) return charRejection;
 
         if ("tools/call".equals(method)) {
-            var toolCallRejection = validateCustomParamHeaders(req, paramsMap);
+            var toolCallRejection = validateCustomParamHeaders(req, params);
             if (toolCallRejection != null) return toolCallRejection;
         }
 
@@ -183,25 +189,28 @@ public final class RequestValidationHandler extends ChannelInboundHandlerAdapter
      * properties (SEP-2243). Registration rejects annotations below the top level, so every one the
      * schema carries is checked here.
      */
-    private @Nullable ServerError validateCustomParamHeaders(HttpRequest req, Map<?, ?> paramsMap) {
-        var toolName = asString(paramsMap.get("name"));
+    private @Nullable ServerError validateCustomParamHeaders(HttpRequest req, JsonNode params) {
+        var toolName = asString(params.get("name"));
         if (toolName == null) return null;
         var descriptor = server.tools().find(toolName).orElse(null);
         var inputSchema = descriptor != null ? descriptor.inputSchema() : null;
         if (inputSchema == null) return null;
         var properties = JsonUtils.parse(inputSchema).path("properties");
         if (!properties.isObject()) return null;
-        var arguments = paramsMap.get("arguments") instanceof Map<?, ?> m ? m : Map.of();
+        var arguments = params.path("arguments");
 
         for (var entry : properties.properties()) {
             var headerAnnotation = entry.getValue().path(X_MCP_HEADER);
             if (!headerAnnotation.isString()) continue;
             var propertyName = entry.getKey();
+            // Only the mirrored argument is flattened: matching compares against the header's
+            // scalar text, and annotated properties are a small subset of the arguments.
+            var argument = arguments.isObject() ? arguments.get(propertyName) : null;
             var rejection = validateMirroredValue(
                     req,
                     McpHeaderNames.MCP_PARAM_PREFIX + headerAnnotation.asString(),
                     propertyName,
-                    arguments.get(propertyName));
+                    argument == null ? null : JsonUtils.mapper().treeToValue(argument, Object.class));
             if (rejection != null) return rejection;
         }
         return null;
@@ -329,8 +338,23 @@ public final class RequestValidationHandler extends ChannelInboundHandlerAdapter
                 ctx, HttpResponseStatus.valueOf(wireError.httpStatus()), "application/json", body, origin);
     }
 
-    private static @Nullable String asString(@Nullable Object value) {
-        return value instanceof String s ? s : null;
+    /** Narrows a raw {@code params} payload to the object node this validator reads. */
+    private static JsonNode paramsNode(@Nullable Object params) {
+        if (params instanceof JsonNode node && node.isObject()) return node;
+        if (params instanceof Map<?, ?> map) return JsonUtils.toObjectNode(stringKeyed(map));
+        return JsonUtils.mapper().createObjectNode();
+    }
+
+    private static Map<String, Object> stringKeyed(Map<?, ?> source) {
+        var result = new LinkedHashMap<String, Object>();
+        source.forEach((key, value) -> {
+            if (key instanceof String text) result.put(text, value);
+        });
+        return result;
+    }
+
+    private static @Nullable String asString(@Nullable JsonNode value) {
+        return value != null && value.isString() ? value.stringValue() : null;
     }
 
     private static @Nullable String strip(@Nullable String value) {

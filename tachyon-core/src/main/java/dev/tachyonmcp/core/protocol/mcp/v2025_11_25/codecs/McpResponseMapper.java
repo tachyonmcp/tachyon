@@ -43,7 +43,6 @@ import dev.tachyonmcp.core.server.domain.InitializeResponse;
 import dev.tachyonmcp.core.server.json.JsonUtils;
 import dev.tachyonmcp.core.transport.jsonrpc.JsonRpcCodec;
 import dev.tachyonmcp.core.transport.jsonrpc.JsonRpcError;
-import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -323,7 +322,7 @@ public class McpResponseMapper implements ProtocolResponseMapper {
         }
 
         @Override
-        public void encode(JsonGenerator gen, InputRequiredPayload value) throws IOException {
+        public void encode(JsonGenerator gen, InputRequiredPayload value) {
             gen.writeStartObject();
             gen.writeStringProperty("resultType", "input_required");
             if (value.inputRequests() != null) {
@@ -340,16 +339,13 @@ public class McpResponseMapper implements ProtocolResponseMapper {
             }
             if (value.meta() != null) {
                 gen.writeObjectPropertyStart("_meta");
-                for (var entry : value.meta().entrySet()) {
-                    gen.writeName(entry.getKey());
-                    gen.writeRawValue(entry.getValue().toString());
-                }
+                CodecSupport.writeTreeEntries(gen, value.meta());
                 gen.writeEndObject();
             }
             gen.writeEndObject();
         }
 
-        private static void writeInputRequest(JsonGenerator gen, InputRequest req) throws IOException {
+        private static void writeInputRequest(JsonGenerator gen, InputRequest req) {
             switch (req) {
                 case RpcMethodRequest r -> {
                     gen.writeStringProperty("method", r.method());

@@ -165,7 +165,7 @@ public final class JsonRpcCodec {
                 case JSONRPC -> {}
                 case ID -> id = parseId(p);
                 case METHOD -> method = p.getString();
-                case PARAMS -> paramsObj = readGenericValue(p);
+                case PARAMS -> paramsObj = readTreeValue(p);
                 case RESULT -> {
                     hasResult = true;
                     resultJson = readRawJson(p);
