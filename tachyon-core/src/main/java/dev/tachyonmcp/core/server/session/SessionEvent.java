@@ -10,6 +10,7 @@ import org.jspecify.annotations.Nullable;
 public sealed interface SessionEvent {
 
     /** The session this event belongs to. */
+    @Nullable
     String sessionId();
 
     /** Timestamp of the event (epoch millis). */
@@ -40,7 +41,7 @@ public sealed interface SessionEvent {
      * @param timestamp  the event timestamp (epoch millis)
      */
     record RequestEvent(
-            String sessionId,
+            @Nullable String sessionId,
             RequestId requestId,
             String method,
             @Nullable String paramsJson,
@@ -58,7 +59,7 @@ public sealed interface SessionEvent {
      * @param streamKey  the SSE stream key, or {@code null} for the general-purpose stream
      */
     record OutboundRequestEvent(
-            String sessionId,
+            @Nullable String sessionId,
             RequestId requestId,
             String method,
             @Nullable String paramsJson,
@@ -78,7 +79,7 @@ public sealed interface SessionEvent {
      * @param streamKey  the SSE stream key, or {@code null} for the general-purpose stream
      */
     record ResponseEvent(
-            String sessionId,
+            @Nullable String sessionId,
             RequestId requestId,
             String resultJson,
             long timestamp,
@@ -106,7 +107,7 @@ public sealed interface SessionEvent {
      * @param streamKey  the SSE stream key, or {@code null} for the general-purpose stream
      */
     record NotificationEvent(
-            String sessionId,
+            @Nullable String sessionId,
             String method,
             @Nullable String paramsJson,
             long timestamp,
