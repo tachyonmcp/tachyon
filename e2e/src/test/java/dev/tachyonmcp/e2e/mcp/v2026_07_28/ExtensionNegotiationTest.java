@@ -1,6 +1,7 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
 package dev.tachyonmcp.e2e.mcp.v2026_07_28;
 
+import static dev.tachyonmcp.testkit.JsonRpcResponseAssert.assertThat;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.tachyonmcp.api.runtime.InteractionContext;
@@ -11,6 +12,7 @@ import dev.tachyonmcp.e2e.mcp.AbstractStatelessMcpE2eTest;
 import dev.tachyonmcp.testkit.Mcp20260728Client;
 import dev.tachyonmcp.testkit.McpClient;
 import dev.tachyonmcp.testkit.McpTestClients;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 
@@ -66,6 +68,22 @@ class ExtensionNegotiationTest extends AbstractStatelessMcpE2eTest<McpClient> {
             assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
         }
 
+        assertThat(extension.initCalled.get()).isFalse();
+    }
+
+    @Test
+    void nonObjectParamsAreRejectedWithoutNegotiation() throws Exception {
+        var extension = new RecordingExtension();
+        startServer(builder -> builder.withExtensions(extension), registrar -> {});
+
+        var response = postMcpRequest("""
+                {"jsonrpc":"2.0","id":1,"method":"tools/list","params":[\
+                {"_meta":{"io.modelcontextprotocol/clientCapabilities":\
+                {"extensions":{"%s":{"client":"test"}}}}}]}
+                """.formatted(EXT_ID), Map.of("Mcp-Method", "tools/list"));
+
+        assertThat(response.statusCode()).as(response.body()).isEqualTo(400);
+        assertThat(response).isJsonRpcError().hasId(1).hasErrorCode(-32602);
         assertThat(extension.initCalled.get()).isFalse();
     }
 

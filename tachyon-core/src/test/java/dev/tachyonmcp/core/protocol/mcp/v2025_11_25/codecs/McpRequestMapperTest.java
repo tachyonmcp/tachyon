@@ -21,6 +21,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -108,10 +109,7 @@ class McpRequestMapperTest {
     void callToolRejectsMissingName() {
         var mapper = new McpRequestMapper();
 
-        assertThatThrownBy(() -> mapper.callTool(Map.of(), NOOP_DESERIALIZER))
-                .isInstanceOf(RequestMappingException.class)
-                .satisfies(e -> assertThat(((RequestMappingException) e).error().kind())
-                        .isEqualTo(ServerError.Kind.INVALID_PARAMS));
+        assertInvalidParams(() -> mapper.callTool(Map.of(), NOOP_DESERIALIZER));
     }
 
     @Test
@@ -157,10 +155,7 @@ class McpRequestMapperTest {
     void taskUpdateRejectsMissingInputResponses() {
         var mapper = new McpRequestMapper();
 
-        assertThatThrownBy(() -> mapper.taskUpdate(Map.of("taskId", "task-1")))
-                .isInstanceOf(RequestMappingException.class)
-                .satisfies(e -> assertThat(((RequestMappingException) e).error().kind())
-                        .isEqualTo(ServerError.Kind.INVALID_PARAMS));
+        assertInvalidParams(() -> mapper.taskUpdate(Map.of("taskId", "task-1")));
     }
 
     @ParameterizedTest
@@ -205,13 +200,10 @@ class McpRequestMapperTest {
     void completeRejectsNonStringContextArgumentValue() {
         var mapper = new McpRequestMapper();
 
-        assertThatThrownBy(() -> mapper.complete(Map.of(
-                        "ref", Map.of("type", "ref/prompt", "name", "greet"),
-                        "argument", Map.of("name", "n", "value", "v"),
-                        "context", Map.of("arguments", Map.of("prior", 123)))))
-                .isInstanceOf(RequestMappingException.class)
-                .satisfies(e -> assertThat(((RequestMappingException) e).error().kind())
-                        .isEqualTo(ServerError.Kind.INVALID_PARAMS));
+        assertInvalidParams(() -> mapper.complete(Map.of(
+                "ref", Map.of("type", "ref/prompt", "name", "greet"),
+                "argument", Map.of("name", "n", "value", "v"),
+                "context", Map.of("arguments", Map.of("prior", 123)))));
     }
 
     @Test
@@ -233,6 +225,17 @@ class McpRequestMapperTest {
         assertThat(mapper.page(Map.of("limit", 10, "cursor", "abc")))
                 .isEqualTo(new ProtocolRequestMapper.PageRequest(10, "abc", null));
         assertThat(mapper.page(null)).isEqualTo(new ProtocolRequestMapper.PageRequest(0, null, null));
+    }
+
+    @Test
+    void nonObjectParamsAreInvalidParams() {
+        var mapper = new McpRequestMapper();
+
+        assertInvalidParams(() -> mapper.page(parseJson("[1, 2]")));
+        assertInvalidParams(() -> mapper.page(parseJson("\"text\"")));
+        assertInvalidParams(() -> mapper.initialize(List.of("not", "an", "object")));
+        assertInvalidParams(() -> mapper.declaredExtensions(parseJson("[1, 2]")));
+        assertInvalidParams(() -> mapper.permittedLogLevel(parseJson("\"text\"")));
     }
 
     @Test
@@ -351,10 +354,7 @@ class McpRequestMapperTest {
     void mismatchedPropertyTypesAreRejectedRatherThanDroppedSilently() {
         var mapper = new McpRequestMapper();
 
-        assertThatThrownBy(() -> mapper.getPrompt(Map.of("name", "greet", "_meta", "not-an-object")))
-                .isInstanceOf(RequestMappingException.class)
-                .satisfies(e -> assertThat(((RequestMappingException) e).error().kind())
-                        .isEqualTo(ServerError.Kind.INVALID_PARAMS));
+        assertInvalidParams(() -> mapper.getPrompt(Map.of("name", "greet", "_meta", "not-an-object")));
         assertThatThrownBy(() -> mapper.initialize(Map.of("capabilities", List.of("wrong", "shape"))))
                 .isInstanceOf(RequestMappingException.class);
     }
@@ -370,6 +370,13 @@ class McpRequestMapperTest {
         var request = mapper.getPrompt(Map.of("name", "greet", "_meta", Map.of("small", 7, "big", 7L)));
 
         assertThat(request.request().meta()).containsEntry("small", 7).containsEntry("big", 7L);
+    }
+
+    private static void assertInvalidParams(ThrowingCallable call) {
+        assertThatThrownBy(call)
+                .isInstanceOfSatisfying(
+                        RequestMappingException.class,
+                        e -> assertThat(e.error().kind()).isEqualTo(ServerError.Kind.INVALID_PARAMS));
     }
 
     private record Params(String name, Map<String, Object> arguments) {}

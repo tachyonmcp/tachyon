@@ -1,6 +1,7 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
 package dev.tachyonmcp.core.protocol.mcp;
 
+import dev.tachyonmcp.api.annotations.InternalApi;
 import dev.tachyonmcp.api.json.JsonObject;
 import dev.tachyonmcp.api.json.PayloadDeserializer;
 import dev.tachyonmcp.api.server.domain.Args;
@@ -36,7 +37,6 @@ import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
 import tools.jackson.core.JacksonException;
 import tools.jackson.core.JsonParser;
-import tools.jackson.core.JsonToken;
 import tools.jackson.core.ObjectReadContext;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.node.ObjectNode;
@@ -49,6 +49,7 @@ import tools.jackson.databind.node.ObjectNode;
  * version. Because these fields aren't part of this version's generated {@code *RequestParams}
  * models, they're read from the raw params map rather than through {@link #convert}.
  */
+@InternalApi
 public abstract class AbstractMcpRequestMapper implements ProtocolRequestMapper {
 
     private static final String META_LOG_LEVEL_KEY = "io.modelcontextprotocol/logLevel";
@@ -249,10 +250,11 @@ public abstract class AbstractMcpRequestMapper implements ProtocolRequestMapper 
 
     @Override
     public @Nullable LoggingLevel permittedLogLevel(@Nullable Object params) {
-        var meta = optionalMap(asObject(params), "_meta", "Invalid _meta");
-        if (meta == null || !(meta.get(META_LOG_LEVEL_KEY) instanceof String value)) return null;
+        var meta = optionalObject(asObject(params), "_meta", "Invalid _meta");
+        var value = meta != null ? meta.get(META_LOG_LEVEL_KEY) : null;
+        if (value == null || !value.isString()) return null;
         try {
-            return LoggingLevel.fromValue(value);
+            return LoggingLevel.fromValue(value.stringValue());
         } catch (IllegalArgumentException ignored) {
             return null;
         }
@@ -260,8 +262,8 @@ public abstract class AbstractMcpRequestMapper implements ProtocolRequestMapper 
 
     @Override
     public boolean hasMetaKey(@Nullable Object params, String key) {
-        var meta = optionalMap(asObject(params), "_meta", "Invalid _meta");
-        return meta != null && meta.containsKey(key);
+        var meta = optionalObject(asObject(params), "_meta", "Invalid _meta");
+        return meta != null && meta.has(key);
     }
 
     @Override
@@ -325,18 +327,16 @@ public abstract class AbstractMcpRequestMapper implements ProtocolRequestMapper 
             case Map<?, ?> map -> {
                 return JsonUtils.toObjectNode(stringKeyed(map));
             }
-            case JsonNode ignored -> {
-                return JsonUtils.mapper().createObjectNode();
+            case JsonNode ignored -> {}
+            default -> {
+                try {
+                    if (JsonUtils.mapper().valueToTree(params) instanceof ObjectNode node) return node;
+                } catch (JacksonException e) {
+                    throw invalidParams("Invalid params: " + e.getOriginalMessage());
+                }
             }
-            default -> {}
         }
-        try {
-            return JsonUtils.mapper().valueToTree(params) instanceof ObjectNode node
-                    ? node
-                    : JsonUtils.mapper().createObjectNode();
-        } catch (RuntimeException ignored) {
-            return JsonUtils.mapper().createObjectNode();
-        }
+        throw invalidParams("Params must be an object");
     }
 
     /**
@@ -351,22 +351,19 @@ public abstract class AbstractMcpRequestMapper implements ProtocolRequestMapper 
      * @return the decoded model
      * @throws RequestMappingException with {@code invalid_params} if the payload does not match
      */
-    protected abstract <T> T convert(JsonNode node, Class<T> type);
+    protected abstract <T> T convert(ObjectNode node, Class<T> type);
 
     /**
      * Runs a version's codec over a params node, mapping decode failures to {@code invalid_params}.
      *
      * @param <T>     the model type
      * @param node    the params object
-     * @param type    the model being decoded, for the error message
      * @param decoder the version's codec decode method
      * @return the decoded model
      */
-    protected static <T> T decodeParams(JsonNode node, Class<T> type, Function<JsonParser, T> decoder) {
+    protected static <T> T decodeParams(ObjectNode node, Function<JsonParser, T> decoder) {
         try (var parser = node.traverse(ObjectReadContext.empty())) {
-            if (parser.nextToken() != JsonToken.START_OBJECT) {
-                throw invalidParams("Invalid " + type.getSimpleName());
-            }
+            parser.nextToken();
             return decoder.apply(parser);
         } catch (JacksonException e) {
             throw invalidParams(e.getOriginalMessage());

@@ -8,7 +8,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
-import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Request mapper for MCP 2026-07-28.
@@ -28,12 +28,12 @@ public final class McpRequestMapper extends AbstractMcpRequestMapper {
      * whose models come from that version's package.
      */
     @Override
-    protected <T> T convert(JsonNode node, Class<T> type) {
+    protected <T> T convert(ObjectNode node, Class<T> type) {
         final var codec = CodecRegistry.codecFor(type);
-        if (codec != null) return decodeParams(node, type, codec::decode);
+        if (codec != null) return decodeParams(node, codec::decode);
         final var fallback = dev.tachyonmcp.core.protocol.mcp.v2025_11_25.codecs.CodecRegistry.codecFor(type);
         if (fallback == null) throw invalidParams("Unsupported params type " + type.getSimpleName());
-        return decodeParams(node, type, fallback::decode);
+        return decodeParams(node, fallback::decode);
     }
 
     @Override

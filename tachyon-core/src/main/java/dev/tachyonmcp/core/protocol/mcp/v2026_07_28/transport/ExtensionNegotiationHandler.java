@@ -3,6 +3,7 @@ package dev.tachyonmcp.core.protocol.mcp.v2026_07_28.transport;
 
 import dev.tachyonmcp.api.annotations.InternalApi;
 import dev.tachyonmcp.api.server.extensions.ServerExtension;
+import dev.tachyonmcp.core.protocol.RequestMappingException;
 import dev.tachyonmcp.core.protocol.mcp.v2026_07_28.McpProtocol;
 import dev.tachyonmcp.core.server.handlers.ExtensionNegotiator;
 import dev.tachyonmcp.core.transport.jsonrpc.JsonRpcCodec;
@@ -65,8 +66,12 @@ public final class ExtensionNegotiationHandler extends ChannelInboundHandlerAdap
             return;
         }
         if (message instanceof JsonRpcMessage.Request<?> request) {
-            var declared = interaction.protocol().requestMapper().declaredExtensions(request.params());
-            ExtensionNegotiator.negotiate(extensions, interaction, declared);
+            try {
+                var declared = interaction.protocol().requestMapper().declaredExtensions(request.params());
+                ExtensionNegotiator.negotiate(extensions, interaction, declared);
+            } catch (RequestMappingException ignored) {
+                // Invalid params: the dispatcher reports invalid_params downstream.
+            }
         }
         ctx.fireChannelRead(msg);
     }
