@@ -105,6 +105,16 @@
           "attachments": {
             "since": "1.0.0-beta.23"
           }
+        },
+        {
+          "ignore": true,
+          "code": "java.method.numberOfParametersChanged",
+          "old": "method void dev.tachyonmcp.testkit.JsonRpcResponseAssert::<init>(tools.jackson.databind.JsonNode)",
+          "new": "method void dev.tachyonmcp.testkit.JsonRpcResponseAssert::<init>(java.net.http.HttpResponse<java.lang.String>, tools.jackson.databind.JsonNode)",
+          "justification": "Extend assertions to verify http response statuses",
+          "attachments": {
+            "since": "1.0.0-beta.27"
+          }
         }
       ]
     }

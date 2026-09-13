@@ -454,7 +454,7 @@ public abstract class McpClient implements Closeable {
     public HttpResponse<String> sendRpc(@Nullable String sessionId, @Language("json") String jsonBody)
             throws Exception {
         var response = post(sessionId, jsonBody);
-        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.statusCode()).isIn(200, 404);
         var contentType = response.headers().firstValue("content-type").orElse("");
         if (contentType.startsWith("text/event-stream")) {
             var extracted = extractJsonRpcResponse(response.body(), extractRequestId(jsonBody));
