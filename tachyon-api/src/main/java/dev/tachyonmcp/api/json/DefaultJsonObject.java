@@ -47,13 +47,8 @@ final class DefaultJsonObject implements JsonObject {
     public String json() {
         var current = json;
         if (current == null) {
-            synchronized (this) {
-                current = json;
-                if (current == null) {
-                    current = JsonValues.writeJson(values);
-                    json = current;
-                }
-            }
+            current = JsonValues.writeJson(values);
+            json = current;
         }
         return current;
     }
