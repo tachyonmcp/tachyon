@@ -346,7 +346,7 @@ public class McpDispatcher {
             RpcMethodHandler<I, O> handler) {
         var paramsStr = rawParams instanceof Map || rawParams instanceof List
                 ? JsonRpcCodec.writeValueAsString(rawParams)
-                : rawParams instanceof String s ? s : null;
+                : rawParams instanceof String s ? s : rawParams instanceof JsonNode n ? n.toString() : null;
 
         // Closed here, on the calling thread, because the work below runs on the executor --
         // reattach() re-opens it there for the decode+kickoff phase.
