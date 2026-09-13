@@ -36,7 +36,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.function.Consumer;
@@ -213,28 +212,17 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
             case JsonRpcMessage.Error err ->
                 handlePostError(ctx, sessionId, ctx.channel().id().asLongText(), err, origin);
             case JsonRpcMessage.Notification<?> not -> {
-                if (McpDispatcher.NOTIFICATIONS_INITIALIZED.equals(not.method())) {
-                    // Activate the session synchronously before acking so a client that waits
-                    // for this 202 observes an ACTIVE session on its next request, closing the
-                    // INITIALIZING race. Guarded so a handler failure still produces the ack.
-                    try {
-                        dispatcher.dispatchNotification(not.method(), not.params(), sessionId, ic);
-                    } catch (RuntimeException e) {
-                        logger.warn("Failed to process {} notification", not.method(), e);
-                    }
-                    executor.execute(() -> sendAccepted(ctx, origin));
-                } else {
-                    executor.execute(() -> sendAccepted(ctx, origin));
-                    CompletableFuture.runAsync(
-                                    () -> dispatcher.dispatchNotification(not.method(), not.params(), sessionId, ic),
-                                    this.executor)
-                            .whenComplete((unused, e) -> {
-                                var cause = e instanceof CompletionException ce ? ce.getCause() : e;
-                                if (cause instanceof RuntimeException re) {
-                                    logger.warn("Failed to process {} notification", not.method(), re);
-                                }
-                            });
+                // Apply the notification before acking so a client that waits for this 202 observes
+                // its effect on the next request it sends: an ACTIVE session for `initialized`, and
+                // for `cancelled` a cancellation that can no longer land on a later request reusing
+                // the same JSON-RPC id. Already on the worker executor, so this blocks no event
+                // loop. Guarded so a handler failure still produces the ack.
+                try {
+                    dispatcher.dispatchNotification(not.method(), not.params(), sessionId, ic);
+                } catch (RuntimeException e) {
+                    logger.warn("Failed to process {} notification", not.method(), e);
                 }
+                executor.execute(() -> sendAccepted(ctx, origin));
             }
             default -> {
                 logger.warn("Unexpected message type: {}", message);
