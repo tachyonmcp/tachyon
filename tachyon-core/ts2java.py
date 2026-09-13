@@ -12,6 +12,7 @@ import json
 import os
 import re
 from collections import OrderedDict
+from datetime import datetime, timezone
 
 DEFAULT_TS = "protocol/mcp-2025-11-25.ts"
 DEFAULT_BASE = "target/generated-sources/ts2java"
@@ -20,6 +21,11 @@ DEFAULT_PKG_MODELS = f"{DEFAULT_PKG}.models"
 DEFAULT_PKG_CODECS = f"{DEFAULT_PKG}.codecs"
 DEFAULT_PKG_PROTOCOL = f"{DEFAULT_PKG}.protocol"
 VERBOSE = False
+
+# ISO 8601, per the javax.annotation.processing.Generated#date contract; shared by every
+# class emitted in this run so one invocation stamps a single, consistent generation time.
+GENERATED_DATE = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+GENERATED_ANNOTATION = f'@Generated(value = "ts2java", date = "{GENERATED_DATE}")'
 
 PRIMITIVE_MAP = {
     "string": "String",
@@ -1230,7 +1236,7 @@ class Generator:
         if jd_block:
             out.append(jd_block)
         out.append('@JsonIgnoreProperties(ignoreUnknown = true)\n')
-        out.append('@Generated("ts2java")\n')
+        out.append(f'{GENERATED_ANNOTATION}\n')
         out.append(f"public record {name}(\n")
         out.append(",\n".join(params))
         out.append(f"\n) {iface_str.strip()}{{\n")
@@ -1261,7 +1267,7 @@ class Generator:
             comps, _ = self.get_components(fields, qualified_name)
             self.model_components[qualified_name] = comps
             out.append(f'{indent}@JsonIgnoreProperties(ignoreUnknown = true)\n')
-            out.append(f'{indent}@Generated("ts2java")\n')
+            out.append(f'{indent}{GENERATED_ANNOTATION}\n')
             params = []
             for c in comps:
                 typ, fname, optional, _, json_name = c
@@ -1293,7 +1299,7 @@ class Generator:
             out.append(jd_block)
         ext = f" extends {super_iface}" if super_iface else ""
         perm = f" permits {', '.join(permits)}" if permits else ""
-        out.append('@Generated("ts2java")\n')
+        out.append(f'{GENERATED_ANNOTATION}\n')
         out.append(f"public sealed interface {name}{ext}{perm} {{\n")
         out.append("}\n")
         self.model_files[name] = "".join(out)
@@ -1365,7 +1371,7 @@ class Generator:
         out.append("@JsonSubTypes({\n")
         out.append(",\n".join(entries))
         out.append("\n})\n")
-        out.append('@Generated("ts2java")\n')
+        out.append(f'{GENERATED_ANNOTATION}\n')
         # Determine extends clause — if this sealed interface is also a child of another
         parent_ext = ""
         for pn, pc in self.interface_extends.items():
@@ -1415,7 +1421,7 @@ class Generator:
         out.append("@JsonSubTypes({\n")
         out.append(",\n".join(entries))
         out.append("\n})\n")
-        out.append('@Generated("ts2java")\n')
+        out.append(f'{GENERATED_ANNOTATION}\n')
         ext = f" extends {super_iface}" if super_iface else ""
         out.append(
             f"public sealed interface {name}{ext} permits {', '.join(variants)} {{\n"
@@ -1434,7 +1440,7 @@ class Generator:
         jd_block = JavadocFormatter.make_javadoc(class_desc)
         if jd_block:
             out.append(jd_block)
-        out.append('@Generated("ts2java")\n')
+        out.append(f'{GENERATED_ANNOTATION}\n')
         out.append(f"public enum {name} {{\n")
         lines = []
         for v in values:
@@ -1701,7 +1707,7 @@ class Generator:
 
         out.append("\n")
         out.append("/** Codec for {@link " + qname + "}. */\n")
-        out.append('@Generated("ts2java")\n')
+        out.append(f'{GENERATED_ANNOTATION}\n')
         out.append(f"public class {codec_name} implements Codec<{qname}> {{\n")
         out.append(f"    /** Default constructor. */\n")
         out.append(f"    public {codec_name}() {{}}\n\n")
@@ -2019,7 +2025,7 @@ class Generator:
             return
         out = [self.pkg(self.pkg_protocol), "\n"]
         out.append("import javax.annotation.processing.Generated;\n\n")
-        out.append('@Generated("ts2java")\n')
+        out.append(f'{GENERATED_ANNOTATION}\n')
         out.append(f"public final class {name} {{\n")
         out.append('    public static final String VERSION = "2025-11-25";\n')
         out.append("    private McpProtocolVersion() {}\n")
@@ -2032,7 +2038,7 @@ class Generator:
             return
         out = [self.pkg(self.pkg_protocol), "\n"]
         out.append("import javax.annotation.processing.Generated;\n\n")
-        out.append('@Generated("ts2java")\n')
+        out.append(f'{GENERATED_ANNOTATION}\n')
         out.append(f"public final class {name} {{\n")
         for method, _ in self.method_map.items():
             cn = method.upper().replace("/", "_")
@@ -2045,7 +2051,7 @@ class Generator:
         if "MethodDescriptor" not in self.protocol_files:
             out = [self.pkg(self.pkg_protocol), "\n"]
             out.append("import javax.annotation.processing.Generated;\n\n")
-            out.append('@Generated("ts2java")\n')
+            out.append(f'{GENERATED_ANNOTATION}\n')
             out.append("public record MethodDescriptor(\n")
             out.append("    String method,\n")
             out.append("    Class<?> requestType,\n")
@@ -2120,7 +2126,7 @@ class Generator:
             out.append(f"import {i};\n")
         out.append("\n")
         out.append("/** Codec for {@link " + union_name + "}. */\n")
-        out.append('@Generated("ts2java")\n')
+        out.append(f'{GENERATED_ANNOTATION}\n')
         out.append(f"public class {codec_name} implements Codec<{union_name}> {{\n\n")
         out.append(f"    /** Default constructor. */\n")
         out.append(f"    public {codec_name}() {{}}\n\n")
@@ -2187,7 +2193,7 @@ class Generator:
         for i in sorted(imported):
             out.append(f"import {i};\n")
         out.append("/** Codec for {@link " + union_name + "}. */\n")
-        out.append('@Generated("ts2java")\n')
+        out.append(f'{GENERATED_ANNOTATION}\n')
         out.append(f"public class {codec_name} implements Codec<{union_name}> {{\n\n")
         out.append(f"    /** Default constructor. */\n")
         out.append(f"    public {codec_name}() {{}}\n\n")
@@ -2253,7 +2259,7 @@ class Generator:
             out.append(f"import {i};\n")
         out.append("\n")
         out.append("/** Codec for serializing and deserializing model types. */\n")
-        out.append('@Generated("ts2java")\n')
+        out.append(f'{GENERATED_ANNOTATION}\n')
         out.append("public interface Codec<T> {\n")
         out.append("    /** Shared streaming factory; prefer {@link CodecSupport} for tree-aware parsing. */\n")
         out.append("    JsonFactory FACTORY = CodecSupport.FACTORY;\n\n")
@@ -2338,7 +2344,7 @@ class Generator:
  * parser.
  */""")
         out.append("\n")
-        out.append('@Generated("ts2java")\n')
+        out.append(f'{GENERATED_ANNOTATION}\n')
         out.append("public final class CodecSupport {\n\n")
         out.append(
             "    /**\n"
@@ -2678,7 +2684,7 @@ class Generator:
         out.append("import java.util.Map;\n")
         out.append("import java.util.concurrent.ConcurrentHashMap;\n")
         out.append("import javax.annotation.processing.Generated;\n\n")
-        out.append('@Generated("ts2java")\n')
+        out.append(f'{GENERATED_ANNOTATION}\n')
         out.append(f"public class {name} {{\n")
         # Static codec map
         out.append(
