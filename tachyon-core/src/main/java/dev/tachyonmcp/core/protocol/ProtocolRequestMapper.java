@@ -85,14 +85,24 @@ public interface ProtocolRequestMapper {
      * same shape as {@link InitializeRequest#extensions()}, so both feed the same negotiator. Protocols
      * negotiated once via {@code initialize} (e.g. 2025-11-25) carry no such per-request declaration and
      * return an empty map.
+     *
+     * @throws RequestMappingException with {@code invalid_params} if params are not an object
      */
     Map<String, JsonObject> declaredExtensions(@Nullable Object params);
 
-    /** Extracts the client's permitted {@link LoggingLevel}, or {@code null} if unset. */
+    /**
+     * Extracts the client's permitted {@link LoggingLevel}, or {@code null} if unset.
+     *
+     * @throws RequestMappingException with {@code invalid_params} if params or {@code _meta} are not objects
+     */
     @Nullable
     LoggingLevel permittedLogLevel(@Nullable Object params);
 
-    /** Returns {@code true} when params carry a {@code _meta} entry under the given key. */
+    /**
+     * Returns {@code true} when params carry a {@code _meta} entry under the given key.
+     *
+     * @throws RequestMappingException with {@code invalid_params} if params or {@code _meta} are not objects
+     */
     boolean hasMetaKey(@Nullable Object params, String key);
 
     /** Maps {@code notifications/cancelled} params, or {@code null} if the request cannot be identified. */

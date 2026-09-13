@@ -2,6 +2,7 @@
 package dev.tachyonmcp.core.server;
 
 import static dev.tachyonmcp.core.test.TestUtils.parseJson;
+import static net.javacrumbs.jsonunit.assertj.JsonAssertions.assertThatJson;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.tachyonmcp.api.server.domain.RequestId;
@@ -18,7 +19,11 @@ import org.junit.jupiter.params.provider.MethodSource;
 class McpDispatcherTest {
 
     static Stream<Arguments> jsonNodeParams() {
-        return Stream.of(Arguments.of("{\"key\":\"value\"}"), Arguments.of("[1,\"two\"]"), Arguments.of("\"scalar\""));
+        return Stream.of(Arguments.of("{\"key\":\"value\"}"), Arguments.of("{\"_meta\":{\"trace\":7}}"));
+    }
+
+    static Stream<Arguments> nonObjectParams() {
+        return Stream.of(Arguments.of("[1,\"two\"]"), Arguments.of("\"scalar\""), Arguments.of("42"));
     }
 
     private static McpDispatcher.DispatchResult.Response asResponse(McpDispatcher.DispatchResult result) {
@@ -133,6 +138,24 @@ class McpDispatcherTest {
                     .findFirst()
                     .orElseThrow();
             assertThat(requestEvent.paramsJson()).isEqualTo(paramsJson);
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource("nonObjectParams")
+    void nonObjectParamsAreRejectedAsInvalidParams(String paramsJson) {
+        try (ServerEngine server = newEngine(b -> b.session(s -> s.enabled(true)))) {
+            var session = server.createSession("sess_bad_params");
+            session.activate();
+            var dispatcher = new McpDispatcher(server, server.executor());
+
+            var body = asResponse(dispatcher
+                            .dispatchRequestAsync(RequestId.of(1), "ping", parseJson(paramsJson), session.id())
+                            .join())
+                    .responseBodyString();
+
+            assertThatJson(body).inPath("$.error.code").isEqualTo(-32602);
+            assertThatJson(body).isObject().doesNotContainKey("result");
         }
     }
 
