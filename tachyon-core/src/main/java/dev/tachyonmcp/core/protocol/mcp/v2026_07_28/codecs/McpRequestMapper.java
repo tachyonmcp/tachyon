@@ -7,6 +7,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
+import tools.jackson.databind.JsonNode;
 
 /**
  * Request mapper for MCP 2026-07-28.
@@ -21,6 +22,16 @@ public final class McpRequestMapper extends dev.tachyonmcp.core.protocol.mcp.v20
         return callTool(params, payloadDeserializer, false);
     }
 
+    /**
+     * Prefers this version's codecs, falling back to 2025-11-25's for the request shapes inherited
+     * unchanged from the superclass, whose models come from that version's package.
+     */
+    @Override
+    protected <T> T convert(JsonNode node, Class<T> type) {
+        var codec = CodecRegistry.codecFor(type);
+        return codec == null ? super.convert(node, type) : decodeParams(node, type, codec::decode);
+    }
+
     @Override
     public boolean supportsLegacyTaskAugmentation() {
         return false;
@@ -33,7 +44,7 @@ public final class McpRequestMapper extends dev.tachyonmcp.core.protocol.mcp.v20
 
     @Override
     public SubscriptionListenRequest subscriptionsListen(@Nullable Object params) {
-        var listenParams = convert(asMap(params), SubscriptionsListenRequestParams.class);
+        var listenParams = convert(asObject(params), SubscriptionsListenRequestParams.class);
         var filter = listenParams.notifications();
         if (filter == null) {
             return new SubscriptionListenRequest(false, false, false, Set.of(), Set.of());

@@ -27,13 +27,13 @@ class McpRequestMapperTest {
     };
 
     @Test
-    void asMapConvertsPojoAndFallsBackForNonMaps() {
+    void asObjectConvertsPojoAndFallsBackForNonObjects() {
         var mapper = new McpRequestMapper();
 
-        assertThat(mapper.asMap(new Params("greet", Map.of("trace", 7))))
-                .containsEntry("name", "greet")
-                .containsEntry("meta", Map.of("trace", 7));
-        assertThat(mapper.asMap(List.of("not", "a", "map"))).isEmpty();
+        var node = mapper.asObject(new Params("greet", Map.of("trace", 7)));
+        assertThat(node.get("name").stringValue()).isEqualTo("greet");
+        assertThat(node.get("meta").get("trace").intValue()).isEqualTo(7);
+        assertThat(mapper.asObject(List.of("not", "a", "map")).isEmpty()).isTrue();
     }
 
     @Test
@@ -263,6 +263,49 @@ class McpRequestMapperTest {
         var mapper = new McpRequestMapper();
 
         assertThat(mapper.taskStatus(Map.of("status", "completed"))).isNull();
+    }
+
+    /**
+     * The {@code Codec} interface and registry are generated per protocol version, so a params type
+     * that only exists in 2026-07-28 is invisible to the 2025-11-25 registry the superclass binds.
+     */
+    @Test
+    void versionSpecificParamsDecodeThroughTheirOwnVersionsRegistry() {
+        var mapper = new dev.tachyonmcp.core.protocol.mcp.v2026_07_28.codecs.McpRequestMapper();
+
+        var empty = mapper.subscriptionsListen(Map.of());
+        assertThat(empty.toolsListChanged()).isFalse();
+        assertThat(empty.resourceSubscriptions()).isEmpty();
+
+        var filtered = mapper.subscriptionsListen(
+                Map.of("notifications", Map.of("toolsListChanged", true, "resourceSubscriptions", List.of("file:///a"))));
+        assertThat(filtered.toolsListChanged()).isTrue();
+        assertThat(filtered.resourceSubscriptions()).containsExactly("file:///a");
+    }
+
+    @Test
+    void mismatchedPropertyTypesAreRejectedRatherThanDroppedSilently() {
+        var mapper = new McpRequestMapper();
+
+        assertThatThrownBy(() -> mapper.getPrompt(Map.of("name", "greet", "_meta", "not-an-object")))
+                .isInstanceOf(RequestMappingException.class)
+                .satisfies(e -> assertThat(((RequestMappingException) e).error().kind())
+                        .isEqualTo(ServerError.Kind.INVALID_PARAMS));
+        assertThatThrownBy(() -> mapper.initialize(Map.of("capabilities", List.of("wrong", "shape"))))
+                .isInstanceOf(RequestMappingException.class);
+    }
+
+    /**
+     * Params handed in as a map must survive the tree round-trip with their Java numeric width, or
+     * an in-memory caller sees a different type than it passed.
+     */
+    @Test
+    void inMemoryParamsPreserveNumericWidth() {
+        var mapper = new McpRequestMapper();
+
+        var request = mapper.getPrompt(Map.of("name", "greet", "_meta", Map.of("small", 7, "big", 7L)));
+
+        assertThat(request.request().meta()).containsEntry("small", 7).containsEntry("big", 7L);
     }
 
     private record Params(String name, Map<String, Object> meta) {}

@@ -46,6 +46,7 @@ import java.util.concurrent.FutureTask;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import tools.jackson.databind.JsonNode;
 
 /**
  * Orchestrates the MCP server's per-request flow: parses JSON-RPC messages, establishes the session on
@@ -144,10 +145,14 @@ public class McpDispatcher {
      * Semantic conventions for Model Context Protocol (MCP)</a>
      */
     private static @Nullable String extractTraceParent(@Nullable Object params) {
+        if (params instanceof JsonNode node) {
+            final var traceParent = node.path("_meta").path("traceparent");
+            return traceParent.isString() ? traceParent.stringValue() : null;
+        }
         if (params instanceof Map<?, ?> map
                 && map.get("_meta") instanceof Map<?, ?> meta
-                && meta.get("traceparent") instanceof String traceparent) {
-            return traceparent;
+                && meta.get("traceparent") instanceof String traceParent) {
+            return traceParent;
         }
         return null;
     }
