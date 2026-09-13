@@ -4,6 +4,7 @@ package dev.tachyonmcp.extensions.skills;
 import static dev.tachyonmcp.extensions.skills.SkillTestFixtures.createClient;
 import static dev.tachyonmcp.extensions.skills.SkillTestFixtures.filesystemSkillsDir;
 import static dev.tachyonmcp.extensions.skills.SkillTestFixtures.startServer;
+import static dev.tachyonmcp.testkit.JsonRpcResponseAssert.assertThat;
 import static net.javacrumbs.jsonunit.assertj.JsonAssertions.assertThatJson;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -57,9 +58,9 @@ class SkillsExtensionE2eTest {
                         SkillsExtension.builder().registry(combinedRegistry).build());
                 var client = createClient(server.port())) {
             // language=JSON
-            var list = client.post("""
-                {"jsonrpc":"2.0","id":1,"method":"skills/list","params":{"_meta":{"%s":{}}}}
-                """.formatted(SkillsExtension.ID));
+            var list = client.sendRpc("""
+                    {"jsonrpc":"2.0","id":1,"method":"skills/list"}
+                """);
             // language=JSON
             assertThatJson(list.body()).isEqualTo("""
                 {
@@ -112,11 +113,10 @@ class SkillsExtensionE2eTest {
                         .build());
                 var client = createClient(server.port())) {
             // language=JSON
-            var list = client.post("""
-                {"jsonrpc":"2.0","id":1,"method":"skills/list","params":{"_meta":{"%s":{}}}}
-                """.formatted(SkillsExtension.ID));
-
-            var result = new ObjectMapper().readTree(list.body()).path("result");
+            var list = client.sendRpc("""
+                    {"jsonrpc":"2.0","id":1,"method":"skills/list"}
+                """);
+            final var result = assertThat(list).isSuccess().result();
             assertThat(result.path("resultType").asString()).isEqualTo("complete");
             assertThat(result.path("ttlMs").asLong()).isEqualTo(60_000L);
             assertThat(result.path("cacheScope").asString()).isEqualTo("private");
@@ -130,30 +130,26 @@ class SkillsExtensionE2eTest {
                         .build());
                 var client = createClient(server.port())) {
             // language=JSON
-            var get = client.post("""
-                {"jsonrpc":"2.0","id":1,"method":"skills/get","params":{"uri":"skill://pdf-processing/SKILL.md","_meta":{"%s":{}}}}
-                """.formatted(SkillsExtension.ID));
+            var get = client.sendRpc("""
+                {"jsonrpc":"2.0","id":1,"method":"skills/get","params":{"uri":"skill://pdf-processing/SKILL.md"}}
+                """);
             // language=JSON
-            assertThatJson(get.body()).isEqualTo("""
+            assertThat(get).isSuccess().hasResult("""
                 {
-                  "jsonrpc":"2.0",
-                  "id":1,
-                  "result":{
-                    "skill":{
-                      "uri":"skill://pdf-processing/SKILL.md",
-                      "frontmatter":{
-                        "name":"pdf-processing",
-                        "description":"Extract, fill, and assemble PDF documents",
-                        "metadata":{"version":"2.1.0"}
-                      },
-                      "resources":[
-                        {"uri":"skill://pdf-processing/SKILL.md","digest":"sha256:da96519e26e173b406339e31ccf3adb0b0bd45c5fdfbabe335bf2ded216b2635","size":243},
-                        {"uri":"skill://pdf-processing/scripts/extract.py","digest":"sha256:f05fea0e15cb5f951049570d4cebb3a84b272fd3390c85e8be7586f84f0b68f8","size":40},
-                        {"uri":"skill://pdf-processing/templates/invoice.md","digest":"sha256:cd1a5be9eb7a5a46feea259ca26620f73dbd3587cc5111da44fff6489993c643","size":43}
-                      ]
+                  "skill":{
+                    "uri":"skill://pdf-processing/SKILL.md",
+                    "frontmatter":{
+                      "name":"pdf-processing",
+                      "description":"Extract, fill, and assemble PDF documents",
+                      "metadata":{"version":"2.1.0"}
                     },
-                    "resultType":"complete"
-                  }
+                    "resources":[
+                      {"uri":"skill://pdf-processing/SKILL.md","digest":"sha256:da96519e26e173b406339e31ccf3adb0b0bd45c5fdfbabe335bf2ded216b2635","size":243},
+                      {"uri":"skill://pdf-processing/scripts/extract.py","digest":"sha256:f05fea0e15cb5f951049570d4cebb3a84b272fd3390c85e8be7586f84f0b68f8","size":40},
+                      {"uri":"skill://pdf-processing/templates/invoice.md","digest":"sha256:cd1a5be9eb7a5a46feea259ca26620f73dbd3587cc5111da44fff6489993c643","size":43}
+                    ]
+                  },
+                  "resultType":"complete"
                 }
                 """);
         }
@@ -166,22 +162,18 @@ class SkillsExtensionE2eTest {
                         .build());
                 var client = createClient(server.port())) {
             // language=JSON
-            var read = client.post("""
-                {"jsonrpc":"2.0","id":1,"method":"resources/read","params":{"uri":"skill://git-workflow/SKILL.md","_meta":{"%s":{}}}}
-                """.formatted(SkillsExtension.ID));
+            var read = client.sendRpc("""
+                {"jsonrpc":"2.0","id":1,"method":"resources/read","params":{"uri":"skill://git-workflow/SKILL.md"}}
+                """);
             // language=JSON
-            assertThatJson(read.body()).isEqualTo("""
+            assertThat(read).isSuccess().hasResult("""
                 {
-                  "jsonrpc":"2.0",
-                  "id":1,
-                  "result":{
                     "contents":[
                       {"uri":"skill://git-workflow/SKILL.md","mimeType":"text/markdown","text":"---\\nname: git-workflow\\ndescription: Follow this team's Git conventions for branching and commits\\n---\\n\\n# Git Workflow\\n\\nFollow this team's Git conventions for branching and commits.\\nUse the branching guide in `references/BRANCHING.md`.\\n"}
                     ],
                     "resultType":"complete",
                     "ttlMs":0,
                     "cacheScope":"public"
-                  }
                 }
                 """);
         }
@@ -189,14 +181,14 @@ class SkillsExtensionE2eTest {
 
     @Test
     void classpathSkillDirectoryListsRootChildren() throws Exception {
-        final var server = startServer(
-                SkillsExtension.builder().registry(classpathSkillsRegistry).build());
-
-        try (var client = createClient(server.port())) {
+        try (final var server = startServer(SkillsExtension.builder()
+                        .registry(classpathSkillsRegistry)
+                        .build());
+                final var client = createClient(server.port())) {
             // language=JSON
-            var directory = client.post("""
-                {"jsonrpc":"2.0","id":1,"method":"resources/directory/read","params":{"uri":"skill://pdf-processing","_meta":{"%s":{}}}}
-                """.formatted(SkillsExtension.ID));
+            var directory = client.sendRpc("""
+                {"jsonrpc":"2.0","id":1,"method":"resources/directory/read","params":{"uri":"skill://pdf-processing"}}
+                """);
             // language=JSON
             assertThatJson(directory.body()).isEqualTo("""
                 {
@@ -217,14 +209,14 @@ class SkillsExtensionE2eTest {
 
     @Test
     void classpathSkillDirectoryListsNestedChildren() throws Exception {
-        final var server = startServer(
-                SkillsExtension.builder().registry(classpathSkillsRegistry).build());
-
-        try (var client = createClient(server.port())) {
+        try (final var server = startServer(SkillsExtension.builder()
+                        .registry(classpathSkillsRegistry)
+                        .build());
+                final var client = createClient(server.port())) {
             // language=JSON
-            var nestedDirectory = client.post("""
-                {"jsonrpc":"2.0","id":1,"method":"resources/directory/read","params":{"uri":"skill://pdf-processing/scripts","_meta":{"%s":{}}}}
-                """.formatted(SkillsExtension.ID));
+            var nestedDirectory = client.sendRpc("""
+                {"jsonrpc":"2.0","id":1,"method":"resources/directory/read","params":{"uri":"skill://pdf-processing/scripts"}}
+                """);
             // language=JSON
             assertThatJson(nestedDirectory.body()).isEqualTo("""
                 {
@@ -243,14 +235,14 @@ class SkillsExtensionE2eTest {
 
     @Test
     void fileSystemSkillsServed() throws Exception {
-        final var server = startServer(
-                SkillsExtension.builder().registry(filesystemSkillsRegistry).build());
-
-        try (var client = createClient(server.port())) {
+        try (final var server = startServer(SkillsExtension.builder()
+                        .registry(filesystemSkillsRegistry)
+                        .build());
+                var client = createClient(server.port())) {
             // language=JSON
-            var response = client.post("""
-                {"jsonrpc":"2.0","id":1,"method":"skills/list","params":{"_meta":{"%s":{}}}}
-                """.formatted(SkillsExtension.ID));
+            var response = client.sendRpc("""
+                {"jsonrpc":"2.0","id":1,"method":"skills/list"}
+                """);
 
             // language=JSON
             assertThatJson(response.body()).isEqualTo("""
@@ -295,17 +287,16 @@ class SkillsExtensionE2eTest {
 
     @Test
     void singleSkillsUnderExplicitPaths() throws Exception {
-        final var server = startServer(SkillsExtension.builder()
-                .registry(
-                        new FilesystemSkillsRegistry(filesystemSkillsDir.resolve("git-workflow"), "team/git-workflow"))
-                .registry(new ClasspathSkillsRegistry("skills/pdf-processing", "acme/pdf-processing"))
-                .build());
-
-        try (var client = createClient(server.port())) {
+        try (final var server = startServer(SkillsExtension.builder()
+                        .registry(new FilesystemSkillsRegistry(
+                                filesystemSkillsDir.resolve("git-workflow"), "team/git-workflow"))
+                        .registry(new ClasspathSkillsRegistry("skills/pdf-processing", "acme/pdf-processing"))
+                        .build());
+                var client = createClient(server.port())) {
             // language=JSON
-            var response = client.post("""
-                {"jsonrpc":"2.0","id":1,"method":"skills/list","params":{"_meta":{"%s":{}}}}
-                """.formatted(SkillsExtension.ID));
+            var response = client.sendRpc("""
+                {"jsonrpc":"2.0","id":1,"method":"skills/list"}
+                """);
 
             // language=JSON
             assertThatJson(response.body()).isEqualTo("""
@@ -359,9 +350,9 @@ class SkillsExtensionE2eTest {
 
             // skills/list: both present in registration order, each keeping its own frontmatter name
             // language=JSON
-            var skillsList = client.post("""
-                {"jsonrpc":"2.0","id":1,"method":"skills/list","params":{"_meta":{"%s":{}}}}
-                """.formatted(SkillsExtension.ID));
+            var skillsList = client.sendRpc("""
+                {"jsonrpc":"2.0","id":1,"method":"skills/list"}
+                """);
             // language=JSON
             assertThatJson(skillsList.body()).isEqualTo("""
                 {
@@ -401,9 +392,9 @@ class SkillsExtensionE2eTest {
 
             // skills/get: each fetched independently by its own URI, no cross-contamination
             // language=JSON
-            var teamGet = client.post("""
-                {"jsonrpc":"2.0","id":2,"method":"skills/get","params":{"uri":"skill://team/git-workflow/SKILL.md","_meta":{"%s":{}}}}
-                """.formatted(SkillsExtension.ID));
+            var teamGet = client.sendRpc("""
+                {"jsonrpc":"2.0","id":2,"method":"skills/get","params":{"uri":"skill://team/git-workflow/SKILL.md"}}
+                """);
             // language=JSON
             assertThatJson(teamGet.body()).isEqualTo("""
                 {
@@ -426,10 +417,9 @@ class SkillsExtensionE2eTest {
                 }
                 """);
 
-            // language=JSON
-            var acmeGet = client.post("""
-                {"jsonrpc":"2.0","id":3,"method":"skills/get","params":{"uri":"skill://acme/git-workflow/SKILL.md","_meta":{"%s":{}}}}
-                """.formatted(SkillsExtension.ID));
+            var acmeGet = client.sendRpc("""
+                {"jsonrpc":"2.0","id":3,"method":"skills/get","params":{"uri":"skill://acme/git-workflow/SKILL.md"}}
+                """);
             // language=JSON
             assertThatJson(acmeGet.body()).isEqualTo("""
                 {
@@ -453,8 +443,7 @@ class SkillsExtensionE2eTest {
                 """);
 
             // base resources/list (no extension negotiation): both manifests present, same name
-            // language=JSON
-            var list = client.post("""
+            var list = client.sendRpc("""
                 {"jsonrpc":"2.0","id":4,"method":"resources/list","params":{}}
                 """);
             // language=JSON
@@ -497,8 +486,7 @@ class SkillsExtensionE2eTest {
             var skillMd = Files.readString(gitWorkflowDir.resolve("SKILL.md"));
 
             // base resources/read: both readable by their own URI
-            // language=JSON
-            var teamRead = client.post("""
+            var teamRead = client.sendRpc("""
                 {"jsonrpc":"2.0","id":5,"method":"resources/read","params":{"uri":"skill://team/git-workflow/SKILL.md"}}
                 """);
             // language=JSON
@@ -519,8 +507,7 @@ class SkillsExtensionE2eTest {
                 }
                 """.formatted(new ObjectMapper().writeValueAsString(skillMd)));
 
-            // language=JSON
-            var acmeRead = client.post("""
+            var acmeRead = client.sendRpc("""
                 {"jsonrpc":"2.0","id":6,"method":"resources/read","params":{"uri":"skill://acme/git-workflow/SKILL.md"}}
                 """);
             // language=JSON
@@ -553,7 +540,6 @@ class SkillsExtensionE2eTest {
                 final var client = new Mcp20251125Client(server.port())) {
             client.initialize();
 
-            // language=JSON
             var list = client.sendRpc("""
                 {"jsonrpc":"2.0","id":1,"method":"resources/list","params":{}}
                 """);
@@ -594,7 +580,6 @@ class SkillsExtensionE2eTest {
 
             var skillMd = Files.readString(gitWorkflowDir.resolve("SKILL.md"));
 
-            // language=JSON
             var acmeRead = client.sendRpc("""
                 {"jsonrpc":"2.0","id":2,"method":"resources/read","params":{"uri":"skill://acme/git-workflow/SKILL.md"}}
                 """);
@@ -642,10 +627,9 @@ class SkillsExtensionE2eTest {
                         .registry(new ClasspathSkillsRegistry("skills/pdf-processing", "acme/pdf-processing"))
                         .build());
                 final var client = createClient(server.port())) {
-            // language=JSON
-            var root = client.post("""
-                {"jsonrpc":"2.0","id":1,"method":"resources/directory/read","params":{"uri":"skill://","_meta":{"%s":{}}}}
-                """.formatted(SkillsExtension.ID));
+            var root = client.sendRpc("""
+                {"jsonrpc":"2.0","id":1,"method":"resources/directory/read","params":{"uri":"skill://"}}
+                """);
             // language=JSON
             assertThatJson(root.body()).isEqualTo("""
                 {
@@ -661,10 +645,9 @@ class SkillsExtensionE2eTest {
                 }
                 """);
 
-            // language=JSON
-            var namespace = client.post("""
-                {"jsonrpc":"2.0","id":2,"method":"resources/directory/read","params":{"uri":"skill://team","_meta":{"%s":{}}}}
-                """.formatted(SkillsExtension.ID));
+            var namespace = client.sendRpc("""
+                {"jsonrpc":"2.0","id":2,"method":"resources/directory/read","params":{"uri":"skill://team"}}
+                """);
             // language=JSON
             assertThatJson(namespace.body()).isEqualTo("""
                 {
@@ -687,35 +670,24 @@ class SkillsExtensionE2eTest {
                         .registry(new ClasspathSkillsRegistry("skills"))
                         .build());
                 final var client = new Mcp20260728Client(server.port())) {
-            // language=JSON
-            var list = client.post("""
+
+            var list = client.sendRpc("""
                 {"jsonrpc":"2.0","id":1,"method":"skills/list","params":{}}
                 """);
-            // language=JSON
-            assertThatJson(list.body()).isEqualTo("""
-                {"jsonrpc":"2.0","id":1,"error":{"code":-32601,"message":"Method not found"}}
-                """);
 
-            // language=JSON
+            assertThat(list).isJsonRpcError().isMethodNotFound();
+
             var get = client.post("""
                 {"jsonrpc":"2.0","id":2,"method":"skills/get","params":{"uri":"skill://pdf-processing/SKILL.md"}}
                 """);
-            // language=JSON
-            assertThatJson(get.body()).isEqualTo("""
-                {"jsonrpc":"2.0","id":2,"error":{"code":-32601,"message":"Method not found"}}
-                """);
+            assertThat(get).isJsonRpcError().isMethodNotFound();
 
-            // language=JSON
             var directory = client.post("""
                 {"jsonrpc":"2.0","id":3,"method":"resources/directory/read","params":{"uri":"skill://pdf-processing"}}
                 """);
-            // language=JSON
-            assertThatJson(directory.body()).isEqualTo("""
-                {"jsonrpc":"2.0","id":3,"error":{"code":-32601,"message":"Method not found"}}
-                """);
+            assertThat(directory).isJsonRpcError().isMethodNotFound();
 
-            // language=JSON
-            var read = client.post("""
+            var read = client.sendRpc("""
                 {"jsonrpc":"2.0","id":4,"method":"resources/read","params":{"uri":"skill://pdf-processing/SKILL.md"}}
                 """);
             // language=JSON
@@ -736,8 +708,7 @@ class SkillsExtensionE2eTest {
                 }
                 """.formatted(new ObjectMapper().writeValueAsString(PDF_SKILL)));
 
-            // language=JSON
-            var resources = client.post("""
+            var resources = client.sendRpc("""
                 {"jsonrpc":"2.0","id":5,"method":"resources/list","params":{}}
                 """);
             // language=JSON
@@ -781,7 +752,6 @@ class SkillsExtensionE2eTest {
                 final var client = new Mcp20251125Client(server.port())) {
             client.initialize();
 
-            // language=JSON
             var read = client.sendRpc("""
                 {"jsonrpc":"2.0","id":2,"method":"resources/read","params":{"uri":"skill://pdf-processing/SKILL.md"}}
                 """);
@@ -809,19 +779,16 @@ class SkillsExtensionE2eTest {
                         .registry(classpathSkillsRegistry)
                         .build());
                 final var client = createClient(server.port())) {
-            // language=JSON
             var get = client.post("""
-                {"jsonrpc":"2.0","id":1,"method":"skills/get","params":{"uri":"skill://nope/SKILL.md","_meta":{"%s":{}}}}
-                """.formatted(SkillsExtension.ID));
-            // language=JSON
+                {"jsonrpc":"2.0","id":1,"method":"skills/get","params":{"uri":"skill://nope/SKILL.md"}}
+                """);
             assertThatJson(get.body()).isEqualTo("""
                 {"jsonrpc":"2.0","id":1,"error":{"code":-32602,"message":"Unknown skill: skill://nope/SKILL.md"}}
                 """);
 
-            // language=JSON
             var directory = client.post("""
-                {"jsonrpc":"2.0","id":2,"method":"resources/directory/read","params":{"uri":"skill://git-workflow/SKILL.md","_meta":{"%s":{}}}}
-                """.formatted(SkillsExtension.ID));
+                {"jsonrpc":"2.0","id":2,"method":"resources/directory/read","params":{"uri":"skill://git-workflow/SKILL.md"}}
+                """);
             // language=JSON
             assertThatJson(directory.body()).isEqualTo("""
                 {"jsonrpc":"2.0","id":2,"error":{"code":-32602,"message":"Unknown skill directory: skill://git-workflow/SKILL.md"}}
@@ -838,10 +805,9 @@ class SkillsExtensionE2eTest {
             var mapper = new ObjectMapper();
             var digestsByUri = digestsByUri(client, mapper);
 
-            // language=JSON
-            var list = client.post("""
+            var list = client.sendRpc("""
                 {"jsonrpc":"2.0","id":1,"method":"resources/list","params":{"_meta":{"%s":{}}}}
-                """.formatted(SkillsExtension.ID));
+                """);
 
             var resources = mapper.readTree(list.body()).path("result").path("resources");
             assertThat(resources.isArray()).isTrue();
@@ -872,9 +838,9 @@ class SkillsExtensionE2eTest {
 
     private Map<String, String> digestsByUri(Mcp20260728Client client, ObjectMapper mapper) throws Exception {
         // language=JSON
-        var skillsList = client.post("""
+        var skillsList = client.sendRpc("""
                 {"jsonrpc":"2.0","id":1,"method":"skills/list","params":{"_meta":{"%s":{}}}}
-                """.formatted(SkillsExtension.ID));
+                """);
 
         var digests = new HashMap<String, String>();
         for (var skill : mapper.readTree(skillsList.body()).path("result").path("skills")) {
@@ -922,12 +888,11 @@ class SkillsExtensionE2eTest {
     }
 
     private byte[] readContent(Mcp20260728Client client, ObjectMapper mapper, String uri) throws Exception {
-        // language=JSON
-        var read = client.post("""
-                {"jsonrpc":"2.0","id":1,"method":"resources/read","params":{"uri":"%s","_meta":{"%s":{}}}}
-                """.formatted(uri, SkillsExtension.ID));
-        var content =
-                mapper.readTree(read.body()).path("result").path("contents").get(0);
+        var read = client.sendRpc("""
+                {"jsonrpc":"2.0","id":1,"method":"resources/read","params":{"uri":"%s"}}
+                """.formatted(uri));
+        final var result = assertThat(read).isSuccess().result();
+        var content = result.path("contents").get(0);
         return content.has("text")
                 ? content.path("text").asString().getBytes(StandardCharsets.UTF_8)
                 : Base64.getDecoder().decode(content.path("blob").asString());
