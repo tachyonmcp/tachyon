@@ -25,6 +25,7 @@ import dev.tachyonmcp.core.transport.jsonrpc.JsonRpcMessage;
 import dev.tachyonmcp.core.transport.netty.sse.PostSseStream;
 import dev.tachyonmcp.core.transport.netty.sse.SseHeartbeat;
 import dev.tachyonmcp.core.transport.netty.sse.SseManager;
+import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.handler.codec.http.FullHttpRequest;
@@ -127,42 +128,7 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
         final @Nullable ChannelContext ic = ChannelHandlerUtils.getInteractionContext(ctx);
         var body = req.content().retain();
         try {
-            CompletableFuture.runAsync(
-                            () -> {
-                                final JsonRpcMessage message;
-                                try {
-                                    if (sessionId != null) {
-                                        final Optional<Session> session;
-                                        try {
-                                            session = server.getSession(sessionId);
-                                        } catch (RuntimeException e) {
-                                            logger.warn("Failed to resolve session: {}", sessionId, e);
-                                            ctx.executor()
-                                                    .execute(() -> sendPlainTextAndClose(
-                                                            ctx,
-                                                            HttpResponseStatus.INTERNAL_SERVER_ERROR,
-                                                            "Session lookup failed",
-                                                            origin));
-                                            return;
-                                        }
-                                        if (session.isEmpty()) {
-                                            ctx.executor()
-                                                    .execute(() -> sendPlainTextAndClose(
-                                                            ctx,
-                                                            HttpResponseStatus.NOT_FOUND,
-                                                            "Unknown session",
-                                                            origin));
-                                            return;
-                                        }
-                                        bindSession(ctx.channel(), session.orElseThrow());
-                                    }
-                                    message = dispatcher.parseMessage(body);
-                                } finally {
-                                    body.release();
-                                }
-                                dispatchPostMessage(ctx, sessionId, message, origin, ic);
-                            },
-                            executor)
+            CompletableFuture.runAsync(() -> parseAndDispatchPost(ctx, sessionId, body, origin, ic), executor)
                     .exceptionally(ex -> {
                         logger.debug("Failed to parse POST body", ex);
                         ctx.executor()
@@ -180,20 +146,61 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
         }
     }
 
+    /**
+     * Resolves and binds the session, parses the body, then hands the message on. Always releases
+     * {@code body}. Returns without dispatching if the session is unknown or cannot be resolved,
+     * having already written the error response.
+     */
+    private void parseAndDispatchPost(
+            ChannelHandlerContext ctx,
+            @Nullable String sessionId,
+            ByteBuf body,
+            @Nullable String origin,
+            @Nullable ChannelContext ic) {
+        final JsonRpcMessage message;
+        try {
+            if (sessionId != null) {
+                final Optional<Session> session;
+                try {
+                    session = server.getSession(sessionId);
+                } catch (RuntimeException e) {
+                    logger.warn("Failed to resolve session: {}", sessionId, e);
+                    ctx.executor()
+                            .execute(() -> sendPlainTextAndClose(
+                                    ctx, HttpResponseStatus.INTERNAL_SERVER_ERROR, "Session lookup failed", origin));
+                    return;
+                }
+                if (session.isEmpty()) {
+                    ctx.executor()
+                            .execute(() -> sendPlainTextAndClose(
+                                    ctx, HttpResponseStatus.NOT_FOUND, "Unknown session", origin));
+                    return;
+                }
+                bindSession(ctx.channel(), session.orElseThrow());
+            }
+            message = dispatcher.parseMessage(body);
+        } finally {
+            body.release();
+        }
+        dispatchPostMessage(ctx, sessionId, message, origin, ic);
+    }
+
     private void dispatchPostMessage(
             ChannelHandlerContext ctx,
             @Nullable String sessionId,
             @Nullable JsonRpcMessage message,
             @Nullable String origin,
             @Nullable ChannelContext ic) {
-        final var executor = ctx.executor();
+        // Named to not shadow the worker `executor` field: every write below must run on the
+        // channel's event loop, while `executor` off-loads work away from it.
+        final var eventLoop = ctx.executor();
         if (message == null) {
-            executor.execute(() -> sendResponseAndClose(
+            eventLoop.execute(() -> sendResponseAndClose(
                     ctx, HttpResponseStatus.BAD_REQUEST, "application/json", dispatcher.parseError(ic), origin));
             return;
         }
         if (!server.isStateless() && sessionId == null && !(message instanceof JsonRpcMessage.Request<?>)) {
-            executor.execute(() -> sendPlainTextAndClose(
+            eventLoop.execute(() -> sendPlainTextAndClose(
                     ctx, HttpResponseStatus.BAD_REQUEST, "Missing MCP-Session-Id header", origin));
             return;
         }
@@ -222,11 +229,11 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
                 } catch (RuntimeException e) {
                     logger.warn("Failed to process {} notification", not.method(), e);
                 }
-                executor.execute(() -> sendAccepted(ctx, origin));
+                eventLoop.execute(() -> sendAccepted(ctx, origin));
             }
             default -> {
                 logger.warn("Unexpected message type: {}", message);
-                executor.execute(() -> sendAccepted(ctx, origin));
+                eventLoop.execute(() -> sendAccepted(ctx, origin));
             }
         }
     }

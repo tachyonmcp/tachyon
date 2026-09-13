@@ -25,6 +25,11 @@ public final class OperationTracker {
     /**
      * Admits an operation unless shutdown has started, then tracks dispatch and transport
      * completion under that one admission decision.
+     *
+     * @param <T>                 the operation's result type
+     * @param operation           supplies the dispatch future; invoked only once admitted
+     * @param transportCompletion completes once the response has been written
+     * @return the operation's future, or a failed future if the server is shutting down
      */
     public <T> CompletableFuture<T> execute(
             Supplier<CompletableFuture<T>> operation, CompletableFuture<Void> transportCompletion) {
@@ -57,7 +62,13 @@ public final class OperationTracker {
         }
     }
 
-    /** Stops admission and waits for active operations using the shared shutdown deadline. */
+    /**
+     * Stops admission and waits for active operations using the shared shutdown deadline.
+     *
+     * @param deadline absolute {@link System#nanoTime()} value to stop waiting at; returns as soon
+     *                 as no operations remain, or gives up quietly once the deadline passes
+     * @throws InterruptedException if interrupted while waiting
+     */
     public void drain(long deadline) throws InterruptedException {
         lock.lock();
         try {
