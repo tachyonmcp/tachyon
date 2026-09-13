@@ -132,6 +132,8 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
      */
     private final ReentrantLock lifecycleLock = new ReentrantLock();
 
+    private boolean closed;
+
     private volatile int port;
 
     @Nullable
@@ -380,6 +382,9 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
     public void start() {
         lifecycleLock.lock();
         try {
+            if (closed) {
+                throw new IllegalStateException("Server is closed");
+            }
             if (transport != null) {
                 throw new IllegalStateException("Server is already started");
             }
@@ -973,14 +978,17 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
 
     @Override
     public void close() {
-        if (transport instanceof NettyServer netty && netty.inEventLoop()) {
-            throw new IllegalStateException("close() must not be called from a Netty event loop thread — "
-                    + "draining in-flight requests needs that thread to flush their responses. "
-                    + "Call close() from another thread.");
-        }
+        requireNotOnEventLoop(transport);
         lifecycleLock.lock();
         try {
             final var current = transport;
+            // start() may have published `transport` while this call waited for the lock, so the
+            // pre-lock check above can miss a caller now running on that server's event loop.
+            requireNotOnEventLoop(current);
+            if (closed) {
+                return;
+            }
+            closed = true;
             if (current instanceof NettyServer netty) {
                 netty.stopAccepting();
             }
@@ -1018,6 +1026,14 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
             }
         } finally {
             lifecycleLock.unlock();
+        }
+    }
+
+    private static void requireNotOnEventLoop(@Nullable Closeable transport) {
+        if (transport instanceof NettyServer netty && netty.inEventLoop()) {
+            throw new IllegalStateException("close() must not be called from a Netty event loop thread — "
+                    + "draining in-flight requests needs that thread to flush their responses. "
+                    + "Call close() from another thread.");
         }
     }
 }

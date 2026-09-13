@@ -3,6 +3,8 @@ package dev.tachyonmcp.core.server;
 
 import static dev.tachyonmcp.core.test.TestUtils.newEngine;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 
 import dev.tachyonmcp.api.server.config.RuntimeConfig;
@@ -45,6 +47,19 @@ class ServerShutdownGraceTest {
         assertThat(elapsedMs)
                 .as("idle close must not wait for the grace period")
                 .isLessThan(1_000L);
+    }
+
+    @Test
+    void closeIsIdempotentAndBlocksLaterStart() {
+        var server = TachyonServer.builder().build();
+
+        server.close();
+
+        assertThatCode(server::close).as("second close must be a no-op").doesNotThrowAnyException();
+        assertThatThrownBy(server::start)
+                .as("start after close must not bind a transport on a shut-down engine")
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("Server is closed");
     }
 
     @Test
