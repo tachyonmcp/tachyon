@@ -17,6 +17,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -187,17 +188,36 @@ public final class SessionManager implements AutoCloseable {
     }
 
     private Creation createAndInstall(String sessionId, SseConnection connection) {
-        final var lifecycleLock = acquireLifecycleLock(sessionId);
-        lifecycleLock.lock();
-        try {
+        return withLifecycleLock(sessionId, () -> {
             final var key = new SessionKey(sessionId, UUID.randomUUID().toString());
             final var snapshot = store.create(key, expiresAt());
             final var created = runtime(snapshot, connection);
             return new Creation(created, sessions.put(sessionId, created));
+        });
+    }
+
+    /**
+     * Runs {@code action} while holding the session's lifecycle lock, so creation, snapshot
+     * persistence and expiry refreshes for one id never interleave. The lock is private to this
+     * manager and reentrant: {@link #evictLocal(Session)} closes the session from inside the lock,
+     * which re-enters through {@link #persist(Session)}.
+     */
+    private <T> T withLifecycleLock(String sessionId, Supplier<T> action) {
+        final var lifecycleLock = acquireLifecycleLock(sessionId);
+        lifecycleLock.lock();
+        try {
+            return action.get();
         } finally {
             lifecycleLock.unlock();
             releaseLifecycleLock(sessionId, lifecycleLock);
         }
+    }
+
+    private void withLifecycleLock(String sessionId, Runnable action) {
+        withLifecycleLock(sessionId, () -> {
+            action.run();
+            return null;
+        });
     }
 
     private LifecycleLock acquireLifecycleLock(String sessionId) {
@@ -221,7 +241,7 @@ public final class SessionManager implements AutoCloseable {
         if (sessions.get(session.id()) != session) {
             return;
         }
-        synchronized (session) {
+        withLifecycleLock(session.id(), () -> {
             if (sessions.get(session.id()) != session) {
                 return;
             }
@@ -237,7 +257,7 @@ public final class SessionManager implements AutoCloseable {
             } catch (RuntimeException e) {
                 logger.warn("Failed to persist session snapshot: {}", session.id(), e);
             }
-        }
+        });
     }
 
     private void touch(Session session) {
@@ -264,7 +284,7 @@ public final class SessionManager implements AutoCloseable {
     }
 
     private void refreshExpiryIfDue(Session session) {
-        synchronized (session) {
+        withLifecycleLock(session.id(), () -> {
             if (sessions.get(session.id()) != session) {
                 return;
             }
@@ -285,7 +305,7 @@ public final class SessionManager implements AutoCloseable {
             } catch (RuntimeException e) {
                 logger.warn("Failed to refresh session snapshot expiry: {}", session.id(), e);
             }
-        }
+        });
     }
 
     private boolean refreshDue(Session session, long nowMillis) {
