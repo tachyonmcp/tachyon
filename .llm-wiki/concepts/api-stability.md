@@ -26,7 +26,7 @@ Package-level: `package-info.java` with `@NullMarked` (+ `@InternalApi` for `tra
 |---|---|
 | `tachyon-api` (`dev.tachyonmcp.api..`) | `dev.tachyonmcp.core.server.internal` (`ServerEngine` — "Not a stability contract" `ServerEngine.java:27-37`) |
 | `TachyonServer`, `ServerBuilder`, `core.server.config.*` records | `McpDispatcher`, `RpcMethodHandler`, registries `Default*`, `transport.*`, `protocol.*` mappers, `runtime.*` |
-| `SessionStore`/`SessionEventStore`/`SessionSnapshot` (`@ExperimentalApi since 1.0.0-beta.26`) | `Session` (`@InternalApi since beta.26`) |
+| `SessionStore`/`SessionEventStore`/`SessionSnapshot` (`@ExperimentalApi since 1.0.0-beta.27`) | `Session` (`@InternalApi since beta.27`) |
 | Kotlin `public` DSL | Kotlin `internal` |
 
 Experimental notable: `Tasks`, `TaskConnector`, `ToolHandler`, `TypedToolFn`, `ExtensionContext`, `ServerExtension`, `NetworkConfig`, `ObservabilityConfig`, `annotations(...)`, `pipelineCustomizer`, `sendRequest`, `comment()`.

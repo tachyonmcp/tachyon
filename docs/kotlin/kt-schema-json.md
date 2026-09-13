@@ -88,7 +88,7 @@ plugins {
 repositories { mavenCentral() }
 
 dependencies {
-    implementation(platform("dev.tachyonmcp:tachyon-bom:1.0.0-beta.26"))
+    implementation(platform("dev.tachyonmcp:tachyon-bom:1.0.0-beta.27"))
     implementation("dev.tachyonmcp:tachyon-kotlin-kt-schema")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
 }
