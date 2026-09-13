@@ -600,15 +600,13 @@
                                             <matcher>java</matcher>
                                             <match>@dev.tachyonmcp.api.annotations.InternalApi ^*;</match>
                                         </item>
-                                    </exclude>
-                                </elements>
-                            </revapi.filter>
-                            <revapi.filter>
-                                <elements>
-                                    <exclude>
                                         <item>
                                             <matcher>java</matcher>
                                             <match>@dev.tachyonmcp.api.annotations.ExperimentalApi ^*;</match>
+                                        </item>
+                                        <item>
+                                            <matcher>java-package</matcher>
+                                            <match>/dev\.tachyonmcp\.core\.protocol\.mcp\.v[0-9_]+(\..*)?/</match>
                                         </item>
                                     </exclude>
                                 </elements>
