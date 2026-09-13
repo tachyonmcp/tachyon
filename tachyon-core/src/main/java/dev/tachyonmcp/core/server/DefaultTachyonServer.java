@@ -84,6 +84,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -122,13 +123,22 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
     private final Map<String, ServerExtension> extensionsById = new ConcurrentHashMap<>();
     private @Nullable String bootstrappingExtensionId;
 
-    private int port;
+    /**
+     * Guards {@link #start()} against {@link #close()} and against itself.
+     *
+     * <p>A {@link ReentrantLock}, not {@code synchronized}: {@code start()} blocks on the Netty
+     * bind and {@code close()} blocks draining in-flight operations, so on a virtual thread a
+     * monitor would pin the carrier for the whole lifecycle transition.
+     */
+    private final ReentrantLock lifecycleLock = new ReentrantLock();
+
+    private volatile int port;
 
     @Nullable
-    private String host;
+    private volatile String host;
 
     @Nullable
-    private Closeable transport;
+    private volatile Closeable transport;
 
     private static final List<ProtocolResponseMapper> RESPONSE_MAPPERS;
 
@@ -367,34 +377,39 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
     }
 
     @Override
-    public synchronized void start() {
-        if (transport != null) {
-            throw new IllegalStateException("Server is already started");
+    public void start() {
+        lifecycleLock.lock();
+        try {
+            if (transport != null) {
+                throw new IllegalStateException("Server is already started");
+            }
+            var network = config.network();
+            if (network.port() < 0) {
+                throw new IllegalStateException("Port must be set before start()");
+            }
+            var netty = new NettyServer(
+                    this,
+                    new NettyServerConfig(
+                            network.host(),
+                            network.port(),
+                            network.endpointPath(),
+                            network.readerIdleTimeout(),
+                            network.writerIdleTimeout(),
+                            network.maxContentLength(),
+                            NettyServerConfig.buildCorsConfig(
+                                    network.allowedOrigins(),
+                                    network.allowNullOrigin(),
+                                    network.allowPrivateNetworks(),
+                                    network.allowedHeaders()),
+                            network.allowedHosts(),
+                            network.ioEngine(),
+                            pipelineCustomizer));
+            host = netty.host();
+            port = netty.port();
+            transport = netty;
+        } finally {
+            lifecycleLock.unlock();
         }
-        var network = config.network();
-        if (network.port() < 0) {
-            throw new IllegalStateException("Port must be set before start()");
-        }
-        var netty = new NettyServer(
-                this,
-                new NettyServerConfig(
-                        network.host(),
-                        network.port(),
-                        network.endpointPath(),
-                        network.readerIdleTimeout(),
-                        network.writerIdleTimeout(),
-                        network.maxContentLength(),
-                        NettyServerConfig.buildCorsConfig(
-                                network.allowedOrigins(),
-                                network.allowNullOrigin(),
-                                network.allowPrivateNetworks(),
-                                network.allowedHeaders()),
-                        network.allowedHosts(),
-                        network.ioEngine(),
-                        pipelineCustomizer));
-        transport = netty;
-        host = netty.host();
-        port = netty.port();
     }
 
     @Override
@@ -958,45 +973,51 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
 
     @Override
     public void close() {
-        if (transport instanceof NettyServer netty) {
-            if (netty.inEventLoop()) {
-                throw new IllegalStateException("close() must not be called from a Netty event loop thread — "
-                        + "draining in-flight requests needs that thread to flush their responses. "
-                        + "Call close() from another thread.");
-            }
-            netty.stopAccepting();
+        if (transport instanceof NettyServer netty && netty.inEventLoop()) {
+            throw new IllegalStateException("close() must not be called from a Netty event loop thread — "
+                    + "draining in-flight requests needs that thread to flush their responses. "
+                    + "Call close() from another thread.");
         }
+        lifecycleLock.lock();
         try {
-            logger.info("Shutting down TachyonMCP Server");
-            final var deadline =
-                    System.nanoTime() + config.runtime().shutdownGracePeriod().toNanos();
+            final var current = transport;
+            if (current instanceof NettyServer netty) {
+                netty.stopAccepting();
+            }
             try {
-                operations.drain(deadline);
-                executor.shutdown();
-                if (!executor.awaitTermination(Math.max(0, deadline - System.nanoTime()), TimeUnit.NANOSECONDS)) {
-                    executor.shutdownNow();
-                }
-            } catch (InterruptedException e) {
-                executor.shutdownNow();
-                Thread.currentThread().interrupt();
-            }
-            subscriptionRegistry.closeAll();
-            shutdownExtensions(deadline);
-            taskRegistry.stopTtlJanitor();
-            sessionManager.close();
-            sessionEventStore.close();
-        } catch (IOException e) {
-            logger.debug("Error while shutting down", e);
-        } finally {
-            if (transport instanceof NettyServer netty) {
-                netty.close();
-            } else if (transport != null) {
+                logger.info("Shutting down TachyonMCP Server");
+                final var deadline = System.nanoTime()
+                        + config.runtime().shutdownGracePeriod().toNanos();
                 try {
-                    transport.close();
-                } catch (IOException e) {
-                    logger.debug("Error closing transport", e);
+                    operations.drain(deadline);
+                    executor.shutdown();
+                    if (!executor.awaitTermination(Math.max(0, deadline - System.nanoTime()), TimeUnit.NANOSECONDS)) {
+                        executor.shutdownNow();
+                    }
+                } catch (InterruptedException e) {
+                    executor.shutdownNow();
+                    Thread.currentThread().interrupt();
+                }
+                subscriptionRegistry.closeAll();
+                shutdownExtensions(deadline);
+                taskRegistry.stopTtlJanitor();
+                sessionManager.close();
+                sessionEventStore.close();
+            } catch (IOException e) {
+                logger.debug("Error while shutting down", e);
+            } finally {
+                if (current instanceof NettyServer netty) {
+                    netty.close();
+                } else if (current != null) {
+                    try {
+                        current.close();
+                    } catch (IOException e) {
+                        logger.debug("Error closing transport", e);
+                    }
                 }
             }
+        } finally {
+            lifecycleLock.unlock();
         }
     }
 }
