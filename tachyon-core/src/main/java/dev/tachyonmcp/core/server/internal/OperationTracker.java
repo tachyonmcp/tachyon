@@ -3,25 +3,44 @@ package dev.tachyonmcp.core.server.internal;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 
-/** Tracks admitted requests until their complete dispatch pipeline terminates. */
+/**
+ * Tracks admitted requests until their complete dispatch pipeline terminates.
+ *
+ * <p>Guarded by a {@link ReentrantLock}, not {@code synchronized}: admission runs on virtual
+ * threads for every request, and a VT blocked on a monitor pins its carrier (Java 21; fixed in
+ * JEP 491 / Java 24). A j.u.c lock parks the VT instead, and {@link Condition#awaitNanos} lets
+ * {@link #drain} wait out the grace period without pinning the thread that called close().
+ */
 public final class OperationTracker {
+
+    private final ReentrantLock lock = new ReentrantLock();
+    private final Condition idle = lock.newCondition();
     private boolean closing;
     private int active;
 
     /**
      * Admits an operation unless shutdown has started, then tracks dispatch and transport
      * completion under that one admission decision.
+     *
+     * @param <T>                 the operation's result type
+     * @param operation           supplies the dispatch future; invoked only once admitted
+     * @param transportCompletion completes once the response has been written
+     * @return the operation's future, or a failed future if the server is shutting down
      */
     public <T> CompletableFuture<T> execute(
             Supplier<CompletableFuture<T>> operation, CompletableFuture<Void> transportCompletion) {
-        synchronized (this) {
+        lock.lock();
+        try {
             if (closing) {
                 return CompletableFuture.failedFuture(new RejectedExecutionException("Server is shutting down"));
             }
             active++;
+        } finally {
+            lock.unlock();
         }
         try {
             final var result = operation.get();
@@ -33,18 +52,34 @@ public final class OperationTracker {
         }
     }
 
-    private synchronized void finished() {
-        active--;
-        if (closing) notifyAll();
+    private void finished() {
+        lock.lock();
+        try {
+            active--;
+            if (closing && active == 0) idle.signalAll();
+        } finally {
+            lock.unlock();
+        }
     }
 
-    /** Stops admission and waits for active operations using the shared shutdown deadline. */
-    public synchronized void drain(long deadline) throws InterruptedException {
-        closing = true;
-        while (active != 0) {
-            final var remaining = deadline - System.nanoTime();
-            if (remaining <= 0) return;
-            TimeUnit.NANOSECONDS.timedWait(this, remaining);
+    /**
+     * Stops admission and waits for active operations using the shared shutdown deadline.
+     *
+     * @param deadline absolute {@link System#nanoTime()} value to stop waiting at; returns as soon
+     *                 as no operations remain, or gives up quietly once the deadline passes
+     * @throws InterruptedException if interrupted while waiting
+     */
+    public void drain(long deadline) throws InterruptedException {
+        lock.lock();
+        try {
+            closing = true;
+            while (active != 0) {
+                final var remaining = deadline - System.nanoTime();
+                if (remaining <= 0) return;
+                idle.awaitNanos(remaining);
+            }
+        } finally {
+            lock.unlock();
         }
     }
 }

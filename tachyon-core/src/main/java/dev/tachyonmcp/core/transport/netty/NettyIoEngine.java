@@ -73,33 +73,27 @@ public enum NettyIoEngine {
     // Detection
     // -----------------------------------------------------------------------
 
-    private static volatile NettyIoEngine detected;
+    private static final class Detected {
+        private static final NettyIoEngine ENGINE = best();
+
+        private static NettyIoEngine best() {
+            for (var e : values()) {
+                if (e != AUTO && e.resolved != null) {
+                    return e;
+                }
+            }
+            return NIO;
+        }
+    }
 
     /**
      * Detects the best available transport in priority order:
      * io_uring &gt; epoll &gt; kqueue &gt; NIO.
      *
-     * <p>The result is cached after the first call.
+     * <p>The result is computed once on first call and cached for the lifetime of the JVM.
      */
     public static NettyIoEngine detect() {
-        NettyIoEngine result = detected;
-        if (result != null) {
-            return result;
-        }
-        synchronized (NettyIoEngine.class) {
-            result = detected;
-            if (result != null) {
-                return result;
-            }
-            for (var e : values()) {
-                if (e != AUTO && e.resolved != null) {
-                    detected = e;
-                    return e;
-                }
-            }
-            detected = NIO;
-            return NIO;
-        }
+        return Detected.ENGINE;
     }
 
     // -----------------------------------------------------------------------
