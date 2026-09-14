@@ -126,11 +126,3 @@ Its Java and Kotlin examples are compiled during the project build to keep them 
 ## License
 
 **Tachyon MCP** is available under the terms of the [Apache 2.0](LICENSE).
-
-<div style="display:flex; align-content:center; justify-content: center; width: 100%">
-  <img
-    src="docs/assets/logo-512.png"
-    alt="Tachyon logo"
-    style="display:inline-block; width: 256px; height: auto;"
-  />
-</div>
