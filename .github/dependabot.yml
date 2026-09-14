@@ -1,16 +1,17 @@
-# To get started with Dependabot version updates, you'll need to specify which
-# package ecosystems to update and where the package manifests are located.
-# Please see the documentation for all configuration options:
+# Renovate (renovate.json) opens dependency PRs.
+# Dependabot keeps the dependency graph and alerts only: open-pull-requests-limit 0 blocks version-update PRs.
 # https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
 
 version: 2
 updates:
-  - package-ecosystem: "maven" # See documentation for possible values
-    directory: "/" # Location of package manifests
+  - package-ecosystem: "maven"
+    directory: "/"
     schedule:
       interval: "weekly"
+    open-pull-requests-limit: 0
 
   - package-ecosystem: "github-actions"
-    directory: "/" # Scans .github/workflows
+    directory: "/"
     schedule:
       interval: "weekly"
+    open-pull-requests-limit: 0
