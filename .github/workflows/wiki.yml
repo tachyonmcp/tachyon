@@ -1,0 +1,48 @@
+# Publishes .llm-wiki to the repository's GitHub Wiki.
+#
+# Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors.
+
+name: Wiki
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".llm-wiki/**"
+      - ".github/workflows/wiki.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: wiki
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Checkout wiki
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ github.repository }}.wiki
+          path: wiki
+
+      - name: Render wiki
+        run: python3 .llm-wiki/tools/publish_wiki.py wiki --sha "${GITHUB_SHA}"
+
+      - name: Push wiki
+        working-directory: wiki
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Wiki unchanged"
+            exit 0
+          fi
+          git commit -m "docs(wiki): sync .llm-wiki at ${GITHUB_SHA::8}"
+          git push

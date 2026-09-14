@@ -7,7 +7,7 @@ commit: 582f9c52
 
 # 🗺️ Tachyon MCP — LLM Wiki index
 
-Read this first. Rules: [[CONVENTIONS]]. Timeline: [[log]].
+Read this first. Rules: [[CONVENTIONS]].
 
 ## 🧭 Start
 
