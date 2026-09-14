@@ -62,7 +62,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <!-- Java -->
         <java.version>21</java.version>
-        <kotlin.version>2.2.21</kotlin.version>
+        <kotlin.version>2.4.20</kotlin.version>
         <kotlin-language.version>2.2</kotlin-language.version>
         <api.oldVersion>1.0.0-beta.27</api.oldVersion>
 
