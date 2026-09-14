@@ -16,6 +16,9 @@ import java.util.Optional
  * Ships in the dedicated `tachyon-kotlin-kt-schema` integration artifact, which declares
  * `kt-schema-generator-json-jvm` as a regular (non-optional) dependency. The provider therefore
  * always loads once that artifact is on the classpath — add it explicitly to use `typedTool`.
+ *
+ * Declines (returns empty) types the Kotlin reflection generator cannot describe, such as Java
+ * records with primitive components, so the chain continues to tachyon-core's Java generator.
  */
 @ExperimentalApi
 internal class KtSchemaReflectionFactory : JsonSchemaFactory<Class<*>> {
@@ -26,9 +29,7 @@ internal class KtSchemaReflectionFactory : JsonSchemaFactory<Class<*>> {
     override fun priority(): Int = 10
 
     override fun toJsonSchema(type: Class<*>): Optional<JsonSchema> =
-        Optional.of(
-            JsonSchema.unchecked(
-                generator.generateSchemaString(type.kotlin),
-            ),
-        )
+        runCatching { generator.generateSchemaString(type.kotlin) }
+            .map { Optional.of(JsonSchema.unchecked(it)) }
+            .getOrElse { Optional.empty() }
 }

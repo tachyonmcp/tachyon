@@ -3,7 +3,7 @@ title: tachyon-core
 tags: [module, core]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/, tachyon-core/src/main/resources/, tachyon-core/pom.xml]
 updated: 2026-09-14
-commit: 5821ad56
+commit: 70e205dc
 ---
 
 # ⚙️ tachyon-core
@@ -15,13 +15,14 @@ Verdict: the runtime. ~190 main files. Deps: `slf4j-api`, `netty-codec-http`, `n
 | Package | Holds | Page |
 |---|---|---|
 | `server` | `TachyonServer`, `ServerBuilder`, `DefaultServerBuilder`, `DefaultTachyonServer` (engine impl, 1039 lines), `McpDispatcher`, `RpcMethodHandler`, `OutboundSseStream*`, `AnnotationContext`, `HandlerWatchdog` | [[overview]], [[request-lifecycle]] |
+| `server.annotations` | `TachyonAnnotationProvider` (default `AnnotationContext` provider for `@McpTool/@McpResource/@McpPrompt`), `MethodInvoker`, `ResultMappers` | [[integrations]] |
 | `server.internal` | `ServerEngine` SPI, `OperationTracker`, `AbstractJanitor`, `NotificationLogSupport` | [[concurrency]] |
 | `server.config` | config records + builders | [[configuration]] |
 | `server.domain` | `ServerErrors`, `InitializeResponse`, `MissingRequiredClientCapabilityException` | [[errors]] |
 | `server.handlers` | `InitializeHandler`, `DiscoverHandler`, `PingHandler`, `EmptyResultHandler`, `LoggingHandlers`, `SubscriptionsListenHandler`, `ExtensionNegotiator` | [[feature-registries]], [[extensions]] |
 | `server.features.*` | registries + `*MethodHandlers` for tools/resources/prompts/completions/tasks/subscriptions; `AbstractRegistry`, `Pagination`, `ChangeSupport`, `ListRequests` | [[feature-registries]], [[tasks]] |
 | `server.session` | `SessionManager`, stores, `SessionEvent`, `DispatchContext`, `DefaultDispatchContext`, `NoopInteractionContext`, `WireClientContext` | [[sessions]] |
-| `server.json` | Jackson factories, `JsonUtils`, `JsonSchemaUtils`, networknt validator, `KtSchemaResourceFactory`, `MapJsonFactory` | [[json-layer]] |
+| `server.json` | Jackson factories, `JsonUtils`, `JsonSchemaUtils`, networknt validator, `KtSchemaResourceFactory`, `JavaTypeSchemaFactory`/`JavaTypeSchemas`, `MapJsonFactory` | [[json-layer]] |
 | `server.observability` | `Observation`, listener/scope/info/outcome, `CapturedPayload` | [[observability]] |
 | `runtime` | `Session`, `SessionState`, `ChannelContext`, `DefaultChannelContext`, `InteractionEvent`, `SseConnection`, `SseEvent`, `Backpressure` | [[sessions]] |
 | `protocol` | `Protocol`, `Protocols`, `ProtocolRequestMapper`, `ProtocolResponseMapper`, `ProtocolMappers`, `RequestMappingException` | [[protocol-versions]] |

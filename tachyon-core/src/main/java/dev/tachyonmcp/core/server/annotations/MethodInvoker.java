@@ -1,0 +1,168 @@
+/* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
+package dev.tachyonmcp.core.server.annotations;
+
+import dev.tachyonmcp.api.json.JsonSchema;
+import dev.tachyonmcp.api.json.PayloadDeserializer;
+import dev.tachyonmcp.api.json.PayloadSerializer;
+import dev.tachyonmcp.api.runtime.InteractionContext;
+import dev.tachyonmcp.api.server.domain.InvalidArgumentException;
+import dev.tachyonmcp.api.server.domain.PromptArgument;
+import dev.tachyonmcp.api.server.features.annotations.AnnotationInvocationSupport;
+import dev.tachyonmcp.api.server.features.annotations.AnnotationRegistrationContext;
+import dev.tachyonmcp.core.server.json.JavaTypeSchemas;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.lang.reflect.Parameter;
+import java.lang.reflect.Type;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import org.jspecify.annotations.Nullable;
+
+/** Binds MCP argument values to an annotated method's parameters and invokes it. */
+final class MethodInvoker {
+
+    private sealed interface Binding {}
+
+    private record ContextBinding() implements Binding {}
+
+    private record WholeBinding(Parameter parameter) implements Binding {}
+
+    private record NamedBinding(Parameter parameter, String name, boolean required) implements Binding {}
+
+    private final Object instance;
+    private final Method method;
+    private final List<Binding> bindings;
+    private final PayloadSerializer serializer;
+    private final PayloadDeserializer deserializer;
+
+    private MethodInvoker(
+            Object instance, Method method, List<Binding> bindings, AnnotationRegistrationContext context) {
+        this.instance = instance;
+        this.method = method;
+        this.bindings = List.copyOf(bindings);
+        this.serializer = context.payloadSerializer();
+        this.deserializer = context.payloadDeserializer();
+    }
+
+    /** Tool shape: a single record/POJO/map parameter receives the whole arguments object. */
+    static MethodInvoker forTool(Object instance, Method method, AnnotationRegistrationContext context) {
+        var parameters = valueParameters(method);
+        if (parameters.size() == 1
+                && JavaTypeSchemas.isObjectType(parameters.getFirst().getType())) {
+            var bindings = new ArrayList<Binding>();
+            for (Parameter parameter : method.getParameters()) {
+                bindings.add(isContext(parameter) ? new ContextBinding() : new WholeBinding(parameter));
+            }
+            return new MethodInvoker(instance, method, bindings, context);
+        }
+        return new MethodInvoker(instance, method, namedBindings(method, false), context);
+    }
+
+    /** Resource/prompt shape: every parameter is one named scalar argument. */
+    static MethodInvoker forArguments(Object instance, Method method, AnnotationRegistrationContext context) {
+        return new MethodInvoker(instance, method, namedBindings(method, true), context);
+    }
+
+    JsonSchema inputSchema() {
+        for (Binding binding : bindings) {
+            if (binding instanceof WholeBinding whole)
+                return JsonSchema.generate(whole.parameter().getType());
+        }
+        var properties = new LinkedHashMap<String, Object>();
+        var required = new ArrayList<String>();
+        for (Binding binding : bindings) {
+            if (binding instanceof NamedBinding(Parameter parameter, String name, boolean required1)) {
+                properties.put(name, JavaTypeSchemas.schemaFor(parameter.getParameterizedType()));
+                if (required1) required.add(name);
+            }
+        }
+        return AnnotationInvocationSupport.inputSchema(properties, required);
+    }
+
+    List<PromptArgument> promptArguments() {
+        var arguments = new ArrayList<PromptArgument>();
+        for (Binding binding : bindings) {
+            if (binding instanceof NamedBinding named) {
+                arguments.add(PromptArgument.builder()
+                        .name(named.name())
+                        .required(named.required())
+                        .build());
+            }
+        }
+        return arguments;
+    }
+
+    List<String> argumentNames() {
+        return bindings.stream()
+                .filter(NamedBinding.class::isInstance)
+                .map(binding -> ((NamedBinding) binding).name())
+                .toList();
+    }
+
+    @Nullable
+    Object invoke(InteractionContext ctx, Map<String, ? extends @Nullable Object> values) throws Exception {
+        var args = new Object[bindings.size()];
+        for (int i = 0; i < args.length; i++) {
+            args[i] = switch (bindings.get(i)) {
+                case ContextBinding ignored -> ctx;
+                case WholeBinding whole ->
+                    coerce("arguments", values, whole.parameter().getParameterizedType());
+                case NamedBinding named -> bindNamed(named, values);
+            };
+        }
+        try {
+            return method.invoke(instance, args);
+        } catch (InvocationTargetException e) {
+            throw AnnotationInvocationSupport.unwrap(e);
+        }
+    }
+
+    private @Nullable Object bindNamed(NamedBinding named, Map<String, ? extends @Nullable Object> values) {
+        var raw = values.get(named.name());
+        if (raw == null && named.required()) {
+            throw new InvalidArgumentException(named.name(), "is required");
+        }
+        return coerce(named.name(), raw, named.parameter().getParameterizedType());
+    }
+
+    private @Nullable Object coerce(String name, @Nullable Object raw, Type type) {
+        try {
+            return AnnotationInvocationSupport.coerce(raw, type, serializer, deserializer);
+        } catch (RuntimeException e) {
+            throw new InvalidArgumentException(name, "could not be decoded as " + type.getTypeName(), e);
+        }
+    }
+
+    private static List<Binding> namedBindings(Method method, boolean scalarsOnly) {
+        var bindings = new ArrayList<Binding>();
+        for (Parameter parameter : method.getParameters()) {
+            if (isContext(parameter)) {
+                bindings.add(new ContextBinding());
+                continue;
+            }
+            if (!parameter.isNamePresent()) {
+                throw new IllegalStateException(
+                        "Parameter names unavailable; compile with -parameters or take a single record parameter: "
+                                + method);
+            }
+            if (scalarsOnly) AnnotationInvocationSupport.requireBindable(parameter, method);
+            var required = !JavaTypeSchemas.isOptional(parameter.getAnnotatedType());
+            bindings.add(new NamedBinding(parameter, parameter.getName(), required));
+        }
+        return bindings;
+    }
+
+    private static List<Parameter> valueParameters(Method method) {
+        var parameters = new ArrayList<Parameter>();
+        for (Parameter parameter : method.getParameters()) {
+            if (!isContext(parameter)) parameters.add(parameter);
+        }
+        return parameters;
+    }
+
+    private static boolean isContext(Parameter parameter) {
+        return InteractionContext.class.isAssignableFrom(parameter.getType());
+    }
+}

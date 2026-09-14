@@ -3,7 +3,7 @@ title: JSON layer
 tags: [concept, json, schema]
 sources: [tachyon-api/src/main/java/dev/tachyonmcp/api/json/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/json/, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/, tachyon-core/src/main/resources/META-INF/services/, tachyon-kotlin/src/main/kotlin/dev/tachyonmcp/kotlin/server/json/]
 updated: 2026-09-14
-commit: 582f9c52
+commit: 70e205dc
 ---
 
 # 🧾 JSON layer
@@ -35,9 +35,11 @@ ServiceLoader registrations:
 | Services file | Impls |
 |---|---|
 | core `...JsonDocumentFactory` | `Jackson3JsonFactory`(String), `JacksonNodeJsonFactory`, `JacksonObjectJsonFactory` |
-| core `...JsonSchemaFactory` | above 3 + `KtSchemaResourceFactory`(Class), `MapJsonFactory`(Map) |
+| core `...JsonSchemaFactory` | above 3 + `KtSchemaResourceFactory`(Class, prio 0), `JavaTypeSchemaFactory`(Class, prio `1000`), `MapJsonFactory`(Map) |
 | kotlin | `KotlinxJsonElementFactory`, `KotlinxJsonObjectFactory` |
-| kt-schema | `KtSchemaReflectionFactory` (Class) |
+| kt-schema | `KtSchemaReflectionFactory` (Class, prio 10; declines on generator failure, e.g. Java record with `int`) |
+
+`JsonSchema.generate(Class)` chain = codegen resource → kt-schema reflection → Java reflection. `JavaTypeSchemas` covers records (required unless `Optional`/JSpecify `@Nullable`), POJOs (public getters/fields, only primitives required), enums, arrays/collections, maps (`additionalProperties`), `java.time`/`UUID`/`URI` formats; cycles ⇒ bare `object`. Factory declines non-object types so chain still fails for them `tachyon-core/src/main/java/dev/tachyonmcp/core/server/json/JavaTypeSchemaFactory.java:37-42`.
 
 Server requires **exactly one** String-source `JsonSchemaFactory` else ISE `DefaultTachyonServer.java:364-382`; used to validate tool schema roots at registration `JsonSchemaUtils.java:188-204`.
 

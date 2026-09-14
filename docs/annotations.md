@@ -4,17 +4,67 @@ weight: 22
 sidebar_order: 22
 toc: true
 description: |-
-  Bridge third-party annotation frameworks (mcp-java, LangChain4j, Spring AI) onto Tachyon's tool, resource, and prompt registries via the AnnotationProvider SPI.
+  Declare tools, resources, and prompts on plain Java methods with @McpTool, @McpResource, @McpPrompt — or bridge third-party annotation frameworks (mcp-java, LangChain4j, Spring AI) via the AnnotationProvider SPI.
 ---
 
-Tachyon's native feature registration is programmatic: `server.tools().register(...)`,
-`server.resources().register(...)`, and so on. The `AnnotationProvider` SPI bridges third-party
-*annotation* programming models — mcp-java, LangChain4j, Spring AI — onto those same façades, so
-you can keep writing `@Tool`-annotated methods from a framework you already use and still get a
-Tachyon server underneath.
+The primary way to declare MCP features is a plain Java class with Tachyon's own annotations from
+`dev.tachyonmcp.api.annotations`. Programmatic registration (`server.tools().register(...)`) and
+third-party annotation frameworks map onto the same registries.
 
-`ServerBuilder.annotations(...)`, `AnnotationContext`, `AnnotationProvider`, and
-`AnnotationRegistrationContext` are `@ExperimentalApi` — the shape may still change.
+`@McpTool`, `@McpResource`, `@McpPrompt`, `ServerBuilder.annotations(...)`, `AnnotationContext`,
+`AnnotationProvider`, and `AnnotationRegistrationContext` are `@ExperimentalApi` — the shape may
+still change.
+
+## Declarative services
+
+```java
+class WeatherService {
+    record ForecastRequest(String city, int days) {}
+    record Forecast(String city, int days, double celsius) {}
+
+    @McpTool(description = "Forecast for a city")
+    Forecast forecast(ForecastRequest request) { ... }
+
+    @McpTool
+    String greet(String name, @Nullable String title, InteractionContext ctx) { ... }
+
+    @McpResource(uri = "weather://cities/{city}")
+    String city(String city) { ... }
+
+    @McpPrompt
+    String trip(String city, Optional<String> season) { ... }
+
+    @McpPrompt(role = Role.ASSISTANT)
+    String opener(String city) { ... }
+}
+
+var server = TachyonServer.builder()
+    .annotations(a -> a.register(new WeatherService()))
+    .build();
+```
+
+Only the annotation is required. `name` defaults to the method name; `description` is optional;
+`@McpResource` needs `uri`; `@McpPrompt` `role` defaults to `Role.USER`.
+
+| Rule | Behaviour |
+|---|---|
+| Discovery | non-private methods on the class, superclasses, public interfaces (class proxies work) |
+| `InteractionContext` parameter | injected, never advertised |
+| `@McpTool` with one record/POJO/`Map` parameter | whole `arguments` object decoded into it; its schema is `inputSchema` |
+| Other parameters | one named argument each (compile with `-parameters`); required unless JSpecify `@Nullable` (preferred) or `Optional*` |
+| Missing required named argument | invalid-params error |
+| `@McpTool` result | `void`/`null` → empty; `ToolResult` passes; `String`/number/boolean/enum → text; `ContentBlock` → content; collection/array → JSON text; other object → `structuredContent` and its type becomes `outputSchema` |
+| `@McpResource` | `{var}` in `uri` → template, variables bind to same-named scalar parameters; static resources take no arguments. Result: `ResourceContents` passes, `String` → text, `byte[]` → blob, object → JSON text (`application/json` default) |
+| `@McpPrompt` | scalar parameters become prompt arguments. Result: `PromptResult` passes; `String`, `ContentBlock`, or object (as JSON text) → one message with the annotation's `role`; `PromptMessage` passes with its own role; `List` of those → messages |
+| Exceptions | checked exceptions propagate exactly as from a `ToolFn` |
+| Fail fast at `build()` | two feature annotations on one method, duplicate tool/prompt name or resource URI, private method, static resource with arguments, parameter not a template variable, non-scalar prompt/resource parameter |
+
+Schemas come from `JsonSchema.generate(type)`: a build-time kt-schema resource or the kt-schema
+reflection generator when present, otherwise tachyon-core's `JavaTypeSchemaFactory` (records,
+POJOs via public getters/fields, enums, collections, maps, `Optional`, `java.time`, `UUID`, `URI`).
+
+In Spring Boot, the [`tachyon-spring-boot-starter`](https://github.com/tachyonmcp/tachyon/tree/main/integrations/tachyon-spring-boot-starter)
+registers every such bean automatically.
 
 ## The AnnotationProvider interface
 
@@ -52,7 +102,8 @@ var server = TachyonServer.builder()
 - Annotation registrations run last: after the server is constructed, and after the
   `withTools`/`withResources`/`withPrompts`/`withCompletions` bootstrap registrations. An
   annotated method sharing a name with a bootstrap registration therefore replaces it.
-- `register(...)` throws `IllegalStateException` if called before any `withProvider(...)`.
+- Before any `withProvider(...)`, `register(...)` uses `TachyonAnnotationProvider` (`@McpTool`
+  and friends).
 
 ## Built-in providers
 

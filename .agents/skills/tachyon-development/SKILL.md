@@ -38,6 +38,8 @@ description: >-
 - Java: JUnit 6 + Pioneer, AssertJ fluent, short spec-reference comments, parameterized tests when appropriate.
 - For throwing handlers, throw a real checked exception directly from the lambda; do not hide the
   `throws Exception` SAM contract behind try/catch or test only unchecked failures.
+- Optional parameters in fixtures (e.g. `@McpTool` methods): use JSpecify `@Nullable`, not `Optional<T>` —
+  `Optional` is for result types. Keep one `Optional` parameter per suite only to verify that binding path.
 - Test wire behavior through real codecs or clients; use concrete mapper tests for mapper-only edge cases.
   For omitted/null claims, serialize with the real codec and assert the JSON; a null model field is insufficient.
 - E2E: use `McpTestClients`/versioned testkit clients and `JsonRpcResponseAssert` (its static
