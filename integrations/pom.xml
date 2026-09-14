@@ -25,5 +25,6 @@
         <module>tachyon-annotations-spring-ai</module>
         <module>tachyon-tasks-temporal</module>
         <module>tachyon-opentelemetry</module>
+        <module>tachyon-spring-boot-starter</module>
     </modules>
 </project>

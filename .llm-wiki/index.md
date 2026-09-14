@@ -45,5 +45,5 @@ Read this first. Rules: [[CONVENTIONS]].
 | [[tachyon-kotlin]] | Kotlin DSL, coroutine runtime extension, kotlinx JSON factories, kt-schema |
 | [[tachyon-extensions]] | Skills extension (`skill://`), echo + You.com tools |
 | [[tachyon-testkit]] | Raw-HTTP MCP test clients + AssertJ asserts |
-| [[integrations]] | Annotation providers (mcp-java, LangChain4j, Spring AI), OpenTelemetry, Temporal tasks |
+| [[integrations]] | Declarative `@McpTool` flow, annotation providers (mcp-java, LangChain4j, Spring AI), Spring Boot starter, OpenTelemetry, Temporal tasks |
 | [[testing]] | e2e layout by protocol version, conformance suite, unit test map, how to run |

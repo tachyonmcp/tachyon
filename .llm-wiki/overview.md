@@ -35,7 +35,7 @@ graph TD
 | `tachyon-kotlin-kt-schema` | Reflection JSON-schema factory for Kotlin classes | [[tachyon-kotlin]] |
 | `tachyon-extensions` | Skills extension, sample tools | [[tachyon-extensions]] |
 | `tachyon-testkit` | HTTP test clients/asserts | [[tachyon-testkit]] |
-| `integrations/*` | 5 modules (`integrations/pom.xml:23-27`) | [[integrations]] |
+| `integrations/*` | 6 modules (`integrations/pom.xml:23-28`) | [[integrations]] |
 | `tachyon-bom` | `dependencyManagement` only | — |
 | `e2e`, `conformance`, `reports` | profile-only modules (`pom.xml` `<profiles>`) | [[testing]] |
 

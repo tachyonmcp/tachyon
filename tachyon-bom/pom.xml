@@ -77,6 +77,11 @@
                 <artifactId>tachyon-opentelemetry</artifactId>
                 <version>${project.version}</version>
             </dependency>
+            <dependency>
+                <groupId>dev.tachyonmcp</groupId>
+                <artifactId>tachyon-spring-boot-starter</artifactId>
+                <version>${project.version}</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 </project>
