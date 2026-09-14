@@ -87,14 +87,6 @@ class SkillsExtensionTest {
     }
 
     @Test
-    void rejectsSkillMethodsWhenNotNegotiated() throws Exception {
-        var body = dispatch("skills/list", Map.of(), false);
-
-        assertThat(body).contains("\"error\"");
-        assertThat(body).contains("-32601");
-    }
-
-    @Test
     void listsSkillsWhenNegotiated() throws Exception {
         var body = dispatch("skills/list", Map.of("_meta", Map.of(SkillsExtension.ID, Map.of())));
 

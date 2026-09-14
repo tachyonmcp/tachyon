@@ -6,7 +6,6 @@ import dev.tachyonmcp.api.server.extensions.AdvertiseMode;
 import dev.tachyonmcp.api.server.extensions.ServerExtension;
 import dev.tachyonmcp.core.server.domain.ServerErrors;
 import dev.tachyonmcp.core.server.session.DispatchContext;
-import java.util.Map;
 import org.jspecify.annotations.Nullable;
 
 /** MCP tasks extension declaration and per-request capability gate. */
@@ -28,8 +27,7 @@ public final class TasksExtension implements ServerExtension {
         if (context.protocol().supportsSessions() || context.isExtensionEnabled(ID)) {
             return null;
         }
-        return ServerErrors.missingRequiredClientCapability(
-                "Requires the '" + ID + "' extension", Map.of("extensions", Map.of(ID, Map.of())));
+        return ServerErrors.missingRequiredExtension(ID);
     }
 
     @Override

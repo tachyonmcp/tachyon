@@ -49,7 +49,7 @@ class ExtensionMethodRoutingTest {
                 .join();
         var body = result.responseBodyString();
         assertThat(body).contains("error");
-        assertThat(body).contains("-32601");
+        assertThat(body).contains("-32003").contains("\"requiredCapabilities\"");
     }
 
     @Test

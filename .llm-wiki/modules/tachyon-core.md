@@ -2,7 +2,7 @@
 title: tachyon-core
 tags: [module, core]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/, tachyon-core/src/main/resources/, tachyon-core/pom.xml]
-updated: 2026-09-13
+updated: 2026-09-14
 commit: 5821ad56
 ---
 
@@ -33,7 +33,7 @@ Verdict: the runtime. ~190 main files. Deps: `slf4j-api`, `netty-codec-http`, `n
 
 ## 🧠 Who holds what
 
-- `DefaultTachyonServer` = state + registries + `methodHandlers` map + pending server→client requests + session manager + event store + extensions; implements `ServerEngine` **and** `ExtensionContext` `tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java:94-124`.
+- `DefaultTachyonServer` = state + registries + `methodHandlers` map + pending server→client requests + session manager + event store + extensions; implements `ServerEngine` **and** `ExtensionContext` `tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java:96-127`.
 - `McpDispatcher` = per-request flow, one per `McpChannelInitializer` (i.e. per server start) `McpChannelInitializer.java` ctor.
 - `DefaultDispatchContext` = per request: delegates channel state, adds engine, request id, outbound stream, observation, notifications impl `tachyon-core/src/main/java/dev/tachyonmcp/core/server/session/DefaultDispatchContext.java:30-273`.
 

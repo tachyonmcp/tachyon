@@ -2,7 +2,7 @@
 title: Observability
 tags: [concept, observability, otel]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/server/observability/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/ObservabilityConfig.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/PayloadCapturePolicy.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java, integrations/tachyon-opentelemetry/]
-updated: 2026-09-13
+updated: 2026-09-14
 commit: 582f9c52
 ---
 
@@ -34,7 +34,7 @@ Listener throwing on interrupted thread ⇒ rethrown, else warn `:177-182`.
 
 ## 🐢 Slow requests
 
-`observability { slowRequestLogging(); slowRequestThreshold(d) }` → `HandlerWatchdog` DEBUG log after threshold + WARN on slow POST response `McpDispatcher.java:376-381`, `McpOperationHandler.java:359-388`.
+`observability { slowRequestLogging(); slowRequestThreshold(d) }` → `HandlerWatchdog` DEBUG log after threshold + WARN on slow POST response `McpDispatcher.java:393-398`, `McpOperationHandler.java:359-388`.
 
 ## 📈 OpenTelemetry bridge
 

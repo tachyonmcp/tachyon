@@ -2,7 +2,7 @@
 title: SSE streams
 tags: [concept, transport, sse]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/sse/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/OutboundSseStream.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/OutboundSseStreamMessageRouter.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpOperationHandler.java]
-updated: 2026-09-13
+updated: 2026-09-14
 commit: 582f9c52
 ---
 
@@ -41,7 +41,7 @@ Verdict: two stream kinds. **POST-SSE** = per-request, lazy: JSON response unles
 
 ## ⏪ Replay
 
-`SseManager.replayEvents` `sse/SseManager.java:94-111`: parse `<n>[#<key>]`, take all session events, keep `sseId > n` **and** `streamKey == key` (null = GET stream), convert via `ServerEngine.toSseEvent` (request/cancel events skipped) `tachyon-core/src/main/java/dev/tachyonmcp/core/server/internal/ServerEngine.java:166-186`, stop when `session.send` false (throttled/closed).
+`SseManager.replayEvents` `sse/SseManager.java:94-111`: parse `<n>[#<key>]`, take all session events, keep `sseId > n` **and** `streamKey == key` (null = GET stream), convert via `ServerEngine.toSseEvent` (request/cancel events skipped) `tachyon-core/src/main/java/dev/tachyonmcp/core/server/internal/ServerEngine.java:169-189`, stop when `session.send` false (throttled/closed).
 
 ## 🫀 Keep-alive math
 

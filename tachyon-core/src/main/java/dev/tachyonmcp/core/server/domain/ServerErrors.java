@@ -71,6 +71,12 @@ public final class ServerErrors {
                 Map.of("requiredCapabilities", requiredCapabilities));
     }
 
+    /** The client did not declare {@code extensionId}; {@code requiredCapabilities} names it under {@code extensions}. */
+    public static ServerError missingRequiredExtension(String extensionId) {
+        return missingRequiredClientCapability(
+                "Requires the '" + extensionId + "' extension", Map.of("extensions", Map.of(extensionId, Map.of())));
+    }
+
     public static ServerError unsupportedProtocolVersion(String detail, Map<String, Object> data) {
         return new ServerError(ServerError.Kind.UNSUPPORTED_PROTOCOL_VERSION, detail, data);
     }

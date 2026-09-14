@@ -2,8 +2,8 @@
 title: Tasks
 tags: [concept, tasks, experimental]
 sources: [tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/tasks/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tasks/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/TasksConfig.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tools/ToolMethodHandlers.java, integrations/tachyon-tasks-temporal/]
-updated: 2026-09-13
-commit: 582f9c52
+updated: 2026-09-14
+commit: 5bee50aa
 ---
 
 # ⏳ Tasks
@@ -20,13 +20,13 @@ Verdict: Tachyon does **not** run tasks. External system owns execution via `Tas
 | `TaskSupport` | tool-level `FORBIDDEN / OPTIONAL / REQUIRED` | `.../tasks/TaskSupport.java:20-36` |
 | `Tasks` (façade) | `publish`, `get`, `remove`, `reportProgress` | `.../tasks/Tasks.java:11-41` |
 | `DefaultTaskRegistry` | cache + notifications + TTL janitor | `tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tasks/DefaultTaskRegistry.java:25` |
-| `TasksExtension` | id `io.modelcontextprotocol/tasks`, `ALWAYS` advertised, per-request gate | `.../tasks/TasksExtension.java:13-44` |
+| `TasksExtension` | id `io.modelcontextprotocol/tasks`, `ALWAYS` advertised, per-request gate | `.../tasks/TasksExtension.java:12-42` |
 
 ## ⚙️ Config
 
 `capabilities { tasks(connector) }` ⇒ enabled + connector `CapabilitiesConfig.java:438-441`; enabled w/o connector ⇒ ISE `:443-447`. `TasksConfig` keepAlive default **5 min**, optional pollInterval, pageSize `TasksConfig.java:26-49`. Builder auto-adds `TasksExtension` when enabled (see [[overview]]).
 
-Startup check: any `REQUIRED` tool w/o connector ⇒ `IllegalStateException("Task-producing tools require a TaskConnector")`; `OPTIONAL` w/o connector ⇒ warn `DefaultTachyonServer.java:270-295`.
+Startup check: any `REQUIRED` tool w/o connector ⇒ `IllegalStateException("Task-producing tools require a TaskConnector")`; `OPTIONAL` w/o connector ⇒ warn `DefaultTachyonServer.java:273-298`.
 
 ## 🔁 Task-producing tool call
 
@@ -49,7 +49,7 @@ Tool returns `ToolResult.task(snapshot)` ⇒ checks (not FORBIDDEN, legacy must 
 - `reportProgress(taskId, …)` needs progressToken captured at creation else dropped `:106-121`.
 - Janitor every 30s removes terminal entries older than keepAlive `:28`, `:163-168`, `TaskEntry.java:74-78`.
 
-Notification fan-out `DefaultTachyonServer.java:474-488`: owner session (or all ACTIVE) gets `notifications/tasks/status` in its protocol's shape; plus `SubscriptionRegistry.notifyTaskStatus` → `notifications/tasks` to `subscriptions/listen` streams filtering on taskId.
+Notification fan-out `DefaultTachyonServer.java:477-491`: owner session (or all ACTIVE) gets `notifications/tasks/status` in its protocol's shape; plus `SubscriptionRegistry.notifyTaskStatus` → `notifications/tasks` to `subscriptions/listen` streams filtering on taskId.
 
 ## 🌐 Method map
 

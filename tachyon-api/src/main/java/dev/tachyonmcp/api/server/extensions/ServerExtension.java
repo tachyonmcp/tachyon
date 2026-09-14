@@ -14,12 +14,25 @@ public interface ServerExtension extends Extension<InteractionContext> {
         return ExtensionSettings.empty();
     }
 
-    /** Controls whether this extension is advertised to clients (e.g. in {@code initialize} or {@code server/discover}). See {@link AdvertiseMode}. */
+    /**
+     * Controls whether this extension is advertised to clients (e.g. in {@code initialize} or {@code server/discover}).
+     * See {@link AdvertiseMode}.
+     */
     AdvertiseMode advertiseMode();
 
     /** Returns the set of JSON-RPC methods this extension handles. */
     default Set<String> methods() {
         return Set.of();
+    }
+
+    /**
+     * Whether the client must declare this extension before its methods are dispatched. Defaults to
+     * {@link ExtensionNegotiation#REQUIRED}. Read once at server construction.
+     *
+     * @return the negotiation policy for this extension's methods
+     */
+    default ExtensionNegotiation negotiation() {
+        return ExtensionNegotiation.REQUIRED;
     }
 
     /** Whether the extension expects a meta envelope for its handler params. */

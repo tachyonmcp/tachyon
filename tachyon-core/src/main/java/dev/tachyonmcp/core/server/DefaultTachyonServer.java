@@ -14,6 +14,7 @@ import dev.tachyonmcp.api.server.domain.RequestId;
 import dev.tachyonmcp.api.server.domain.ServerCapabilities;
 import dev.tachyonmcp.api.server.extensions.ExtensionContext;
 import dev.tachyonmcp.api.server.extensions.ExtensionMethodHandler;
+import dev.tachyonmcp.api.server.extensions.ExtensionNegotiation;
 import dev.tachyonmcp.api.server.extensions.ServerExtension;
 import dev.tachyonmcp.api.server.features.completions.Completions;
 import dev.tachyonmcp.api.server.features.prompts.Prompts;
@@ -76,6 +77,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.ServiceLoader;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -121,6 +123,7 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
     private final @Nullable Consumer<ChannelPipeline> pipelineCustomizer;
     private final Map<String, String> extensionMethodOwners = new ConcurrentHashMap<>();
     private final Map<String, ServerExtension> extensionsById = new ConcurrentHashMap<>();
+    private final Set<String> optionalNegotiationExtensionIds = ConcurrentHashMap.newKeySet();
     private @Nullable String bootstrappingExtensionId;
 
     /**
@@ -616,6 +619,9 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
                 extensionMethodOwners.put(method, ext.extensionId());
             }
             extensionsById.put(ext.extensionId(), ext);
+            if (ext.negotiation() == ExtensionNegotiation.OPTIONAL) {
+                optionalNegotiationExtensionIds.add(ext.extensionId());
+            }
             bootstrappingExtensionId = ext.extensionId();
             try {
                 ext.bootstrap(this);
@@ -676,6 +682,11 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
     public boolean extensionRequiresMeta(String extensionId) {
         var ext = extensionsById.get(extensionId);
         return ext != null && ext.requiresMetaEnvelope();
+    }
+
+    @Override
+    public boolean extensionNegotiationOptional(String extensionId) {
+        return optionalNegotiationExtensionIds.contains(extensionId);
     }
 
     @Override

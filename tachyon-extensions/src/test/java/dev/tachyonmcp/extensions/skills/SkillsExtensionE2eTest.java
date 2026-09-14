@@ -8,6 +8,8 @@ import static dev.tachyonmcp.testkit.JsonRpcResponseAssert.assertThat;
 import static net.javacrumbs.jsonunit.assertj.JsonAssertions.assertThatJson;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import dev.tachyonmcp.api.server.extensions.ExtensionNegotiation;
+import dev.tachyonmcp.core.server.TachyonServer;
 import dev.tachyonmcp.core.server.features.resources.MimeTypes;
 import dev.tachyonmcp.testkit.Mcp20251125Client;
 import dev.tachyonmcp.testkit.Mcp20260728Client;
@@ -20,7 +22,10 @@ import java.util.Base64;
 import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -46,11 +51,26 @@ class SkillsExtensionE2eTest {
         Pick the matching template from `templates/` for the document type.
         """;
 
-    private final SkillsRegistry classpathSkillsRegistry = new ClasspathSkillsRegistry("skills");
-    private final SkillsRegistry filesystemSkillsRegistry = new FilesystemSkillsRegistry(filesystemSkillsDir);
+    private static final SkillsRegistry classpathSkillsRegistry = new ClasspathSkillsRegistry("skills");
+    private static final SkillsRegistry filesystemSkillsRegistry = new FilesystemSkillsRegistry(filesystemSkillsDir);
 
-    private final SkillsRegistry combinedRegistry =
+    private static final SkillsRegistry combinedRegistry =
             new CompositeSkillsRegistry(filesystemSkillsRegistry, classpathSkillsRegistry);
+    private static final Logger log = LoggerFactory.getLogger(SkillsExtensionE2eTest.class);
+
+    // quickstart example
+    public static void main(String... args) throws InterruptedException {
+        try (var server = TachyonServer.builder()
+                .port(8080)
+                .withExtensions(SkillsExtension.builder()
+                        .registry(combinedRegistry)
+                        .negotiation(ExtensionNegotiation.OPTIONAL)
+                        .build())
+                .build(); ) {
+            server.start();
+            new CountDownLatch(1).await();
+        }
+    }
 
     @Test
     void classpathSkillsListedWithDigests() throws Exception {
@@ -665,27 +685,40 @@ class SkillsExtensionE2eTest {
     }
 
     @Test
-    void skillResourcesRemainAvailableWhenExtensionMethodsAreHidden() throws Exception {
+    void skillResourcesRemainAvailableWhenExtensionMethodsRequireDeclaration() throws Exception {
         try (final var server = startServer(SkillsExtension.builder()
                         .registry(new ClasspathSkillsRegistry("skills"))
+                        .negotiation(ExtensionNegotiation.REQUIRED)
                         .build());
                 final var client = new Mcp20260728Client(server.port())) {
-
-            var list = client.sendRpc("""
-                {"jsonrpc":"2.0","id":1,"method":"skills/list","params":{}}
+            // SEP-2133: known extension method without client declaration -> -32021, not -32601
+            // language=JSON
+            var missingSkills = new ObjectMapper().readTree("""
+                {
+                  "code": -32021,
+                  "message": "Requires the 'io.modelcontextprotocol/skills' extension",
+                  "data": {"requiredCapabilities": {"extensions": {"io.modelcontextprotocol/skills": {}}}}
+                }
                 """);
 
-            assertThat(list).isJsonRpcError().isMethodNotFound();
+            var list = client.post("""
+                {"jsonrpc":"2.0","id":1,"method":"skills/list","params":{}}
+                """);
+            assertThat(list).isJsonRpcError().hasHttpStatusCode(400).hasId(1).hasError(missingSkills);
 
             var get = client.post("""
                 {"jsonrpc":"2.0","id":2,"method":"skills/get","params":{"uri":"skill://pdf-processing/SKILL.md"}}
                 """);
-            assertThat(get).isJsonRpcError().isMethodNotFound();
+            assertThat(get).isJsonRpcError().hasHttpStatusCode(400).hasId(2).hasError(missingSkills);
 
             var directory = client.post("""
                 {"jsonrpc":"2.0","id":3,"method":"resources/directory/read","params":{"uri":"skill://pdf-processing"}}
                 """);
-            assertThat(directory).isJsonRpcError().isMethodNotFound();
+            assertThat(directory)
+                    .isJsonRpcError()
+                    .hasHttpStatusCode(400)
+                    .hasId(3)
+                    .hasError(missingSkills);
 
             var read = client.sendRpc("""
                 {"jsonrpc":"2.0","id":4,"method":"resources/read","params":{"uri":"skill://pdf-processing/SKILL.md"}}
@@ -833,6 +866,54 @@ class SkillsExtensionE2eTest {
                             "pdf-processing/SKILL.md",
                             "pdf-processing/scripts/extract.py",
                             "pdf-processing/templates/invoice.md");
+        }
+    }
+
+    @Test
+    void defaultNegotiationServesSkillMethodsToUndeclaredClient() throws Exception {
+        var extension = SkillsExtension.builder()
+                .registry(new ClasspathSkillsRegistry("skills"))
+                .build();
+        assertThat(extension.negotiation()).isEqualTo(ExtensionNegotiation.OPTIONAL);
+        try (final var server = startServer(extension);
+                final var client = new Mcp20260728Client(server.port())) {
+
+            var get = client.sendRpc("""
+                {"jsonrpc":"2.0","id":1,"method":"skills/get","params":{"uri":"skill://pdf-processing/SKILL.md"}}
+                """);
+            // language=JSON
+            assertThat(get).isSuccess().hasResult("""
+                {
+                    "skill":{
+                      "uri":"skill://pdf-processing/SKILL.md",
+                      "frontmatter":{
+                        "name":"pdf-processing",
+                        "description":"Extract, fill, and assemble PDF documents",
+                        "metadata":{"version":"2.1.0"}
+                      },
+                      "resources":"${json-unit.ignore}"
+                    },
+                    "resultType":"complete"
+                }
+                """);
+
+            var list = client.sendRpc("""
+                {"jsonrpc":"2.0","id":2,"method":"skills/list","params":{}}
+                """);
+            assertThat(list).isSuccess().hasId(2).hasResultType("complete");
+
+            var directory = client.sendRpc("""
+                {"jsonrpc":"2.0","id":3,"method":"resources/directory/read","params":{"uri":"skill://pdf-processing"}}
+                """);
+            assertThat(directory).isSuccess().hasId(3).hasResultType("complete");
+
+            // OPTIONAL is still advertised with unchanged server settings
+            client.discover().isSuccess().hasCapabilities("""
+                {
+                  "resources": "${json-unit.ignore}",
+                  "extensions": {"io.modelcontextprotocol/skills": {"directoryRead": true}}
+                }
+                """);
         }
     }
 

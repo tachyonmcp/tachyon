@@ -2,7 +2,7 @@
 title: JSON layer
 tags: [concept, json, schema]
 sources: [tachyon-api/src/main/java/dev/tachyonmcp/api/json/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/json/, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/, tachyon-core/src/main/resources/META-INF/services/, tachyon-kotlin/src/main/kotlin/dev/tachyonmcp/kotlin/server/json/]
-updated: 2026-09-13
+updated: 2026-09-14
 commit: 582f9c52
 ---
 
@@ -39,7 +39,7 @@ ServiceLoader registrations:
 | kotlin | `KotlinxJsonElementFactory`, `KotlinxJsonObjectFactory` |
 | kt-schema | `KtSchemaReflectionFactory` (Class) |
 
-Server requires **exactly one** String-source `JsonSchemaFactory` else ISE `DefaultTachyonServer.java:361-379`; used to validate tool schema roots at registration `JsonSchemaUtils.java:188-204`.
+Server requires **exactly one** String-source `JsonSchemaFactory` else ISE `DefaultTachyonServer.java:364-382`; used to validate tool schema roots at registration `JsonSchemaUtils.java:188-204`.
 
 `KtSchemaResourceFactory` looks up `META-INF/kt-schema/schemas/<fqcn path>.json` on context classloader (build-time generated) `tachyon-core/src/main/java/dev/tachyonmcp/core/server/json/KtSchemaResourceFactory.java:40-51`.
 

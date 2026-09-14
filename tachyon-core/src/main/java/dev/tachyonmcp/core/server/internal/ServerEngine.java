@@ -77,6 +77,9 @@ public interface ServerEngine extends TachyonServer {
     /** Returns {@code true} if the given extension requires the meta envelope for its methods. */
     boolean extensionRequiresMeta(String extensionId);
 
+    /** Returns {@code true} if the given extension's methods may be dispatched without client declaration. */
+    boolean extensionNegotiationOptional(String extensionId);
+
     /** Creates and registers a new session with the given ID. */
     Session createSession(String sessionId);
 

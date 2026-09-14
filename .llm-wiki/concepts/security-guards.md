@@ -2,7 +2,7 @@
 title: Security guards
 tags: [concept, security, transport]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/http/, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpChannelInitializer.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/NetworkConfig.java]
-updated: 2026-09-13
+updated: 2026-09-14
 commit: 582f9c52
 ---
 
@@ -21,7 +21,7 @@ Verdict: fail-closed HTTP guards before body aggregation. Loopback-only by defau
 | Body limit | 1 MB default, 413 | `McpChannelInitializer.java:50`, `:167` |
 | CORS | Netty `CorsHandler` from `allowedOrigins/allowNullOrigin/allowPrivateNetworks/allowedHeaders` | `NettyServerConfig.buildCorsConfig`, `McpChannelInitializer.java:150` |
 | Body/header agreement (2026) | SEP-2243 mirrors validated vs body | [[protocol-versions]] |
-| Pending-request ownership | client response must come from owning session (stateful) / channel (stateless) | `DefaultTachyonServer.java:875-898` |
+| Pending-request ownership | client response must come from owning session (stateful) / channel (stateless) | `DefaultTachyonServer.java:886-909` |
 | Error message hygiene | bare IAE message hidden; client-controlled values not echoed in header errors | [[errors]] |
 | SSE comment injection | CR/LF flattened | `sse/PostSseStream.java:249-260` |
 

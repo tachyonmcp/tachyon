@@ -2,8 +2,8 @@
 title: tachyon-extensions
 tags: [module, extensions, skills]
 sources: [tachyon-extensions/src/main/java/dev/tachyonmcp/extensions/, tachyon-extensions/src/main/resources/]
-updated: 2026-09-13
-commit: 582f9c52
+updated: 2026-09-14
+commit: 5bee50aa
 ---
 
 # 🧩 tachyon-extensions
@@ -18,7 +18,8 @@ Verdict: optional add-ons built only on public SPI. Main piece = **Skills extens
 |---|---|---|
 | id | `io.modelcontextprotocol/skills` | `:46` |
 | advertise | `ALWAYS`, settings `{directoryRead: true}` | `:88-95` |
-| `_meta` envelope | **not required** | `:83-85` (fix `582f9c52`) |
+| `_meta` envelope | **not required** | `:88-90` (fix `582f9c52`) |
+| negotiation | builder `negotiation(...)`, **default `OPTIONAL`** (serves undeclared clients, e.g. MCP Inspector; same advertisement); `REQUIRED` ⇒ undeclared -32021 | `:93-95`, `:273`, `:332-335` |
 | bootstrap | every skill file → resource (`SKILL.md` named by frontmatter `name` + `description`); text vs blob by `MimeTypes.isText` | `:102-132` |
 | methods | `skills/list` (no pagination; `ttlMs`, `cacheScope`), `skills/get {uri}`, `resources/directory/read {uri}` (children with `inode/directory`) | `:119-175` |
 | builder | `registry(...)`, `cacheTtlMs ≥ 0`, `cacheScope public|private` | `:258-314` |

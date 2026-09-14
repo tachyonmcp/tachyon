@@ -2,7 +2,7 @@
 title: Configuration
 tags: [concept, config, builder]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/server/ServerBuilder.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultServerBuilder.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/, tachyon-api/src/main/java/dev/tachyonmcp/api/server/config/]
-updated: 2026-09-13
+updated: 2026-09-14
 commit: 582f9c52
 ---
 
@@ -35,7 +35,7 @@ Verdict: `ServerBuilder` exposes grouped `Consumer<X.Builder>` configurers + sho
 | Setting | Default | Proof |
 |---|---|---|
 | host | `127.0.0.1` | `NetworkConfig.java:73` |
-| port | `-1` unset ⇒ `start()` ISE; `0` = ephemeral | `:74`, `DefaultTachyonServer.java:392-394` |
+| port | `-1` unset ⇒ `start()` ISE; `0` = ephemeral | `:74`, `DefaultTachyonServer.java:395-397` |
 | endpoint | `/mcp` | `:75` |
 | reader idle / writer idle | 60s / 5min | `:76-77` |
 | heartbeat | 15s (≤0 disables) | `:78` |
