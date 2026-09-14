@@ -1,10 +1,12 @@
-[![Maven Central](https://img.shields.io/maven-central/v/dev.tachyonmcp/tachyon-core)](https://central.sonatype.com/search?q=dev.tachyonmcp%2Ftachyon-*)
+[![Maven Central](https://img.shields.io/maven-central/v/dev.tachyonmcp/tachyon-core?logo=apachemaven&logoColor=C71A36)](https://central.sonatype.com/search?q=dev.tachyonmcp%2Ftachyon-*)
 [![Java 21+](https://img.shields.io/badge/Java-21+-orange.svg?logo=jvm)](http://java.com)
 [![Build](https://github.com/tachyonmcp/tachyon/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/tachyonmcp/tachyon/actions/workflows/build.yml)
-[![MCPConformance: 2025-11-25+2026-07-28](https://img.shields.io/badge/MCP%20Conformance-2025.11.25%20+%202026.07.28-grass?logo=modelcontextprotocol)](https://github.com/modelcontextprotocol/conformance)
+[![MCPConformance: 2025-11-25+2026-07-28](https://img.shields.io/badge/MCP%20Conformance-2025.11.25+2026.07.28-grass?logo=modelcontextprotocol)](https://github.com/modelcontextprotocol/conformance)
 [![codecov](https://codecov.io/github/tachyonmcp/tachyon/graph/badge.svg?token=WUMD9A8T2T)](https://codecov.io/github/tachyonmcp/tachyon)
-[![Docs](https://img.shields.io/badge/Docs-blue)](https://tachyonmcp.dev/docs/)
-[![Api](https://img.shields.io/badge/API-blue?logo=github)](https://apidocs.tachyonmcp.dev/)
+
+[![Docs](https://img.shields.io/badge/Site-TachyonMCP.dev-magenta)](https://tachyonmcp.dev/docs/)
+[![Api Docs](https://img.shields.io/badge/API-Docs-blue)](https://apidocs.tachyonmcp.dev/)
+[![LLM Wiki](https://img.shields.io/badge/LLM_Wiki-blue?logo=github)](https://github.com/tachyonmcp/tachyon/wiki)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/tachyonmcp/tachyon)
 
 <div style="align-content: center">
@@ -15,7 +17,7 @@
   />
 </div>
 
-**Tachyon MCP** is a Java 21+ server runtime for the
+**[Tachyon MCP](https://tachyonmcp.dev)** is a Java 21+ server runtime for the
 [Model Context Protocol](https://modelcontextprotocol.io). It implements MCP 2025-11-25 and
 2026-07-28 over Streamable HTTP and passes the official conformance suites for both versions.
 
