@@ -18,18 +18,6 @@
     <name>Tachyon MCP — LangChain4j Annotations</name>
     <description>Maps dev.langchain4j.agent.tool annotations to Tachyon tool descriptors</description>
 
-    <dependencyManagement>
-        <dependencies>
-            <dependency>
-                <groupId>com.fasterxml.jackson</groupId>
-                <artifactId>jackson-bom</artifactId>
-                <version>${jackson2.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-        </dependencies>
-    </dependencyManagement>
-
     <dependencies>
         <dependency>
             <groupId>dev.tachyonmcp</groupId>
