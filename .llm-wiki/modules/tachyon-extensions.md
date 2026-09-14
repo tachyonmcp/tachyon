@@ -19,7 +19,7 @@ Verdict: optional add-ons built only on public SPI. Main piece = **Skills extens
 | id | `io.modelcontextprotocol/skills` | `:46` |
 | advertise | `ALWAYS`, settings `{directoryRead: true}` | `:88-95` |
 | `_meta` envelope | **not required** | `:88-90` (fix `582f9c52`) |
-| negotiation | builder `negotiation(...)`, **default `OPTIONAL`** (serves undeclared clients, e.g. MCP Inspector; same advertisement); `REQUIRED` ⇒ undeclared -32021 | `:93-95`, `:273`, `:332-335` |
+| negotiation | builder `negotiation(...)`, **default `OPTIONAL`** (serves undeclared clients, e.g. MCP Inspector; same advertisement); `REQUIRED` ⇒ undeclared ⇒ missing required client capability: -32003 (2025-11-25), -32021 + HTTP 400 (2026-07-28) | `:93-95`, `:273`, `:332-335`; codes `v2025_11_25/codecs/McpResponseMapper.java:98`, `v2026_07_28/codecs/McpResponseMapper.java:117` |
 | bootstrap | every skill file → resource (`SKILL.md` named by frontmatter `name` + `description`); text vs blob by `MimeTypes.isText` | `:102-132` |
 | methods | `skills/list` (no pagination; `ttlMs`, `cacheScope`), `skills/get {uri}`, `resources/directory/read {uri}` (children with `inode/directory`) | `:119-175` |
 | builder | `registry(...)`, `cacheTtlMs ≥ 0`, `cacheScope public|private` | `:258-314` |
