@@ -2,8 +2,8 @@
 title: Errors
 tags: [concept, errors, protocol]
 sources: [tachyon-api/src/main/java/dev/tachyonmcp/api/server/domain/ServerError.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/domain/ServerErrors.java, tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/mcp/v2025_11_25/codecs/McpResponseMapper.java, tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/mcp/v2026_07_28/codecs/McpResponseMapper.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java]
-updated: 2026-09-13
-commit: 582f9c52
+updated: 2026-09-14
+commit: 5bee50aa
 ---
 
 # 🚨 Errors
@@ -26,6 +26,8 @@ Verdict: handlers produce protocol-neutral `ServerError(kind, message, data)` (r
 | `MISSING_REQUIRED_CLIENT_CAPABILITY` | -32003 | -32021 | 400 |
 | `UNSUPPORTED_PROTOCOL_VERSION` | -32004 | -32022 | 400 |
 
+Extension gate: `ServerErrors.missingRequiredExtension(id)` ⇒ `MISSING_REQUIRED_CLIENT_CAPABILITY`, message `Requires the '<id>' extension`, `data.requiredCapabilities.extensions.<id>:{}` `tachyon-core/src/main/java/dev/tachyonmcp/core/server/domain/ServerErrors.java:75-78`. See [[extensions]].
+
 2025 mapper always HTTP 200 (`JsonRpcError` default). ⚠️ `UnsupportedProtocolVersionHandler` always uses **latest** protocol mapper + HTTP 400 `UnsupportedProtocolVersionHandler.java:40-47`.
 
 ## 🧯 Exception → error
@@ -39,7 +41,7 @@ Verdict: handlers produce protocol-neutral `ServerError(kind, message, data)` (r
 | `IllegalArgumentException` | INVALID_PARAMS `"Invalid params"` — message **hidden** (may leak lib internals) |
 | anything else | INTERNAL_ERROR with fixed detail (`"Tool handler failed"` …) |
 
-Dispatcher-level `McpDispatcher.handleHandlerError` `McpDispatcher.java:442-473`: `CancellationException` ⇒ internal error + `Cancelled`; `RequestMappingException` ⇒ its error; other ⇒ `"Internal error"`. Serialization failure ⇒ `"Failed to encode response"` + `SerializationFailed` outcome `:645-663`.
+Dispatcher-level `McpDispatcher.handleHandlerError` `McpDispatcher.java:459-490`: `CancellationException` ⇒ internal error + `Cancelled`; `RequestMappingException` ⇒ its error; other ⇒ `"Internal error"`. Serialization failure ⇒ `"Failed to encode response"` + `SerializationFailed` outcome `:662-680`.
 
 `tools/call` cancel ⇒ `"Tool call cancelled"` `ToolMethodHandlers.java:252-256`. Output-schema failure ⇒ **tool result** `isError` (not JSON-RPC error).
 
@@ -47,7 +49,7 @@ Dispatcher-level `McpDispatcher.handleHandlerError` `McpDispatcher.java:442-473`
 
 | Status | When | Proof |
 |---|---|---|
-| 400 | missing `MCP-Session-Id` (stateful) ; duplicate MCP header / SEP-2243 mirror w/o 2026 version ; unparseable body (JSON parse error body) | `McpDispatcher.java:294-298`, `http/McpHeaderGuardHandler.java:89-116` |
+| 400 | missing `MCP-Session-Id` (stateful) ; duplicate MCP header / SEP-2243 mirror w/o 2026 version ; unparseable body (JSON parse error body) | `McpDispatcher.java:298-302`, `http/McpHeaderGuardHandler.java:89-116` |
 | 403 | DNS-rebinding guard | `http/DnsRebindingProtectionHandler.java:119-121` |
 | 404 | wrong path; unknown session; stateless + session headers | `EndpointValidatorHandler`, `McpOperationHandler.java:173-177`, `StatelessValidatorHandler.java:21-39` |
 | 405 | DELETE on stateless; unknown HTTP method | same |

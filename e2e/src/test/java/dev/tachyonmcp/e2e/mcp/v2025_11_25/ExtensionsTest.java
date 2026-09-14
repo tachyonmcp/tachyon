@@ -156,13 +156,16 @@ class ExtensionsTest extends AbstractStatefulMcpE2eTest {
             var sessionId = response.headers().firstValue("MCP-Session-Id").orElseThrow();
             client.sendInitialized(sessionId);
 
-            // Call extension method WITHOUT meta envelope -> should fail
+            // Call extension method WITHOUT meta envelope -> known method, invalid params
             // language=JSON
             var callWithoutMeta = """
                     {"jsonrpc":"2.0","id":2,"method":"test/ext-call","params":{}}
                     """;
             var resp1 = client.post(sessionId, callWithoutMeta);
-            assertThat(resp1).isJsonRpcError().hasErrorCode(-32601);
+            assertThat(resp1)
+                    .isJsonRpcError()
+                    .hasErrorCode(-32602)
+                    .hasErrorMessage("Missing required client capability: " + TEST_EXT_ID);
 
             // Call extension method WITH meta envelope -> should succeed
             // language=JSON

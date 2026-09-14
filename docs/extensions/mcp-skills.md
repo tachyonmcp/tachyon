@@ -29,8 +29,9 @@ var server = TachyonServer.builder()
 server.start();
 ```
 
-Skills extension ID is `io.modelcontextprotocol/skills`. Its extension methods require [negotiation](#extension-negotiation);
-skill files remain available through the standard Resources API.
+Skills extension ID is `io.modelcontextprotocol/skills`. Its extension methods are served without
+client declaration by default; strict [negotiation](#extension-negotiation) is opt-in. Skill files
+remain available through the standard Resources API.
 
 ## Skill directory layout
 
@@ -182,20 +183,30 @@ replacement transport.
 
 ## Extension negotiation
 
-Per [SEP-2133](https://modelcontextprotocol.io/seps/2133-extensions), extension-specific features
-require negotiation. For Skills, those features are `skills/list`, `skills/get`, and
-`resources/directory/read`. MCP 2025-11-25 clients declare support in
-`initialize.params.capabilities.extensions`. Under MCP 2026-07-28 (sessionless), declare support
-through the per-request `_meta` key:
+The Skills extension methods are `skills/list`, `skills/get`, and `resources/directory/read`. MCP
+2025-11-25 clients declare support in `initialize.params.capabilities.extensions`; MCP 2026-07-28
+clients declare it on each request in `_meta."io.modelcontextprotocol/clientCapabilities".extensions`.
 
-```json
-{"_meta": {"io.modelcontextprotocol/skills": {}}}
+`SkillsExtension` defaults to `ExtensionNegotiation.OPTIONAL`: the three methods are served even when
+the client did not declare the extension, because real clients (for example MCP Inspector) call them
+without declaring it. `OPTIONAL` changes dispatch only — the extension and its
+`{"directoryRead": true}` setting are advertised exactly the same, and the extension is not marked as
+negotiated for the request.
+
+For strict [SEP-2133](https://modelcontextprotocol.io/seps/2133-extensions) negotiation, opt in:
+
+```java
+SkillsExtension.builder()
+        .registry(new ClasspathSkillsRegistry("skills"))
+        .negotiation(ExtensionNegotiation.REQUIRED)
+        .build();
 ```
 
-A client that does not declare the extension gets `-32601 Method not found` from the three
-extension methods. It can still discover skill files through `resources/list` and fetch a known
-`skill://` URI through `resources/read`. This is SEP-2133 graceful degradation to core protocol
-behaviour and [SEP-2640][SEP-2640]'s baseline resource transport.
+With `REQUIRED`, a client that does not declare the extension gets Missing Required Client Capability
+from the three extension methods (`-32021` + HTTP 400 on 2026-07-28, `-32003` on 2025-11-25) with
+`data.requiredCapabilities.extensions."io.modelcontextprotocol/skills"`. It can still discover skill
+files through `resources/list` and fetch a known `skill://` URI through `resources/read` —
+[SEP-2640][SEP-2640]'s baseline resource transport. See [negotiation policy](_index.md#negotiation-policy).
 
 `SkillsExtension` uses `AdvertiseMode.ALWAYS`, so the server advertises
 `io.modelcontextprotocol/skills` even when the client has not declared it. `serverSettings()` reports

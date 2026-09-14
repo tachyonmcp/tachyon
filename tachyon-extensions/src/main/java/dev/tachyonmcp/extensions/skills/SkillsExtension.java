@@ -8,6 +8,7 @@ import dev.tachyonmcp.api.server.domain.ResourceContents;
 import dev.tachyonmcp.api.server.domain.TextResourceContents;
 import dev.tachyonmcp.api.server.extensions.AdvertiseMode;
 import dev.tachyonmcp.api.server.extensions.ExtensionContext;
+import dev.tachyonmcp.api.server.extensions.ExtensionNegotiation;
 import dev.tachyonmcp.api.server.extensions.ExtensionSettings;
 import dev.tachyonmcp.api.server.extensions.ServerExtension;
 import dev.tachyonmcp.api.server.features.resources.ResourceDescriptor;
@@ -28,8 +29,9 @@ import org.jspecify.annotations.Nullable;
  * skills extension: serves Agent Skills as {@code skill://} resources and answers
  * {@code skills/list}, {@code skills/get}, and {@code resources/directory/read}.
  * Skill files remain available through the base {@code resources/list} and {@code resources/read}
- * methods when the client has not negotiated this extension; only the extension methods require
- * negotiation.
+ * methods when the client has not negotiated this extension. The extension methods are served to
+ * undeclared clients by default ({@link ExtensionNegotiation#OPTIONAL}); build with
+ * {@link ExtensionNegotiation#REQUIRED} to reject them with Missing Required Client Capability.
  *
  * <pre>{@code
  * TachyonServer.builder()
@@ -54,10 +56,13 @@ public final class SkillsExtension implements ServerExtension {
     private final Set<String> fileUris;
     private final long cacheTtlMs;
     private final String cacheScope;
+    private final ExtensionNegotiation negotiation;
 
-    private SkillsExtension(List<SkillsRegistry> registries, long cacheTtlMs, String cacheScope) {
+    private SkillsExtension(
+            List<SkillsRegistry> registries, long cacheTtlMs, String cacheScope, ExtensionNegotiation negotiation) {
         this.cacheTtlMs = cacheTtlMs;
         this.cacheScope = cacheScope;
+        this.negotiation = negotiation;
         this.registry = new CompositeSkillsRegistry(registries);
         var uris = new HashSet<String>();
         for (var skill : registry.skills()) {
@@ -82,6 +87,11 @@ public final class SkillsExtension implements ServerExtension {
     @Override
     public boolean requiresMetaEnvelope() {
         return false;
+    }
+
+    @Override
+    public ExtensionNegotiation negotiation() {
+        return negotiation;
     }
 
     @Override
@@ -260,6 +270,7 @@ public final class SkillsExtension implements ServerExtension {
         private final List<SkillsRegistry> registries = new ArrayList<>();
         private long cacheTtlMs = 0;
         private String cacheScope = "public";
+        private ExtensionNegotiation negotiation = ExtensionNegotiation.OPTIONAL;
 
         /**
          * Adds a skill registry. Construct {@link FilesystemSkillsRegistry} or
@@ -308,9 +319,24 @@ public final class SkillsExtension implements ServerExtension {
             return this;
         }
 
+        /**
+         * Sets whether clients must declare {@code io.modelcontextprotocol/skills} before calling
+         * {@code skills/list}, {@code skills/get}, and {@code resources/directory/read}. Defaults to
+         * {@link ExtensionNegotiation#OPTIONAL}, because clients such as MCP Inspector call these
+         * methods without declaring the extension; use {@link ExtensionNegotiation#REQUIRED} for strict
+         * SEP-2133 negotiation.
+         *
+         * @param negotiation the negotiation policy
+         * @return this builder
+         */
+        public Builder negotiation(ExtensionNegotiation negotiation) {
+            this.negotiation = negotiation;
+            return this;
+        }
+
         /** Builds the extension. */
         public SkillsExtension build() {
-            return new SkillsExtension(registries, cacheTtlMs, cacheScope);
+            return new SkillsExtension(registries, cacheTtlMs, cacheScope, negotiation);
         }
     }
 }

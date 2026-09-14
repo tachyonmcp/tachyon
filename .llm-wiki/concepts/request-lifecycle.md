@@ -2,8 +2,8 @@
 title: Request lifecycle
 tags: [concept, dispatch]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/RpcMethodHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpInitializationHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpOperationHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tools/ToolMethodHandlers.java, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/HandlerFutures.java]
-updated: 2026-09-13
-commit: 582f9c52
+updated: 2026-09-14
+commit: 5bee50aa
 ---
 
 # 🔄 Request lifecycle
@@ -39,7 +39,7 @@ Verdict: event loop parses nothing heavy. Body hop → worker executor (VT) → 
 - **Session bypass** when `server.isStateless()` **or** `!protocol.supportsSessions()` (2026-07-28) **or** pre-session `ping` `:281-292`.
 - Stateful, no `MCP-Session-Id` ⇒ `DispatchResult.Status(400)` `:294-298`; unknown ⇒ `Status(404)` `:300-305`.
 - Session `CLOSED` ⇒ invalid request; `INITIALIZING` ⇒ only `ping` `:313-320`.
-- `lookupHandler`: method owned by extension ⇒ extension must be enabled on ctx, and `_meta.<extId>` present if `requiresMetaEnvelope()` — else `methodNotFound` `:331-342`. See [[extensions]].
+- Handler resolved first (`server.getHandler`, none ⇒ `methodNotFound`); then `extensionNegotiationRejection` for extension-owned methods: `REQUIRED` + undeclared ⇒ missing required client capability, declared but no `_meta.<extId>` (if `requiresMetaEnvelope()`) ⇒ invalid params; `OPTIONAL` ⇒ no check `:286-294`, `:326-334`, `:345-360`. See [[extensions]].
 
 ## 📨 Result shapes
 

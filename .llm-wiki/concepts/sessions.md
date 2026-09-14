@@ -2,7 +2,7 @@
 title: Sessions
 tags: [concept, session, state]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/runtime/Session.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/session/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/SessionConfig.java, tachyon-api/src/main/java/dev/tachyonmcp/api/server/session/SessionIdGenerator.java]
-updated: 2026-09-13
+updated: 2026-09-14
 commit: 582f9c52
 ---
 
@@ -25,10 +25,10 @@ Verdict: **stateless by default** (`SessionConfig.enabled=false`). Sessions exis
 
 ## 🔁 Lifecycle
 
-1. `initialize` (no header) → `server.createSession(generateSessionId(ctx))` on VT `McpDispatcher.java:606-608`. Generator gets detached HTTP request copy if `readsRequest()` (`ATTR_INIT_REQUEST`) `McpDispatcher.java:670-679`. Blank id ⇒ `IllegalStateException`.
+1. `initialize` (no header) → `server.createSession(generateSessionId(ctx))` on VT `McpDispatcher.java:623-625`. Generator gets detached HTTP request copy if `readsRequest()` (`ATTR_INIT_REQUEST`) `McpDispatcher.java:687-696`. Blank id ⇒ `IllegalStateException`.
 2. `DefaultDispatchContext.setSession` records negotiated protocol on session `DefaultDispatchContext.java:87-92`.
 3. Response carries `MCP-Session-Id`; init handler fires `OperationStarted(session)` → bound into channel ctx.
-4. `notifications/initialized` → `Session.activate()` CAS `INITIALIZING→ACTIVE` `Session.java:110-117`. Before that only `ping` allowed `McpDispatcher.java:317-320`.
+4. `notifications/initialized` → `Session.activate()` CAS `INITIALIZING→ACTIVE` `Session.java:110-117`. Before that only `ping` allowed `McpDispatcher.java:321-324`.
 5. `DELETE` with header → `removeSession` → 200 / 404 `McpOperationHandler.java:489-523`.
 6. Channel close in init phase → `ShutdownStarted` → removal.
 7. Janitor removes `CLOSED` or idle > TTL `SessionManager.java:165-184`.
@@ -52,12 +52,12 @@ Verdict: **stateless by default** (`SessionConfig.enabled=false`). Sessions exis
 
 - Defaults: TTL **30s**, janitor **5s** `SessionConfig.java:34-35`; `SessionConfig` compact ctor rejects session options when disabled `:39-53`.
 - Liveness bumped by: any request (`session.touch()` in dispatcher), any outbound byte (`SessionTouchHandler`), SSE heartbeat (15s default) — so open GET stream keeps session alive.
-- `DefaultTachyonServer` passes `config.runtime().clock()` + executor as persistence executor `DefaultTachyonServer.java:316-320`.
+- `DefaultTachyonServer` passes `config.runtime().clock()` + executor as persistence executor `DefaultTachyonServer.java:319-323`.
 
 ## 📨 Server → client
 
-- Notifications: `server.sendNotification(session, …)` → event log append → deliver on bound POST-SSE stream (if dispatching same session) else GET connection `DefaultTachyonServer.java:788-812`.
-- Requests (elicitation/sampling): `sendRequest` registers pending future with `runtime.requestTimeout` (60s) and ownership `DefaultTachyonServer.java:828-924`. Stateless dispatch ctx refuses: "Server-to-client requests require a session" `DefaultDispatchContext.java:165-172`.
-- Broadcasts (`list_changed`, logs) iterate **ACTIVE local** sessions only `DefaultTachyonServer.java:463-472`, `:723-741`.
+- Notifications: `server.sendNotification(session, …)` → event log append → deliver on bound POST-SSE stream (if dispatching same session) else GET connection `DefaultTachyonServer.java:799-823`.
+- Requests (elicitation/sampling): `sendRequest` registers pending future with `runtime.requestTimeout` (60s) and ownership `DefaultTachyonServer.java:839-935`. Stateless dispatch ctx refuses: "Server-to-client requests require a session" `DefaultDispatchContext.java:165-172`.
+- Broadcasts (`list_changed`, logs) iterate **ACTIVE local** sessions only `DefaultTachyonServer.java:466-475`, `:734-752`.
 
 Related: [[sse-streams]], [[configuration]], [[request-lifecycle]].

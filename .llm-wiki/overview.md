@@ -2,7 +2,7 @@
 title: Overview
 tags: [concept, architecture]
 sources: [pom.xml, tachyon-core/pom.xml, integrations/pom.xml, tachyon-core/src/main/java/dev/tachyonmcp/core/server/TachyonServer.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/ServerBuilder.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultServerBuilder.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java]
-updated: 2026-09-13
+updated: 2026-09-14
 commit: 582f9c52
 ---
 
@@ -50,11 +50,11 @@ Two-phase: `build()` constructs server + runs registrations, **no socket**; `sta
 1. `DefaultServerBuilder.build()` `tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultServerBuilder.java:301-340`:
    - default in-memory `SessionEventStore` + `SessionStore`
    - tasks enabled ⇒ auto-add `TasksExtension` if absent
-   - executor = `threadFactory` given ? thread-per-task : VT executor `tachyon-vt-*` (`DefaultTachyonServer.java:356-359`)
+   - executor = `threadFactory` given ? thread-per-task : VT executor `tachyon-vt-*` (`DefaultTachyonServer.java:359-362`)
    - `new DefaultTachyonServer(...)` → run `withTools/withResources/...` callbacks → annotation providers → `validateConfiguration()`; any throw ⇒ `close()` + rethrow.
-2. `DefaultTachyonServer` ctor `DefaultTachyonServer.java:297-350`: registries, `registerDefaults()` (`:537-551`), `bootstrapExtensions()` (`:613-626`), change listeners (`:433-457`), session janitor if sessions on.
-3. `start()` `DefaultTachyonServer.java:382-418`: lifecycle `ReentrantLock`, `new NettyServer(this, NettyServerConfig…)`, record bound host/port.
-4. `close()` `DefaultTachyonServer.java:979-1030` → see [[concurrency]].
+2. `DefaultTachyonServer` ctor `DefaultTachyonServer.java:300-353`: registries, `registerDefaults()` (`:540-554`), `bootstrapExtensions()` (`:616-632`), change listeners (`:436-460`), session janitor if sessions on.
+3. `start()` `DefaultTachyonServer.java:385-421`: lifecycle `ReentrantLock`, `new NettyServer(this, NettyServerConfig…)`, record bound host/port.
+4. `close()` `DefaultTachyonServer.java:990-1041` → see [[concurrency]].
 
 ## 🧩 Internal seams
 

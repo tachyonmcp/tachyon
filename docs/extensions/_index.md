@@ -97,7 +97,45 @@ Register one or more extensions with `withExtensions(...)`.
 2. The client sends `initialize` with the extensions it supports, such as `"extensions": {"com.example/audit": {}}`.
 3. Tachyon calls `onConnectionInit` for each extension declared by both client and server — this still works for
    `NEVER`-mode extensions if a client already knows the ID, since hiding only affects advertisement, not negotiation.
-4. Methods declared in `methods()` are only routed for sessions that negotiated the extension.
+4. Methods the extension owns — declared in `methods()` or registered from `bootstrap` — are dispatched
+   according to its `negotiation()` policy (below).
+
+## Negotiation policy
+
+`ExtensionNegotiation negotiation()` decides whether the client must declare the extension before
+Tachyon dispatches the JSON-RPC methods it owns. The server checks the method exists first, so an unknown
+method — or one whose extension is not installed — is always `-32601 Method not found`.
+
+| Policy | Client declared the extension | Client did not declare it |
+|---|---|---|
+| `REQUIRED` (default) | dispatched | rejected, handler not invoked |
+| `OPTIONAL` | dispatched | dispatched |
+
+Declaration is read from `initialize.params.capabilities.extensions` for the MCP 2025-11-25 session, and
+from `_meta."io.modelcontextprotocol/clientCapabilities".extensions` on **each** MCP 2026-07-28 request
+(no carry-over between requests). A `REQUIRED` rejection is Missing Required Client Capability —
+`-32021` with HTTP 400 on 2026-07-28, `-32003` on 2025-11-25:
+
+```json
+{
+  "code": -32021,
+  "message": "Requires the 'com.example/audit' extension",
+  "data": {"requiredCapabilities": {"extensions": {"com.example/audit": {}}}}
+}
+```
+
+`OPTIONAL` is a compatibility mode for clients that know an extension's wire methods but skip negotiation.
+The extension is still advertised. Nothing is synthesized: `onConnectionInit` does not fire,
+`InteractionContext.isExtensionEnabled` stays `false`, and extension-specific optional settings or
+features are not turned on. It also skips the `requiresMetaEnvelope()` check; under `REQUIRED`, a
+declared call missing `_meta.<extensionId>` is `-32602 Invalid params`.
+
+```java
+@Override
+public ExtensionNegotiation negotiation() {
+    return ExtensionNegotiation.OPTIONAL;
+}
+```
 
 ## Built-in: TasksExtension
 

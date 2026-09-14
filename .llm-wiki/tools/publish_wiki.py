@@ -82,7 +82,7 @@ def sidebar(index_body: str) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("wiki_dir", type=Path)
-    parser.add_argument("--repo-url", default=f"https://github.com/{os.environ.get('GITHUB_REPOSITORY', 'kpavlov/tachyon')}")
+    parser.add_argument("--repo-url", default=f"https://github.com/{os.environ.get('GITHUB_REPOSITORY', 'tachyonmcp/tachyon')}")
     parser.add_argument("--sha", default=None)
     args = parser.parse_args()
     sha = args.sha or git("rev-parse", "HEAD")

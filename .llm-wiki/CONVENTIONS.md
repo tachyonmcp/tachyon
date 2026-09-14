@@ -20,8 +20,6 @@ LLM owns this dir. Humans read. Source of truth = **code**, never `docs/`, never
 | `findings.md` | 🐛/🪶/⚠️ smells, stale javadoc, open questions found while reading code |
 | `tools/stale.sh` | Lists pages whose `sources` changed since page `commit` |
 | `tools/publish_wiki.py` | Renders wiki into GitHub Wiki checkout. Run by `.github/workflows/wiki.yml` on push to `main` |
-| `tools/publish_wiki.py` | Renders pages into the GitHub Wiki (`.github/workflows/wiki.yml`, on push to `main`). Page names must stay unique across dirs. |
-
 ## 📄 Page format
 
 ```markdown

@@ -283,10 +283,14 @@ public class McpDispatcher {
                 || (sessionId == null && METHOD_PING.equals(method))) {
 
             requestCtx.setOutboundStream(outboundSseStream);
-            var handler = lookupHandler(method, params, requestCtx);
+            var handler = server.getHandler(method);
             if (handler == null) {
                 return CompletableFuture.completedFuture(
                         rejected(id, ServerErrors.methodNotFound("Method not found"), requestCtx));
+            }
+            var negotiationRejection = extensionNegotiationRejection(method, params, requestCtx);
+            if (negotiationRejection != null) {
+                return CompletableFuture.completedFuture(rejected(id, negotiationRejection, requestCtx));
             }
             return invokeHandlerAsync(id, method, params, outboundSseStream, requestCtx, null, handler);
         }
@@ -319,26 +323,39 @@ public class McpDispatcher {
                     id, ServerErrors.invalidRequest("Session is not yet active, only ping allowed"), requestCtx));
         }
 
-        var handler = lookupHandler(method, params, requestCtx);
+        var handler = server.getHandler(method);
         if (handler == null) {
             return CompletableFuture.completedFuture(
                     rejected(id, ServerErrors.methodNotFound("Method not found"), requestCtx));
+        }
+        var negotiationRejection = extensionNegotiationRejection(method, params, requestCtx);
+        if (negotiationRejection != null) {
+            return CompletableFuture.completedFuture(rejected(id, negotiationRejection, requestCtx));
         }
 
         return invokeHandlerAsync(id, method, params, outboundSseStream, requestCtx, session, handler);
     }
 
-    private @Nullable RpcMethodHandler<?, ?> lookupHandler(String method, Object params, DispatchContext ic) {
+    /**
+     * Enforces {@link dev.tachyonmcp.api.server.extensions.ServerExtension#negotiation()} for a method
+     * that already resolved to a handler, so unknown methods stay {@code methodNotFound}. Declaration is
+     * read from the context: the session under 2025-11-25, the per-request channel context under
+     * 2026-07-28.
+     */
+    private @Nullable ServerError extensionNegotiationRejection(String method, Object params, DispatchContext ic) {
         var owningExtensionId = server.extensionForMethod(method);
-        if (owningExtensionId != null) {
-            if (!ic.isExtensionEnabled(owningExtensionId)) {
-                logger.trace("Extension {} is disabled", owningExtensionId);
-                return null;
-            }
-            if (server.extensionRequiresMeta(owningExtensionId)
-                    && !ic.requestMapper().hasMetaKey(params, owningExtensionId)) return null;
+        if (owningExtensionId == null || server.extensionNegotiationOptional(owningExtensionId)) {
+            return null;
         }
-        return server.getHandler(method);
+        if (!ic.isExtensionEnabled(owningExtensionId)) {
+            logger.debug("Extension {} not declared by client for method {}", owningExtensionId, method);
+            return ServerErrors.missingRequiredExtension(owningExtensionId);
+        }
+        if (server.extensionRequiresMeta(owningExtensionId)
+                && !ic.requestMapper().hasMetaKey(params, owningExtensionId)) {
+            return ServerErrors.invalidParams("Missing required client capability: " + owningExtensionId);
+        }
+        return null;
     }
 
     private <I, O> CompletableFuture<DispatchResult> invokeHandlerAsync(

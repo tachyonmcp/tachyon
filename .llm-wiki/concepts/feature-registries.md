@@ -2,7 +2,7 @@
 title: Feature registries
 tags: [concept, tools, resources, prompts, completions]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/handlers/, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java]
-updated: 2026-09-13
+updated: 2026-09-14
 commit: 582f9c52
 ---
 
@@ -39,7 +39,7 @@ Mode `OFF` ⇒ registration silently skipped (debug log) in every registry.
 
 ## 🎚️ Capability resolution
 
-`DefaultTachyonServer.resolveCapabilities` `tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java:209-268`:
+`DefaultTachyonServer.resolveCapabilities` `tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java:212-271`:
 - `Mode.ON` ⇒ advertise; `OFF` ⇒ no; `AUTO` ⇒ advertise iff registry non-empty (computed **per request**, so post-start registrations show up).
 - `tasks` advertised if enabled **or** any tool `taskSupport ∉ {null, FORBIDDEN}`.
 - `logging` plain boolean; `logging/setLevel` handler only registered when true `:548-550`.
@@ -82,6 +82,6 @@ Mode `OFF` ⇒ registration silently skipped (debug log) in every registry.
 
 ## 🧩 Built-in handlers
 
-`registerDefaults` `DefaultTachyonServer.java:537-551`: `initialize`, `server/discover`, `ping`, `subscriptions/listen`, tools/resources/tasks/prompts/completion handlers, optional `logging/setLevel`. `DiscoverHandler` returns supported versions desc + capabilities + identity + advertised extensions `handlers/DiscoverHandler.java:35-46`.
+`registerDefaults` `DefaultTachyonServer.java:540-554`: `initialize`, `server/discover`, `ping`, `subscriptions/listen`, tools/resources/tasks/prompts/completion handlers, optional `logging/setLevel`. `DiscoverHandler` returns supported versions desc + capabilities + identity + advertised extensions `handlers/DiscoverHandler.java:35-46`.
 
 Related: [[tasks]], [[extensions]], [[json-layer]], [[request-lifecycle]].
