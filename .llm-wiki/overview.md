@@ -3,7 +3,7 @@ title: Overview
 tags: [concept, architecture]
 sources: [pom.xml, tachyon-core/pom.xml, integrations/pom.xml, tachyon-core/src/main/java/dev/tachyonmcp/core/server/TachyonServer.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/ServerBuilder.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultServerBuilder.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java]
 updated: 2026-09-14
-commit: 582f9c52
+commit: 8c7738c0
 ---
 
 # 🛰️ Overview
@@ -41,13 +41,13 @@ graph TD
 
 ## 🎯 The one type users hold
 
-`TachyonServer` interface `tachyon-core/src/main/java/dev/tachyonmcp/core/server/TachyonServer.java:23` — `AutoCloseable`, exposes registries `tools()/resources()/prompts()/tasks()/completions()`, `notifications()`, `start()`, `port()`, `close()`. Factory `TachyonServer.builder()` → `DefaultServerBuilder` (`:87`).
+`TachyonServer` interface `tachyon-core/src/main/java/dev/tachyonmcp/core/server/TachyonServer.java:24` — `AutoCloseable`, exposes registries `tools()/resources()/prompts()/tasks()/completions()`, `annotations(...)`, `notifications()`, `start()`, `port()`, `close()`. Factory `TachyonServer.builder()` → `DefaultServerBuilder` (`:98`).
 
 Two-phase: `build()` constructs server + runs registrations, **no socket**; `start()` binds Netty.
 
 ## 🏗️ Build → start flow
 
-1. `DefaultServerBuilder.build()` `tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultServerBuilder.java:301-340`:
+1. `DefaultServerBuilder.build()` `tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultServerBuilder.java:290`:
    - default in-memory `SessionEventStore` + `SessionStore`
    - tasks enabled ⇒ auto-add `TasksExtension` if absent
    - executor = `threadFactory` given ? thread-per-task : VT executor `tachyon-vt-*` (`DefaultTachyonServer.java:359-362`)

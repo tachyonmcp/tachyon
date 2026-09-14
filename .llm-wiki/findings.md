@@ -3,7 +3,7 @@ title: Findings
 tags: [meta, findings]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/HandlerFutures.java]
 updated: 2026-09-14
-commit: 5821ad56
+commit: 8c7738c0
 ---
 
 # 🔎 Findings
@@ -20,7 +20,7 @@ Spotted while reading code. Not verified by tests. Fixed in code ⇒ 🗑️ rem
 | 6 | 🪶 | `DefaultTaskRegistry.onChange` **replaces** single listener; other registries append via `ChangeSupport`. | `DefaultTaskRegistry.java:151-153` |
 | 7 | 🪶 | `Session` javadoc typo "unique string ID1". | `tachyon-core/src/main/java/dev/tachyonmcp/core/runtime/Session.java:19-23` |
 | 8 | ⚠️ | `ObservationListener` marked `@InternalApi` + `@Experimental`, yet public extension point used by `tachyon-opentelemetry` and documented in `ObservabilityConfig.Builder.listener`. Contract unclear. | `server/observability/ObservationListener.java:20-22`, `ObservabilityConfig.java:84-92` |
-| 9 | 🪶 | In-memory stores defaulted twice: `SessionConfig.Builder.build()` and `DefaultServerBuilder.build()`. | `SessionConfig.java:140-146`, `DefaultServerBuilder.java:304-306` |
+| 9 | 🪶 | In-memory stores defaulted twice: `SessionConfig.Builder.build()` and `DefaultServerBuilder.build()`. | `SessionConfig.java:140-146`, `DefaultServerBuilder.java:291-295` |
 | 10 | ⚠️ | Notifications route onto POST-SSE only from the dispatching thread (ThreadLocal). Handler continuing on another thread ⇒ event goes to GET stream / dropped when none (stateful) — surprising for async tools. | `OutboundSseStreamMessageRouter.java:20-59`, `McpDispatcher.java:402-410` |
 | 11 | ⚠️ | `DefaultResourceRegistry.unregister(name)` / `find(name)` pick arbitrary match when names collide (documented). | `DefaultResourceRegistry.java:170-214` |
 | 12 | 🪶 | `ResourceTemplateEntry` is public record while sibling entries are package-private. | `features/resources/ResourceTemplateEntry.java:11` |

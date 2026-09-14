@@ -3,7 +3,7 @@ title: Concurrency & shutdown
 tags: [concept, concurrency, virtual-threads]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/internal/OperationTracker.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/NettyServer.java, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/HandlerFutures.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/OutboundSseStreamMessageRouter.java]
 updated: 2026-09-14
-commit: 582f9c52
+commit: 8c7738c0
 ---
 
 # 🧵 Concurrency & shutdown
@@ -38,7 +38,7 @@ client `notifications/cancelled` → `inboundRequests.get(key).cancel(true)` →
 
 `DefaultTachyonServer.close()` `tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java:990-1041`:
 
-1. Refuse if called on Netty event loop (would deadlock drain) `:1043-1049`.
+1. Refuse if called on Netty event loop (would deadlock drain) `:1054-1060`.
 2. `netty.stopAccepting()` — close server socket, keep children.
 3. `deadline = now + runtime.shutdownGracePeriod` (5s default).
 4. `operations.drain(deadline)` — stop admission, wait `active==0`. Admission counts until **both** dispatch future and `transportCompletion` (response flushed) done `OperationTracker.java:34-84`.
@@ -49,6 +49,8 @@ client `notifications/cancelled` → `inboundRequests.get(key).cancel(true)` →
 New requests during drain ⇒ `RejectedExecutionException` ⇒ 503 "Server shutting down". Tests: `ServerShutdownGraceTest`, e2e `ShutdownDrainTest`.
 
 ## ⚠️ Rules for new code
+
+- Annotation registration is synchronous on the caller and delegates to existing registries; the group is not atomic (`DefaultTachyonServer.java:1044`). Spring invokes it before transport startup; handler dispatch still uses virtual threads.
 
 - Handler may block (VT) but not pin: no `synchronized`, no long native calls; CPU-heavy → `context.engine().executor()` `RpcMethodHandler.java:14-25`.
 - Any Netty write off EL → `eventLoop.execute` / `runOnEventLoop`; catch `RejectedExecutionException` on shutdown.

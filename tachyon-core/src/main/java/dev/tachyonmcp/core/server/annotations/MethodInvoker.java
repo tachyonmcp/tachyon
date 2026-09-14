@@ -40,10 +40,22 @@ final class MethodInvoker {
     private MethodInvoker(
             Object instance, Method method, List<Binding> bindings, AnnotationRegistrationContext context) {
         this.instance = instance;
-        this.method = method;
+        this.method = invocationMethod(instance, method);
         this.bindings = List.copyOf(bindings);
         this.serializer = context.payloadSerializer();
         this.deserializer = context.payloadDeserializer();
+    }
+
+    private static Method invocationMethod(Object instance, Method metadata) {
+        if (metadata.getDeclaringClass().isInstance(instance)) return metadata;
+        try {
+            final var method = instance.getClass().getMethod(metadata.getName(), metadata.getParameterTypes());
+            method.setAccessible(true);
+            return method;
+        } catch (NoSuchMethodException e) {
+            throw new IllegalStateException(
+                    "Annotated method is not exposed by the invocation receiver: " + metadata, e);
+        }
     }
 
     /** Tool shape: a single record/POJO/map parameter receives the whole arguments object. */

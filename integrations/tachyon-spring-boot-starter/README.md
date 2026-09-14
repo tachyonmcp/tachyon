@@ -44,9 +44,21 @@ tachyon:
 
 | Bean | Effect |
 |---|---|
-| any bean with `@McpTool`/`@McpResource`/`@McpPrompt` methods | registered via `ServerBuilder.annotations(...)` (class proxies OK) |
+| any singleton bean with `@McpTool`/`@McpResource`/`@McpPrompt` methods | registered after singleton initialization; class and JDK proxies preserve advice |
 | `ServerExtension` | passed to `withExtensions(...)` |
 | `TachyonServerCustomizer` | last word on the `ServerBuilder` (sessions, JSON, other annotation providers, …) |
 | `TachyonServer` | built by the starter; inject it for `notifications()` or runtime registration |
 
 `TachyonServerLifecycle` binds the transport when the context refreshes and closes it on shutdown.
+
+Annotated beans may constructor-inject `TachyonServer`. The starter builds the server first,
+then registers initialized beans using its configured payload codecs, before binding the transport.
+JDK proxies use annotations and parameter names from the target class; annotated methods must be
+exposed on the proxy's interfaces. Calls always pass through the proxy, including security and
+transaction advice. Use class proxies for annotated methods outside those interfaces.
+
+Unrelated lazy beans are not initialized for scanning. A lazy annotated bean must expose its
+annotations on the type Spring can determine without creating it.
+
+A user-provided `TachyonServer` disables automatic construction and bean registration; its lifecycle
+is still managed unless a `TachyonServerLifecycle` bean is also provided.

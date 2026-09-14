@@ -3,7 +3,7 @@ title: Extensions
 tags: [concept, extensions, spi]
 sources: [tachyon-api/src/main/java/dev/tachyonmcp/api/server/extensions/, tachyon-api/src/main/java/dev/tachyonmcp/api/runtime/Extension.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/handlers/ExtensionNegotiator.java, tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/mcp/v2026_07_28/transport/ExtensionNegotiationHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java]
 updated: 2026-09-14
-commit: 364371aa
+commit: 8c7738c0
 ---
 
 # 🧩 Extensions
@@ -29,6 +29,8 @@ Verdict: `ServerExtension` = bootstrap hook (register features + custom JSON-RPC
 `ExtensionMethodHandler.handle(InteractionContext, JsonObject params)` → `Object` (null ⇒ protocol empty result) `ExtensionMethodHandler.java:19-31`, adapter `DefaultTachyonServer.java:571-611`.
 
 ## 🔁 Lifecycle
+
+Spring extensions still bootstrap during server construction. Discovered annotated beans register later, after singleton initialization, through the existing registries (`integrations/tachyon-spring-boot-starter/src/main/java/dev/tachyonmcp/spring/boot/TachyonAutoConfiguration.java:52`, `TachyonBeanRegistrar.java:20`); see [[integrations]].
 
 1. `withExtensions(...)` — duplicate id ⇒ IAE `DefaultServerBuilder.java` `addExtension`.
 2. Ctor `bootstrapExtensions`: record `methods()` owners, set `bootstrappingExtensionId`, call `bootstrap(this)`; any `registerHandler` during bootstrap also owned `DefaultTachyonServer.java:571-576`, `:613-626`.

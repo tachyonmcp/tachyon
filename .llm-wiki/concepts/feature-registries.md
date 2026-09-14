@@ -3,7 +3,7 @@ title: Feature registries
 tags: [concept, tools, resources, prompts, completions]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/handlers/, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java]
 updated: 2026-09-14
-commit: 582f9c52
+commit: 8c7738c0
 ---
 
 # 🧰 Feature registries
@@ -11,6 +11,8 @@ commit: 582f9c52
 Verdict: each MCP feature = public façade in `tachyon-api` (`Tools`, `Resources`, `Prompts`, `Completions`, `Tasks`) + `Default*Registry` in core + static `*MethodHandlers.register(map, …)` JSON-RPC adapters. Sync fn wrapped into async fn at registration; dispatch always async. Registries are live — register/unregister after `start()` fires `list_changed`.
 
 ## 📋 Registration API shape
+
+`TachyonServer.annotations(...)` feeds annotated objects into these same registries with configured codecs, after construction (`DefaultTachyonServer.java:1044`). Used by Spring after singleton initialization; [[integrations]].
 
 Rule set lives in `docs/architecture/guidance.md` (AGENTS.md mandates reading it before changing SAMs/registry names). Observed in code:
 

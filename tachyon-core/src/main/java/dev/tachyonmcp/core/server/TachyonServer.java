@@ -11,6 +11,7 @@ import dev.tachyonmcp.api.server.features.tasks.Tasks;
 import dev.tachyonmcp.api.server.features.tools.Tools;
 import dev.tachyonmcp.core.server.config.ServerConfig;
 import java.util.List;
+import java.util.function.Consumer;
 
 /**
  * The one public type users hold — an MCP server that is {@link AutoCloseable}.
@@ -47,6 +48,16 @@ public interface TachyonServer extends AutoCloseable {
      * Returns the completion registry.
      */
     Completions completions();
+
+    /**
+     * Registers annotated objects using this server's registries and configured payload codecs.
+     * DI containers can call this after constructing their beans and before {@link #start()}.
+     * Registrations are applied immediately, in order, and are not atomic as a group.
+     *
+     * @param configurer annotation providers and objects to register
+     */
+    @ExperimentalApi
+    void annotations(Consumer<AnnotationContext> configurer);
 
     Notifications notifications();
 

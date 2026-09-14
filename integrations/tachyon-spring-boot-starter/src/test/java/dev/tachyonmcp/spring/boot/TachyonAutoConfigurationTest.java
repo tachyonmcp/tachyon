@@ -1,10 +1,15 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
 package dev.tachyonmcp.spring.boot;
 
+import static dev.tachyonmcp.testkit.JsonRpcResponseAssert.assertThat;
+import static net.javacrumbs.jsonunit.assertj.JsonAssertions.assertThatJson;
+import static org.assertj.core.api.Assertions.assertThat;
+
 import dev.tachyonmcp.api.annotations.McpTool;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
 import dev.tachyonmcp.core.server.TachyonServer;
 import dev.tachyonmcp.testkit.McpTestClients;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.aopalliance.intercept.MethodInterceptor;
 import org.junit.jupiter.api.Test;
 import org.springframework.aop.framework.ProxyFactory;
@@ -13,23 +18,16 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import java.util.concurrent.atomic.AtomicInteger;
-
-import static dev.tachyonmcp.testkit.JsonRpcResponseAssert.assertThat;
-import static net.javacrumbs.jsonunit.assertj.JsonAssertions.assertThatJson;
-import static org.assertj.core.api.Assertions.assertThat;
-
 /**
  * Boots the starter in a real Spring context and calls the discovered beans over MCP.
  */
 class TachyonAutoConfigurationTest {
 
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
-        .withConfiguration(AutoConfigurations.of(TachyonAutoConfiguration.class))
-        .withPropertyValues("tachyon.port=0", "tachyon.name=spring-mcp");
+            .withConfiguration(AutoConfigurations.of(TachyonAutoConfiguration.class))
+            .withPropertyValues("tachyon.port=0", "tachyon.name=spring-mcp");
 
-    record Greeting(String message) {
-    }
+    record Greeting(String message) {}
 
     @SuppressWarnings("unused")
     public static class GreetingService {
@@ -68,42 +66,41 @@ class TachyonAutoConfigurationTest {
         @Bean
         TachyonServerCustomizer pingTool() {
             return builder -> builder.withTools(
-                tools -> tools.register(tool -> tool.name("ping"), (ctx, req) -> ToolResult.text("pong")));
+                    tools -> tools.register(tool -> tool.name("ping"), (ctx, req) -> ToolResult.text("pong")));
         }
     }
 
     @Test
     void annotatedBeanIsServedOverMcpOnceContextStarts() {
-        runner.withUserConfiguration(GreetingConfig.class)
-            .run(context -> {
-                var server = context.getBean(TachyonServer.class);
-                assertThat(server.config().identity().name()).isEqualTo("spring-mcp");
+        runner.withUserConfiguration(GreetingConfig.class).run(context -> {
+            var server = context.getBean(TachyonServer.class);
+            assertThat(server.config().identity().name()).isEqualTo("spring-mcp");
 
-                try (var client = McpTestClients.latest(server.port())) {
-                    var list = client.sendRpc("""
+            try (var client = McpTestClients.latest(server.port())) {
+                var list = client.sendRpc("""
                         {"jsonrpc":"2.0","id":1,"method":"tools/list"}
                         """);
-                    var call = client.sendRpc("""
+                var call = client.sendRpc("""
                         {"jsonrpc":"2.0","id":2,"method":"tools/call",
                          "params":{"name":"greet","arguments":{"name":"Ada"}}}
                         """);
 
-                    // language=json
-                    var expectedList = """
+                // language=json
+                var expectedList = """
                         {"jsonrpc":"2.0","id":1,"result":{
                           "tools":[{"name":"greet","description":"Greets by name",
                             "inputSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]},
                             "outputSchema":{"type":"object","properties":{"message":{"type":"string"}},"required":["message"]}}],
                           "resultType":"complete","ttlMs":0,"cacheScope":"public"}}
                         """;
-                    assertThatJson(list.body()).isEqualTo(expectedList);
-                    assertThat(call).isSuccess().hasId(2).hasResult("""
+                assertThatJson(list.body()).isEqualTo(expectedList);
+                assertThat(call).isSuccess().hasId(2).hasResult("""
                         {"content":[{"type":"text","text":"{\\"message\\":\\"Hello, Ada!\\"}"}],
                          "structuredContent":{"message":"Hello, Ada!"},
                          "resultType":"complete"}
                         """);
-                }
-            });
+            }
+        });
     }
 
     @Test
@@ -144,7 +141,7 @@ class TachyonAutoConfigurationTest {
     @Test
     void disabledPropertySkipsTheServer() {
         runner.withPropertyValues("tachyon.enabled=false")
-            .withUserConfiguration(GreetingConfig.class)
-            .run(context -> assertThat(context).doesNotHaveBean(TachyonServer.class));
+                .withUserConfiguration(GreetingConfig.class)
+                .run(context -> assertThat(context).doesNotHaveBean(TachyonServer.class));
     }
 }

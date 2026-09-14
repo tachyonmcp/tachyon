@@ -1040,6 +1040,17 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
         }
     }
 
+    @Override
+    public void annotations(Consumer<AnnotationContext> configurer) {
+        final var context = new AnnotationContext();
+        configurer.accept(context);
+        final var registrationContext = new DefaultAnnotationRegistrationContext(
+                tools(), resources(), prompts(), completions(), payloadSerializer, payloadDeserializer);
+        for (final var registration : context.registrations()) {
+            registration.provider().register(registration.instance(), registrationContext);
+        }
+    }
+
     private static void requireNotOnEventLoop(@Nullable Closeable transport) {
         if (transport instanceof NettyServer netty && netty.inEventLoop()) {
             throw new IllegalStateException("close() must not be called from a Netty event loop thread — "

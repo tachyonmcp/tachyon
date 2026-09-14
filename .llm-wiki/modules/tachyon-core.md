@@ -3,7 +3,7 @@ title: tachyon-core
 tags: [module, core]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/, tachyon-core/src/main/resources/, tachyon-core/pom.xml]
 updated: 2026-09-14
-commit: 70e205dc
+commit: 8c7738c0
 ---
 
 # ⚙️ tachyon-core
@@ -14,7 +14,7 @@ Verdict: the runtime. ~190 main files. Deps: `slf4j-api`, `netty-codec-http`, `n
 
 | Package | Holds | Page |
 |---|---|---|
-| `server` | `TachyonServer`, `ServerBuilder`, `DefaultServerBuilder`, `DefaultTachyonServer` (engine impl, 1039 lines), `McpDispatcher`, `RpcMethodHandler`, `OutboundSseStream*`, `AnnotationContext`, `HandlerWatchdog` | [[overview]], [[request-lifecycle]] |
+| `server` | `TachyonServer`, `ServerBuilder`, `DefaultServerBuilder`, `DefaultTachyonServer`, `McpDispatcher`, `RpcMethodHandler`, `OutboundSseStream*`, `AnnotationContext`, `HandlerWatchdog` | [[overview]], [[request-lifecycle]] |
 | `server.annotations` | `TachyonAnnotationProvider` (default `AnnotationContext` provider for `@McpTool/@McpResource/@McpPrompt`), `MethodInvoker`, `ResultMappers` | [[integrations]] |
 | `server.internal` | `ServerEngine` SPI, `OperationTracker`, `AbstractJanitor`, `NotificationLogSupport` | [[concurrency]] |
 | `server.config` | config records + builders | [[configuration]] |
@@ -33,6 +33,8 @@ Verdict: the runtime. ~190 main files. Deps: `slf4j-api`, `netty-codec-http`, `n
 | `transport.netty.sse` | `PostSseStream`, `SseManager`, `SseHeartbeat`, `SseSerializer`, `NettySseConnection` | [[sse-streams]] |
 
 ## 🧠 Who holds what
+
+- `TachyonServer.annotations(...)` registers after construction with the server's codecs; builder annotations delegate to it (`TachyonServer.java:60`, `DefaultTachyonServer.java:1044`, `DefaultServerBuilder.java:264`). Proxy metadata/receiver separation lives in [[integrations]].
 
 - `DefaultTachyonServer` = state + registries + `methodHandlers` map + pending server→client requests + session manager + event store + extensions; implements `ServerEngine` **and** `ExtensionContext` `tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java:96-127`.
 - `McpDispatcher` = per-request flow, one per `McpChannelInitializer` (i.e. per server start) `McpChannelInitializer.java` ctor.

@@ -15,6 +15,20 @@ third-party annotation frameworks map onto the same registries.
 `AnnotationProvider`, and `AnnotationRegistrationContext` are `@ExperimentalApi` — the shape may
 still change.
 
+An already-built Java server also supports `server.annotations(a -> a.register(service))`.
+This uses the server's configured payload serializers and feature registries. Registration runs
+immediately, in order; a group of registrations is not transactional. DI containers can construct
+the server, inject it into service beans, register those beans, and then call `server.start()`.
+
+The Spring Boot starter follows that order. It discovers singleton beans after initialization,
+reads annotation metadata from Spring AOP target classes, and invokes JDK/class proxies so advice
+still runs. For JDK proxies, each annotated method must be exposed by an interface. A user-provided
+server keeps its own registration policy.
+
+Container integrations can call `TachyonAnnotationProvider.register(proxy, targetClass, context)`
+to separate annotation metadata from the invocation receiver. A method absent from the proxy fails
+registration; the provider never bypasses advice by invoking the target directly.
+
 ## Declarative services
 
 ```java

@@ -23,10 +23,8 @@ import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 
 /**
- * {@link AnnotationProvider} for Tachyon's own {@link McpTool @McpTool}, {@link McpResource
- *
- * @author Konstantin Pavlov
- * @McpResource}, and {@link McpPrompt @McpPrompt}. It is the default provider of {@code
+ * {@link AnnotationProvider} for Tachyon's own {@link McpTool @McpTool},
+ * {@link McpResource @McpResource}, and {@link McpPrompt @McpPrompt}. It is the default provider of {@code
  * ServerBuilder.annotations(...)}, so {@code annotations(a -> a.register(service))} needs no
  * further setup.
  *
@@ -57,12 +55,12 @@ public final class TachyonAnnotationProvider implements AnnotationProvider {
     }
 
     /**
-     * Returns whether {@code type} declares any {@link McpTool @McpTool}, {@link McpResource
+     * Returns whether {@code type} declares any {@link McpTool @McpTool},
+     * {@link McpResource @McpResource}, or {@link McpPrompt @McpPrompt} method.
+     * Lets DI containers select candidate beans without instantiating them.
      *
      * @param type the class to inspect
      * @return {@code true} if registering an instance of {@code type} would expose features
-     * @McpResource}, or {@link McpPrompt @McpPrompt} method. Lets DI containers select candidate
-     * beans without instantiating them.
      */
     public static boolean declaresFeatures(Class<?> type) {
         for (Class<?> c = type; c != null && c != Object.class; c = c.getSuperclass()) {
@@ -78,8 +76,21 @@ public final class TachyonAnnotationProvider implements AnnotationProvider {
 
     @Override
     public void register(Object instance, AnnotationRegistrationContext context) {
+        register(instance, instance.getClass(), context);
+    }
+
+    /**
+     * Registers features declared by a target type, invoking methods on the supplied instance.
+     * A DI container may supply an interface proxy and its target class separately. Every exposed
+     * method must be invocable on the proxy; the target is never invoked directly.
+     *
+     * @param instance the invocation receiver, including any framework advice
+     * @param annotatedType the type carrying feature and parameter metadata
+     * @param context the registries and payload codecs
+     */
+    public void register(Object instance, Class<?> annotatedType, AnnotationRegistrationContext context) {
         var methods = AnnotationInvocationSupport.discoverMethods(
-                instance.getClass(), McpTool.class, McpResource.class, McpPrompt.class);
+                annotatedType, McpTool.class, McpResource.class, McpPrompt.class);
         var keys = new HashSet<String>();
         for (Method method : methods) {
             var tool = method.getAnnotation(McpTool.class);
