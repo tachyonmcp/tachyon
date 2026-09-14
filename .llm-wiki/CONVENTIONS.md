@@ -14,12 +14,13 @@ LLM owns this dir. Humans read. Source of truth = **code**, never `docs/`, never
 | Path | What |
 |---|---|
 | `index.md` | Catalog. Every page, one line. Read first. |
-| `log.md` | Append-only timeline. `## [YYYY-MM-DD] <op> \| <title>` |
 | `overview.md` | Modules, deps, versions, entry points |
 | `concepts/*.md` | Cross-cutting mechanics (lifecycle, sessions, SSE…) |
 | `modules/*.md` | One page per Maven module / module group |
 | `findings.md` | 🐛/🪶/⚠️ smells, stale javadoc, open questions found while reading code |
 | `tools/stale.sh` | Lists pages whose `sources` changed since page `commit` |
+| `tools/publish_wiki.py` | Renders wiki into GitHub Wiki checkout. Run by `.github/workflows/wiki.yml` on push to `main` |
+| `tools/publish_wiki.py` | Renders pages into the GitHub Wiki (`.github/workflows/wiki.yml`, on push to `main`). Page names must stay unique across dirs. |
 
 ## 📄 Page format
 
@@ -48,14 +49,12 @@ Verdict/summary first. Then sections. Tables > prose.
 2. Re-read changed code. Update every page whose `sources` match.
 3. Fix `path:line`, bump `updated` + `commit`.
 4. New concept/module with no page → create page, add to `index.md`.
-5. Append `log.md` entry.
 
 **Query**
 1. Read `index.md` → drill pages → verify in code before answering.
-2. Good synthesized answer (comparison, trace, decision) → file as new page, index it, log it.
+2. Good synthesized answer (comparison, trace, decision) → file as new page, index it.
 
 **Lint**
 - Run `tools/stale.sh`. Check: orphan pages (no inbound wiki link), dead `path:line`, contradictions between pages, concepts mentioned w/o page, `findings.md` items fixed in code → 🗑️ remove.
-- Log `lint` entry.
 
 Based on https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f
