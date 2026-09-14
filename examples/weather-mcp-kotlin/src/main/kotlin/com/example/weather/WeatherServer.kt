@@ -84,10 +84,8 @@ private val openTelemetry =
                     BatchSpanProcessor
                         .builder(OtlpHttpSpanExporter.builder().build())
                         .build(),
-                )
-                .build(),
-        )
-        .setMeterProvider(
+                ).build(),
+        ).setMeterProvider(
             SdkMeterProvider
                 .builder()
                 .setResource(openTelemetryResource)
@@ -96,16 +94,13 @@ private val openTelemetry =
                         .builder(LoggingMetricExporter.create())
                         .setInterval(Duration.ofSeconds(10))
                         .build(),
-                )
-                .registerMetricReader(
+                ).registerMetricReader(
                     PeriodicMetricReader
                         .builder(OtlpHttpMetricExporter.builder().build())
                         .setInterval(Duration.ofSeconds(10))
                         .build(),
-                )
-                .build(),
-        )
-        .build()
+                ).build(),
+        ).build()
 
 private data class NarrationStyleInput(
     val forecast: String,
@@ -166,7 +161,8 @@ fun assembleServer(
             name = "weather-server-kotlin"
             title = "Weather Server (Kotlin)"
             description = "Weather MCP server built with Tachyon Kotlin DSL"
-            websiteUrl = "https://github.com/kpavlov/tachyon/tree/main/examples/weather-mcp-kotlin"
+            websiteUrl =
+                "https://github.com/tachyonmcp/tachyon/tree/main/examples/weather-mcp-kotlin"
             instructions = "Test instructions"
             icons += Icon(LOGO, "image/png", listOf("256x256"))
             version = "1.0"

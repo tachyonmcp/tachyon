@@ -4,7 +4,7 @@
 
 Please **do not** open a public GitHub issue for security vulnerabilities.
 
-Report privately via [GitHub Security Advisories](https://github.com/kpavlov/tachyon/security/advisories/new)
+Report privately via [GitHub Security Advisories](https://github.com/tachyonmcp/tachyon/security/advisories/new)
 for this repository. Include:
 
 - A description of the vulnerability and its impact.

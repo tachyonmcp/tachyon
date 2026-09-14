@@ -12,7 +12,7 @@
 
     <name>Weather MCP Kotlin Example</name>
     <description>Weather MCP server using Tachyon MCP on Kotlin</description>
-    <url>https://github.com/kpavlov/tachyon</url>
+    <url>https://github.com/tachyonmcp/tachyon</url>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>

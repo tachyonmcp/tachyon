@@ -12,7 +12,7 @@
 
     <name>Echo Kotlin MCP Example</name>
     <description>Echo MCP server using Tachyon MCP Kotlin DSL</description>
-    <url>https://github.com/kpavlov/tachyon</url>
+    <url>https://github.com/tachyonmcp/tachyon</url>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>

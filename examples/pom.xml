@@ -12,7 +12,7 @@
     <packaging>pom</packaging>
 
     <name>Tachyon MCP Examples</name>
-    <url>https://github.com/kpavlov/tachyon</url>
+    <url>https://github.com/tachyonmcp/tachyon</url>
 
     <modules>
         <module>echo-kotlin</module>

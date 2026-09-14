@@ -1,6 +1,6 @@
 ---
 name: tachyon-mcp
-description: Build MCP (Model Context Protocol) servers using the [Tachyon MCP](https://github.com/kpavlov/tachyon).
+description: Build MCP (Model Context Protocol) servers using the [Tachyon MCP](https://github.com/tachyonmcp/tachyon).
 compatibility: Designed for Claude Code on JDK 21+ projects
 version: 1.0.0-SNAPSHOT
 metadata:

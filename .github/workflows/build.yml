@@ -77,7 +77,7 @@ jobs:
           name: codecov-jdk${{ matrix.java }}
           files: 'reports/target/site/jacoco-aggregate/jacoco.xml'
           token: ${{ secrets.CODECOV_TOKEN }}
-          slug: kpavlov/tachyon
+          slug: tachyonmcp/tachyon
 
       - name: Upload test results to Codecov
         if: ${{ !cancelled() && matrix.codecov && github.event.pull_request.head.repo.fork != true }}

@@ -120,7 +120,7 @@ This repository also includes a skill that teaches coding agents how to build Ta
 is separate from the server-side `SkillsExtension` described above.
 
 ```shell
-npx skills add kpavlov/tachyon --skill tachyon-mcp
+npx skills add tachyonmcp/tachyon --skill tachyon-mcp
 ```
 
 Its Java and Kotlin examples are compiled during the project build to keep them current.

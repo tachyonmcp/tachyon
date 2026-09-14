@@ -14,7 +14,7 @@
 
     <name>Tachyon MCP</name>
     <description>Model Context Protocol (MCP) server for Java and Kotlin</description>
-    <url>https://github.com/kpavlov/tachyon</url>
+    <url>https://github.com/tachyonmcp/tachyon</url>
     <organization>
         <name>IT Staff OÜ</name>
         <url>https://itstaff.ee</url>
@@ -37,14 +37,14 @@
     </developers>
 
     <scm>
-        <connection>scm:git:git://github.com/kpavlov/tachyon.git</connection>
-        <developerConnection>scm:git:ssh://github.com/kpavlov/tachyon.git</developerConnection>
-        <url>https://github.com/kpavlov/tachyon</url>
+        <connection>scm:git:git://github.com/tachyonmcp/tachyon.git</connection>
+        <developerConnection>scm:git:ssh://github.com/tachyonmcp/tachyon.git</developerConnection>
+        <url>https://github.com/tachyonmcp/tachyon</url>
     </scm>
 
     <issueManagement>
         <system>github</system>
-        <url>https://github.com/kpavlov/tachyon/issues</url>
+        <url>https://github.com/tachyonmcp/tachyon/issues</url>
     </issueManagement>
 
     <modules>
@@ -405,7 +405,7 @@
                             </palantirJavaFormat>
                             <excludes>
                                 <exclude>**/generated-sources/**</exclude>
-                                <exclude>**/me/kpavlov/tachyon/protocol/mcp/**</exclude>
+                                <exclude>**/me/tachyonmcp/tachyon/protocol/mcp/**</exclude>
                             </excludes>
                             <licenseHeader>
                                 <content>/* Copyright (c) $YEAR Konstantin Pavlov/IT Staff and contributors. */</content>

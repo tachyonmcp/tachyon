@@ -14,7 +14,7 @@
     <description>
         Weather MCP server using Tachyon MCP Server (OpenMeteo)
     </description>
-    <url>https://github.com/kpavlov/tachyon</url>
+    <url>https://github.com/tachyonmcp/tachyon</url>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>

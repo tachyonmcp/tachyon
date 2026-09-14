@@ -2,7 +2,7 @@
 
 Experimental kt-schema integration for Tachyon MCP Kotlin.
 
-Provides a runtime [`JsonSchemaFactory`](https://github.com/kpavlov/tachyon/blob/main/docs)
+Provides a runtime [`JsonSchemaFactory`](https://github.com/tachyonmcp/tachyon/blob/main/docs)
 that generates a JSON schema by reflecting on the class, backed by kt-schema's
 `ReflectionClassJsonSchemaGenerator`.
 

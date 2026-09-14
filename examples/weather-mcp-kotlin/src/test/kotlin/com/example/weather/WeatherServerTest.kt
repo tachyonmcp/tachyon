@@ -89,7 +89,7 @@ class WeatherServerTest {
             title() shouldBe "Weather Server (Kotlin)"
             description() shouldBe "Weather MCP server built with Tachyon Kotlin DSL"
             websiteUrl() shouldBe
-                "https://github.com/kpavlov/tachyon/tree/main/examples/weather-mcp-kotlin"
+                "https://github.com/tachyonmcp/tachyon/tree/main/examples/weather-mcp-kotlin"
             icons() shouldHaveSize 1
             icons().first().src() shouldStartWith "data:image/png;base64,"
         }

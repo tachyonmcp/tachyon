@@ -15,7 +15,7 @@
         MCP server built with Tachyon's LangChain4j annotation provider, scanning a plain
         @Tool-annotated method that accepts and returns composite (record) types
     </description>
-    <url>https://github.com/kpavlov/tachyon</url>
+    <url>https://github.com/tachyonmcp/tachyon</url>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
