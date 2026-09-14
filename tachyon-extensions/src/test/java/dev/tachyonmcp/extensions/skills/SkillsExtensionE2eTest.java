@@ -24,8 +24,6 @@ import java.util.HexFormat;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -56,7 +54,6 @@ class SkillsExtensionE2eTest {
 
     private static final SkillsRegistry combinedRegistry =
             new CompositeSkillsRegistry(filesystemSkillsRegistry, classpathSkillsRegistry);
-    private static final Logger log = LoggerFactory.getLogger(SkillsExtensionE2eTest.class);
 
     // quickstart example
     public static void main(String... args) throws InterruptedException {
@@ -66,7 +63,7 @@ class SkillsExtensionE2eTest {
                         .registry(combinedRegistry)
                         .negotiation(ExtensionNegotiation.OPTIONAL)
                         .build())
-                .build(); ) {
+                .build()) {
             server.start();
             new CountDownLatch(1).await();
         }
@@ -79,8 +76,8 @@ class SkillsExtensionE2eTest {
                 var client = createClient(server.port())) {
             // language=JSON
             var list = client.sendRpc("""
-                    {"jsonrpc":"2.0","id":1,"method":"skills/list"}
-                """);
+                {"jsonrpc":"2.0","id":1,"method":"skills/list","params":{"_meta":{"%s":{}}}}
+                """.formatted(SkillsExtension.ID));
             // language=JSON
             assertThatJson(list.body()).isEqualTo("""
                 {
@@ -685,11 +682,12 @@ class SkillsExtensionE2eTest {
     }
 
     @Test
-    void skillResourcesRemainAvailableWhenExtensionMethodsRequireDeclaration() throws Exception {
-        try (final var server = startServer(SkillsExtension.builder()
-                        .registry(new ClasspathSkillsRegistry("skills"))
-                        .negotiation(ExtensionNegotiation.REQUIRED)
-                        .build());
+    void defaultNegotiationRejectsSkillMethodsButKeepsResourcesForUndeclaredClient() throws Exception {
+        var extension = SkillsExtension.builder()
+                .registry(new ClasspathSkillsRegistry("skills"))
+                .build();
+        assertThat(extension.negotiation()).isEqualTo(ExtensionNegotiation.REQUIRED);
+        try (final var server = startServer(extension);
                 final var client = new Mcp20260728Client(server.port())) {
             // SEP-2133: known extension method without client declaration -> -32021, not -32601
             // language=JSON
@@ -870,9 +868,10 @@ class SkillsExtensionE2eTest {
     }
 
     @Test
-    void defaultNegotiationServesSkillMethodsToUndeclaredClient() throws Exception {
+    void optionalNegotiationServesSkillMethodsToUndeclaredClient() throws Exception {
         var extension = SkillsExtension.builder()
                 .registry(new ClasspathSkillsRegistry("skills"))
+                .negotiation(ExtensionNegotiation.OPTIONAL)
                 .build();
         assertThat(extension.negotiation()).isEqualTo(ExtensionNegotiation.OPTIONAL);
         try (final var server = startServer(extension);

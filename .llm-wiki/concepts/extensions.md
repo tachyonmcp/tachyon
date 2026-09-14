@@ -3,7 +3,7 @@ title: Extensions
 tags: [concept, extensions, spi]
 sources: [tachyon-api/src/main/java/dev/tachyonmcp/api/server/extensions/, tachyon-api/src/main/java/dev/tachyonmcp/api/runtime/Extension.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/handlers/ExtensionNegotiator.java, tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/mcp/v2026_07_28/transport/ExtensionNegotiationHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java]
 updated: 2026-09-14
-commit: 5bee50aa
+commit: 364371aa
 ---
 
 # 🧩 Extensions
@@ -60,7 +60,7 @@ Capability requirement inside a handler: throw `MissingRequiredClientCapabilityE
 | Id | Impl | Mode | Page |
 |---|---|---|---|
 | `io.modelcontextprotocol/tasks` | `TasksExtension` (core) | ALWAYS | [[tasks]] |
-| `io.modelcontextprotocol/skills` | `SkillsExtension` | ALWAYS, no meta, negotiation via builder (default **OPTIONAL**, overrides SPI default) | [[tachyon-extensions]] |
+| `io.modelcontextprotocol/skills` | `SkillsExtension` | ALWAYS, no meta, negotiation via builder (default **REQUIRED**, same as SPI default; `OPTIONAL` opt-in) | [[tachyon-extensions]] |
 | `dev.tachyonmcp/kotlin-coroutines` | `CoroutineRuntime` (internal, lifecycle only) | NEVER | [[tachyon-kotlin]] |
 
 Related: [[feature-registries]], [[protocol-versions]].
