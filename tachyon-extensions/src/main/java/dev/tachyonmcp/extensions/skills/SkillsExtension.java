@@ -29,9 +29,9 @@ import org.jspecify.annotations.Nullable;
  * skills extension: serves Agent Skills as {@code skill://} resources and answers
  * {@code skills/list}, {@code skills/get}, and {@code resources/directory/read}.
  * Skill files remain available through the base {@code resources/list} and {@code resources/read}
- * methods when the client has not negotiated this extension. The extension methods are served to
- * undeclared clients by default ({@link ExtensionNegotiation#OPTIONAL}); build with
- * {@link ExtensionNegotiation#REQUIRED} to reject them with Missing Required Client Capability.
+ * methods when the client has not negotiated this extension. By default
+ * ({@link ExtensionNegotiation#REQUIRED}) the extension methods reject undeclared clients with Missing
+ * Required Client Capability; build with {@link ExtensionNegotiation#OPTIONAL} to serve them anyway.
  *
  * <pre>{@code
  * TachyonServer.builder()
@@ -270,7 +270,7 @@ public final class SkillsExtension implements ServerExtension {
         private final List<SkillsRegistry> registries = new ArrayList<>();
         private long cacheTtlMs = 0;
         private String cacheScope = "public";
-        private ExtensionNegotiation negotiation = ExtensionNegotiation.OPTIONAL;
+        private ExtensionNegotiation negotiation = ExtensionNegotiation.REQUIRED;
 
         /**
          * Adds a skill registry. Construct {@link FilesystemSkillsRegistry} or
@@ -322,9 +322,9 @@ public final class SkillsExtension implements ServerExtension {
         /**
          * Sets whether clients must declare {@code io.modelcontextprotocol/skills} before calling
          * {@code skills/list}, {@code skills/get}, and {@code resources/directory/read}. Defaults to
-         * {@link ExtensionNegotiation#OPTIONAL}, because clients such as MCP Inspector call these
-         * methods without declaring the extension; use {@link ExtensionNegotiation#REQUIRED} for strict
-         * SEP-2133 negotiation.
+         * {@link ExtensionNegotiation#REQUIRED} (strict SEP-2133 negotiation); use
+         * {@link ExtensionNegotiation#OPTIONAL} for clients such as MCP Inspector that call these
+         * methods without declaring the extension.
          *
          * @param negotiation the negotiation policy
          * @return this builder
