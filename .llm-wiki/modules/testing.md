@@ -3,7 +3,7 @@ title: Testing
 tags: [module, testing, e2e, conformance]
 sources: [e2e/src/test/, conformance/, Makefile, tachyon-core/src/test/, .github/workflows/build.yml]
 updated: 2026-09-15
-commit: 9eec1092
+commit: 210237ec
 ---
 
 # ✅ Testing
@@ -37,6 +37,19 @@ Pattern: abstract contract in root, one subclass per protocol package → same b
 ## 📏 Conformance
 
 `conformance/src/test/java/dev/tachyonmcp/conformance/`: `DefaultConformanceServer` + `EdgeConformanceServer`, `*ServerConformanceTest`, `ConformanceRunner`, `ConformanceReportWriter`. Baselines `conformance/conformance-baseline-0.1.yml`, `-0.2.yml` (known failures).
+
+## 🏷️ Declarative result coverage
+
+[DeclarativeResultsTest#binaryResourceEncodesRawBytesOnce](../../e2e/src/test/java/dev/tachyonmcp/e2e/mcp/DeclarativeResultsTest.java)
+reads a PNG from `@TempDir` through an annotated method. Modern-wire assertions cover complete binary
+resource contents, mixed prompt roles, explicit success/error tool results, invalid inputs, and an
+input-required form with request state. Each test owns a stateless port-0 server.
+
+[DeclarativeElicitationTest#annotatedToolCompletesClientElicitationRoundTrip](../../e2e/src/test/java/dev/tachyonmcp/e2e/mcp/DeclarativeElicitationTest.java)
+uses the MCP SDK and an isolated stateful server. All three client actions run through an annotated
+method with injected context; assertions cover the form request, tool result, and exclusion of
+context from the advertised input schema. Requests use `ElicitationRequest.builder()` and wire
+decoding constructs `ElicitationResult` through its builder.
 
 ## 🧪 Unit tests
 

@@ -2,6 +2,7 @@
 package dev.tachyonmcp.api.runtime;
 
 import dev.tachyonmcp.api.annotations.ExperimentalApi;
+import dev.tachyonmcp.api.annotations.LegacyApi;
 import dev.tachyonmcp.api.server.domain.Args;
 import java.util.concurrent.CompletableFuture;
 
@@ -12,12 +13,12 @@ import java.util.concurrent.CompletableFuture;
  * a future protocol revision. Request and response are kept as raw {@link Args} rather than a
  * per-field domain model, since the wire shape isn't a stable long-term contract to model against.
  *
- * @deprecated SEP-2577 explicitly deprecates sampling.
+ * <p>SEP-2577 explicitly deprecates sampling.
  * @see ClientContext#sampling()
  */
 @ExperimentalApi
 @FunctionalInterface
-@Deprecated()
+@LegacyApi
 public interface SamplingService {
 
     /**

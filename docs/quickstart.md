@@ -45,6 +45,7 @@ Create `pom.xml`:
     <version>1.0-SNAPSHOT</version>
     <properties>
         <maven.compiler.release>21</maven.compiler.release>
+        <maven.compiler.parameters>true</maven.compiler.parameters>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
     <dependencyManagement>
@@ -113,11 +114,15 @@ plugins {
 repositories { mavenCentral() }
 
 dependencies {
-    implementation(platform("dev.tachyonmcp:tachyon-bom:1.0.0-beta.27"))
+    implementation(platform("dev.tachyonmcp:tachyon-bom:1.0.0-beta.28"))
     implementation("dev.tachyonmcp:tachyon-core")
 }
 
 java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }
+
+tasks.withType<JavaCompile>().configureEach {
+    options.compilerArgs.add("-parameters")
+}
 
 application { mainClass = "MyMcpServer" }
 ```
@@ -126,27 +131,29 @@ application { mainClass = "MyMcpServer" }
 
 ## 2. Create a server
 
-The server registers a greeting tool, requires a string `name`, and closes on JVM shutdown.
+The server registers an annotated service, requires a string `name`, and closes on JVM shutdown.
+Tachyon derives the tool's input schema from the method signature. The build configurations above
+enable `-parameters` to preserve argument names.
 
 Create `src/main/java/MyMcpServer.java`:
 
 ```java
-import dev.tachyonmcp.api.server.features.tools.ToolResult;
+import dev.tachyonmcp.api.annotations.McpTool;
 import dev.tachyonmcp.core.server.TachyonServer;
 
 public final class MyMcpServer {
+    public static final class GreetingService {
+        @McpTool(description = "Say hello to someone")
+        public String greet(String name) {
+            return "Hello, " + name + "!";
+        }
+    }
+
     public static void main(String[] args) {
         final var server = TachyonServer.builder()
                 .name("my-server")
                 .version("1.0")
-                .withTools(tools -> tools.register(
-                        tool -> tool.name("greet")
-                                .description("Say hello to someone")
-                                .inputSchema("""
-                                        {"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}
-                                        """),
-                        (ctx, request) -> ToolResult.text(
-                                "Hello, " + request.arguments().stringValue("name") + "!")))
+                .annotations(annotations -> annotations.register(new GreetingService()))
                 .host("127.0.0.1")
                 .port(8080)
                 .build();
@@ -217,9 +224,20 @@ Change `"Ada"` to your name and call again. The greeting changes with the argume
 > HTTP success alone does not mean a tool call succeeded. Inspect the JSON-RPC `error` field and,
 > for tool results, `isError`.
 
+## Executable coverage
+
+[DeclarativeFeaturesTest](https://github.com/tachyonmcp/tachyon/blob/main/e2e/src/test/java/dev/tachyonmcp/e2e/mcp/DeclarativeFeaturesTest.java) verifies the same annotation registration,
+named-string binding, greeting response, and missing-argument rejection over HTTP.
+[DeclarativeResultsTest](https://github.com/tachyonmcp/tachyon/blob/main/e2e/src/test/java/dev/tachyonmcp/e2e/mcp/DeclarativeResultsTest.java) also checks mistyped arguments and
+explicit tool errors. These tests cover the handler behavior; the Markdown build files are not
+extracted into the test suite.
+
 ## Next steps
 
-- [Tools](features/tools.md) — read input, return structured output, and handle errors.
+- [Spring Boot starter](spring-boot.md) — expose Spring beans as MCP tools.
+
+- [Tools](features/tools.md) — bind typed arguments, return structured output, and handle errors.
+- [Annotations](annotations.md) — share registration and binding rules across feature services.
 - [Testkit](testkit.md) — automate calls against a running server.
 - [Resources](features/resources.md) and [prompts](features/prompts.md) — add data and reusable messages.
 - [Deployment](running/deployment.md) — make the server reachable beyond your machine.

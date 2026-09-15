@@ -1,7 +1,7 @@
 ---
 title: "Testkit"
-weight: 45
-sidebar_order: 45
+weight: 85
+sidebar_order: 85
 toc: true
 description: |-
   Test Tachyon servers end to end: shaping clients, dynamic-port servers, and fluent JSON-RPC assertions.

@@ -66,7 +66,10 @@ public final class WireClientContext implements ClientContext, ElicitationServic
             throw new IllegalArgumentException(
                     "elicitation/create response with action=ACCEPT must include an object 'content', got: " + content);
         }
-        return new ElicitationResult(action, content instanceof Map<?, ?> cm ? Args.of((Map<String, ?>) cm) : null);
+        return ElicitationResult.builder()
+                .action(action)
+                .content(content instanceof Map<?, ?> cm ? Args.of((Map<String, ?>) cm) : null)
+                .build();
     }
 
     @SuppressWarnings("unchecked")

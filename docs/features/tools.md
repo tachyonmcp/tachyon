@@ -4,60 +4,103 @@ weight: 10
 sidebar_order: 10
 toc: true
 description: |-
-  Implement MCP tool handlers in Tachyon: sync and async functions, input schemas, structured output, ToolResult, and annotations.
+  Declare MCP tools with annotations, bind typed arguments, return structured output, and use programmatic registration when needed.
 ---
 
 Tools are the primary way clients invoke server-side logic. Tachyon validates inputs against JSON Schema 2020-12 and routes calls to your handler.
 
-## Define a tool
+## Define a tool with annotations
 
-Add the `.withTools(...)` registration snippets to `TachyonServer.builder()`. For a complete project, start
-with the [Quickstart](../quickstart.md).
+Put `@McpTool` on a service method. Its parameters define the input schema, and a string return
+value becomes text content. Register the service with the server:
+
+```java
+import dev.tachyonmcp.api.annotations.McpTool;
+import dev.tachyonmcp.core.server.TachyonServer;
+
+class GreetingService {
+    @McpTool(description = "Say hello to someone")
+    public String greet(String name) {
+        return "Hello, " + name + "!";
+    }
+}
+
+var server = TachyonServer.builder()
+        .annotations(annotations -> annotations.register(new GreetingService()))
+        .port(8080)
+        .build();
+```
+
+The tool name defaults to `greet`; set `@McpTool(name = "hello")` to override it. Compile with
+`-parameters` so `name` is available for argument binding. The [Quickstart](../quickstart.md)
+includes Maven and Gradle setup. See the [annotation reference](../annotations.md) for shared rules.
+
+### Bind typed arguments
+
+Named parameters are required unless marked with JSpecify `@Nullable` or typed as `Optional`.
+Tachyon injects `InteractionContext` wherever it appears in the signature; it is never a client
+argument. Add this method to your service:
+
+```java
+@McpTool
+public String welcome(String name, @org.jspecify.annotations.Nullable String title) {
+    return "Hello, " + (title == null ? "" : title + " ") + name + "!";
+}
+```
+
+A single record, POJO, or `Map` parameter receives the whole arguments object. Return a record or
+POJO for structured output and a generated output schema:
+
+```java
+public record ForecastRequest(String city, int days) {}
+public record Forecast(String city, int days, double highC) {}
+
+@McpTool(description = "Multi-day forecast")
+public Forecast forecast(ForecastRequest request) {
+    return new Forecast(request.city(), request.days(), 24.0);
+}
+```
+
+The input is `{"city":"Paris","days":3}`, with no `request` wrapper. Tachyon derives schemas from
+the Java types and uses the configured payload codecs. The example returns fixed demonstration data;
+replace its body with your forecast lookup.
+
+### Return results
+
+Annotated methods can return ordinary values or an explicit `ToolResult`:
+
+| Return value | MCP result |
+|---|---|
+| String, number, boolean, enum | Text content |
+| Record or POJO | Structured content and a JSON text fallback |
+| Collection or array | JSON text content |
+| `ContentBlock` | Content block |
+| `void` or `null` | Empty content |
+| `ToolResult` | Preserved, including errors and metadata |
+
+Use `ToolResult` for error results, input requests, or explicit content. Its factories below work
+from both annotated methods and programmatic handlers.
+
+### Handle errors
+
+Return `ToolResult.error(...)` for an expected failure that the caller can act on:
 
 ```java
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
 
-.withTools(tools -> tools.register(
-        tool -> tool.name("hello").description("Say hello"),
-        (ctx, request) -> ToolResult.text("Hello!")))
+@McpTool(description = "Say hello to someone")
+public ToolResult greet(String name) {
+    if (name.isBlank()) {
+        return ToolResult.error("Provide a non-blank name.");
+    }
+    return ToolResult.text("Hello, " + name + "!");
+}
 ```
 
-Need an input schema? Configure the descriptor with the builder overload. `.inputSchema(...)` /
-`.outputSchema(...)` take a raw JSON `String` **or** a Jackson `JsonNode`:
+Use this method in place of the earlier `greet` method. A service cannot declare duplicate tool
+names. Error and input-validation behavior is described [below](#error-behavior).
 
-```java
-.withTools(tools -> tools.register(
-        b -> b.name("hello")
-            .description("Say hello")
-            .inputSchema("""
-            {"type":"object","properties":{"name":{"type":"string"}}}
-            """),
-        (ctx, request) -> ToolResult.text(
-            "Hello, " + request.arguments().stringOr("name", "world") + "!")))
-```
-
-## Read arguments
-
-Handlers receive a `ToolRequest`. Use `request.arguments()` to read its input.
-
-`Args` is the `JsonObject` view of the call arguments, so it carries the same typed accessors:
-
-| Method                    | Returns   |
-|---------------------------|-----------|
-| `args.stringValue("key")` | `String`  |
-| `args.intValue("key")`    | `int`     |
-| `args.boolValue("key")`   | `boolean` |
-| `args.doubleValue("key")` | `double`  |
-| `args.has("key")`         | `boolean` |
-
-`*Or(key, fallback)` and `*Opt(key)` variants avoid throwing on missing keys — `stringOpt`,
-`boolOpt`, `intOpt`, `longOpt`, `doubleOpt`, `decimalOpt`, `objectOpt`, `arrayOpt`.
-
-To take the whole argument object at once, use `args.decode(MyArgs.class)` — it runs through the
-server's configured `PayloadDeserializer`. To reach the underlying provider value, use
-`args.unwrap(JsonNode.class)`.
-
-## Return results
+## ToolResult factories
 
 `ToolResult` is a sealed type — pick the right factory:
 
@@ -82,25 +125,9 @@ of `structuredContent`. A structured value that fails its declared `outputSchema
 See [Client interactions](client-interactions.md) for form elicitation, input-required results,
 and the sampling compatibility boundary.
 
-## Handle errors
+## Error behavior
 
-Return `ToolResult.error(...)` for an expected failure that the caller can act on:
-
-```java
-.withTools(tools -> tools.register(
-        tool -> tool.name("greet").inputSchema("""
-                {"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}
-                """),
-        (ctx, request) -> {
-            final var name = request.arguments().stringValue("name");
-            if (name.isBlank()) {
-                return ToolResult.error("Provide a non-blank name.");
-            }
-            return ToolResult.text("Hello, " + name + "!");
-        }))
-```
-
-This returns a tool result with `isError: true`. A request that fails input-schema validation
+`ToolResult.error(...)` returns a tool result with `isError: true`. A request that fails input-schema validation
 instead receives a JSON-RPC error with code `-32602`, before the handler runs. Unexpected handler
 exceptions produce `-32603` with the message `Tool handler failed`; an `IllegalArgumentException`
 produces `-32602` with `Invalid params`. Internal exception messages are not returned to the client.
@@ -108,14 +135,66 @@ produces `-32602` with `Invalid params`. Internal exception messages are not ret
 ## Test the tool
 
 Start with the [Quickstart curl call](../quickstart.md#3-test-with-curl). Change the `name` argument
-and check that the greeting changes. For the handler above, also try an empty string, a missing
+and check that the greeting changes. For the annotated `ToolResult` handler, also try an empty string, a missing
 `name`, and a number: these exercise the tool-error and input-validation paths.
 
 For automated coverage, use [Testkit](../testkit.md) to start a server on port `0`, call it through
 an MCP client, and assert the full result. Cover valid input and failures through the same transport
 that your clients use.
 
-## Advanced registration
+## Programmatic registration
+
+Use descriptors when you need explicit schemas or metadata beyond `@McpTool`'s name and description,
+or register handlers dynamically through `server.tools()`.
+
+### Define a tool
+
+Add the `.withTools(...)` registration snippets to `TachyonServer.builder()`. For a complete project, start
+with the [Quickstart](../quickstart.md).
+
+```java
+import dev.tachyonmcp.api.server.features.tools.ToolResult;
+
+.withTools(tools -> tools.register(
+        tool -> tool.name("hello").description("Say hello"),
+        (ctx, request) -> ToolResult.text("Hello!")))
+```
+
+Need an input schema? Configure the descriptor with the builder overload. `.inputSchema(...)` /
+`.outputSchema(...)` take a raw JSON `String` or a provider-neutral `JsonSchema`:
+
+```java
+.withTools(tools -> tools.register(
+        b -> b.name("hello")
+            .description("Say hello")
+            .inputSchema("""
+            {"type":"object","properties":{"name":{"type":"string"}}}
+            """),
+        (ctx, request) -> ToolResult.text(
+            "Hello, " + request.arguments().stringOr("name", "world") + "!")))
+```
+
+### Read arguments
+
+Handlers receive a `ToolRequest`. Use `request.arguments()` to read its input.
+
+`Args` is the `JsonObject` view of the call arguments, so it carries the same typed accessors:
+
+| Method                    | Returns   |
+|---------------------------|-----------|
+| `args.stringValue("key")` | `String`  |
+| `args.intValue("key")`    | `int`     |
+| `args.boolValue("key")`   | `boolean` |
+| `args.doubleValue("key")` | `double`  |
+| `args.has("key")`         | `boolean` |
+
+`*Or(key, fallback)` and `*Opt(key)` variants avoid throwing on missing keys — `stringOpt`,
+`boolOpt`, `intOpt`, `longOpt`, `doubleOpt`, `decimalOpt`, `objectOpt`, `arrayOpt`.
+
+To take the whole argument object at once, use `args.decode(MyArgs.class)` — it runs through the
+server's configured `PayloadDeserializer`. To reach the underlying provider value, use
+`args.unwrap(JsonNode.class)`.
+
 
 ### Async tool
 
@@ -158,11 +237,11 @@ Any schema the descriptor leaves unset is filled in from the matching type via
 | Source | Provided by |
 |---|---|
 | Build-time schema resource from the kt-schema annotation processor | `tachyon-core` |
-| Runtime reflection over the class | `tachyon-kotlin-kt-schema` |
+| Runtime reflection over the class, when installed | `tachyon-kotlin-kt-schema` |
+| Java records, POJOs, and other supported Java types | `tachyon-core` fallback |
 
-With neither available for a type, `JsonSchema.generate` throws `IllegalStateException`. Declare
-`inputSchema`/`outputSchema` on the descriptor yourself and the typed overloads work with no extra
-dependency — you still get typed decode and structured output, just not generated schemas.
+The built-in Java fallback handles ordinary Java types without an extra schema dependency.
+Set `inputSchema`/`outputSchema` on the descriptor when you need explicit constraints.
 
 ## Add metadata
 
@@ -176,7 +255,8 @@ Metadata appears in the `_meta` field of the response.
 
 MCP 2026-07-28 (SEP-2243) lets a tool argument be mirrored into an `Mcp-Param-{Name}` request
 header, so load balancers, WAFs and rate limiters can route on it without parsing the JSON body.
-Annotate the property with `x-mcp-header`:
+Use an explicit input schema in programmatic registration and annotate the property with
+`x-mcp-header` (a JSON Schema keyword):
 
 ```json
 {
@@ -260,3 +340,10 @@ tool(
 `typedTool<In, Out>` derives both schemas from the types, so the literals above disappear
 entirely. See [typed tools](/docs/kotlin/#typed-tools) and the
 [Kotlin DSL](/docs/kotlin/) for the full Kotlin API.
+
+## Executable examples
+
+[DeclarativeFeaturesTest](https://github.com/tachyonmcp/tachyon/blob/main/e2e/src/test/java/dev/tachyonmcp/e2e/mcp/DeclarativeFeaturesTest.java) exercises named and nullable arguments,
+record input/output, generated schemas, and validation over HTTP.
+[DeclarativeResultsTest](https://github.com/tachyonmcp/tachyon/blob/main/e2e/src/test/java/dev/tachyonmcp/e2e/mcp/DeclarativeResultsTest.java) uses the annotated `greet` method above
+and checks successful text, blank-name errors, and missing or mistyped arguments.

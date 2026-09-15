@@ -99,7 +99,7 @@ class DefaultConformanceServer extends AbstractConformanceServer {
                                             List.of("username", "email"))));
                                     var result = ctx.client()
                                             .elicitation()
-                                            .create(new ElicitationRequest(message, schema))
+                                            .create(ElicitationRequest.of(message, schema))
                                             .get(2, TimeUnit.SECONDS);
                                     var text = "User response: "
                                             + result.action().name().toLowerCase(Locale.ROOT);
@@ -143,7 +143,7 @@ class DefaultConformanceServer extends AbstractConformanceServer {
                                                 Map.of("type", "boolean", "default", true)))));
                                 var result = ctx.client()
                                         .elicitation()
-                                        .create(new ElicitationRequest(
+                                        .create(ElicitationRequest.of(
                                                 "Please provide your details with defaults", schema))
                                         .get(2, TimeUnit.SECONDS);
                                 var text = "Defaults " + result.action().name().toLowerCase(Locale.ROOT);
@@ -208,7 +208,7 @@ class DefaultConformanceServer extends AbstractConformanceServer {
                                         JsonRpcCodec.writeValueAsString(Map.of("type", "object", "properties", props)));
                                 var result = ctx.client()
                                         .elicitation()
-                                        .create(new ElicitationRequest("Please select your preferences", schema))
+                                        .create(ElicitationRequest.of("Please select your preferences", schema))
                                         .get(2, TimeUnit.SECONDS);
                                 var text = "Enums " + result.action().name().toLowerCase(Locale.ROOT);
                                 if (result.content() != null)

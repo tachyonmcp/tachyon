@@ -15,21 +15,22 @@ third-party annotation frameworks map onto the same registries.
 `AnnotationProvider`, and `AnnotationRegistrationContext` are `@ExperimentalApi` — the shape may
 still change.
 
-An already-built Java server also supports `server.annotations(a -> a.register(service))`.
-This uses the server's configured payload serializers and feature registries. Registration runs
-immediately, in order; a group of registrations is not transactional. DI containers can construct
-the server, inject it into service beans, register those beans, and then call `server.start()`.
-
-The Spring Boot starter follows that order. It discovers singleton beans after initialization,
-reads annotation metadata from Spring AOP target classes, and invokes JDK/class proxies so advice
-still runs. For JDK proxies, each annotated method must be exposed by an interface. A user-provided
-server keeps its own registration policy.
-
-Container integrations can call `TachyonAnnotationProvider.register(proxy, targetClass, context)`
-to separate annotation metadata from the invocation receiver. A method absent from the proxy fails
-registration; the provider never bypasses advice by invoking the target directly.
-
 ## Declarative services
+
+Native annotations are included with `tachyon-core`. Start with the [Quickstart](quickstart.md), then
+follow the annotation examples for [tools](features/tools.md), [resources](features/resources.md),
+[prompts](features/prompts.md), and [completions](features/completions.md).
+
+Compile with `-parameters` to preserve named arguments. For Maven, set
+`<maven.compiler.parameters>true</maven.compiler.parameters>` in your project's `<properties>`.
+For Gradle Kotlin DSL:
+
+```kotlin
+tasks.withType<JavaCompile>().configureEach {
+    options.compilerArgs.add("-parameters")
+}
+```
+
 
 ```java
 class WeatherService {
@@ -123,6 +124,22 @@ the 100-candidate limit. Calls run on virtual threads; checked exceptions follow
 mapping. Spring proxy advice remains active, and parameter names come from the annotated target
 method. Completion annotations do not generate JSON schemas.
 
+## Registration and dependency injection
+
+An already-built Java server also supports `server.annotations(a -> a.register(service))`.
+This uses the server's configured payload serializers and feature registries. Registration runs
+immediately, in order; a group of registrations is not transactional. DI containers can construct
+the server, inject it into service beans, register those beans, and then call `server.start()`.
+
+The [Spring Boot starter](spring-boot.md) follows that order. It discovers singleton beans after initialization,
+reads annotation metadata from Spring AOP target classes, and invokes JDK/class proxies so advice
+still runs. For JDK proxies, each annotated method must be exposed by an interface. A user-provided
+server keeps its own registration policy.
+
+Container integrations can call `TachyonAnnotationProvider.register(proxy, targetClass, context)`
+to separate annotation metadata from the invocation receiver. A method absent from the proxy fails
+registration; the provider never bypasses advice by invoking the target directly.
+
 ## The AnnotationProvider interface
 
 Each implementation knows how to inspect one particular annotation framework and translate its
@@ -140,7 +157,7 @@ public interface AnnotationProvider {
 Implementations are stateless and reusable — the same provider instance may be passed to multiple
 objects.
 
-## Register annotated objects
+## Register third-party annotated objects
 
 ```java
 var server = TachyonServer.builder()
@@ -162,7 +179,7 @@ var server = TachyonServer.builder()
 - Before any `withProvider(...)`, `register(...)` uses `TachyonAnnotationProvider` (`@McpTool`
   and friends).
 
-## Built-in providers
+## Third-party providers
 
 | Module | Provider | Maps |
 |---|---|---|
@@ -255,6 +272,6 @@ themselves — registering two features under the same name silently replaces th
 
 ## Next steps
 
-- [Tools](features/tools.md) — register Tachyon-native handlers
+- [Tools](features/tools.md) — declare annotated tools and return typed results
 - [Extensions](extensions/) — add negotiated protocol behaviour
 - [Quickstart](quickstart.md) — run a minimal server
