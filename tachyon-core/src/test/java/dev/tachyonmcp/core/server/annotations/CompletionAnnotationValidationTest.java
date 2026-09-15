@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 
 import dev.tachyonmcp.api.annotations.McpCompletion;
+import dev.tachyonmcp.api.annotations.McpPrompt;
+import dev.tachyonmcp.api.annotations.McpResource;
 import dev.tachyonmcp.api.annotations.McpTool;
 import dev.tachyonmcp.api.server.features.completions.CompletionRequest;
 import dev.tachyonmcp.core.server.TachyonServer;
@@ -91,8 +93,45 @@ class CompletionAnnotationValidationTest {
         }
     }
 
+    static class UnknownPromptArgument {
+        @McpCompletion(prompt = "trip")
+        List<String> complete(String town) {
+            return List.of();
+        }
+
+        @McpPrompt
+        String trip(String city) {
+            return city;
+        }
+    }
+
+    static class UnknownTemplateVariable {
+        @McpCompletion(resource = "city://{city}")
+        List<String> complete(String town) {
+            return List.of();
+        }
+
+        @McpResource(uri = "city://{city}")
+        String city(String city) {
+            return city;
+        }
+    }
+
+    static class TripPrompt {
+        @McpPrompt
+        String trip(String city) {
+            return city;
+        }
+    }
+
     static Stream<Arguments> invalidDeclarations() {
         return Stream.of(
+                Arguments.of(
+                        new UnknownPromptArgument(),
+                        "@McpCompletion argument 'town' is not declared by prompt 'trip' [city]"),
+                Arguments.of(
+                        new UnknownTemplateVariable(),
+                        "@McpCompletion argument 'town' is not declared by resource 'city://{city}' [city]"),
                 Arguments.of(new MissingTarget(), "exactly one of prompt or resource"),
                 Arguments.of(new BothTargets(), "exactly one of prompt or resource"),
                 Arguments.of(new NoArgument(), "first String argument"),
@@ -116,6 +155,28 @@ class CompletionAnnotationValidationTest {
                     }
                 })
                 .withMessageContaining(message);
+    }
+
+    @Test
+    void rejectsUnknownArgumentOfPromptRegisteredByAnotherService() {
+        assertThatIllegalStateException()
+                .isThrownBy(() -> TachyonServer.builder()
+                        .annotations(annotations ->
+                                annotations.register(new TripPrompt()).register(new NumericlessCompletion()))
+                        .build())
+                .withMessageContaining("@McpCompletion argument 'town' is not declared by prompt 'trip' [city]");
+        try (var server = TachyonServer.builder()
+                .annotations(annotations -> annotations.register(new NumericlessCompletion()))
+                .build()) {
+            assertThat(server.prompts().find("trip")).isEmpty();
+        }
+    }
+
+    static class NumericlessCompletion {
+        @McpCompletion(prompt = "trip")
+        List<String> complete(String town) {
+            return List.of();
+        }
     }
 
     @Test

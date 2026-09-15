@@ -135,6 +135,17 @@ final class MethodInvoker {
         return arguments;
     }
 
+    Map<String, List<String>> enumArguments() {
+        final var arguments = new LinkedHashMap<String, List<String>>();
+        for (final var binding : bindings) {
+            if (binding instanceof NamedBinding named) {
+                final var enumType = enumType(named.parameter().getParameterizedType());
+                if (enumType != null) arguments.put(named.name(), constantNames(enumType));
+            }
+        }
+        return arguments;
+    }
+
     List<String> argumentNames() {
         return bindings.stream()
                 .filter(NamedBinding.class::isInstance)
@@ -199,16 +210,18 @@ final class MethodInvoker {
 
     private static Enum<?> enumConstant(String name, Object raw, Class<?> enumType) {
         if (enumType.isInstance(raw)) return (Enum<?>) raw;
-        final var constants = Arrays.stream(enumType.getEnumConstants())
-                .map(constant -> (Enum<?>) constant)
-                .toList();
         if (raw instanceof String text) {
-            for (final var constant : constants) {
-                if (constant.name().equals(text)) return constant;
+            for (final var constant : enumType.getEnumConstants()) {
+                if (((Enum<?>) constant).name().equals(text)) return (Enum<?>) constant;
             }
         }
-        throw new InvalidArgumentException(
-                name, "must be one of " + constants.stream().map(Enum::name).toList());
+        throw new InvalidArgumentException(name, "must be one of " + constantNames(enumType));
+    }
+
+    private static List<String> constantNames(Class<?> enumType) {
+        return Arrays.stream(enumType.getEnumConstants())
+                .map(constant -> ((Enum<?>) constant).name())
+                .toList();
     }
 
     private static List<Binding> namedBindings(Method method, boolean scalarsOnly) {

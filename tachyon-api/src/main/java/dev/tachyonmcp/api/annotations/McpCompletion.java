@@ -21,7 +21,12 @@ import java.lang.annotation.Target;
  * reflection name selects the argument being completed and its value is the current partial text.
  * Other named scalar parameters bind from previously resolved sibling arguments. Missing siblings
  * are required unless {@code Optional}-typed or JSpecify {@code @Nullable}. Compile with
- * {@code -parameters}. Requests for a different argument return no candidates.
+ * {@code -parameters}. Requests for a different argument return no candidates. When the target
+ * prompt or resource template is already known, a completed argument it does not declare fails
+ * registration.
+ *
+ * <p>Enum-typed prompt and resource template arguments complete from constant names automatically;
+ * declaring {@code @McpCompletion} for the same target in the same service replaces that default.
  *
  * <p>Alternatively, take a single {@code CompletionRequest} to handle all arguments of the target
  * and read the partial value, resolved siblings, and request metadata directly. Either signature

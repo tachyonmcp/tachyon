@@ -18,7 +18,7 @@ class WeatherApplicationTest {
                 .withPropertyValues("tachyon.port=0", "tachyon.host=127.0.0.1")
                 .withBean(WeatherProvider.class, () -> new WeatherProvider() {
                     public Weather current(String city) {
-                        return new Weather(city, "Clear sky", 20.0, "celsius", 60, 10.0);
+                        return new Weather(city, "Clear sky", 20.0, TemperatureUnit.CELSIUS, 60, 10.0);
                     }
 
                     public List<String> cities(String prefix) {
@@ -34,12 +34,12 @@ class WeatherApplicationTest {
                         // language=json
                         assertThat(client.post("""
                                 {"jsonrpc":"2.0","id":1,"method":"tools/call",
-                                 "params":{"name":"get-weather","arguments":{"city":"Tallinn","units":"fahrenheit"}}}
-                                """)).isSuccess().hasResult("""
-                                {"content":[{"type":"text","text":"{\\\"city\\\":\\\"Tallinn\\\",\\\"condition\\\":\\\"Clear sky\\\",\\\"temperature\\\":68.0,\\\"unit\\\":\\\"fahrenheit\\\",\\\"humidity\\\":60,\\\"windSpeed\\\":10.0}"}],
-                                 "structuredContent":{"city":"Tallinn","condition":"Clear sky","temperature":68.0,"unit":"fahrenheit","humidity":60,"windSpeed":10.0},
+                             "params":{"name":"get-weather","arguments":{"city":"Tallinn","units":"FAHRENHEIT"}}}
+                             """)).isSuccess().hasResult("""
+                            {"content":[{"type":"text","text":"{\\\"city\\\":\\\"Tallinn\\\",\\\"condition\\\":\\\"Clear sky\\\",\\\"temperature\\\":68.0,\\\"unit\\\":\\\"FAHRENHEIT\\\",\\\"humidity\\\":60,\\\"windSpeed\\\":10.0}"}],
+                             "structuredContent":{"city":"Tallinn","condition":"Clear sky","temperature":68.0,"unit":"FAHRENHEIT","humidity":60,"windSpeed":10.0},
                                  "resultType":"complete"}
-                                """);
+                            """);
                         // language=json
                         assertThat(client.post("""
                                 {"jsonrpc":"2.0","id":2,"method":"prompts/get",
@@ -65,14 +65,14 @@ class WeatherApplicationTest {
                         assertThat(client.post("""
                                 {"jsonrpc":"2.0","id":5,"method":"resources/read","params":{"uri":"weather://current/Tallinn"}}
                                 """)).isSuccess().hasResult("""
-                                {"cacheScope":"public","ttlMs":0,"contents":[{"uri":"weather://current/Tallinn","mimeType":"application/json","text":"{\\\"city\\\":\\\"Tallinn\\\",\\\"condition\\\":\\\"Clear sky\\\",\\\"temperature\\\":20.0,\\\"unit\\\":\\\"celsius\\\",\\\"humidity\\\":60,\\\"windSpeed\\\":10.0}"}],"resultType":"complete"}
-                                """);
+                            {"cacheScope":"public","ttlMs":0,"contents":[{"uri":"weather://current/Tallinn","mimeType":"application/json","text":"{\\\"city\\\":\\\"Tallinn\\\",\\\"condition\\\":\\\"Clear sky\\\",\\\"temperature\\\":20.0,\\\"unit\\\":\\\"CELSIUS\\\",\\\"humidity\\\":60,\\\"windSpeed\\\":10.0}"}],"resultType":"complete"}
+                            """);
                         // language=json
                         assertThat(client.post("""
                                 {"jsonrpc":"2.0","id":6,"method":"tools/call",
                                  "params":{"name":"get-weather","arguments":{"city":"Tallinn"}}}
                                 """)).isSuccess().hasStructuredContent("""
-                                {"city":"Tallinn","condition":"Clear sky","temperature":20.0,"unit":"celsius","humidity":60,"windSpeed":10.0}
+                            {"city":"Tallinn","condition":"Clear sky","temperature":20.0,"unit":"CELSIUS","humidity":60,"windSpeed":10.0}
                                 """);
                         // language=json
                         assertThat(client.post("""

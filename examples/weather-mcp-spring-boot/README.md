@@ -27,9 +27,9 @@ separately.
 
 | Annotation | Feature |
 |---|---|
-| `@McpTool` | `get-weather(city, units?)`; structured output, Celsius default or Fahrenheit |
+| `@McpTool` | `get-weather(city, units?)`; structured output, `Unit` enum: CELSIUS default or FAHRENHEIT |
 | `@McpResource` | Prediction article, featured Tallinn weather, `weather://current/{city}` |
-| `@McpPrompt` | `rewrite-forecast(forecast, style)`; `Style` enum: PLAIN, CONCISE, PIRATE |
+| `@McpPrompt` | `rewrite-forecast(forecast, style)`; `NarrationStyle` enum: PLAIN, CONCISE, PIRATE |
 | `@McpCompletion` | Style and city suggestions, selected by reflected first parameter name |
 
 Compiler `-parameters` is enabled. Optional tool input uses JSpecify `@Nullable`.

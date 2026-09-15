@@ -7,6 +7,7 @@ import dev.tachyonmcp.api.annotations.McpPrompt;
 import dev.tachyonmcp.api.annotations.McpResource;
 import dev.tachyonmcp.api.annotations.McpTool;
 import dev.tachyonmcp.api.json.JsonSchema;
+import dev.tachyonmcp.api.server.domain.PromptArgument;
 import dev.tachyonmcp.api.server.features.annotations.AnnotationInvocationSupport;
 import dev.tachyonmcp.api.server.features.annotations.AnnotationProvider;
 import dev.tachyonmcp.api.server.features.annotations.AnnotationRegistrationContext;
@@ -16,12 +17,16 @@ import dev.tachyonmcp.api.server.features.resources.ResourceTemplateDescriptor;
 import dev.tachyonmcp.core.server.json.JavaTypeSchemas;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 
@@ -36,7 +41,12 @@ import org.jspecify.annotations.Nullable;
  * its public interfaces, so framework subclass proxies keep working. Registration fails fast on a
  * method carrying more than one feature annotation, on a duplicate tool/prompt name or resource
  * URI within one instance, on unsupported parameter types, and on parameter names missing because
- * the class was compiled without {@code -parameters}.
+ * the class was compiled without {@code -parameters}. A named {@link McpCompletion @McpCompletion}
+ * whose argument is not declared by its known prompt or resource template also fails.
+ *
+ * <p>Enum-typed prompt and resource template arguments complete automatically from constant names
+ * (case-insensitive prefix) unless the same instance declares an {@code @McpCompletion} for that
+ * target.
  */
 @ExperimentalApi
 public final class TachyonAnnotationProvider implements AnnotationProvider {
@@ -46,6 +56,8 @@ public final class TachyonAnnotationProvider implements AnnotationProvider {
             List.of(McpTool.class, McpResource.class, McpPrompt.class, McpCompletion.class);
     private static final Pattern TEMPLATE_EXPRESSION = Pattern.compile("\\{[+#./;?&]?([^}]*)}");
     private static final String JSON = "application/json";
+    private static final String PROMPT = "prompt:";
+    private static final String RESOURCE = "resource:";
 
     private TachyonAnnotationProvider() {}
 
@@ -96,19 +108,30 @@ public final class TachyonAnnotationProvider implements AnnotationProvider {
         var methods = AnnotationInvocationSupport.discoverMethods(
                 annotatedType, McpTool.class, McpResource.class, McpPrompt.class, McpCompletion.class);
         var keys = new HashSet<String>();
+        final var completed = new HashSet<String>();
         for (Method method : methods) {
-            var tool = method.getAnnotation(McpTool.class);
-            var resource = method.getAnnotation(McpResource.class);
-            var prompt = method.getAnnotation(McpPrompt.class);
-            final var completion = method.getAnnotation(McpCompletion.class);
             if (FEATURES.stream().filter(method::isAnnotationPresent).count() > 1) {
                 throw new IllegalStateException(
                         "Method must carry only one of @McpTool, @McpResource, @McpPrompt, @McpCompletion: " + method);
             }
+            final var completion = method.getAnnotation(McpCompletion.class);
+            if (completion != null) {
+                completed.add(PROMPT + completion.prompt());
+                completed.add(RESOURCE + completion.resource());
+            }
+        }
+        final var declared = new HashMap<String, List<String>>();
+        for (Method method : methods) {
+            var tool = method.getAnnotation(McpTool.class);
+            var resource = method.getAnnotation(McpResource.class);
+            var prompt = method.getAnnotation(McpPrompt.class);
             if (tool != null) registerTool(instance, method, tool, context, keys);
-            if (resource != null) registerResource(instance, method, resource, context, keys);
-            if (prompt != null) registerPrompt(instance, method, prompt, context, keys);
-            if (completion != null) registerCompletion(instance, method, completion, context, keys);
+            if (resource != null) registerResource(instance, method, resource, context, keys, declared, completed);
+            if (prompt != null) registerPrompt(instance, method, prompt, context, keys, declared, completed);
+        }
+        for (Method method : methods) {
+            final var completion = method.getAnnotation(McpCompletion.class);
+            if (completion != null) registerCompletion(instance, method, completion, context, keys, declared);
         }
     }
 
@@ -137,7 +160,9 @@ public final class TachyonAnnotationProvider implements AnnotationProvider {
             Method method,
             McpResource resource,
             AnnotationRegistrationContext context,
-            Set<String> keys) {
+            Set<String> keys,
+            Map<String, List<String>> declared,
+            Set<String> completed) {
         var uri = resource.uri();
         if (uri.isBlank()) throw new IllegalStateException("@McpResource uri must not be blank: " + method);
         claim(keys, "resource '" + uri + "'", method);
@@ -179,10 +204,19 @@ public final class TachyonAnnotationProvider implements AnnotationProvider {
                             return ResultMappers.resourceContents(
                                     invoker.invoke(ctx, values), request.uri(), mimeType, serializer);
                         });
+        declared.put(RESOURCE + uri, List.copyOf(variables));
+        registerEnumCompletion(
+                invoker, RESOURCE + uri, completed, fn -> context.completions().registerForResource(uri, fn));
     }
 
     private static void registerPrompt(
-            Object instance, Method method, McpPrompt prompt, AnnotationRegistrationContext context, Set<String> keys) {
+            Object instance,
+            Method method,
+            McpPrompt prompt,
+            AnnotationRegistrationContext context,
+            Set<String> keys,
+            Map<String, List<String>> declared,
+            Set<String> completed) {
         var name = nameOf(prompt.name(), method);
         claim(keys, "prompt '" + name + "'", method);
         var invoker = MethodInvoker.forArguments(instance, method, context);
@@ -196,6 +230,23 @@ public final class TachyonAnnotationProvider implements AnnotationProvider {
                                 prompt.role(),
                                 invoker.invoke(ctx, request.arguments().asMap()),
                                 serializer));
+        declared.put(PROMPT + name, invoker.argumentNames());
+        registerEnumCompletion(
+                invoker, PROMPT + name, completed, fn -> context.completions().registerForPrompt(name, fn));
+    }
+
+    private static void registerEnumCompletion(
+            MethodInvoker invoker, String target, Set<String> completed, Consumer<CompletionFn> register) {
+        final var constants = invoker.enumArguments();
+        if (constants.isEmpty() || completed.contains(target)) return;
+        register.accept((ctx, request) -> {
+            final var candidates = constants.get(request.argumentName());
+            if (candidates == null) return CompletionResult.empty();
+            final var prefix = request.argumentValue().toUpperCase(Locale.ROOT);
+            return CompletionResult.of(candidates.stream()
+                    .filter(candidate -> candidate.toUpperCase(Locale.ROOT).startsWith(prefix))
+                    .toList());
+        });
     }
 
     private static boolean isFeature(Method method) {
@@ -207,7 +258,8 @@ public final class TachyonAnnotationProvider implements AnnotationProvider {
             Method method,
             McpCompletion completion,
             AnnotationRegistrationContext context,
-            Set<String> keys) {
+            Set<String> keys,
+            Map<String, List<String>> declared) {
         final var prompt = !completion.prompt().isBlank();
         if (prompt == !completion.resource().isBlank()) {
             throw new IllegalStateException("@McpCompletion must specify exactly one of prompt or resource: " + method);
@@ -218,12 +270,35 @@ public final class TachyonAnnotationProvider implements AnnotationProvider {
         final var invoker = MethodInvoker.forCompletion(instance, method, context);
         final var arguments = invoker.argumentNames();
         final String argument = arguments.isEmpty() ? null : arguments.getFirst();
+        if (argument != null) {
+            final var known = Optional.ofNullable(declared.get((prompt ? PROMPT : RESOURCE) + target))
+                    .or(() -> registeredArguments(context, prompt, target));
+            if (known.isPresent() && !known.get().contains(argument)) {
+                throw new IllegalStateException("@McpCompletion argument '" + argument + "' is not declared by "
+                        + (prompt ? "prompt '" : "resource '") + target + "' " + known.get() + ": " + method);
+            }
+        }
         final CompletionFn fn = (ctx, request) -> {
             if (argument != null && !argument.equals(request.argumentName())) return CompletionResult.empty();
             return ResultMappers.completionResult(invoker.invokeCompletion(ctx, request));
         };
         if (prompt) context.completions().registerForPrompt(target, fn);
         else context.completions().registerForResource(target, fn);
+    }
+
+    private static Optional<List<String>> registeredArguments(
+            AnnotationRegistrationContext context, boolean prompt, String target) {
+        if (prompt) {
+            return context.prompts()
+                    .find(target)
+                    .map(descriptor -> descriptor.arguments().stream()
+                            .map(PromptArgument::name)
+                            .toList());
+        }
+        return context.resources().templateDescriptors().stream()
+                .filter(descriptor -> descriptor.uriTemplate().equals(target))
+                .findFirst()
+                .map(descriptor -> List.copyOf(templateVariables(target)));
     }
 
     private static void claim(Set<String> keys, String key, Method method) {

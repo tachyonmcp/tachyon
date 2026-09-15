@@ -39,7 +39,7 @@ final class OpenMeteoProvider implements WeatherProvider {
                 city,
                 condition(current.path("weather_code").asInt()),
                 current.path("temperature_2m").asDouble(),
-                "celsius",
+                TemperatureUnit.CELSIUS,
                 current.path("relative_humidity_2m").asInt(),
                 current.path("wind_speed_10m").asDouble());
     }

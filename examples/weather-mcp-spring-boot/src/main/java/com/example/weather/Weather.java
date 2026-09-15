@@ -6,8 +6,9 @@ package com.example.weather;
  * @param city city name
  * @param condition human-readable conditions
  * @param temperature temperature in the selected unit
- * @param unit celsius or fahrenheit
+ * @param unit temperature unit
  * @param humidity relative humidity percentage
  * @param windSpeed wind speed in km/h
  */
-public record Weather(String city, String condition, double temperature, String unit, int humidity, double windSpeed) {}
+public record Weather(
+        String city, String condition, double temperature, TemperatureUnit unit, int humidity, double windSpeed) {}
