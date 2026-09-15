@@ -23,4 +23,18 @@
         <module>mcp-skills</module>
         <module>temporal</module>
     </modules>
+    <profiles>
+        <profile>
+            <id>snapshot-examples</id>
+            <activation>
+                <property>
+                    <name>tachyon.version</name>
+                    <value>1.0.0-SNAPSHOT</value>
+                </property>
+            </activation>
+            <modules>
+                <module>weather-mcp-spring-boot</module>
+            </modules>
+        </profile>
+    </profiles>
 </project>

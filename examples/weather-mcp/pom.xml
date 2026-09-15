@@ -10,7 +10,7 @@
     <artifactId>weather-example</artifactId>
     <version>1.0-SNAPSHOT</version>
 
-    <name>Weather MCP Server Example</name>
+    <name>Weather MCP</name>
     <description>
         Weather MCP server using Tachyon MCP Server (OpenMeteo)
     </description>

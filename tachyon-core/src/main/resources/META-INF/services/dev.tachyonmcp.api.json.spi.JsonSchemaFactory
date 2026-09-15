@@ -1,5 +1,6 @@
 dev.tachyonmcp.core.server.json.Jackson3JsonFactory
 dev.tachyonmcp.core.server.json.JacksonNodeJsonFactory
 dev.tachyonmcp.core.server.json.JacksonObjectJsonFactory
+dev.tachyonmcp.core.server.json.JavaTypeSchemaFactory
 dev.tachyonmcp.core.server.json.KtSchemaResourceFactory
 dev.tachyonmcp.core.server.json.MapJsonFactory

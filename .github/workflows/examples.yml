@@ -28,6 +28,7 @@ jobs:
           - langchain4j-mcp
           - mcp-java
           - mcp-skills
+          - temporal
           - weather-mcp
           - weather-mcp-kotlin
 

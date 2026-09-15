@@ -261,18 +261,7 @@ final class DefaultServerBuilder implements ServerBuilder {
 
     private void applyAnnotationRegistrations(TachyonServer server) {
         if (annotationConfigurers.isEmpty()) return;
-        var ctx = new AnnotationContext();
-        annotationConfigurers.forEach(configurer -> configurer.accept(ctx));
-        var registrationContext = new DefaultAnnotationRegistrationContext(
-                server.tools(),
-                server.resources(),
-                server.prompts(),
-                server.completions(),
-                payloadSerializer,
-                payloadDeserializer);
-        for (var reg : ctx.registrations()) {
-            reg.provider().register(reg.instance(), registrationContext);
-        }
+        server.annotations(ctx -> annotationConfigurers.forEach(configurer -> configurer.accept(ctx)));
     }
 
     // === Transport escape hatch ===

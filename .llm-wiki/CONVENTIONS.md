@@ -1,8 +1,9 @@
 ---
 title: Wiki conventions (schema)
 tags: [meta]
-updated: 2026-09-13
-commit: 582f9c52
+sources: [.llm-wiki/tools/, .agents/skills/tachyon-wiki/SKILL.md]
+updated: 2026-09-15
+commit: 9eec1092
 ---
 
 # 📐 LLM Wiki — conventions
@@ -18,7 +19,7 @@ LLM owns this dir. Humans read. Source of truth = **code**, never `docs/`, never
 | `concepts/*.md` | Cross-cutting mechanics (lifecycle, sessions, SSE…) |
 | `modules/*.md` | One page per Maven module / module group |
 | `findings.md` | 🐛/🪶/⚠️ smells, stale javadoc, open questions found while reading code |
-| `tools/stale.sh` | Lists pages whose `sources` changed since page `commit` |
+| `tools/stale.sh` | Audits tracked pages: committed/working-tree source drift, unknown commits, links, orphan pages, and lexical symbol checks. `--check` exits 1 on findings. |
 | `tools/publish_wiki.py` | Renders wiki into GitHub Wiki checkout. Run by `.github/workflows/wiki.yml` on push to `main` |
 ## 📄 Page format
 
@@ -34,8 +35,9 @@ commit: <short sha the claims were verified against>
 Verdict/summary first. Then sections. Tables > prose.
 ```
 
-- Claims carry `path:line` proof. Repo-relative paths (clickable).
-- Line numbers rot. On edit near a cited line → re-verify, fix number.
+- Claims carry symbol proof: link repo-relative file path (clickable), label with `Type#member` (or `Type` for type-level claims), e.g. `[MethodInvoker#forArguments](../tachyon-core/.../MethodInvoker.java)`.
+- 🚫 No line numbers or ranges (`File.java`, `#L42`) — they rot on every edit. Name the class/method/field instead; non-code files (POM, YAML) cite file + element/property name.
+- Member renamed/moved → fix label + path.
 - Link pages with Obsidian double-bracket wiki links around the file stem (no dir, no `.md`), e.g. link to `sessions.md` by its stem.
 - Caveman style, emoji markers (see `AGENTS.md`). Ignore untracked files.
 - No copy of javadoc. Explain *why/how it connects*, not *what signature says*.
@@ -45,7 +47,7 @@ Verdict/summary first. Then sections. Tables > prose.
 **Ingest (code changed)**
 1. `git diff --name-only <page commit>..HEAD` or run `.llm-wiki/tools/stale.sh`.
 2. Re-read changed code. Update every page whose `sources` match.
-3. Fix `path:line`, bump `updated` + `commit`.
+3. Fix renamed/moved `Type#member` citations, bump `updated` + `commit`.
 4. New concept/module with no page → create page, add to `index.md`.
 
 **Query**
@@ -53,6 +55,9 @@ Verdict/summary first. Then sections. Tables > prose.
 2. Good synthesized answer (comparison, trace, decision) → file as new page, index it.
 
 **Lint**
-- Run `tools/stale.sh`. Check: orphan pages (no inbound wiki link), dead `path:line`, contradictions between pages, concepts mentioned w/o page, `findings.md` items fixed in code → 🗑️ remove.
+- Run `tools/stale.sh`. Check: orphan pages (no inbound wiki link), dead paths or `Type#member` symbols, leftover line-number citations, contradictions between pages, concepts mentioned w/o page, `findings.md` items fixed in code → 🗑️ remove.
+- The audit reads only frontmatter metadata and skips fenced examples. It ignores untracked pages and sources. Working-tree drift remains visible after a page refresh until code is committed; unknown commits mean unverifiable history, never “fresh.” Symbol checks only detect absent names, not incorrect semantic claims ([audit.py](tools/audit.py)).
+- Run script regressions: `python3 -m unittest discover -s .llm-wiki/tools -p 'test_*.py'`.
+- Publication rewrites repository-relative Markdown citations to commit-pinned source URLs ([publish_wiki.py](tools/publish_wiki.py)).
 
 Based on https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f

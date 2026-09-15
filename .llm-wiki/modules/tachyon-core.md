@@ -2,26 +2,27 @@
 title: tachyon-core
 tags: [module, core]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/, tachyon-core/src/main/resources/, tachyon-core/pom.xml]
-updated: 2026-09-14
-commit: 5821ad56
+updated: 2026-09-15
+commit: 9eec1092
 ---
 
 # ⚙️ tachyon-core
 
-Verdict: the runtime. ~190 main files. Deps: `slf4j-api`, `netty-codec-http`, `netty-handler`, `jackson-databind` 3, `json-schema-validator` (networknt), `tachyon-api` (`tachyon-core/pom.xml:29-46`). Generates protocol wire models at build (ts2java).
+Verdict: the runtime. ~190 main files. Deps: `slf4j-api`, `netty-codec-http`, `netty-handler`, `jackson-databind` 3, `json-schema-validator` (networknt), `tachyon-api` (`pom.xml`). Generates protocol wire models at build (ts2java).
 
 ## 🗂️ Package map (`tachyon-core/src/main/java/dev/tachyonmcp/core/`)
 
 | Package | Holds | Page |
 |---|---|---|
-| `server` | `TachyonServer`, `ServerBuilder`, `DefaultServerBuilder`, `DefaultTachyonServer` (engine impl, 1039 lines), `McpDispatcher`, `RpcMethodHandler`, `OutboundSseStream*`, `AnnotationContext`, `HandlerWatchdog` | [[overview]], [[request-lifecycle]] |
+| `server` | `TachyonServer`, `ServerBuilder`, `DefaultServerBuilder`, `DefaultTachyonServer`, `McpDispatcher`, `RpcMethodHandler`, `OutboundSseStream*`, `AnnotationContext`, `HandlerWatchdog` | [[overview]], [[request-lifecycle]] |
+| `server.annotations` | `TachyonAnnotationProvider`, `MethodInvoker`, `ResultMappers` | [[declarative-configuration]] |
 | `server.internal` | `ServerEngine` SPI, `OperationTracker`, `AbstractJanitor`, `NotificationLogSupport` | [[concurrency]] |
 | `server.config` | config records + builders | [[configuration]] |
 | `server.domain` | `ServerErrors`, `InitializeResponse`, `MissingRequiredClientCapabilityException` | [[errors]] |
 | `server.handlers` | `InitializeHandler`, `DiscoverHandler`, `PingHandler`, `EmptyResultHandler`, `LoggingHandlers`, `SubscriptionsListenHandler`, `ExtensionNegotiator` | [[feature-registries]], [[extensions]] |
 | `server.features.*` | registries + `*MethodHandlers` for tools/resources/prompts/completions/tasks/subscriptions; `AbstractRegistry`, `Pagination`, `ChangeSupport`, `ListRequests` | [[feature-registries]], [[tasks]] |
 | `server.session` | `SessionManager`, stores, `SessionEvent`, `DispatchContext`, `DefaultDispatchContext`, `NoopInteractionContext`, `WireClientContext` | [[sessions]] |
-| `server.json` | Jackson factories, `JsonUtils`, `JsonSchemaUtils`, networknt validator, `KtSchemaResourceFactory`, `MapJsonFactory` | [[json-layer]] |
+| `server.json` | Jackson factories, `JsonUtils`, `JsonSchemaUtils`, networknt validator, `KtSchemaResourceFactory`, `JavaTypeSchemaFactory`/`JavaTypeSchemas`, `MapJsonFactory` | [[json-layer]] |
 | `server.observability` | `Observation`, listener/scope/info/outcome, `CapturedPayload` | [[observability]] |
 | `runtime` | `Session`, `SessionState`, `ChannelContext`, `DefaultChannelContext`, `InteractionEvent`, `SseConnection`, `SseEvent`, `Backpressure` | [[sessions]] |
 | `protocol` | `Protocol`, `Protocols`, `ProtocolRequestMapper`, `ProtocolResponseMapper`, `ProtocolMappers`, `RequestMappingException` | [[protocol-versions]] |
@@ -33,9 +34,11 @@ Verdict: the runtime. ~190 main files. Deps: `slf4j-api`, `netty-codec-http`, `n
 
 ## 🧠 Who holds what
 
-- `DefaultTachyonServer` = state + registries + `methodHandlers` map + pending server→client requests + session manager + event store + extensions; implements `ServerEngine` **and** `ExtensionContext` `tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java:96-127`.
-- `McpDispatcher` = per-request flow, one per `McpChannelInitializer` (i.e. per server start) `McpChannelInitializer.java` ctor.
-- `DefaultDispatchContext` = per request: delegates channel state, adds engine, request id, outbound stream, observation, notifications impl `tachyon-core/src/main/java/dev/tachyonmcp/core/server/session/DefaultDispatchContext.java:30-273`.
+- Annotation registration, binding, and proxy invocation: [[declarative-configuration]].
+
+- [DefaultTachyonServer](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java) = state + registries + `methodHandlers` map + pending server→client requests + session manager + event store + extensions; implements [ServerEngine](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/internal/ServerEngine.java) **and** [ExtensionContext](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/extensions/ExtensionContext.java) [DefaultTachyonServer](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java).
+- [McpDispatcher](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java) = per-request flow, one per [McpChannelInitializer](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpChannelInitializer.java) (i.e. per server start) `McpChannelInitializer.java` ctor.
+- [DefaultDispatchContext](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/session/DefaultDispatchContext.java) = per request: delegates channel state, adds engine, request id, outbound stream, observation, notifications impl [DefaultDispatchContext](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/session/DefaultDispatchContext.java).
 
 ## 📦 Resources
 
@@ -46,7 +49,7 @@ Verdict: the runtime. ~190 main files. Deps: `slf4j-api`, `netty-codec-http`, `n
 
 1. Mapper method on `ProtocolRequestMapper` (impl once in `AbstractMcpRequestMapper`, override per version only if shape differs) and `ProtocolResponseMapper` (+ both version impls).
 2. `RpcMethodHandler` record in `server.features.<x>` `*MethodHandlers.register(map, …)` or `server.handlers`.
-3. Wire in `DefaultTachyonServer.registerDefaults` `:537-551`.
+3. Wire in [DefaultTachyonServer#registerDefaults](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java).
 4. 2026-07-28 name/uri header rule? update `RequestValidationHandler.NAME_REQUIRED_METHODS`.
 5. Capability flag? `resolveCapabilities` + `ServerInfoMapper` both versions.
 6. e2e test per protocol package → [[testing]].

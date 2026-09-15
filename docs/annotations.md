@@ -4,17 +4,124 @@ weight: 22
 sidebar_order: 22
 toc: true
 description: |-
-  Bridge third-party annotation frameworks (mcp-java, LangChain4j, Spring AI) onto Tachyon's tool, resource, and prompt registries via the AnnotationProvider SPI.
+  Declare tools, resources, prompts, and completions on plain Java methods — or bridge third-party annotation frameworks (mcp-java, LangChain4j, Spring AI) via the AnnotationProvider SPI.
 ---
 
-Tachyon's native feature registration is programmatic: `server.tools().register(...)`,
-`server.resources().register(...)`, and so on. The `AnnotationProvider` SPI bridges third-party
-*annotation* programming models — mcp-java, LangChain4j, Spring AI — onto those same façades, so
-you can keep writing `@Tool`-annotated methods from a framework you already use and still get a
-Tachyon server underneath.
+The primary way to declare MCP features is a plain Java class with Tachyon's own annotations from
+`dev.tachyonmcp.api.annotations`. Programmatic registration (`server.tools().register(...)`) and
+third-party annotation frameworks map onto the same registries.
 
-`ServerBuilder.annotations(...)`, `AnnotationContext`, `AnnotationProvider`, and
-`AnnotationRegistrationContext` are `@ExperimentalApi` — the shape may still change.
+`@McpTool`, `@McpResource`, `@McpPrompt`, `@McpCompletion`, `ServerBuilder.annotations(...)`, `AnnotationContext`,
+`AnnotationProvider`, and `AnnotationRegistrationContext` are `@ExperimentalApi` — the shape may
+still change.
+
+An already-built Java server also supports `server.annotations(a -> a.register(service))`.
+This uses the server's configured payload serializers and feature registries. Registration runs
+immediately, in order; a group of registrations is not transactional. DI containers can construct
+the server, inject it into service beans, register those beans, and then call `server.start()`.
+
+The Spring Boot starter follows that order. It discovers singleton beans after initialization,
+reads annotation metadata from Spring AOP target classes, and invokes JDK/class proxies so advice
+still runs. For JDK proxies, each annotated method must be exposed by an interface. A user-provided
+server keeps its own registration policy.
+
+Container integrations can call `TachyonAnnotationProvider.register(proxy, targetClass, context)`
+to separate annotation metadata from the invocation receiver. A method absent from the proxy fails
+registration; the provider never bypasses advice by invoking the target directly.
+
+## Declarative services
+
+```java
+class WeatherService {
+    record ForecastRequest(String city, int days) {}
+    record Forecast(String city, int days, double celsius) {}
+
+    @McpTool(description = "Forecast for a city")
+    Forecast forecast(ForecastRequest request) { ... }
+
+    @McpTool
+    String greet(String name, @Nullable String title, InteractionContext ctx) { ... }
+
+    @McpResource(uri = "weather://cities/{city}")
+    String city(String city) { ... }
+
+    @McpPrompt
+    String trip(String city, Optional<String> season) { ... }
+
+    @McpPrompt(role = Role.ASSISTANT)
+    String opener(String city) { ... }
+}
+
+var server = TachyonServer.builder()
+    .annotations(a -> a.register(new WeatherService()))
+    .build();
+```
+
+Only the annotation is required. `name` defaults to the method name; `description` is optional;
+`@McpResource` needs `uri`; `@McpPrompt` `role` defaults to `Role.USER`.
+
+| Rule | Behaviour |
+|---|---|
+| Discovery | non-private methods on the class, superclasses, public interfaces (class proxies work) |
+| `InteractionContext` parameter | injected, never advertised |
+| `@McpTool` with one record/POJO/`Map` parameter | whole `arguments` object decoded into it; its schema is `inputSchema` |
+| Other parameters | one named argument each (compile with `-parameters`); required unless JSpecify `@Nullable` (preferred) or `Optional*` |
+| Missing required named argument | invalid-params error |
+| `@McpTool` result | `void`/`null` → empty; `ToolResult` passes; `String`/number/boolean/enum → text; `ContentBlock` → content; collection/array → JSON text; other object → `structuredContent` and its type becomes `outputSchema` |
+| `@McpResource` | `{var}` in `uri` → template, variables must exactly match non-context parameter names and bind to same-named scalar parameters; static resources take no arguments. Result: `ResourceContents` passes, `String` → text, `byte[]` → blob, object → JSON text (`application/json` default) |
+| `@McpPrompt` | scalar parameters become prompt arguments. Result: `PromptResult` passes; `String`, `ContentBlock`, or object (as JSON text) → one message with the annotation's `role`; `PromptMessage` passes with its own role; `List` of those → messages |
+| `@McpCompletion` | one prompt/resource target; `CompletionRequest` or named partial-value/sibling parameters; returns `CompletionResult` or `List<String>` (see below) |
+| Exceptions | checked exceptions propagate as from the corresponding synchronous feature function (`ToolFn`, `CompletionFn`, etc.) |
+| Fail fast at registration | two feature annotations on one method, duplicate tool/prompt name or resource URI, private method, static resource with arguments, missing or extra resource-template parameter, non-scalar prompt/resource parameter; completion target/signature/return-type violations or duplicate completion targets |
+
+Schemas come from `JsonSchema.generate(type)`: a build-time kt-schema resource or the kt-schema
+reflection generator when present, otherwise tachyon-core's `JavaTypeSchemaFactory` (records,
+POJOs via public getters/fields, enums, collections, maps, `Optional`, `java.time`, `UUID`, `URI`).
+
+In Spring Boot, the [`tachyon-spring-boot-starter`](https://github.com/tachyonmcp/tachyon/tree/main/integrations/tachyon-spring-boot-starter)
+registers every such bean automatically.
+
+## Argument completions
+
+Use `@McpCompletion(prompt = "trip")` for a prompt or
+`@McpCompletion(resource = "weather://{city}")` for an exact resource URI/template reference.
+Specify exactly one target. The target can be declared elsewhere; a completion-only Spring bean
+is discovered too.
+
+The simple signature uses reflection parameter names (`-parameters` required):
+
+```java
+@McpCompletion(prompt = "trip")
+List<String> completeCity(String city, @Nullable String country) {
+    return cities.findStartingWith(city, country);
+}
+```
+
+The first non-`InteractionContext` parameter must be `String`. Its name (`city`) selects the
+argument being completed and receives the partial text, including an empty string. Later named
+scalar parameters receive resolved sibling arguments from the request context, using the configured
+payload codecs for conversion. Missing siblings need `@Nullable` (or a supported `Optional` type)
+unless they are required. The partial value wins if context also contains a stale value for `city`.
+Requests completing a different argument return no candidates without invoking the method.
+
+For a target that completes several arguments, take `CompletionRequest` instead:
+
+```java
+@McpCompletion(prompt = "trip")
+CompletionResult completeTrip(CompletionRequest request, InteractionContext context) {
+    return suggestions.complete(request.argumentName(), request.argumentValue(), request.resolvedArguments());
+}
+```
+
+These are alternative signatures for one target. Both allow an injected `InteractionContext` in any
+position. Do not mix `CompletionRequest` with named parameters. A service may declare only one
+completion method for each prompt or resource target; duplicates fail registration.
+
+Return `List<String>` for candidates only, or `CompletionResult` to retain `total`, `hasMore`, and
+`_meta`. Null results and invalid candidates fail the request. Existing completion dispatch applies
+the 100-candidate limit. Calls run on virtual threads; checked exceptions follow `CompletionFn` error
+mapping. Spring proxy advice remains active, and parameter names come from the annotated target
+method. Completion annotations do not generate JSON schemas.
 
 ## The AnnotationProvider interface
 
@@ -52,7 +159,8 @@ var server = TachyonServer.builder()
 - Annotation registrations run last: after the server is constructed, and after the
   `withTools`/`withResources`/`withPrompts`/`withCompletions` bootstrap registrations. An
   annotated method sharing a name with a bootstrap registration therefore replaces it.
-- `register(...)` throws `IllegalStateException` if called before any `withProvider(...)`.
+- Before any `withProvider(...)`, `register(...)` uses `TachyonAnnotationProvider` (`@McpTool`
+  and friends).
 
 ## Built-in providers
 

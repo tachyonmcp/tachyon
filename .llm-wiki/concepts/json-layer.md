@@ -2,8 +2,8 @@
 title: JSON layer
 tags: [concept, json, schema]
 sources: [tachyon-api/src/main/java/dev/tachyonmcp/api/json/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/json/, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/, tachyon-core/src/main/resources/META-INF/services/, tachyon-kotlin/src/main/kotlin/dev/tachyonmcp/kotlin/server/json/]
-updated: 2026-09-14
-commit: 582f9c52
+updated: 2026-09-15
+commit: 9eec1092
 ---
 
 # 🧾 JSON layer
@@ -12,22 +12,22 @@ Verdict: three independent JSON concerns. (1) **JSON-RPC envelope** — hand-rol
 
 ## ✉️ JSON-RPC codec
 
-`JsonRpcCodec` `tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/JsonRpcCodec.java`:
-- `parseRequest(ByteBuf)` streaming; `params` read as Jackson tree (`JsonNode`), `result`/`error.data` kept **raw JSON string** `:46-53`, `:147-208`.
-- Classification priority: error (code+message) > result > method+id ⇒ `Request` > method ⇒ `Notification` > IAE `:192-207`.
-- `id`: long / double / string / null `:210-218` → `RequestId` (`tachyon-api/.../server/domain/RequestId.java`).
-- Serialize to `byte[]` (GC-managed, not pooled — dropped response on shutdown ≠ leak) `:339-350`.
-- `JsonRpcMessage` sealed `Request<T> | Response | Error | Notification<T>` `JsonRpcMessage.java:9-81`. `JsonRpcError(code, message, data, httpStatus=200)` `JsonRpcError.java:17-27`.
-- `ValueSerializer` plain Map/List/scalar writer (unknown ⇒ `toString()`) `ValueSerializer.java:33-60`.
+[JsonRpcCodec](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/JsonRpcCodec.java) `tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/JsonRpcCodec.java`:
+- `parseRequest(ByteBuf)` streaming; `params` read as Jackson tree (`JsonNode`), `result`/`error.data` kept **raw JSON string** [JsonRpcCodec#parseRequest](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/JsonRpcCodec.java), [JsonRpcCodec](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/JsonRpcCodec.java).
+- Classification priority: error (code+message) > result > method+id ⇒ `Request` > method ⇒ [JsonRpcMessage.Notification](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/JsonRpcMessage.java) > IAE [JsonRpcCodec#parseRequest](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/JsonRpcCodec.java).
+- `id`: long / double / string / null [JsonRpcCodec#parseId](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/JsonRpcCodec.java) → [RequestId](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/domain/RequestId.java) (`tachyon-api/.../server/domain/RequestId.java`).
+- Serialize to `byte[]` (GC-managed, not pooled — dropped response on shutdown ≠ leak) [JsonRpcCodec#serialize](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/JsonRpcCodec.java).
+- [JsonRpcMessage](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/JsonRpcMessage.java) sealed `Request<T> | Response | Error | Notification<T>` [JsonRpcMessage](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/JsonRpcMessage.java). `JsonRpcError(code, message, data, httpStatus=200)` [JsonRpcError](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/JsonRpcError.java).
+- [ValueSerializer](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/ValueSerializer.java) plain Map/List/scalar writer (unknown ⇒ `toString()`) [ValueSerializer#writeJsonValue](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/ValueSerializer.java).
 
 ## 📄 Documents & schemas (api)
 
 | Type | Proof |
 |---|---|
-| `JsonDocument` — `json()`, `unwrap(Class)`, `of(String)` (no validation), `parse`, `from(source, type)` | `tachyon-api/src/main/java/dev/tachyonmcp/api/json/JsonDocument.java:17-77` |
-| `JsonObject` / `JsonArray` typed accessors (`stringOpt`, `intOpt` exact, …) | `JsonObject.java:25` |
+| `JsonDocument` — `json()`, `unwrap(Class)`, `of(String)` (no validation), `parse`, `from(source, type)` | `JsonDocument` |
+| `JsonObject` / `JsonArray` typed accessors (`stringOpt`, `intOpt` exact, …) | `JsonObject` |
 | `JsonSchema` (`unchecked`, `generate(Class)`) | `JsonSchema.java` |
-| `JsonSchemaValidator` + `noop()` | `JsonSchemaValidator.java:12-36` |
+| `JsonSchemaValidator` + `noop()` | `JsonSchemaValidator` |
 | SPI `JsonDocumentFactory<T>` / `JsonSchemaFactory<T>` (`sourceType`, `priority`) | `json/spi/*.java` |
 
 ServiceLoader registrations:
@@ -35,25 +35,27 @@ ServiceLoader registrations:
 | Services file | Impls |
 |---|---|
 | core `...JsonDocumentFactory` | `Jackson3JsonFactory`(String), `JacksonNodeJsonFactory`, `JacksonObjectJsonFactory` |
-| core `...JsonSchemaFactory` | above 3 + `KtSchemaResourceFactory`(Class), `MapJsonFactory`(Map) |
+| core `...JsonSchemaFactory` | above 3 + `KtSchemaResourceFactory`(Class, prio 0), `JavaTypeSchemaFactory`(Class, prio `1000`), `MapJsonFactory`(Map) |
 | kotlin | `KotlinxJsonElementFactory`, `KotlinxJsonObjectFactory` |
-| kt-schema | `KtSchemaReflectionFactory` (Class) |
+| kt-schema | `KtSchemaReflectionFactory` (Class, prio 10; declines on generator failure, e.g. Java record with `int`) |
 
-Server requires **exactly one** String-source `JsonSchemaFactory` else ISE `DefaultTachyonServer.java:364-382`; used to validate tool schema roots at registration `JsonSchemaUtils.java:188-204`.
+`JsonSchema.generate(Class)` chain = codegen resource → kt-schema reflection → Java reflection. `JavaTypeSchemas` covers records (required unless `Optional`/JSpecify `@Nullable`), POJOs (public getters/fields, only primitives required), enums, arrays/collections, maps (`additionalProperties`), `java.time`/`UUID`/`URI` formats; cycles ⇒ bare `object`. Factory declines non-object types so chain still fails for them `JavaTypeSchemaFactory#priority`.
 
-`KtSchemaResourceFactory` looks up `META-INF/kt-schema/schemas/<fqcn path>.json` on context classloader (build-time generated) `tachyon-core/src/main/java/dev/tachyonmcp/core/server/json/KtSchemaResourceFactory.java:40-51`.
+Server requires **exactly one** String-source `JsonSchemaFactory` else ISE `DefaultTachyonServer#discoverSchemaFactory`; used to validate tool schema roots at registration `JsonSchemaUtils#parseSchemaRoot`.
+
+`KtSchemaResourceFactory` looks up `META-INF/kt-schema/schemas/<fqcn path>.json` on context classloader (build-time generated) `KtSchemaResourceFactory#sourceType`.
 
 ## ✅ Validation
 
-- Default input **and** output validator `NetworkntJsonSchemaValidator`, dialect **2020-12**, compiled-schema cache keyed by schema JSON string `tachyon-core/src/main/java/dev/tachyonmcp/core/server/json/NetworkntJsonSchemaValidator.java:17-46`.
-- Override via `json { inputSchemaValidator / outputSchemaValidator / schemaValidator }` `tachyon-api/src/main/java/dev/tachyonmcp/api/server/config/JsonConfig.java:20-75`. Output validator `noop()` skips output check `ToolMethodHandlers.java:243-250`.
-- Registration rules (`JsonSchemaUtils`): input root must be `type: object` `:40-56`; output must be object `:72-79`; `x-mcp-header` rules `:96-148` → [[protocol-versions]].
+- Default input **and** output validator `NetworkntJsonSchemaValidator`, dialect **2020-12**, compiled-schema cache keyed by schema JSON string `NetworkntJsonSchemaValidator`.
+- Override via `json { inputSchemaValidator / outputSchemaValidator / schemaValidator }` `JsonConfig`. Output validator `noop()` skips output check `ToolsCallHandler#validateOutput`.
+- Registration rules (`JsonSchemaUtils`): input root must be `type: object` `JsonSchemaUtils#validateInputSchemaRoot`; output must be object `JsonSchemaUtils#validateOutputSchemaRoot`; `x-mcp-header` rules `JsonSchemaUtils` → [[protocol-versions]].
 
 ## 🔄 Payload serde
 
-- Default `JacksonPayloadSerde` over shared `JsonUtils.mapper()` (Duration deserialized from **millis**) `JacksonPayloadSerde.java:13-47`, `JsonUtils.java:37-76`.
+- Default `JacksonPayloadSerde` over shared `JsonUtils.mapper()` (Duration deserialized from **millis**) `JacksonPayloadSerde`, `JsonUtils#MAPPER`.
 - `ToolRequest.arguments()` = `Args` (wraps JSON; `decode(Class)` via deserializer carried on request) `tachyon-api/.../server/domain/Args.java`.
-- Structured results serialized to `JsonDocument` before mapping `JsonUtils.serializeStructured` `:248-262`.
+- Structured results serialized to `JsonDocument` before mapping `JsonUtils.serializeStructured` `JsonDocument`.
 - Kotlin: `KxSerializationSerde` → [[tachyon-kotlin]].
 
 ⚠️ Jackson **3** (`tools.jackson.*`): `JsonNode.isString()/stringValue()/asString()`, `properties()` — not Jackson 2 names.

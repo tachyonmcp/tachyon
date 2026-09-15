@@ -409,6 +409,7 @@ JSpecify `@Nullable` is the baseline (`@NullMarked` at package level). Reach for
 - `Optional<T>` — a lookup/search where "no result" is the point: `Optional<User> findUserById(id)`, `Optional<Path> resolveConfigFile()`.
 - Collections: return empty, never wrap a `List`/`Map` in `@Nullable` or `Optional`.
 - Avoid `Optional` for plain field-style getters (`Optional<String> getName()`), setters (`void setName(Optional<String>)`), or class fields — usually just awkward, rarely earns its ceremony.
+- Parameters: `@Nullable T`, never `Optional<T>` — including optional arguments of `@McpTool`/`@McpPrompt`/`@McpResource` methods in docs, examples, and tests. `Optional` parameters stay supported for users; tests keep one only to cover that binding.
 - Applied here: `InteractionContext.get(AttributeKey<T>)` is `Optional<T>` (map-style lookup, absence is a real branch); `sessionId()` stays `@Nullable String` (ordinary status field, same shape as `lifecycle()`/`session()`).
 
 ## 🐛 Context extension state is `AttributeKey<T>`, never `Map<String, Object>`
