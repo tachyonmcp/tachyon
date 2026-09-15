@@ -4,6 +4,7 @@ package dev.tachyonmcp.e2e.mcp;
 import static dev.tachyonmcp.testkit.JsonRpcResponseAssert.assertThat;
 import static net.javacrumbs.jsonunit.assertj.JsonAssertions.assertThatJson;
 
+import dev.tachyonmcp.api.annotations.McpCompletion;
 import dev.tachyonmcp.api.annotations.McpPrompt;
 import dev.tachyonmcp.api.annotations.McpResource;
 import dev.tachyonmcp.api.annotations.McpTool;
@@ -14,6 +15,7 @@ import dev.tachyonmcp.testkit.McpTestClients;
 import dev.tachyonmcp.testkit.McpTestServers;
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
@@ -54,6 +56,11 @@ class DeclarativeFeaturesTest {
         void ping() {}
 
         @McpTool
+        int tally(Map<String, Integer> counts) {
+            return counts.values().stream().mapToInt(Integer::intValue).sum();
+        }
+
+        @McpTool
         String fail(String reason) throws IOException {
             throw new IOException(reason);
         }
@@ -87,6 +94,11 @@ class DeclarativeFeaturesTest {
         String packing(Season season, Optional<Season> next) {
             return "Pack for " + season.name()
                     + next.map(s -> " then " + s.name()).orElse("");
+        }
+
+        @McpCompletion(resource = "weather://seasons/{season}")
+        List<String> seasons(String season) {
+            return List.of("custom:" + season);
         }
     }
 
@@ -126,7 +138,9 @@ class DeclarativeFeaturesTest {
                          "inputSchema":{"type":"object",
                            "properties":{"name":{"type":"string"},"title":{"type":"string"}},
                            "required":["name"]}},
-                        {"name":"ping","inputSchema":{"type":"object","properties":{}}}
+                        {"name":"ping","inputSchema":{"type":"object","properties":{}}},
+                        {"name":"tally",
+                         "inputSchema":{"type":"object","additionalProperties":{"type":"integer"}}}
                       ],
                       "resultType":"complete","ttlMs":0,"cacheScope":"public"}}
                     """;
@@ -174,6 +188,24 @@ class DeclarativeFeaturesTest {
             assertThat(empty).isSuccess().hasId(5).hasResult("""
                     {"content":[],"resultType":"complete"}
                     """);
+        }
+    }
+
+    @Test
+    void mapInputKeepsValueSchemaAndDecodesWholeArguments() throws Exception {
+        try (var client = McpTestClients.latest(server.port())) {
+            // language=json
+            assertThat(client.post("""
+                    {"jsonrpc":"2.0","id":23,"method":"tools/call",
+                     "params":{"name":"tally","arguments":{"a":1,"b":2}}}
+                    """)).isSuccess().hasId(23).hasResult("""
+                    {"content":[{"type":"text","text":"3"}],"resultType":"complete"}
+                    """);
+            // language=json
+            assertThat(client.post("""
+                    {"jsonrpc":"2.0","id":24,"method":"tools/call",
+                     "params":{"name":"tally","arguments":{"a":"one"}}}
+                    """)).isJsonRpcError().hasId(24).hasErrorCode(-32602);
         }
     }
 
@@ -296,6 +328,47 @@ class DeclarativeFeaturesTest {
                     .hasId(17)
                     .hasErrorCode(-32602)
                     .hasErrorMessage("invalid argument 'season': must be one of [SUMMER, WINTER]");
+        }
+    }
+
+    @Test
+    void enumArgumentsCompleteFromConstantsUnlessCompletionIsDeclared() throws Exception {
+        try (var client = McpTestClients.latest(server.port())) {
+            // language=json
+            assertThat(client.post("""
+                    {"jsonrpc":"2.0","id":18,"method":"completion/complete","params":{
+                     "ref":{"type":"ref/prompt","name":"packing"},"argument":{"name":"season","value":"s"}}}
+                    """)).isSuccess().hasId(18).hasResult("""
+                    {"completion":{"values":["SUMMER"]},"resultType":"complete"}
+                    """);
+            // language=json
+            assertThat(client.post("""
+                    {"jsonrpc":"2.0","id":19,"method":"completion/complete","params":{
+                     "ref":{"type":"ref/prompt","name":"packing"},"argument":{"name":"season","value":""}}}
+                    """)).isSuccess().hasId(19).hasResult("""
+                    {"completion":{"values":["SUMMER","WINTER"]},"resultType":"complete"}
+                    """);
+            // language=json
+            assertThat(client.post("""
+                    {"jsonrpc":"2.0","id":20,"method":"completion/complete","params":{
+                     "ref":{"type":"ref/prompt","name":"packing"},"argument":{"name":"next","value":"Wi"}}}
+                    """)).isSuccess().hasId(20).hasResult("""
+                    {"completion":{"values":["WINTER"]},"resultType":"complete"}
+                    """);
+            // language=json
+            assertThat(client.post("""
+                    {"jsonrpc":"2.0","id":21,"method":"completion/complete","params":{
+                     "ref":{"type":"ref/prompt","name":"packing"},"argument":{"name":"city","value":"R"}}}
+                    """)).isSuccess().hasId(21).hasResult("""
+                    {"completion":{"values":[],"hasMore":false},"resultType":"complete"}
+                    """);
+            // language=json
+            assertThat(client.post("""
+                    {"jsonrpc":"2.0","id":22,"method":"completion/complete","params":{
+                     "ref":{"type":"ref/resource","uri":"weather://seasons/{season}"},"argument":{"name":"season","value":"wi"}}}
+                    """)).isSuccess().hasId(22).hasResult("""
+                    {"completion":{"values":["custom:wi"]},"resultType":"complete"}
+                    """);
         }
     }
 

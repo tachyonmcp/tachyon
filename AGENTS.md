@@ -27,7 +27,7 @@ Code knowledge base: [`.llm-wiki/index.md`](.llm-wiki/index.md). Built from **co
 Use [tachyon-wiki](.agents/skills/tachyon-wiki/SKILL.md) when creating, updating, reorganizing, or checking wiki pages, including refreshes after code changes.
 
 - **Before work**: read `index.md`, then relevant pages. Still verify claims in code.
-- **After changing code**: update every page whose `sources` cover touched files — fix `path:line`, bump `updated` + `commit`, add page for new concept/module. Same change set as the code.
+- **After changing code**: update every page whose `sources` cover touched files — fix `Type#member` citations (no line numbers), bump `updated` + `commit`, add page for new concept/module. Same change set as the code.
 - **Check drift**: `.llm-wiki/tools/stale.sh` (changed sources since page commit + dead `[[links]]`).
 - **Answered hard question?** File answer as page, index it.
 - Smell/bug seen, not fixing now → row in `findings.md`. Fixed → 🗑️ row.

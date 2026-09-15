@@ -30,7 +30,7 @@ separately.
 | `@McpTool` | `get-weather(city, units?)`; structured output, `Unit` enum: CELSIUS default or FAHRENHEIT |
 | `@McpResource` | Prediction article, featured Tallinn weather, `weather://current/{city}` |
 | `@McpPrompt` | `rewrite-forecast(forecast, style)`; `NarrationStyle` enum: PLAIN, CONCISE, PIRATE |
-| `@McpCompletion` | Style and city suggestions, selected by reflected first parameter name |
+| `@McpCompletion` | City suggestions, selected by reflected first parameter name; `NarrationStyle` completes from enum constants automatically |
 
 Compiler `-parameters` is enabled. Optional tool input uses JSpecify `@Nullable`.
 Annotations derive schemas and map return values; no manual registry setup.
@@ -48,4 +48,5 @@ or city elicitation. Unknown cities and invalid units are rejected.
 
 `mvn -q -f examples/weather-mcp-spring-boot/pom.xml verify` starts the actual
 Spring-managed Tachyon transport on port 0 and exercises MCP requests with a fake
-weather provider. No external weather requests occur in these tests.
+weather provider. `OpenMeteoProviderTest` serves canned Open-Meteo payloads from a loopback
+HTTP server and rejects partial or invalid numeric fields. No external weather requests occur in these tests.

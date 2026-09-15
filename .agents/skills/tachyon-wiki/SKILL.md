@@ -25,7 +25,7 @@ do not copy those rules into this skill. Then read the
 ## Drift and scope
 
 Run `.llm-wiki/tools/stale.sh` from the repository root. Its drift output includes
-tracked working-tree changes and does not certify that cited line numbers or
+tracked working-tree changes and does not certify that cited symbols or
 claims are correct. Inspect citations separately; include task-owned new files
 when checking sources. Report unrelated drift without expanding a focused edit.
 

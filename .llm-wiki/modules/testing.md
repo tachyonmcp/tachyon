@@ -8,7 +8,7 @@ commit: 751331f4
 
 # ✅ Testing
 
-Verdict: E2E-first (AGENTS.md). Real server on port 0, clients = official MCP Java SDK (`mcp-core` 2.0.1, `pom.xml:75`) **and** raw testkit clients. E2E packages split by protocol version. Conformance via `@modelcontextprotocol/conformance` with baselines.
+Verdict: E2E-first (AGENTS.md). Real server on port 0, clients = official MCP Java SDK (`mcp-core` 2.0.1, `pom.xml`) **and** raw testkit clients. E2E packages split by protocol version. Conformance via `@modelcontextprotocol/conformance` with baselines.
 
 ## 🏃 Run
 
@@ -40,7 +40,7 @@ Pattern: abstract contract in root, one subclass per protocol package → same b
 
 ## 🧪 Unit tests
 
-Declarative completion wire coverage runs on both protocols (`e2e/src/test/java/dev/tachyonmcp/e2e/mcp/DeclarativeCompletionsTest.java:85`): explicit request + metadata, named partial text + sibling binding, nullability, resource refs, checked failures. Invalid declarations and missing parameter-name metadata are build-time edge tests (`tachyon-core/src/test/java/dev/tachyonmcp/core/server/annotations/CompletionAnnotationValidationTest.java:109`); Spring completion-only proxy regression lives in [[spring-boot]].
+Declarative completion wire coverage runs on both protocols (`DeclarativeCompletionsTest#explicitRequestPreservesContextAndCompleteResult`): explicit request + metadata, named partial text + sibling binding, nullability, resource refs, checked failures. Invalid declarations and missing parameter-name metadata are build-time edge tests (`UnknownTemplateVariable`); Spring completion-only proxy regression lives in [[spring-boot]].
 
 See module pages: [[tachyon-core]], [[tachyon-api]], [[tachyon-kotlin]], [[tachyon-extensions]]. Rules (AGENTS.md): JUnit 6, AssertJ (Java) / Kotest (Kotlin), Awaitility, `@TempDir`, `TachyonServer` as SUT, many asserts per test, no tautologies; drop unit test when e2e covers.
 

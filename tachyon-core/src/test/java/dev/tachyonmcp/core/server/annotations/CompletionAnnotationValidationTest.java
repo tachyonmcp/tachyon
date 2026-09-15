@@ -147,13 +147,7 @@ class CompletionAnnotationValidationTest {
     @MethodSource("invalidDeclarations")
     void rejectsInvalidDeclarationsAtBuildTime(Object service, String message) {
         assertThatIllegalStateException()
-                .isThrownBy(() -> {
-                    try (var server = TachyonServer.builder()
-                            .annotations(annotations -> annotations.register(service))
-                            .build()) {
-                        server.start();
-                    }
-                })
+                .isThrownBy(TachyonServer.builder().annotations(annotations -> annotations.register(service))::build)
                 .withMessageContaining(message);
     }
 
@@ -162,17 +156,17 @@ class CompletionAnnotationValidationTest {
         assertThatIllegalStateException()
                 .isThrownBy(() -> TachyonServer.builder()
                         .annotations(annotations ->
-                                annotations.register(new TripPrompt()).register(new NumericlessCompletion()))
+                                annotations.register(new TripPrompt()).register(new TownCompletion()))
                         .build())
                 .withMessageContaining("@McpCompletion argument 'town' is not declared by prompt 'trip' [city]");
         try (var server = TachyonServer.builder()
-                .annotations(annotations -> annotations.register(new NumericlessCompletion()))
+                .annotations(annotations -> annotations.register(new TownCompletion()))
                 .build()) {
             assertThat(server.prompts().find("trip")).isEmpty();
         }
     }
 
-    static class NumericlessCompletion {
+    static class TownCompletion {
         @McpCompletion(prompt = "trip")
         List<String> complete(String town) {
             return List.of();

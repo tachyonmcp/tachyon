@@ -108,8 +108,13 @@ final class MethodInvoker {
 
     JsonSchema inputSchema() {
         for (Binding binding : bindings) {
-            if (binding instanceof WholeBinding whole)
-                return JsonSchema.generate(whole.parameter().getType());
+            if (binding instanceof WholeBinding whole) {
+                final var parameter = whole.parameter();
+                if (Map.class.isAssignableFrom(parameter.getType())) {
+                    return JsonSchema.from(JavaTypeSchemas.schemaFor(parameter.getParameterizedType()));
+                }
+                return JsonSchema.generate(parameter.getType());
+            }
         }
         var properties = new LinkedHashMap<String, Object>();
         var required = new ArrayList<String>();

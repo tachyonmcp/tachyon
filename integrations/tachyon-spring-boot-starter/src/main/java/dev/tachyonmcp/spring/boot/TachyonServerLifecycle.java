@@ -3,7 +3,7 @@ package dev.tachyonmcp.spring.boot;
 
 import dev.tachyonmcp.api.annotations.ExperimentalApi;
 import dev.tachyonmcp.core.server.TachyonServer;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.ReentrantLock;
 import org.springframework.context.SmartLifecycle;
 
 /**
@@ -14,7 +14,8 @@ import org.springframework.context.SmartLifecycle;
 public final class TachyonServerLifecycle implements SmartLifecycle {
 
     private final TachyonServer server;
-    private final AtomicBoolean running = new AtomicBoolean();
+    private final ReentrantLock lock = new ReentrantLock();
+    private volatile boolean running;
 
     /**
      * Creates the lifecycle for {@code server}.
@@ -27,16 +28,30 @@ public final class TachyonServerLifecycle implements SmartLifecycle {
 
     @Override
     public void start() {
-        if (running.compareAndSet(false, true)) server.start();
+        lock.lock();
+        try {
+            if (running) return;
+            server.start();
+            running = true;
+        } finally {
+            lock.unlock();
+        }
     }
 
     @Override
     public void stop() {
-        if (running.compareAndSet(true, false)) server.close();
+        lock.lock();
+        try {
+            if (!running) return;
+            server.close();
+            running = false;
+        } finally {
+            lock.unlock();
+        }
     }
 
     @Override
     public boolean isRunning() {
-        return running.get();
+        return running;
     }
 }

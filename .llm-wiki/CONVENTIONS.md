@@ -1,8 +1,8 @@
 ---
 title: Wiki conventions (schema)
 tags: [meta]
-updated: 2026-09-13
-commit: 582f9c52
+updated: 2026-09-15
+commit: d939ff61
 ---
 
 # 📐 LLM Wiki — conventions
@@ -34,8 +34,9 @@ commit: <short sha the claims were verified against>
 Verdict/summary first. Then sections. Tables > prose.
 ```
 
-- Claims carry `path:line` proof. Repo-relative paths (clickable).
-- Line numbers rot. On edit near a cited line → re-verify, fix number.
+- Claims carry symbol proof: link repo-relative file path (clickable), label with `Type#member` (or `Type` for type-level claims), e.g. `[MethodInvoker#forArguments](../../tachyon-core/.../MethodInvoker.java)`.
+- 🚫 No line numbers or ranges (`File.java`, `#L42`) — they rot on every edit. Name the class/method/field instead; non-code files (POM, YAML) cite file + element/property name.
+- Member renamed/moved → fix label + path.
 - Link pages with Obsidian double-bracket wiki links around the file stem (no dir, no `.md`), e.g. link to `sessions.md` by its stem.
 - Caveman style, emoji markers (see `AGENTS.md`). Ignore untracked files.
 - No copy of javadoc. Explain *why/how it connects*, not *what signature says*.
@@ -45,7 +46,7 @@ Verdict/summary first. Then sections. Tables > prose.
 **Ingest (code changed)**
 1. `git diff --name-only <page commit>..HEAD` or run `.llm-wiki/tools/stale.sh`.
 2. Re-read changed code. Update every page whose `sources` match.
-3. Fix `path:line`, bump `updated` + `commit`.
+3. Fix renamed/moved `Type#member` citations, bump `updated` + `commit`.
 4. New concept/module with no page → create page, add to `index.md`.
 
 **Query**
@@ -53,6 +54,6 @@ Verdict/summary first. Then sections. Tables > prose.
 2. Good synthesized answer (comparison, trace, decision) → file as new page, index it.
 
 **Lint**
-- Run `tools/stale.sh`. Check: orphan pages (no inbound wiki link), dead `path:line`, contradictions between pages, concepts mentioned w/o page, `findings.md` items fixed in code → 🗑️ remove.
+- Run `tools/stale.sh`. Check: orphan pages (no inbound wiki link), dead paths or `Type#member` symbols, leftover line-number citations, contradictions between pages, concepts mentioned w/o page, `findings.md` items fixed in code → 🗑️ remove.
 
 Based on https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f

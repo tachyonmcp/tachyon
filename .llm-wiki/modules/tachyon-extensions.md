@@ -16,31 +16,31 @@ Verdict: optional add-ons built only on public SPI. Main piece = **Skills extens
 
 | Aspect | Value | Proof |
 |---|---|---|
-| id | `io.modelcontextprotocol/skills` | `:46` |
-| advertise | `ALWAYS`, settings `{directoryRead: true}` | `:88-95` |
-| `_meta` envelope | **not required** | `:88-90` (fix `582f9c52`) |
-| negotiation | builder `negotiation(...)`, **default `REQUIRED`** ⇒ undeclared ⇒ missing required client capability: -32003 (2025-11-25), -32021 + HTTP 400 (2026-07-28); base `resources/list|read` still served. `OPTIONAL` opt-in serves undeclared clients (e.g. MCP Inspector; same advertisement) | `:93-95`, `:273`, `:332-335`; codes `v2025_11_25/codecs/McpResponseMapper.java:98`, `v2026_07_28/codecs/McpResponseMapper.java:117` |
-| bootstrap | every skill file → resource (`SKILL.md` named by frontmatter `name` + `description`); text vs blob by `MimeTypes.isText` | `:102-132` |
-| methods | `skills/list` (no pagination; `ttlMs`, `cacheScope`), `skills/get {uri}`, `resources/directory/read {uri}` (children with `inode/directory`) | `:119-175` |
-| builder | `registry(...)`, `cacheTtlMs ≥ 0`, `cacheScope public|private` | `:258-314` |
+| id | `io.modelcontextprotocol/skills` | `SkillsExtension#ID` |
+| advertise | `ALWAYS`, settings `{directoryRead: true}` | `SkillsExtension#advertiseMode`, `SkillsExtension#serverSettings` |
+| `_meta` envelope | **not required** | `SkillsExtension#requiresMetaEnvelope` (fix `582f9c52`) |
+| negotiation | builder `negotiation(...)`, **default `REQUIRED`** ⇒ undeclared ⇒ missing required client capability: -32003 (2025-11-25), -32021 + HTTP 400 (2026-07-28); base `resources/list|read` still served. `OPTIONAL` opt-in serves undeclared clients (e.g. MCP Inspector; same advertisement) | `SkillsExtension#negotiation`, `SkillsExtension.Builder#negotiation`; codes in `McpResponseMapper` (v2025_11_25, v2026_07_28) |
+| bootstrap | every skill file → resource (`SKILL.md` named by frontmatter `name` + `description`); text vs blob by `MimeTypes.isText` | `SkillsExtension#bootstrap`, `SkillsExtension#contents` |
+| methods | `skills/list` (no pagination; `ttlMs`, `cacheScope`), `skills/get {uri}`, `resources/directory/read {uri}` (children with `inode/directory`) | `SkillsExtension#listSkills`, `SkillsExtension#getSkill`, `SkillsExtension#readDirectory` |
+| builder | `registry(...)`, `cacheTtlMs ≥ 0`, `cacheScope public|private` | `SkillsExtension.Builder` |
 
-Skill model `SkillsRegistry.Skill(skillPath, frontmatter, files)`, `SkillFile(relativePath, uri, mimeType, sha256 digest, size)`; `skillUri = skill://<path>/SKILL.md` `SkillsRegistry.java:39-56`.
+Skill model `SkillsRegistry.Skill(skillPath, frontmatter, files)`, `SkillFile(relativePath, uri, mimeType, sha256 digest, size)`; `skillUri = skill://<path>/SKILL.md` `Skill`.
 
 ## 📂 Registries
 
 | Impl | Source | Proof |
 |---|---|---|
-| `FilesystemSkillsRegistry(root)` / `(dir, skillPath)` | dir of skill dirs / single | `FilesystemSkillsRegistry.java:18-30` |
-| `ClasspathSkillsRegistry(resource[, skillPath])` | `file:` or `jar:` URLs | `ClasspathSkillsRegistry.java:51-119` |
-| `CompositeSkillsRegistry` | dup skill path ⇒ IAE | `CompositeSkillsRegistry.java:23-40` |
-| `BaseSkillsRegistry` | dir scan lenient (skip invalid, warn), single strict | `BaseSkillsRegistry.java:52-136` |
+| `FilesystemSkillsRegistry(root)` / `(dir, skillPath)` | dir of skill dirs / single | `FilesystemSkillsRegistry#FilesystemSkillsRegistry` |
+| `ClasspathSkillsRegistry(resource[, skillPath])` | `file:` or `jar:` URLs | `ClasspathSkillsRegistry` |
+| `CompositeSkillsRegistry` | dup skill path ⇒ IAE | `CompositeSkillsRegistry#CompositeSkillsRegistry` |
+| `BaseSkillsRegistry` | dir scan lenient (skip invalid, warn), single strict | `BaseSkillsRegistry` |
 
-Validation `SkillsScanner.buildSkill`: `SKILL.md` required, YAML frontmatter (SnakeYAML `SafeConstructor`) with non-blank `name`+`description`, last path segment == `name` `SkillsScanner.java:25-47`, `FrontmatterParser.java:30-57`. Ignore globs from classpath `META-INF/dev/tachyonmcp/extensions/skills/.mcpignore` (gitignore-ish: anchored `/`, dir `/` suffix) `IgnoreRules.java:26-121`.
+Validation `SkillsScanner.buildSkill`: `SKILL.md` required, YAML frontmatter (SnakeYAML `SafeConstructor`) with non-blank `name`+`description`, last path segment == `name` `SkillsScanner#buildSkill`, `FrontmatterParser#parse`. Ignore globs from classpath `META-INF/dev/tachyonmcp/extensions/skills/.mcpignore` (gitignore-ish: anchored `/`, dir `/` suffix) `IgnoreRules`.
 
 ## 🔧 Sample tools
 
-- `EchoToolHandler` — `echo {message}` `tools/echo/EchoToolHandler.java:11-37`.
-- `YouComSearchTool(YouComSearchConfig)` — `you-search`, JDK `HttpClient`, free tier w/o key, `X-API-Key` otherwise, structured + text results `tools/youcom/search/YouComSearchTool.java:24-168`.
+- `EchoToolHandler` — `echo {message}` `EchoToolHandler.java`.
+- `YouComSearchTool(YouComSearchConfig)` — `you-search`, JDK `HttpClient`, free tier w/o key, `X-API-Key` otherwise, structured + text results `YouComSearchTool`.
 
 ## 🧪 Tests
 

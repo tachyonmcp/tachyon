@@ -8,7 +8,6 @@ import dev.tachyonmcp.api.annotations.McpTool;
 import dev.tachyonmcp.api.server.domain.InvalidArgumentException;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import org.jspecify.annotations.Nullable;
@@ -60,15 +59,6 @@ class WeatherService {
         if (forecast.isBlank()) throw new InvalidArgumentException("forecast", "must not be blank");
         return "Rewrite the following weather forecast in %s style. Preserve factual details:\n\n%s"
                 .formatted(style.name().toLowerCase(Locale.ROOT), forecast);
-    }
-
-    @McpCompletion(prompt = "rewrite-forecast")
-    List<String> styles(String style) {
-        final var prefix = style.toUpperCase(Locale.ROOT);
-        return Arrays.stream(NarrationStyle.values())
-                .map(NarrationStyle::name)
-                .filter(candidate -> candidate.startsWith(prefix))
-                .toList();
     }
 
     @McpCompletion(resource = "weather://current/{city}")

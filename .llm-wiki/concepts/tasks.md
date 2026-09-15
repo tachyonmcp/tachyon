@@ -14,23 +14,23 @@ Verdict: Tachyon does **not** run tasks. External system owns execution via `Tas
 
 | Type | Role | Proof |
 |---|---|---|
-| `TaskConnector` | required `get`, `cancel`, `update`; `@LegacyApi` optional `list`, `awaitResult` | `tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/tasks/TaskConnector.java:22-159` |
-| `TaskSnapshot` | taskId, status, timestamps, `revision`, pollInterval, result/error, meta; factories `working/inputRequired/completed/failed/cancelled` | `.../tasks/TaskSnapshot.java:20-202` |
-| `TaskState` | `SUBMITTED, REJECTED*, AUTH_REQUIRED, WORKING, INPUT_REQUIRED, COMPLETED*, FAILED*, CANCELLED*, UNKNOWN*` (*terminal) | `.../tasks/TaskState.java:26-47` |
-| `TaskSupport` | tool-level `FORBIDDEN / OPTIONAL / REQUIRED` | `.../tasks/TaskSupport.java:20-36` |
-| `Tasks` (façade) | `publish`, `get`, `remove`, `reportProgress` | `.../tasks/Tasks.java:11-41` |
-| `DefaultTaskRegistry` | cache + notifications + TTL janitor | `tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tasks/DefaultTaskRegistry.java:25` |
-| `TasksExtension` | id `io.modelcontextprotocol/tasks`, `ALWAYS` advertised, per-request gate | `.../tasks/TasksExtension.java:12-42` |
+| `TaskConnector` | required `get`, `cancel`, `update`; `@LegacyApi` optional `list`, `awaitResult` | `TaskConnector` |
+| `TaskSnapshot` | taskId, status, timestamps, `revision`, pollInterval, result/error, meta; factories `working/inputRequired/completed/failed/cancelled` | `TaskSnapshot` |
+| `TaskState` | `SUBMITTED, REJECTED*, AUTH_REQUIRED, WORKING, INPUT_REQUIRED, COMPLETED*, FAILED*, CANCELLED*, UNKNOWN*` (*terminal) | `TaskState` |
+| `TaskSupport` | tool-level `FORBIDDEN / OPTIONAL / REQUIRED` | `TaskSupport` |
+| `Tasks` (façade) | `publish`, `get`, `remove`, `reportProgress` | `Tasks` |
+| `DefaultTaskRegistry` | cache + notifications + TTL janitor | `DefaultTaskRegistry` |
+| `TasksExtension` | id `io.modelcontextprotocol/tasks`, `ALWAYS` advertised, per-request gate | `TasksExtension` |
 
 ## ⚙️ Config
 
-`capabilities { tasks(connector) }` ⇒ enabled + connector `CapabilitiesConfig.java:438-441`; enabled w/o connector ⇒ ISE `:443-447`. `TasksConfig` keepAlive default **5 min**, optional pollInterval, pageSize `TasksConfig.java:26-49`. Builder auto-adds `TasksExtension` when enabled (see [[overview]]).
+`capabilities { tasks(connector) }` ⇒ enabled + connector `Builder#tasks`; enabled w/o connector ⇒ ISE `Builder#validateTaskConnector`. `TasksConfig` keepAlive default **5 min**, optional pollInterval, pageSize `TasksConfig`. Builder auto-adds `TasksExtension` when enabled (see [[overview]]).
 
-Startup check: any `REQUIRED` tool w/o connector ⇒ `IllegalStateException("Task-producing tools require a TaskConnector")`; `OPTIONAL` w/o connector ⇒ warn `DefaultTachyonServer.java:273-298`.
+Startup check: any `REQUIRED` tool w/o connector ⇒ `IllegalStateException("Task-producing tools require a TaskConnector")`; `OPTIONAL` w/o connector ⇒ warn `DefaultTachyonServer#validateConfiguration`.
 
 ## 🔁 Task-producing tool call
 
-`ToolMethodHandlers` `validateTaskRequest` `:166-178` + `mapResult` `:180-205`:
+`ToolMethodHandlers` `validateTaskRequest` `ToolsCallHandler#validateTaskRequest` + `mapResult` `ToolsCallHandler#mapResult`:
 
 | Protocol | Rule |
 |---|---|
@@ -41,19 +41,19 @@ Tool returns `ToolResult.task(snapshot)` ⇒ checks (not FORBIDDEN, legacy must 
 
 ## 🗂️ Registry semantics
 
-`DefaultTaskRegistry.publish` `:78-103`:
+`DefaultTaskRegistry.publish` `DefaultTachyonServer`:
 - effective pollInterval = snapshot's or config default.
-- `TaskEntry.publish` accepts only **higher revision**; taskId immutable `TaskEntry.java:40-54`.
+- `TaskEntry.publish` accepts only **higher revision**; taskId immutable `TaskEntry#publish`.
 - Changed ⇒ `server.notifyTaskStatus(snapshot, ownerSessionId)` + `onChange`.
 - Owner session captured from dispatch ThreadLocal at creation (`OutboundSseStreamMessageRouter.currentSessionId()`).
-- `reportProgress(taskId, …)` needs progressToken captured at creation else dropped `:106-121`.
-- Janitor every 30s removes terminal entries older than keepAlive `:28`, `:163-168`, `TaskEntry.java:74-78`.
+- `reportProgress(taskId, …)` needs progressToken captured at creation else dropped `TaskEntry`.
+- Janitor every 30s removes terminal entries older than keepAlive `TaskEntry#TaskEntry`, `TaskEntry`, `TaskEntry#isResultExpired`.
 
-Notification fan-out `DefaultTachyonServer.java:477-491`: owner session (or all ACTIVE) gets `notifications/tasks/status` in its protocol's shape; plus `SubscriptionRegistry.notifyTaskStatus` → `notifications/tasks` to `subscriptions/listen` streams filtering on taskId.
+Notification fan-out `DefaultTachyonServer#notifyTaskStatus`: owner session (or all ACTIVE) gets `notifications/tasks/status` in its protocol's shape; plus `SubscriptionRegistry.notifyTaskStatus` → `notifications/tasks` to `subscriptions/listen` streams filtering on taskId.
 
 ## 🌐 Method map
 
-`TaskMethodHandlers.register` `tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tasks/TaskMethodHandlers.java:25-31`
+`TaskMethodHandlers.register` `TaskMethodHandlers#register`
 
 | Method | Gate | Connector | Result |
 |---|---|---|---|
@@ -63,10 +63,10 @@ Notification fan-out `DefaultTachyonServer.java:477-491`: owner session (or all 
 | `tasks/result` | legacy only | `awaitResult` (blocking) | tool call payload |
 | `tasks/update` | modern only + extension | `update(inputResponses)` | empty |
 
-Gates thrown from `decode` as `RequestMappingException` `:33-49`.
+Gates thrown from `decode` as `RequestMappingException` `RequestMappingException`.
 
 ## 🔌 Temporal integration
 
-`TemporalTaskExecutionEngine` → `connector()`; MCP task id = Workflow id; routes (`TemporalTaskRoute`) define workflow type, start args, status query, snapshot mapper, input update `integrations/tachyon-tasks-temporal/src/main/java/dev/tachyonmcp/tasks/temporal/TemporalTaskExecutionEngine.java:29-65`. Test double: `tachyon-testkit/src/main/java/dev/tachyonmcp/testkit/TestTaskConnector.java`. See [[integrations]].
+`TemporalTaskExecutionEngine` → `connector()`; MCP task id = Workflow id; routes (`TemporalTaskRoute`) define workflow type, start args, status query, snapshot mapper, input update `TemporalTaskExecutionEngine`. Test double: `tachyon-testkit/src/main/java/dev/tachyonmcp/testkit/TestTaskConnector.java`. See [[integrations]].
 
 Related: [[feature-registries]], [[extensions]], [[protocol-versions]].

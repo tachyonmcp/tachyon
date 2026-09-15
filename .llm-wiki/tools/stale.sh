@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Lists wiki pages whose `sources` changed since the page's `commit`, plus dead [[links]].
+# Lists wiki pages whose `sources` changed since the page's `commit`, dead [[links]], and line-number citations.
 # Usage: .llm-wiki/tools/stale.sh
 set -euo pipefail
 
@@ -33,6 +33,11 @@ while IFS=: read -r file link; do
     echo "🔗 dead link [[${target}]] in ${file#"$repo"/}"
   fi
 done < <(grep -oH '\[\[[^]]*\]\]' -r "$wiki" --include='*.md' || true)
+
+while IFS= read -r hit; do
+  stale=1
+  echo "🔢 line citation ${hit#"$repo"/} — cite Type#member"
+done < <(grep -rnoE '([A-Za-z0-9_$-]+\.(java|kt|kts|xml|ts|ya?ml|properties|sh|py)|`):[0-9]+' "$wiki" --include='*.md' | grep -v '/CONVENTIONS.md:' || true)
 
 [ "$stale" -eq 0 ] && echo "✅ wiki fresh"
 exit 0

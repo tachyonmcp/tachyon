@@ -16,32 +16,41 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 final class OpenMeteoProvider implements WeatherProvider {
-    private static final String GEOCODING = "https://geocoding-api.open-meteo.com/v1/search";
-    private static final String FORECAST = "https://api.open-meteo.com/v1/forecast";
+    private static final URI GEOCODING = URI.create("https://geocoding-api.open-meteo.com/v1/search");
+    private static final URI FORECAST = URI.create("https://api.open-meteo.com/v1/forecast");
     private final HttpClient client;
+    private final URI geocoding;
+    private final URI forecast;
     private final ObjectMapper mapper = new ObjectMapper();
 
     OpenMeteoProvider(HttpClient client) {
+        this(client, GEOCODING, FORECAST);
+    }
+
+    OpenMeteoProvider(HttpClient client, URI geocoding, URI forecast) {
         this.client = client;
+        this.geocoding = geocoding;
+        this.forecast = forecast;
     }
 
     @Override
     public Weather current(String city) throws IOException, InterruptedException {
         final var location = get(geocoding(city, 1)).path("results").path(0);
         if (location.isMissingNode()) throw new InvalidArgumentException("city", "not found");
+        final var latitude = number(location, "latitude", -90, 90);
+        final var longitude = number(location, "longitude", -180, 180);
         final var current = get(URI.create(
-                        FORECAST + "?latitude=" + location.path("latitude").asDouble()
-                                + "&longitude=" + location.path("longitude").asDouble()
+                        forecast + "?latitude=" + latitude + "&longitude=" + longitude
                                 + "&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&wind_speed_unit=kmh"))
                 .path("current");
-        if (current.isMissingNode()) throw new IOException("Missing current weather");
+        if (!current.isObject()) throw new IOException("Missing current weather");
         return new Weather(
                 city,
-                condition(current.path("weather_code").asInt()),
-                current.path("temperature_2m").asDouble(),
+                condition(integer(current, "weather_code", 0, 99)),
+                number(current, "temperature_2m", -150, 100),
                 TemperatureUnit.CELSIUS,
-                current.path("relative_humidity_2m").asInt(),
-                current.path("wind_speed_10m").asDouble());
+                integer(current, "relative_humidity_2m", 0, 100),
+                number(current, "wind_speed_10m", 0, Double.MAX_VALUE));
     }
 
     @Override
@@ -64,9 +73,31 @@ final class OpenMeteoProvider implements WeatherProvider {
         return mapper.readTree(response.body());
     }
 
-    private static URI geocoding(String city, int count) {
-        return URI.create(GEOCODING + "?name=" + URLEncoder.encode(city, StandardCharsets.UTF_8) + "&count=" + count
+    private URI geocoding(String city, int count) {
+        return URI.create(geocoding + "?name=" + URLEncoder.encode(city, StandardCharsets.UTF_8) + "&count=" + count
                 + "&language=en");
+    }
+
+    private static double number(JsonNode parent, String field, double min, double max) throws IOException {
+        final var value = parent.path(field);
+        if (!value.isNumber()) throw new IOException("Open-Meteo field '" + field + "' must be a number");
+        final var number = value.doubleValue();
+        if (!Double.isFinite(number) || number < min || number > max) {
+            throw new IOException("Open-Meteo field '" + field + "' is out of range: " + number);
+        }
+        return number;
+    }
+
+    private static int integer(JsonNode parent, String field, int min, int max) throws IOException {
+        final var value = parent.path(field);
+        if (!value.isIntegralNumber() || !value.canConvertToInt()) {
+            throw new IOException("Open-Meteo field '" + field + "' must be an integer");
+        }
+        final var number = value.intValue();
+        if (number < min || number > max) {
+            throw new IOException("Open-Meteo field '" + field + "' is out of range: " + number);
+        }
+        return number;
     }
 
     private static String condition(int code) {

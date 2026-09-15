@@ -32,15 +32,15 @@ Verdict: contract module. User-facing SAMs, descriptors, requests, results, doma
 
 ## 🎭 InteractionContext (what handlers get)
 
-`tachyon-api/src/main/java/dev/tachyonmcp/api/runtime/InteractionContext.java:22-117`: `protocolVersion()`, `lifecycle()` (`INITIALIZATION|OPERATION|SHUTDOWN`), `sessionId()` (null stateless), `isExtensionEnabled(id)`, `notifications()` (`log`, `progress(token,…)`, `comment`), `client()` (`elicitation().create(...)`), `sendRequest(method, params)` (`@ExperimentalApi`, raw JSON string future), typed attributes `get/set(AttributeKey)`.
+`InteractionContext`: `protocolVersion()`, `lifecycle()` (`INITIALIZATION|OPERATION|SHUTDOWN`), `sessionId()` (null stateless), `isExtensionEnabled(id)`, `notifications()` (`log`, `progress(token,…)`, `comment`), `client()` (`elicitation().create(...)`), `sendRequest(method, params)` (`@ExperimentalApi`, raw JSON string future), typed attributes `get/set(AttributeKey)`.
 
 Runtime impl in core: `DefaultDispatchContext` (per request, wraps channel ctx) → [[tachyon-core]].
 
 ## 🎁 Results
 
-- `ToolResult` sealed `Success | Error | InputRequired | Task` + statics `text`, `content`, `structured(payload[, text])`, `error`, `empty`, `task`, `raw(json,text)`, `inputRequired(reqs, state)` `tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/tools/ToolResult.java:19-458`.
-- `PromptResult` sealed `Messages | InputRequired` `.../prompts/PromptResult.java:18-220`.
-- `InputRequired` (MRTR: `inputRequests` map + opaque `requestState`); follow-up request carries `inputResponses` + `requestState` (`ToolRequest.java:83-92`).
+- `ToolResult` sealed `Success | Error | InputRequired | Task` + statics `text`, `content`, `structured(payload[, text])`, `error`, `empty`, `task`, `raw(json,text)`, `inputRequired(reqs, state)` `ToolResult`.
+- `PromptResult` sealed `Messages | InputRequired` `PromptResult`.
+- `InputRequired` (MRTR: `inputRequests` map + opaque `requestState`); follow-up request carries `inputResponses` + `requestState` (`ToolRequest#arguments`).
 
 ## 🧪 Tests
 

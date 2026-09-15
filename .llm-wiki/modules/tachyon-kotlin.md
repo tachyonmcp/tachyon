@@ -13,32 +13,32 @@ Verdict: thin adapter. DSL builder wraps Java `ServerBuilder`; `suspend` handler
 ## 🚪 Entry points
 
 `tachyon-kotlin/src/main/kotlin/dev/tachyonmcp/kotlin/server/TachyonServerFactory.kt`:
-- `TachyonServer(port) { … }` — build **and start** `:23-33`.
-- `buildServer { … }` — build only `:43-50`.
+- `TachyonServer(port) { … }` — build **and start** `TachyonServerFactory#TachyonServer`.
+- `buildServer { … }` — build only `TachyonServerFactory#buildServer`.
 
 ## 🏗️ DSL
 
-- `TachyonServerBuilder` receiver `tachyon-kotlin/src/main/kotlin/dev/tachyonmcp/kotlin/server/config/TachyonServerBuilder.kt:38`; `tool(...)` overloads `:132-263`, `:473`, `resource` `:285/:322`, `prompt` `:342/:375`, `resourceTemplate` `:396/:431`, `promptCompletion` `:444`, `resourceCompletion` `:460`, `name`, `extensions`, `pipelineCustomizer` `:498-515`.
+- `TachyonServerBuilder` receiver `TachyonServerBuilder`; `tool(...)` overloads `TachyonServerBuilder`, `TachyonServerBuilder#tool`, `resource` `TachyonServerBuilder#resource`, `prompt` `TachyonServerBuilder#prompt`, `resourceTemplate` `TachyonServerBuilder#resourceTemplate`, `promptCompletion` `TachyonServerBuilder#promptCompletion`, `resourceCompletion` `TachyonServerBuilder#resourceCompletion`, `name`, `extensions`, `pipelineCustomizer` `TachyonServerBuilder#name`.
 - One scope per file `config/*Scope.kt`: `CapabilitiesScope`, `NetworkScope`, `SessionScope`, `RuntimeScope`, `ServerInfoScope`, `JsonScope`, `ObservabilityScope`, `PayloadCaptureScope`, `MonitoringScope`, `TasksScope`, `ToolScope`, `ResourceScope`, `ResourcesScope`, `PromptScope`, `TemplateScope`, `CompletionScope`, `ContentScope`, `FeatureScope`. `@TachyonDsl` marker `TachyonDsl.kt`.
-- `ToolScope` result helpers: `success`, `text`, `raw`, `empty`, `fail(msg|{content})`, `inputRequired`, `content { }` `config/ToolScope.kt:37-136`.
-- Registration funnels through `KotlinFeatureRegistrar` `config/KotlinFeatureRegistrar.kt:23-135`.
-- Post-build registration on server: `registerTool/Resource/ResourceTemplate/Prompt/PromptCompletion/ResourceCompletion` extensions + reified typed `registerTool<In, Out>` `TachyonServer.kt:53-391`, `:515`; impl `DefaultKotlinTachyonServer` `:397`.
+- `ToolScope` result helpers: `success`, `text`, `raw`, `empty`, `fail(msg|{content})`, `inputRequired`, `content { }` `ToolScope`.
+- Registration funnels through `KotlinFeatureRegistrar` `KotlinFeatureRegistrar`.
+- Post-build registration on server: `registerTool/Resource/ResourceTemplate/Prompt/PromptCompletion/ResourceCompletion` extensions + reified typed `registerTool<In, Out>` `TachyonServer`, `TachyonServer`; impl `DefaultKotlinTachyonServer` `DefaultKotlinTachyonServer`.
 - Domain factories `domain/*Factories.kt` (content, icons, annotations, resources, requests, structured builders).
 
 ## 🌀 Coroutines
 
-`CoroutineRuntime` internal `ServerExtension` id `dev.tachyonmcp/kotlin-coroutines`, `AdvertiseMode.NEVER` `features/CoroutineRuntime.kt:21-29`:
+`CoroutineRuntime` internal `ServerExtension` id `dev.tachyonmcp/kotlin-coroutines`, `AdvertiseMode.NEVER` `CoroutineRuntime`:
 - `bootstrap`: `CoroutineScope(SupervisorJob + executor.asCoroutineDispatcher() + CoroutineName("tachyon-kotlin"))`.
-- `future(name, block)`: launch → `CompletableFuture`; future cancel ⇒ job cancel; job fail ⇒ future fail `:47-75`.
-- `shutdown`: cancel scope, wait up to `shutdownGracePeriod` `:77-91`.
+- `future(name, block)`: launch → `CompletableFuture`; future cancel ⇒ job cancel; job fail ⇒ future fail `CoroutineRuntime#future`.
+- `shutdown`: cancel scope, wait up to `shutdownGracePeriod` `CoroutineRuntime#shutdown`.
 - `*FnFactory.kt` adapt suspend lambdas to Java async SAMs.
 
 ## 🧾 JSON
 
-- `KxSerializationSerde(Json)` implements `PayloadSerde` `json/KxSerializationSerde.kt:20`.
+- `KxSerializationSerde(Json)` implements `PayloadSerde` `KxSerializationSerde`.
 - `KotlinxJsonElementFactory` / `KotlinxJsonObjectFactory` (`JsonDocumentFactory` + `JsonSchemaFactory`) via ServiceLoader `tachyon-kotlin/src/main/resources/META-INF/services/`.
 - `JsonInterop.kt`: `JsonElement.toJacksonNode()`, `JsonObject.toJsonSchema()`, `ToolDescriptor.Builder.schemas(...)`.
-- kt-schema module: `KtSchemaReflectionFactory : JsonSchemaFactory<Class<*>>` (reflection-generated schema) + `ktSchemaGenerator(...)` helper `tachyon-kotlin-kt-schema/src/main/kotlin/dev/tachyonmcp/kotlin/server/json/ktschema/KtSchemaReflectionFactory.kt:24`, `helpers.kt:24`. Generator failure (e.g. Java record with `int`) ⇒ `Optional.empty()`, chain falls to core `JavaTypeSchemaFactory` (`KtSchemaReflectionFactory.kt:31-34`). Core's `KtSchemaResourceFactory` reads build-time generated schemas instead → [[json-layer]].
+- kt-schema module: `KtSchemaReflectionFactory : JsonSchemaFactory<Class<*>>` (reflection-generated schema) + `ktSchemaGenerator(...)` helper `KtSchemaReflectionFactory#sourceType`, `helpers#ktSchemaGenerator`. Generator failure (e.g. Java record with `int`) ⇒ `Optional.empty()`, chain falls to core `JavaTypeSchemaFactory` (`KtSchemaReflectionFactory#toJsonSchema`). Core's `KtSchemaResourceFactory` reads build-time generated schemas instead → [[json-layer]].
 
 ## 🧪 Tests
 

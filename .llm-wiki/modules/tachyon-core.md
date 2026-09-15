@@ -8,7 +8,7 @@ commit: 751331f4
 
 # ⚙️ tachyon-core
 
-Verdict: the runtime. ~190 main files. Deps: `slf4j-api`, `netty-codec-http`, `netty-handler`, `jackson-databind` 3, `json-schema-validator` (networknt), `tachyon-api` (`tachyon-core/pom.xml:29-46`). Generates protocol wire models at build (ts2java).
+Verdict: the runtime. ~190 main files. Deps: `slf4j-api`, `netty-codec-http`, `netty-handler`, `jackson-databind` 3, `json-schema-validator` (networknt), `tachyon-api` (`pom.xml`). Generates protocol wire models at build (ts2java).
 
 ## 🗂️ Package map (`tachyon-core/src/main/java/dev/tachyonmcp/core/`)
 
@@ -36,9 +36,9 @@ Verdict: the runtime. ~190 main files. Deps: `slf4j-api`, `netty-codec-http`, `n
 
 - Annotation registration, binding, and proxy invocation: [[declarative-configuration]].
 
-- `DefaultTachyonServer` = state + registries + `methodHandlers` map + pending server→client requests + session manager + event store + extensions; implements `ServerEngine` **and** `ExtensionContext` `tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java:96-127`.
+- `DefaultTachyonServer` = state + registries + `methodHandlers` map + pending server→client requests + session manager + event store + extensions; implements `ServerEngine` **and** `ExtensionContext` `DefaultTachyonServer`.
 - `McpDispatcher` = per-request flow, one per `McpChannelInitializer` (i.e. per server start) `McpChannelInitializer.java` ctor.
-- `DefaultDispatchContext` = per request: delegates channel state, adds engine, request id, outbound stream, observation, notifications impl `tachyon-core/src/main/java/dev/tachyonmcp/core/server/session/DefaultDispatchContext.java:30-273`.
+- `DefaultDispatchContext` = per request: delegates channel state, adds engine, request id, outbound stream, observation, notifications impl `DefaultDispatchContext`.
 
 ## 📦 Resources
 
@@ -49,7 +49,7 @@ Verdict: the runtime. ~190 main files. Deps: `slf4j-api`, `netty-codec-http`, `n
 
 1. Mapper method on `ProtocolRequestMapper` (impl once in `AbstractMcpRequestMapper`, override per version only if shape differs) and `ProtocolResponseMapper` (+ both version impls).
 2. `RpcMethodHandler` record in `server.features.<x>` `*MethodHandlers.register(map, …)` or `server.handlers`.
-3. Wire in `DefaultTachyonServer.registerDefaults` `:537-551`.
+3. Wire in `DefaultTachyonServer.registerDefaults` `DefaultDispatchContext`.
 4. 2026-07-28 name/uri header rule? update `RequestValidationHandler.NAME_REQUIRED_METHODS`.
 5. Capability flag? `resolveCapabilities` + `ServerInfoMapper` both versions.
 6. e2e test per protocol package → [[testing]].
