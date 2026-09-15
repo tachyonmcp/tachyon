@@ -5,10 +5,10 @@ import dev.tachyonmcp.api.annotations.ExperimentalApi;
 import dev.tachyonmcp.core.server.ServerBuilder;
 
 /**
- * Bean callback that adjusts the {`@link` ServerBuilder} after {`@link` TachyonProperties} and
+ * Bean callback that adjusts the {@link ServerBuilder} after {@link TachyonProperties} and
  * extension beans are applied, before the server is built. Annotated beans are registered after
- * construction. Customizers run in {`@code` `@Order`}.
- */
+ * construction.
+ */ 
 @ExperimentalApi
 @FunctionalInterface
 public interface TachyonServerCustomizer {
