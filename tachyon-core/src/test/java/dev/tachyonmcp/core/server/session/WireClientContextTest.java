@@ -22,7 +22,11 @@ class WireClientContextTest {
     }
 
     private static CompletableFuture<ElicitationResult> create(WireClientContext ctx) {
-        return ctx.elicitation().create(new ElicitationRequest("please fill this in", JsonSchema.objectSchema()));
+        return ctx.elicitation()
+                .create(ElicitationRequest.builder()
+                        .message("please fill this in")
+                        .requestedSchema(JsonSchema.objectSchema())
+                        .build());
     }
 
     @Test

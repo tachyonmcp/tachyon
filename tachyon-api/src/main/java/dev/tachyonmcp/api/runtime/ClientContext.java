@@ -1,6 +1,8 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
 package dev.tachyonmcp.api.runtime;
 
+import dev.tachyonmcp.api.annotations.LegacyApi;
+
 /**
  * Typed access to the client-facing collaboration channels a handler may invoke:
  * elicitation and sampling round-trips.
@@ -19,10 +21,10 @@ public interface ClientContext {
     /**
      * Returns the sampling service for requesting an LLM completion from the client.
      *
-     * @deprecated Sampling is deprecated as of protocol version 2026-07-28 (SEP-2577)
+     * <p>Sampling is deprecated as of protocol version 2026-07-28 (SEP-2577)
      *
      * @return the sampling service
      */
-    @Deprecated()
+    @LegacyApi
     SamplingService sampling();
 }
