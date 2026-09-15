@@ -97,7 +97,7 @@ class GetWeatherTool {
     }
 
     private static Optional<String> elicitCity(InteractionContext ctx, String city) throws Exception {
-        var request = ElicitationRequest.of(
+        var request = new ElicitationRequest(
             "City '%s' was not found. Enter another city.".formatted(city), CITY_SCHEMA);
         var result = HandlerFutures.joinInterruptibly(ctx.client().elicitation().create(request));
         if (result.action() != ElicitationResult.Action.ACCEPT || result.content() == null) {

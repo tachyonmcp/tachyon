@@ -2,40 +2,47 @@
 package dev.tachyonmcp.api.runtime;
 
 import dev.tachyonmcp.api.json.JsonSchema;
-import org.immutables.value.Value;
+import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 
-/** A request to elicit additional information from the user via the client, in form mode. */
-@Value.Immutable
-@Value.Style(
-        allParameters = true,
-        visibility = Value.Style.ImplementationVisibility.PACKAGE,
-        typeImmutable = "Default*")
-public interface ElicitationRequest {
+/**
+ * A request to elicit additional information from the user via the client, in form mode.
+ *
+ * @param message the message describing the information requested from the user
+ * @param requestedSchema the restricted JSON Schema describing the form's top-level primitive properties
+ */
+public record ElicitationRequest(String message, JsonSchema requestedSchema) {
 
-    /** {@return the message describing the information requested from the user} */
-    String message();
+    /**
+     * Creates a form request.
+     *
+     * @param message the message presented to the user
+     * @param requestedSchema the restricted JSON Schema describing the form
+     * @throws NullPointerException if any argument is {@code null}
+     */
+    public ElicitationRequest {
+        Objects.requireNonNull(message, "message");
+        Objects.requireNonNull(requestedSchema, "requestedSchema");
+    }
 
-    /** {@return the restricted JSON Schema describing the form's top-level primitive properties} */
-    JsonSchema requestedSchema();
-
-    /** {@return a builder for an immutable form request} */
-    static Builder builder() {
-        return DefaultElicitationRequest.builder();
+    /** {@return a builder for a form request} */
+    public static Builder builder() {
+        return new DefaultBuilder();
     }
 
     /**
-     * Creates an immutable form request.
+     * Creates a form request.
      *
      * @param message the message presented to the user
      * @param requestedSchema the restricted JSON Schema describing the form
      * @return the request
      */
-    static ElicitationRequest of(String message, JsonSchema requestedSchema) {
-        return DefaultElicitationRequest.of(message, requestedSchema);
+    public static ElicitationRequest of(String message, JsonSchema requestedSchema) {
+        return new ElicitationRequest(message, requestedSchema);
     }
 
-    /** Builds immutable elicitation requests. */
-    interface Builder {
+    /** Builds elicitation requests. */
+    public interface Builder {
 
         /**
          * Copies the values from an existing request.
@@ -61,7 +68,40 @@ public interface ElicitationRequest {
          */
         Builder requestedSchema(JsonSchema requestedSchema);
 
-        /** {@return an immutable request with the configured message and schema} */
+        /**
+         * {@return a request with the configured message and schema}
+         *
+         * @throws NullPointerException if the message or schema was not set
+         */
         ElicitationRequest build();
+    }
+
+    private static final class DefaultBuilder implements Builder {
+        private @Nullable String message;
+        private @Nullable JsonSchema requestedSchema;
+
+        @Override
+        public Builder from(ElicitationRequest instance) {
+            message = instance.message();
+            requestedSchema = instance.requestedSchema();
+            return this;
+        }
+
+        @Override
+        public Builder message(String message) {
+            this.message = message;
+            return this;
+        }
+
+        @Override
+        public Builder requestedSchema(JsonSchema requestedSchema) {
+            this.requestedSchema = requestedSchema;
+            return this;
+        }
+
+        @Override
+        public ElicitationRequest build() {
+            return new ElicitationRequest(message, requestedSchema);
+        }
     }
 }

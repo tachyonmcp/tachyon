@@ -2,8 +2,8 @@
 title: Sessions
 tags: [concept, session, state]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/runtime/Session.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/session/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/SessionConfig.java, tachyon-api/src/main/java/dev/tachyonmcp/api/server/session/SessionIdGenerator.java]
-updated: 2026-09-14
-commit: 582f9c52
+updated: 2026-09-15
+commit: b1aeff64
 ---
 
 # 🪪 Sessions
@@ -61,8 +61,8 @@ Verdict: **stateless by default** (`SessionConfig.enabled=false`). Sessions exis
 - Broadcasts (`list_changed`, logs) iterate **ACTIVE local** sessions only `DefaultTachyonServer#broadcastNotification`, `DefaultTachyonServer#broadcastLog`.
 
 [WireClientContext#create](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/session/WireClientContext.java)
-encodes an `ElicitationRequest` interface; `toElicitationResult` validates accepted content before
-building the immutable result. Missing/non-object content on `ACCEPT` fails; absent content on
+encodes an `ElicitationRequest` record; `toElicitationResult` validates accepted content before
+building the result. Missing/non-object content on `ACCEPT` fails; absent content on
 `DECLINE`/`CANCEL` stays null. Value builders: [[tachyon-api]].
 
 Related: [[sse-streams]], [[configuration]], [[request-lifecycle]].

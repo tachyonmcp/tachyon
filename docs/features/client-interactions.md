@@ -63,7 +63,7 @@ var server = TachyonServer.builder()
 The [Quickstart](../quickstart.md) covers project setup, including `-parameters` for methods with
 named arguments. See [Annotations](../annotations.md) for context injection and result mapping.
 
-`ElicitationRequest` and `ElicitationResult` are immutable interfaces. Use `builder()` to construct
+`ElicitationRequest` and `ElicitationResult` are records. Use `builder()` to construct
 them, `builder().from(existing)` to copy their values, or the `of(...)` convenience factories.
 
 The returned action is `ACCEPT`, `DECLINE`, or `CANCEL`. `content()` is present only for `ACCEPT`.

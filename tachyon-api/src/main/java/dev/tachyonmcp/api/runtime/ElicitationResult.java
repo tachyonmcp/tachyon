@@ -2,42 +2,46 @@
 package dev.tachyonmcp.api.runtime;
 
 import dev.tachyonmcp.api.server.domain.Args;
-import org.immutables.value.Value;
+import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
-/** The client's response to an elicitation request. */
-@Value.Immutable
-@Value.Style(
-        allParameters = true,
-        visibility = Value.Style.ImplementationVisibility.PACKAGE,
-        typeImmutable = "Default*")
-public interface ElicitationResult {
+/**
+ * The client's response to an elicitation request.
+ *
+ * @param action the user's action in response to the elicitation
+ * @param content the submitted form data, or {@code null} when the client submitted no data
+ */
+public record ElicitationResult(Action action, @Nullable Args content) {
 
-    /** {@return the user's action in response to the elicitation} */
-    Action action();
+    /**
+     * Creates an elicitation result.
+     *
+     * @param action the user's action
+     * @param content the submitted form data, or {@code null} when absent
+     * @throws NullPointerException if {@code action} is {@code null}
+     */
+    public ElicitationResult {
+        Objects.requireNonNull(action, "action");
+    }
 
-    /** {@return the submitted form data, or {@code null} when the client submitted no data} */
-    @Nullable
-    Args content();
-
-    /** {@return a builder for an immutable elicitation result} */
-    static Builder builder() {
-        return DefaultElicitationResult.builder();
+    /** {@return a builder for an elicitation result} */
+    public static Builder builder() {
+        return new DefaultBuilder();
     }
 
     /**
-     * Creates an immutable elicitation result.
+     * Creates an elicitation result.
      *
      * @param action the user's action
      * @param content the submitted form data, or {@code null} when absent
      * @return the result
      */
-    static ElicitationResult of(Action action, @Nullable Args content) {
-        return DefaultElicitationResult.of(action, content);
+    public static ElicitationResult of(Action action, @Nullable Args content) {
+        return new ElicitationResult(action, content);
     }
 
-    /** Builds immutable elicitation results. */
-    interface Builder {
+    /** Builds elicitation results. */
+    public interface Builder {
 
         /**
          * Copies the values from an existing result.
@@ -63,17 +67,50 @@ public interface ElicitationResult {
          */
         Builder content(@Nullable Args content);
 
-        /** {@return an immutable result with the configured action and optional content} */
+        /**
+         * {@return a result with the configured action and optional content}
+         *
+         * @throws NullPointerException if the action was not set
+         */
         ElicitationResult build();
     }
 
     /** The user action in response to an elicitation request. */
-    enum Action {
+    public enum Action {
         /** The user submitted the form. */
         ACCEPT,
         /** The user explicitly declined the action. */
         DECLINE,
         /** The user dismissed the request without making an explicit choice. */
         CANCEL
+    }
+
+    private static final class DefaultBuilder implements Builder {
+        private @Nullable Action action;
+        private @Nullable Args content;
+
+        @Override
+        public Builder from(ElicitationResult instance) {
+            action = instance.action();
+            content = instance.content();
+            return this;
+        }
+
+        @Override
+        public Builder action(Action action) {
+            this.action = action;
+            return this;
+        }
+
+        @Override
+        public Builder content(@Nullable Args content) {
+            this.content = content;
+            return this;
+        }
+
+        @Override
+        public ElicitationResult build() {
+            return new ElicitationResult(action, content);
+        }
     }
 }

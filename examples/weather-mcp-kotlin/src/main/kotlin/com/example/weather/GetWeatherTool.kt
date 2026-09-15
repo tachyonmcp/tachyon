@@ -167,7 +167,7 @@ private fun elicitCity(
 ): String? {
     val future =
         ctx.client().elicitation().create(
-            ElicitationRequest.of("City '$city' was not found. Enter another city.", CITY_SCHEMA),
+            ElicitationRequest("City '$city' was not found. Enter another city.", CITY_SCHEMA),
         )
     val result =
         try {

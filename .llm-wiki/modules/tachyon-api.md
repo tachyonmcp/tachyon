@@ -3,7 +3,7 @@ title: tachyon-api
 tags: [module, api]
 sources: [tachyon-api/src/main/java/dev/tachyonmcp/api/]
 updated: 2026-09-15
-commit: 210237ec
+commit: b1aeff64
 ---
 
 # 📜 tachyon-api
@@ -40,9 +40,9 @@ Runtime impl in core: `DefaultDispatchContext` (per request, wraps channel ctx) 
 
 [ElicitationRequest#builder](../../tachyon-api/src/main/java/dev/tachyonmcp/api/runtime/ElicitationRequest.java)
 and [ElicitationResult#builder](../../tachyon-api/src/main/java/dev/tachyonmcp/api/runtime/ElicitationResult.java)
-expose immutable interfaces backed by package-private Immutables implementations. Both support
-`of(...)` and `Builder#from`; request message/schema and result action are required, result content
-is nullable. Construction uses builders or factories instead of record constructors.
+are records: canonical constructors stay for source/binary compatibility with published betas.
+Both add `of(...)` and a hand-written `Builder` with `from`; request message/schema and result
+action are required (compact ctor `requireNonNull`), result content is nullable.
 
 ## 🎁 Results
 
