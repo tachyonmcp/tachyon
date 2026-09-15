@@ -1,6 +1,9 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
 package com.example.weather;
 
+import dev.tachyonmcp.opentelemetry.McpOpenTelemetryListener;
+import dev.tachyonmcp.spring.boot.TachyonServerCustomizer;
+import io.opentelemetry.api.OpenTelemetry;
 import java.net.http.HttpClient;
 import java.time.Duration;
 import org.springframework.boot.SpringApplication;
@@ -25,6 +28,12 @@ public class WeatherApplication {
     @Bean(destroyMethod = "close")
     HttpClient weatherHttpClient() {
         return HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
+    }
+
+    @Bean
+    TachyonServerCustomizer mcpOpenTelemetry(OpenTelemetry openTelemetry) {
+        return builder -> builder.observability(
+                o -> o.slowRequestLogging().listener(McpOpenTelemetryListener.create(openTelemetry)));
     }
 
     @Bean

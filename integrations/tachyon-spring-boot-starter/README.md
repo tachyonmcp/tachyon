@@ -62,3 +62,15 @@ annotations on the type Spring can determine without creating it.
 
 A user-provided `TachyonServer` disables automatic construction and bean registration; its lifecycle
 is still managed unless a `TachyonServerLifecycle` bean is also provided.
+
+## Actuator
+
+Optional; activates only when the classes are present.
+
+| Classpath / bean | Contributes |
+|---|---|
+| `spring-boot-health` (e.g. via `spring-boot-starter-actuator`) | `tachyon` health indicator: `UP` with `host`/`port` while the lifecycle runs, `DOWN` otherwise. Disable with `management.health.tachyon.enabled=false` |
+| Micrometer + a `MeterRegistry` bean | timer `mcp.server.operations` (tags `mcp.method.name`, `outcome`), gauges `mcp.server.tools`, `mcp.server.prompts`, `mcp.server.resources` |
+
+The operation timer attaches through a `TachyonServerCustomizer`, so it applies to the server the
+starter builds, not to a user-provided `TachyonServer`. Gauges work with either.

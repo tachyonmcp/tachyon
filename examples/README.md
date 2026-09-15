@@ -10,7 +10,8 @@ the Maven wrapper build in, so you can run it without installing anything else �
 - [**weather-mcp-kotlin**](weather-mcp-kotlin) — Kotlin port of `weather-mcp`, same observability setup.
 - [**weather-mcp-spring-boot**](weather-mcp-spring-boot) — Java. Spring Boot starter discovers a
   bean with native `@McpTool`, `@McpResource`, `@McpPrompt`, and `@McpCompletion` methods.
-  Binds via `tachyon.host`/`tachyon.port` properties, not the variables below.
+  Actuator health/Micrometer meters and OpenTelemetry spans via Boot starters. Binds via
+  `tachyon.host`/`tachyon.port` properties, not the variables below.
 - [**langchain4j-mcp**](langchain4j-mcp) — Java. A plain LangChain4j `@Tool` method, with no
   Tachyon imports, scanned by `LangChain4jAnnotationProvider` into a running server.
 - [**mcp-java**](mcp-java) — Java. A plain service using mcp-java `@Tool`, `@Resource`,
