@@ -219,6 +219,8 @@ Change `"Ada"` to your name and call again. The greeting changes with the argume
 
 ## Next steps
 
+- [Spring Boot starter](spring-boot.md) — expose Spring beans as MCP tools.
+
 - [Tools](features/tools.md) — read input, return structured output, and handle errors.
 - [Testkit](testkit.md) — automate calls against a running server.
 - [Resources](features/resources.md) and [prompts](features/prompts.md) — add data and reusable messages.
