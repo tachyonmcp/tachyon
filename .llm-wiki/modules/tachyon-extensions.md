@@ -2,8 +2,8 @@
 title: tachyon-extensions
 tags: [module, extensions, skills]
 sources: [tachyon-extensions/src/main/java/dev/tachyonmcp/extensions/, tachyon-extensions/src/main/resources/]
-updated: 2026-09-14
-commit: 364371aa
+updated: 2026-09-15
+commit: 9eec1092
 ---
 
 # 🧩 tachyon-extensions
@@ -16,13 +16,13 @@ Verdict: optional add-ons built only on public SPI. Main piece = **Skills extens
 
 | Aspect | Value | Proof |
 |---|---|---|
-| id | `io.modelcontextprotocol/skills` | `SkillsExtension#ID` |
-| advertise | `ALWAYS`, settings `{directoryRead: true}` | `SkillsExtension#advertiseMode`, `SkillsExtension#serverSettings` |
-| `_meta` envelope | **not required** | `SkillsExtension#requiresMetaEnvelope` (fix `582f9c52`) |
-| negotiation | builder `negotiation(...)`, **default `REQUIRED`** ⇒ undeclared ⇒ missing required client capability: -32003 (2025-11-25), -32021 + HTTP 400 (2026-07-28); base `resources/list|read` still served. `OPTIONAL` opt-in serves undeclared clients (e.g. MCP Inspector; same advertisement) | `SkillsExtension#negotiation`, `SkillsExtension.Builder#negotiation`; codes in `McpResponseMapper` (v2025_11_25, v2026_07_28) |
-| bootstrap | every skill file → resource (`SKILL.md` named by frontmatter `name` + `description`); text vs blob by `MimeTypes.isText` | `SkillsExtension#bootstrap`, `SkillsExtension#contents` |
-| methods | `skills/list` (no pagination; `ttlMs`, `cacheScope`), `skills/get {uri}`, `resources/directory/read {uri}` (children with `inode/directory`) | `SkillsExtension#listSkills`, `SkillsExtension#getSkill`, `SkillsExtension#readDirectory` |
-| builder | `registry(...)`, `cacheTtlMs ≥ 0`, `cacheScope public|private` | `SkillsExtension.Builder` |
+| id | `io.modelcontextprotocol/skills` | [SkillsExtension#ID](../../tachyon-extensions/src/main/java/dev/tachyonmcp/extensions/skills/SkillsExtension.java) |
+| advertise | `ALWAYS`, settings `{directoryRead: true}` | [SkillsExtension#advertiseMode](../../tachyon-extensions/src/main/java/dev/tachyonmcp/extensions/skills/SkillsExtension.java), [SkillsExtension#serverSettings](../../tachyon-extensions/src/main/java/dev/tachyonmcp/extensions/skills/SkillsExtension.java) |
+| `_meta` envelope | **not required** | [SkillsExtension#requiresMetaEnvelope](../../tachyon-extensions/src/main/java/dev/tachyonmcp/extensions/skills/SkillsExtension.java) (fix `582f9c52`) |
+| negotiation | builder `negotiation(...)`, **default `REQUIRED`** ⇒ undeclared ⇒ missing required client capability: -32003 (2025-11-25), -32021 + HTTP 400 (2026-07-28); base `resources/list\|read` still served. `OPTIONAL` opt-in serves undeclared clients (e.g. MCP Inspector; same advertisement) | [SkillsExtension#negotiation](../../tachyon-extensions/src/main/java/dev/tachyonmcp/extensions/skills/SkillsExtension.java), [SkillsExtension.Builder#negotiation](../../tachyon-extensions/src/main/java/dev/tachyonmcp/extensions/skills/SkillsExtension.java); codes in `McpResponseMapper` (v2025_11_25, v2026_07_28) |
+| bootstrap | every skill file → resource (`SKILL.md` named by frontmatter `name` + `description`); text vs blob by `MimeTypes.isText` | [SkillsExtension#bootstrap](../../tachyon-extensions/src/main/java/dev/tachyonmcp/extensions/skills/SkillsExtension.java), [SkillsExtension#contents](../../tachyon-extensions/src/main/java/dev/tachyonmcp/extensions/skills/SkillsExtension.java) |
+| methods | `skills/list` (no pagination; `ttlMs`, `cacheScope`), `skills/get {uri}`, `resources/directory/read {uri}` (children with `inode/directory`) | [SkillsExtension#listSkills](../../tachyon-extensions/src/main/java/dev/tachyonmcp/extensions/skills/SkillsExtension.java), [SkillsExtension#getSkill](../../tachyon-extensions/src/main/java/dev/tachyonmcp/extensions/skills/SkillsExtension.java), [SkillsExtension#readDirectory](../../tachyon-extensions/src/main/java/dev/tachyonmcp/extensions/skills/SkillsExtension.java) |
+| builder | `registry(...)`, `cacheTtlMs ≥ 0`, `cacheScope public\|private` | [SkillsExtension.Builder](../../tachyon-extensions/src/main/java/dev/tachyonmcp/extensions/skills/SkillsExtension.java) |
 
 Skill model `SkillsRegistry.Skill(skillPath, frontmatter, files)`, `SkillFile(relativePath, uri, mimeType, sha256 digest, size)`; `skillUri = skill://<path>/SKILL.md` `Skill`.
 

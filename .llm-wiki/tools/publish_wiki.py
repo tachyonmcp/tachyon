@@ -15,13 +15,13 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+from urllib.parse import quote, unquote, urlsplit
 
 WIKI = Path(__file__).resolve().parent.parent
 REPO = WIKI.parent
 SKIP_DIRS = {"tools"}
 CODE_REF = re.compile(r"`([A-Za-z0-9_.\-]+(?:/[A-Za-z0-9_.\-]+)+)(?::(\d+)(?:-(\d+))?)?`")
 WIKI_LINK = re.compile(r"\[\[([^\]|]+)\]\]")
-FENCE = re.compile(r"^\s*(```|~~~)")
 
 
 def git(*args: str) -> str:
@@ -42,7 +42,7 @@ def split_frontmatter(text: str) -> tuple[dict[str, str], str]:
     return meta, text[end + 5 :]
 
 
-def link_code_refs(body: str, blob_base: str) -> str:
+def link_code_refs(body: str, blob_base: str, source: Path | None = None) -> str:
     def replace(match: re.Match[str]) -> str:
         path, start, end = match.group(1), match.group(2), match.group(3)
         if not (REPO / path).exists():
@@ -50,11 +50,38 @@ def link_code_refs(body: str, blob_base: str) -> str:
         anchor = f"#L{start}" + (f"-L{end}" if end else "") if start else ""
         return f"[{match.group(0)}]({blob_base}/{path}{anchor})"
 
-    out, in_fence = [], False
+    def markdown_link(match: re.Match[str]) -> str:
+        label, target = match.group(1), match.group(2)
+        url = urlsplit(target)
+        if source is None or url.scheme or url.netloc or not url.path:
+            return match.group(0)
+        resolved = (source.parent / unquote(url.path)).resolve()
+        if not resolved.is_relative_to(REPO.resolve()) or not resolved.exists():
+            return match.group(0)
+        path = resolved.relative_to(REPO.resolve()).as_posix()
+        anchor = f"#{url.fragment}" if url.fragment else ""
+        return f"[{label}]({blob_base}/{quote(path, safe='/')}{anchor})"
+
+    markdown_pattern = re.compile(r"(?<!!)\[([^\[\]]+)\]\(([^\s)]+)\)")
+    out, fence = [], None
     for line in body.splitlines(keepends=True):
-        if FENCE.match(line):
-            in_fence = not in_fence
-        out.append(line if in_fence else CODE_REF.sub(replace, line))
+        marker = re.match(r"^\s*(`{3,}|~{3,})", line)
+        if marker:
+            token = marker[1]
+            if fence is None:
+                fence = token
+            elif token[0] == fence[0] and len(token) >= len(fence):
+                fence = None
+            out.append(line)
+            continue
+        if fence is None:
+            pieces, end = [], 0
+            for match in markdown_pattern.finditer(line):
+                pieces.extend([CODE_REF.sub(replace, line[end:match.start()]), markdown_link(match)])
+                end = match.end()
+            pieces.append(CODE_REF.sub(replace, line[end:]))
+            line = "".join(pieces)
+        out.append(line)
     return "".join(out)
 
 
@@ -103,7 +130,7 @@ def main() -> int:
     for stem, page in names.items():
         meta, body = split_frontmatter(page.read_text(encoding="utf-8"))
         blob_base = f"{args.repo_url}/blob/{meta.get('commit') or sha}"
-        rendered = link_code_refs(body.lstrip("\n"), blob_base) + footer(meta, args.repo_url, page.relative_to(REPO))
+        rendered = link_code_refs(body.lstrip("\n"), blob_base, page) + footer(meta, args.repo_url, page.relative_to(REPO))
         if stem == "index":
             index_body = body
             rendered = rendered.replace("[[index]]", "[[Home]]")

@@ -2,8 +2,8 @@
 title: Concurrency & shutdown
 tags: [concept, concurrency, virtual-threads]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/internal/OperationTracker.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/NettyServer.java, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/HandlerFutures.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/OutboundSseStreamMessageRouter.java]
-updated: 2026-09-14
-commit: 8c7738c0
+updated: 2026-09-15
+commit: 9eec1092
 ---
 
 # 🧵 Concurrency & shutdown
@@ -14,12 +14,12 @@ Verdict: **platform** threads for Netty I/O, **virtual thread per task** for eve
 
 | Work | Thread | Proof |
 |---|---|---|
-| accept, decode HTTP, validation handlers, writes | `netty-io` platform EL | `NettyServer#NettyServer` |
-| body parse + dispatch + handler | `tachyon-vt-N` VT (or custom `threadFactory`) | `DefaultTachyonServer#defaultExecutor`, `McpOperationHandler#handlePost` |
-| POST-SSE final response finalize | VT | `McpOperationHandler#completePostRequest` |
-| session/task janitors | daemon single-thread scheduler | `AbstractJanitor#start` |
-| slow handler watchdog log | daemon `handler-watchdog` (only when DEBUG) | `HandlerWatchdog#SCHEDULER` |
-| extension shutdown | VT `ext-shutdown-<id>` | `DefaultTachyonServer#shutdownExtensions` |
+| accept, decode HTTP, validation handlers, writes | `netty-io` platform EL | [NettyServer#NettyServer](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/NettyServer.java) |
+| body parse + dispatch + handler | `tachyon-vt-N` VT (or custom `threadFactory`) | [DefaultTachyonServer#defaultExecutor](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java), [McpOperationHandler#handlePost](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpOperationHandler.java) |
+| POST-SSE final response finalize | VT | [McpOperationHandler#completePostRequest](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpOperationHandler.java) |
+| session/task janitors | daemon single-thread scheduler | [AbstractJanitor#start](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/internal/AbstractJanitor.java) |
+| slow handler watchdog log | daemon `handler-watchdog` (only when DEBUG) | [HandlerWatchdog#SCHEDULER](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/HandlerWatchdog.java) |
+| extension shutdown | VT `ext-shutdown-<id>` | [DefaultTachyonServer#shutdownExtensions](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java) |
 | Kotlin coroutines | dispatcher over server executor | [[tachyon-kotlin]] |
 
 ## 🔒 Lock inventory (all `ReentrantLock`)
@@ -36,9 +36,9 @@ client `notifications/cancelled` → `inboundRequests.get(key).cancel(true)` →
 
 ## 🧮 Shutdown (graceful)
 
-`DefaultTachyonServer.close()` `DefaultTachyonServer`:
+[DefaultTachyonServer#close](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java):
 
-1. Refuse if called on Netty event loop (would deadlock drain) `DefaultTachyonServer`.
+1. Refuse if called on Netty event loop (would deadlock drain) [DefaultTachyonServer#requireNotOnEventLoop](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java).
 2. `netty.stopAccepting()` — close server socket, keep children.
 3. `deadline = now + runtime.shutdownGracePeriod` (5s default).
 4. `operations.drain(deadline)` — stop admission, wait `active==0`. Admission counts until **both** dispatch future and `transportCompletion` (response flushed) done `OperationTracker`.

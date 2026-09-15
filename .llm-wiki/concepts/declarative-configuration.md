@@ -3,7 +3,7 @@ title: Declarative configuration
 tags: [concept, configuration, annotations]
 sources: [tachyon-api/src/main/java/dev/tachyonmcp/api/annotations/, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/annotations/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/annotations/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/AnnotationContext.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultServerBuilder.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/json/JavaTypeSchemas.java]
 updated: 2026-09-15
-commit: d939ff61
+commit: 9eec1092
 ---
 
 # 🏷️ Declarative configuration
@@ -65,7 +65,7 @@ String user(String id) {
 }
 ```
 
-No URI variables ⇒ static resource, no named arguments. URI variables ⇒ resource template; each named parameter must occur in the template, but unused template variables are allowed. Blank URI fails registration ([TachyonAnnotationProvider#registerResource](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/annotations/TachyonAnnotationProvider.java)).
+No URI variables ⇒ static resource, no named arguments. URI variables ⇒ resource template; the template variable set must exactly equal the non-context parameter-name set; missing or extra names fail registration. Blank URI fails registration ([TachyonAnnotationProvider#registerResource](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/annotations/TachyonAnnotationProvider.java)).
 
 For mapped contents, nonblank `mimeType` wins. Otherwise an object-classified declared return type selects `application/json`; other types leave MIME unset. Explicit `ResourceContents` retains its own fields ([TachyonAnnotationProvider#mimeTypeOf](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/annotations/TachyonAnnotationProvider.java), [ResultMappers#resourceContents](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/annotations/ResultMappers.java)).
 

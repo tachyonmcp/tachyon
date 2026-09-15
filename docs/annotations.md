@@ -68,11 +68,11 @@ Only the annotation is required. `name` defaults to the method name; `descriptio
 | Other parameters | one named argument each (compile with `-parameters`); required unless JSpecify `@Nullable` (preferred) or `Optional*` |
 | Missing required named argument | invalid-params error |
 | `@McpTool` result | `void`/`null` → empty; `ToolResult` passes; `String`/number/boolean/enum → text; `ContentBlock` → content; collection/array → JSON text; other object → `structuredContent` and its type becomes `outputSchema` |
-| `@McpResource` | `{var}` in `uri` → template, variables bind to same-named scalar parameters; static resources take no arguments. Result: `ResourceContents` passes, `String` → text, `byte[]` → blob, object → JSON text (`application/json` default) |
+| `@McpResource` | `{var}` in `uri` → template, variables must exactly match non-context parameter names and bind to same-named scalar parameters; static resources take no arguments. Result: `ResourceContents` passes, `String` → text, `byte[]` → blob, object → JSON text (`application/json` default) |
 | `@McpPrompt` | scalar parameters become prompt arguments. Result: `PromptResult` passes; `String`, `ContentBlock`, or object (as JSON text) → one message with the annotation's `role`; `PromptMessage` passes with its own role; `List` of those → messages |
 | `@McpCompletion` | one prompt/resource target; `CompletionRequest` or named partial-value/sibling parameters; returns `CompletionResult` or `List<String>` (see below) |
 | Exceptions | checked exceptions propagate as from the corresponding synchronous feature function (`ToolFn`, `CompletionFn`, etc.) |
-| Fail fast at registration | two feature annotations on one method, duplicate tool/prompt name or resource URI, private method, static resource with arguments, parameter not a template variable, non-scalar prompt/resource parameter; completion target/signature/return-type violations or duplicate completion targets |
+| Fail fast at registration | two feature annotations on one method, duplicate tool/prompt name or resource URI, private method, static resource with arguments, missing or extra resource-template parameter, non-scalar prompt/resource parameter; completion target/signature/return-type violations or duplicate completion targets |
 
 Schemas come from `JsonSchema.generate(type)`: a build-time kt-schema resource or the kt-schema
 reflection generator when present, otherwise tachyon-core's `JavaTypeSchemaFactory` (records,

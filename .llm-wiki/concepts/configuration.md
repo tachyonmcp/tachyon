@@ -3,7 +3,7 @@ title: Configuration
 tags: [concept, config, builder]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/server/ServerBuilder.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultServerBuilder.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/, tachyon-api/src/main/java/dev/tachyonmcp/api/server/config/]
 updated: 2026-09-15
-commit: 751331f4
+commit: 9eec1092
 ---
 
 # 🎛️ Configuration
@@ -12,22 +12,22 @@ Verdict: `ServerBuilder` exposes grouped `Consumer<X.Builder>` configurers + sho
 
 ## 🏗️ Builder groups
 
-`ServerBuilder` `ServerBuilder`
+[ServerBuilder](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/ServerBuilder.java) [ServerBuilder](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/ServerBuilder.java)
 
 | Method | Target | Notes |
 |---|---|---|
-| `info` | `ServerIdentity.Builder` (api, Immutables) | name `tachyon-mcp`, version `0.1`, title, description, websiteUrl, instructions, icons `ServerIdentity` |
-| `capabilities` | `CapabilitiesConfig.Builder` | per-feature mode/listChanged/pageSize, completions, logging, tasks |
-| `session` | `SessionConfig.Builder` | enabled, ttl, janitor, stores, id generator |
-| `network` | `NetworkConfig.Builder` | host/port/address, endpoint, idle, body size, CORS, allowedHosts, ioEngine, heartbeat |
-| `runtime` | `RuntimeConfig.Builder` (api) | shutdown grace, request timeout, clock |
-| `observability` | `ObservabilityConfig.Builder` | slow-request log, listeners, payload capture |
-| `json` | `JsonConfig.Builder` (api) | serde, input/output validators |
+| `info` | [ServerIdentity.Builder](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/config/ServerIdentity.java) (api, Immutables) | name `tachyon-mcp`, version `0.1`, title, description, websiteUrl, instructions, icons [ServerIdentity](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/config/ServerIdentity.java) |
+| `capabilities` | [CapabilitiesConfig.Builder](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/CapabilitiesConfig.java) | per-feature mode/listChanged/pageSize, completions, logging, tasks |
+| `session` | [SessionConfig.Builder](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/SessionConfig.java) | enabled, ttl, janitor, stores, id generator |
+| `network` | [NetworkConfig.Builder](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/NetworkConfig.java) | host/port/address, endpoint, idle, body size, CORS, allowedHosts, ioEngine, heartbeat |
+| `runtime` | [RuntimeConfig.Builder](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/config/RuntimeConfig.java) (api) | shutdown grace, request timeout, clock |
+| `observability` | [ObservabilityConfig.Builder](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/ObservabilityConfig.java) | slow-request log, listeners, payload capture |
+| `json` | [JsonConfig.Builder](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/config/JsonConfig.java) (api) | serde, input/output validators |
 | `name/version/host/port` | shorthands | |
 | `withTools/withResources/withPrompts/withCompletions` | bootstrap registrations run in `build()` | |
 | `withExtensions` | | dup id ⇒ IAE |
 | `threadFactory` | handler executor | |
-| `annotations` | `AnnotationContext` (`withProvider(p).register(obj)`) | composes across calls; `@ExperimentalApi` `AnnotationContext` |
+| `annotations` | [AnnotationContext](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/AnnotationContext.java) (`withProvider(p).register(obj)`) | composes across calls; `@ExperimentalApi` [AnnotationContext](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/AnnotationContext.java) |
 | `pipelineCustomizer` | last Netty hook | `@ExperimentalApi` |
 
 ## 📊 Defaults

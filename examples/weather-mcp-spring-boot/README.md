@@ -9,7 +9,6 @@ feature bean and owns the embedded Netty MCP server lifecycle; a separate WebFlu
 Install the snapshot dependencies from the repository root:
 
 ```bash
-mvn -q -pl tachyon-bom,integrations/tachyon-spring-boot-starter,tachyon-testkit -am install -DskipTests && \
 mvn -q -f examples/weather-mcp-spring-boot/pom.xml verify && \
 java -jar examples/weather-mcp-spring-boot/target/weather-mcp-spring-boot.jar
 ```

@@ -3,7 +3,7 @@ title: Spring Boot starter
 tags: [module, spring-boot, configuration]
 sources: [pom.xml, integrations/tachyon-spring-boot-starter/]
 updated: 2026-09-15
-commit: 751331f4
+commit: 9eec1092
 ---
 
 # 🌱 Spring Boot starter
@@ -21,5 +21,6 @@ Build → register annotated singletons → start transport. Native annotation c
 - `TachyonServerLifecycle` starts/closes the server with the application context; lock serializes calls, `running` flips only after `start`/`close` succeeds (failure keeps prior state, retry allowed) ([TachyonServerLifecycle#start](../../integrations/tachyon-spring-boot-starter/src/main/java/dev/tachyonmcp/spring/boot/TachyonServerLifecycle.java)).
 - Actuator (all optional): `HealthConfiguration` needs `HealthIndicator` class, then `management.health.tachyon.enabled` ⇒ `tachyon` indicator, `UP` + host/port iff lifecycle running ([TachyonHealthIndicator#health](../../integrations/tachyon-spring-boot-starter/src/main/java/dev/tachyonmcp/spring/boot/TachyonHealthIndicator.java)). `MetricsConfiguration` needs Micrometer class + `MeterRegistry` bean (auto-config ordered after Boot metrics) ⇒ customizer adds `TachyonMetricsListener` (timer `mcp.server.operations`, tags method + snake-case outcome; starter-built server only) and `TachyonMeterBinder` feature gauges ([MetricsConfiguration](../../integrations/tachyon-spring-boot-starter/src/main/java/dev/tachyonmcp/spring/boot/TachyonAutoConfiguration.java), [TachyonMetricsListener#complete](../../integrations/tachyon-spring-boot-starter/src/main/java/dev/tachyonmcp/spring/boot/TachyonMetricsListener.java), [TachyonMeterBinder#bindTo](../../integrations/tachyon-spring-boot-starter/src/main/java/dev/tachyonmcp/spring/boot/TachyonMeterBinder.java)). Listener uses `@InternalApi` `ObservationListener` → [[api-stability]].
 - Actuator conditions and backoff covered by [TachyonActuatorAutoConfigurationTest](../../integrations/tachyon-spring-boot-starter/src/test/java/dev/tachyonmcp/spring/boot/TachyonActuatorAutoConfigurationTest.java).
+- Feature gauges bind directly to the available registry; Boot's metrics module is optional ([RegistryMetricsConfiguration#tachyonMeterBinder](../../integrations/tachyon-spring-boot-starter/src/main/java/dev/tachyonmcp/spring/boot/TachyonAutoConfiguration.java)). Both classpaths exercise operation timing and all three gauges ([TachyonActuatorAutoConfigurationTest#metricsWorkWithoutBootMetricsModule](../../integrations/tachyon-spring-boot-starter/src/test/java/dev/tachyonmcp/spring/boot/TachyonActuatorAutoConfigurationTest.java)).
 
 Related: [[configuration]], [[extensions]], [[integrations]].

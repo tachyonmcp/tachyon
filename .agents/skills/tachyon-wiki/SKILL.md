@@ -29,5 +29,10 @@ tracked working-tree changes and does not certify that cited symbols or
 claims are correct. Inspect citations separately; include task-owned new files
 when checking sources. Report unrelated drift without expanding a focused edit.
 
+Use `--check` when a failing exit status is needed. Committed drift, working-tree
+drift, and unknown commits are reported separately. Citation member checks are
+lexical only; verify their meaning in code. Script changes require running
+`python3 -m unittest discover -s .llm-wiki/tools -p 'test_*.py'`.
+
 Edit the repository wiki only. Publication is handled by the existing workflow;
 wiki maintenance does not authorize commits, pushes, or direct GitHub Wiki edits.

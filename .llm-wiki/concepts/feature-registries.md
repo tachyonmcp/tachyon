@@ -3,7 +3,7 @@ title: Feature registries
 tags: [concept, tools, resources, prompts, completions]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/handlers/, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java]
 updated: 2026-09-15
-commit: 751331f4
+commit: 9eec1092
 ---
 
 # 🧰 Feature registries
@@ -12,20 +12,20 @@ Verdict: each MCP feature = public façade in `tachyon-api` (`Tools`, `Resources
 
 ## 📋 Registration API shape
 
-`TachyonServer.annotations(...)` (see [[declarative-configuration]]) feeds annotated objects into these same registries with configured codecs, after construction (`DefaultTachyonServer#annotations`). Used by Spring after singleton initialization; [[spring-boot]].
+`TachyonServer.annotations(...)` (see [[declarative-configuration]]) feeds annotated objects into these same registries with configured codecs, after construction ([DefaultTachyonServer#annotations](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java)). Used by Spring after singleton initialization; [[spring-boot]].
 
 Rule set lives in `docs/architecture/guidance.md` (AGENTS.md mandates reading it before changing SAMs/registry names). Observed in code:
 
 | Façade | Sync SAM | Async SAM | Extras | Proof |
 |---|---|---|---|---|
-| `Tools` | `ToolFn` (throws) | `AsyncToolFn` | typed `register(Class<I>,Class<O>, …, TypedToolFn)` auto-generates schemas via `JsonSchema.generate` | `Tools` |
-| `Resources` | `ResourceFn` | `AsyncResourceFn` | templates, `unregisterByUri`, `findByUri`, `notifyResourceUpdated` | `Resources` |
-| `Prompts` | `PromptFn` | `AsyncPromptFn` | static `List<PromptMessage>` overload | `Prompts` |
-| `Completions` | `CompletionFn` | `AsyncCompletionFn` | keyed by prompt name or uri/template | `Completions` |
+| [Tools](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/tools/Tools.java) | [ToolFn](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/tools/ToolFn.java) (throws) | [AsyncToolFn](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/tools/AsyncToolFn.java) | typed `register(Class<I>,Class<O>, …, TypedToolFn)` auto-generates schemas via `JsonSchema.generate` | [Tools](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/tools/Tools.java) |
+| [Resources](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/resources/Resources.java) | [ResourceFn](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/resources/ResourceFn.java) | [AsyncResourceFn](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/resources/AsyncResourceFn.java) | templates, `unregisterByUri`, `findByUri`, `notifyResourceUpdated` | [Resources](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/resources/Resources.java) |
+| [Prompts](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/prompts/Prompts.java) | [PromptFn](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/prompts/PromptFn.java) | [AsyncPromptFn](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/prompts/AsyncPromptFn.java) | static `List<PromptMessage>` overload | [Prompts](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/prompts/Prompts.java) |
+| [Completions](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/completions/Completions.java) | [CompletionFn](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/completions/CompletionFn.java) | [AsyncCompletionFn](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/completions/AsyncCompletionFn.java) | keyed by prompt name or uri/template | [Completions](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/completions/Completions.java) |
 
 All: `register(Descriptor, fn)` + `register(Consumer<Descriptor.Builder>, fn)`, `unregister(name)`, `find(name)`, `descriptors()` (name-sorted).
 
-Sync adapters assert VT: `HandlerFutures.assumeVirtualThread()` (Java `assert`) e.g. `DefaultToolRegistry#register`, `AbstractToolHandler.handle` guardrail `AbstractToolHandler#handle`.
+Sync adapters assert VT: `HandlerFutures.assumeVirtualThread()` (Java `assert`) e.g. [DefaultToolRegistry#register](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tools/DefaultToolRegistry.java), `AbstractToolHandler.handle` guardrail [AbstractToolHandler#handle](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/tools/AbstractToolHandler.java).
 
 ## 🗃️ Registries
 

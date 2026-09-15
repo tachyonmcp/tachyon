@@ -106,6 +106,30 @@ class TachyonAnnotationProviderTest {
 
     record Query(String text) {}
 
+    static class UnusedTemplateVariable {
+        @McpResource(uri = "plain://items/{id}/{day}")
+        String read(String id) {
+            return id;
+        }
+    }
+
+    static class TemplateWithoutArguments {
+        @McpResource(uri = "plain://items/{id}")
+        String read() {
+            return "item";
+        }
+    }
+
+    @Test
+    void rejectsTemplateVariablesWithoutParametersAtBuildTime() {
+        assertThatIllegalStateException()
+                .isThrownBy(() -> build(new UnusedTemplateVariable()))
+                .withMessageContaining("[id] must match URI template variables [id, day]");
+        assertThatIllegalStateException()
+                .isThrownBy(() -> build(new TemplateWithoutArguments()))
+                .withMessageContaining("[] must match URI template variables [id]");
+    }
+
     @SuppressWarnings("unused")
     static class PromptWithRecord {
         @McpPrompt

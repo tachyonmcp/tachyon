@@ -3,7 +3,7 @@ title: API stability
 tags: [concept, api, compat]
 sources: [tachyon-api/src/main/java/dev/tachyonmcp/api/annotations/, tachyon-api/revapi.json, tachyon-core/revapi.json, tachyon-core/pom.xml, tachyon-core/src/main/java/dev/tachyonmcp/core/server/internal/ServerEngine.java]
 updated: 2026-09-15
-commit: 751331f4
+commit: 9eec1092
 ---
 
 # 🧱 API stability

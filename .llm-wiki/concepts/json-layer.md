@@ -2,8 +2,8 @@
 title: JSON layer
 tags: [concept, json, schema]
 sources: [tachyon-api/src/main/java/dev/tachyonmcp/api/json/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/json/, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/, tachyon-core/src/main/resources/META-INF/services/, tachyon-kotlin/src/main/kotlin/dev/tachyonmcp/kotlin/server/json/]
-updated: 2026-09-14
-commit: 70e205dc
+updated: 2026-09-15
+commit: 9eec1092
 ---
 
 # 🧾 JSON layer
@@ -12,13 +12,13 @@ Verdict: three independent JSON concerns. (1) **JSON-RPC envelope** — hand-rol
 
 ## ✉️ JSON-RPC codec
 
-`JsonRpcCodec` `tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/JsonRpcCodec.java`:
-- `parseRequest(ByteBuf)` streaming; `params` read as Jackson tree (`JsonNode`), `result`/`error.data` kept **raw JSON string** `JsonRpcCodec#parseRequest`, `JsonRpcCodec`.
-- Classification priority: error (code+message) > result > method+id ⇒ `Request` > method ⇒ `Notification` > IAE `Notification`.
-- `id`: long / double / string / null `JsonRpcCodec#parseId` → `RequestId` (`tachyon-api/.../server/domain/RequestId.java`).
-- Serialize to `byte[]` (GC-managed, not pooled — dropped response on shutdown ≠ leak) `RequestId`.
-- `JsonRpcMessage` sealed `Request<T> | Response | Error | Notification<T>` `JsonRpcMessage`. `JsonRpcError(code, message, data, httpStatus=200)` `JsonRpcError`.
-- `ValueSerializer` plain Map/List/scalar writer (unknown ⇒ `toString()`) `ValueSerializer#writeJsonValue`.
+[JsonRpcCodec](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/JsonRpcCodec.java) `tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/JsonRpcCodec.java`:
+- `parseRequest(ByteBuf)` streaming; `params` read as Jackson tree (`JsonNode`), `result`/`error.data` kept **raw JSON string** [JsonRpcCodec#parseRequest](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/JsonRpcCodec.java), [JsonRpcCodec](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/JsonRpcCodec.java).
+- Classification priority: error (code+message) > result > method+id ⇒ `Request` > method ⇒ [JsonRpcMessage.Notification](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/JsonRpcMessage.java) > IAE [JsonRpcCodec#parseRequest](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/JsonRpcCodec.java).
+- `id`: long / double / string / null [JsonRpcCodec#parseId](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/JsonRpcCodec.java) → [RequestId](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/domain/RequestId.java) (`tachyon-api/.../server/domain/RequestId.java`).
+- Serialize to `byte[]` (GC-managed, not pooled — dropped response on shutdown ≠ leak) [JsonRpcCodec#serialize](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/JsonRpcCodec.java).
+- [JsonRpcMessage](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/JsonRpcMessage.java) sealed `Request<T> | Response | Error | Notification<T>` [JsonRpcMessage](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/JsonRpcMessage.java). `JsonRpcError(code, message, data, httpStatus=200)` [JsonRpcError](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/JsonRpcError.java).
+- [ValueSerializer](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/ValueSerializer.java) plain Map/List/scalar writer (unknown ⇒ `toString()`) [ValueSerializer#writeJsonValue](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/ValueSerializer.java).
 
 ## 📄 Documents & schemas (api)
 

@@ -5,8 +5,8 @@ import dev.tachyonmcp.api.annotations.ExperimentalApi;
 import dev.tachyonmcp.api.server.extensions.ServerExtension;
 import dev.tachyonmcp.core.server.TachyonServer;
 import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.binder.MeterBinder;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -116,8 +116,8 @@ public class TachyonAutoConfiguration {
             }
 
             @Bean
-            MeterBinder tachyonMeterBinder(TachyonServer server) {
-                return new TachyonMeterBinder(server);
+            SmartInitializingSingleton tachyonMeterBinder(TachyonServer server, MeterRegistry registry) {
+                return () -> new TachyonMeterBinder(server).bindTo(registry);
             }
         }
     }

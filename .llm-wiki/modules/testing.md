@@ -3,7 +3,7 @@ title: Testing
 tags: [module, testing, e2e, conformance]
 sources: [e2e/src/test/, conformance/, Makefile, tachyon-core/src/test/, .github/workflows/build.yml]
 updated: 2026-09-15
-commit: 751331f4
+commit: 9eec1092
 ---
 
 # ✅ Testing
@@ -39,6 +39,8 @@ Pattern: abstract contract in root, one subclass per protocol package → same b
 `conformance/src/test/java/dev/tachyonmcp/conformance/`: `DefaultConformanceServer` + `EdgeConformanceServer`, `*ServerConformanceTest`, `ConformanceRunner`, `ConformanceReportWriter`. Baselines `conformance/conformance-baseline-0.1.yml`, `-0.2.yml` (known failures).
 
 ## 🧪 Unit tests
+
+Resource registration rejects missing and extra URI-template parameters at build time ([TachyonAnnotationProviderTest#rejectsTemplateVariablesWithoutParametersAtBuildTime](../../tachyon-core/src/test/java/dev/tachyonmcp/core/server/annotations/TachyonAnnotationProviderTest.java)).
 
 Declarative completion wire coverage runs on both protocols (`DeclarativeCompletionsTest#explicitRequestPreservesContextAndCompleteResult`): explicit request + metadata, named partial text + sibling binding, nullability, resource refs, checked failures. Invalid declarations and missing parameter-name metadata are build-time edge tests (`UnknownTemplateVariable`); Spring completion-only proxy regression lives in [[spring-boot]].
 

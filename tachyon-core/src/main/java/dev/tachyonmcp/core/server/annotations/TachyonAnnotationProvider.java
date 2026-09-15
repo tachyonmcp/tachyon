@@ -186,7 +186,7 @@ public final class TachyonAnnotationProvider implements AnnotationProvider {
                                     invoker.invoke(ctx, Map.of()), request.uri(), mimeType, serializer));
             return;
         }
-        if (!variables.containsAll(new LinkedHashSet<>(invoker.argumentNames()))) {
+        if (!variables.equals(new LinkedHashSet<>(invoker.argumentNames()))) {
             throw new IllegalStateException("@McpResource parameters " + invoker.argumentNames()
                     + " must match URI template variables " + variables + ": " + method);
         }

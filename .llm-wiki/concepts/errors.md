@@ -2,8 +2,8 @@
 title: Errors
 tags: [concept, errors, protocol]
 sources: [tachyon-api/src/main/java/dev/tachyonmcp/api/server/domain/ServerError.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/domain/ServerErrors.java, tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/mcp/v2025_11_25/codecs/McpResponseMapper.java, tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/mcp/v2026_07_28/codecs/McpResponseMapper.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java]
-updated: 2026-09-14
-commit: 5bee50aa
+updated: 2026-09-15
+commit: 9eec1092
 ---
 
 # 🚨 Errors
@@ -26,7 +26,7 @@ Verdict: handlers produce protocol-neutral `ServerError(kind, message, data)` (r
 | `MISSING_REQUIRED_CLIENT_CAPABILITY` | -32003 | -32021 | 400 |
 | `UNSUPPORTED_PROTOCOL_VERSION` | -32004 | -32022 | 400 |
 
-Extension gate: `ServerErrors.missingRequiredExtension(id)` ⇒ `MISSING_REQUIRED_CLIENT_CAPABILITY`, message `Requires the '<id>' extension`, `data.requiredCapabilities.extensions.<id>:{}` `ServerErrors#unsupportedProtocolVersion`. See [[extensions]].
+Extension gate: `ServerErrors.missingRequiredExtension(id)` ⇒ `MISSING_REQUIRED_CLIENT_CAPABILITY`, message `Requires the '<id>' extension`, `data.requiredCapabilities.extensions.<id>:{}` [ServerErrors#missingRequiredExtension](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/domain/ServerErrors.java). See [[extensions]].
 
 2025 mapper always HTTP 200 (`JsonRpcError` default). ⚠️ `UnsupportedProtocolVersionHandler` always uses **latest** protocol mapper + HTTP 400 `UnsupportedProtocolVersionHandler#channelRead`.
 

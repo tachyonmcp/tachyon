@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 import dev.tachyonmcp.core.server.TachyonServer;
+import dev.tachyonmcp.testkit.Mcp20260728Client;
 import dev.tachyonmcp.testkit.McpTestClients;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.opentelemetry.sdk.common.CompletableResultCode;
@@ -23,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.boot.health.contributor.HealthIndicator;
 import org.springframework.boot.health.contributor.Status;
+import org.springframework.boot.test.context.assertj.AssertableApplicationContext;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.support.GenericApplicationContext;
 
@@ -62,7 +64,199 @@ class WeatherApplicationTest {
     }
 
     @Test
-    void discoversAnnotationsAndServesWeatherWithoutExternalRequests() {
+    void servesWeatherInRequestedUnits() {
+        withWeather((context, client) -> {
+            // language=json
+            assertThat(client.post("""
+                    {"jsonrpc":"2.0","id":1,"method":"tools/call",
+                 "params":{"name":"get-weather","arguments":{"city":"Tallinn","units":"FAHRENHEIT"}}}
+                 """)).isSuccess().hasResult("""
+                {"content":[{"type":"text","text":"{\\\"city\\\":\\\"Tallinn\\\",\\\"condition\\\":\\\"Clear sky\\\",\\\"temperature\\\":68.0,\\\"unit\\\":\\\"FAHRENHEIT\\\",\\\"humidity\\\":60,\\\"windSpeed\\\":10.0}"}],
+                 "structuredContent":{"city":"Tallinn","condition":"Clear sky","temperature":68.0,"unit":"FAHRENHEIT","humidity":60,"windSpeed":10.0},
+                     "resultType":"complete"}
+                """);
+        });
+    }
+
+    @Test
+    void rewritesForecast() {
+        withWeather((context, client) -> {
+            // language=json
+            assertThat(client.post("""
+                    {"jsonrpc":"2.0","id":2,"method":"prompts/get",
+                     "params":{"name":"rewrite-forecast","arguments":{"forecast":"Sunny","style":"PIRATE"}}}
+                    """)).isSuccess().hasResult("""
+                    {"description":"Rewrite a forecast in PLAIN, CONCISE, or PIRATE style","messages":[{"role":"user","content":{"type":"text","text":"Rewrite the following weather forecast in pirate style. Preserve factual details:\\n\\nSunny"}}],"resultType":"complete"}
+                    """);
+        });
+    }
+
+    @Test
+    void completesForecastStyle() {
+        withWeather((context, client) -> {
+            // language=json
+            assertThat(client.post("""
+                    {"jsonrpc":"2.0","id":3,"method":"completion/complete","params":{
+                     "ref":{"type":"ref/prompt","name":"rewrite-forecast"},"argument":{"name":"style","value":"pi"}}}
+                    """)).isSuccess().hasResult("""
+                    {"completion":{"values":["PIRATE"]},"resultType":"complete"}
+                    """);
+        });
+    }
+
+    @Test
+    void completesCity() {
+        withWeather((context, client) -> {
+            // language=json
+            assertThat(client.post("""
+                    {"jsonrpc":"2.0","id":4,"method":"completion/complete","params":{
+                     "ref":{"type":"ref/resource","uri":"weather://current/{city}"},"argument":{"name":"city","value":"Ta"}}}
+                    """)).isSuccess().hasResult("""
+                    {"completion":{"values":["Tallinn","Tartu"]},"resultType":"complete"}
+                    """);
+        });
+    }
+
+    @Test
+    void readsCurrentWeather() {
+        withWeather((context, client) -> {
+            // language=json
+            assertThat(client.post("""
+                    {"jsonrpc":"2.0","id":5,"method":"resources/read","params":{"uri":"weather://current/Tallinn"}}
+                    """)).isSuccess().hasResult("""
+                {"cacheScope":"public","ttlMs":0,"contents":[{"uri":"weather://current/Tallinn","mimeType":"application/json","text":"{\\\"city\\\":\\\"Tallinn\\\",\\\"condition\\\":\\\"Clear sky\\\",\\\"temperature\\\":20.0,\\\"unit\\\":\\\"CELSIUS\\\",\\\"humidity\\\":60,\\\"windSpeed\\\":10.0}"}],"resultType":"complete"}
+                """);
+        });
+    }
+
+    @Test
+    void defaultsToCelsius() {
+        withWeather((context, client) -> {
+            // language=json
+            assertThat(client.post("""
+                    {"jsonrpc":"2.0","id":6,"method":"tools/call",
+                     "params":{"name":"get-weather","arguments":{"city":"Tallinn"}}}
+                    """)).isSuccess().hasStructuredContent("""
+                {"city":"Tallinn","condition":"Clear sky","temperature":20.0,"unit":"CELSIUS","humidity":60,"windSpeed":10.0}
+                    """);
+        });
+    }
+
+    @Test
+    void rejectsUnknownTemperatureUnit() {
+        withWeather((context, client) -> {
+            // language=json
+            assertThat(client.post("""
+                    {"jsonrpc":"2.0","id":7,"method":"tools/call",
+                     "params":{"name":"get-weather","arguments":{"city":"Tallinn","units":"kelvin"}}}
+                    """)).isJsonRpcError().hasErrorCode(-32602);
+        });
+    }
+
+    @Test
+    void rejectsMissingCity() {
+        withWeather((context, client) -> {
+            // language=json
+            assertThat(client.post("""
+                    {"jsonrpc":"2.0","id":8,"method":"tools/call",
+                     "params":{"name":"get-weather","arguments":{}}}
+                    """)).isJsonRpcError().hasErrorCode(-32602);
+        });
+    }
+
+    @Test
+    void ignoresShortCityPrefix() {
+        withWeather((context, client) -> {
+            // language=json
+            assertThat(client.post("""
+                    {"jsonrpc":"2.0","id":9,"method":"completion/complete","params":{
+                     "ref":{"type":"ref/resource","uri":"weather://current/{city}"},"argument":{"name":"city","value":"T"}}}
+                    """)).isSuccess().hasResult("""
+                    {"completion":{"values":[]},"resultType":"complete"}
+                    """);
+        });
+    }
+
+    @Test
+    void rejectsLowercaseForecastStyle() {
+        withWeather((context, client) -> {
+            // language=json
+            assertThat(client.post("""
+                    {"jsonrpc":"2.0","id":11,"method":"prompts/get",
+                     "params":{"name":"rewrite-forecast","arguments":{"forecast":"Sunny","style":"pirate"}}}
+                    """))
+                    .isJsonRpcError()
+                    .hasErrorCode(-32602)
+                    .hasErrorMessage("invalid argument 'style': must be one of [PLAIN, CONCISE, PIRATE]");
+        });
+    }
+
+    @Test
+    void ignoresCompletionForForecastText() {
+        withWeather((context, client) -> {
+            // language=json
+            assertThat(client.post("""
+                    {"jsonrpc":"2.0","id":10,"method":"completion/complete","params":{
+                     "ref":{"type":"ref/prompt","name":"rewrite-forecast"},"argument":{"name":"forecast","value":"pi"}}}
+                    """)).isSuccess().hasResult("""
+                    {"completion":{"values":[],"hasMore":false},"resultType":"complete"}
+                    """);
+        });
+    }
+
+    @Test
+    void observesWeatherOperations() {
+        withWeather((context, client) -> {
+            final var server = context.getBean(TachyonServer.class);
+            // language=json
+            assertThat(client.post("""
+                    {"jsonrpc":"2.0","id":1,"method":"tools/call",
+                 "params":{"name":"get-weather","arguments":{"city":"Tallinn","units":"FAHRENHEIT"}}}
+                 """)).isSuccess().hasResult("""
+                {"content":[{"type":"text","text":"{\\\"city\\\":\\\"Tallinn\\\",\\\"condition\\\":\\\"Clear sky\\\",\\\"temperature\\\":68.0,\\\"unit\\\":\\\"FAHRENHEIT\\\",\\\"humidity\\\":60,\\\"windSpeed\\\":10.0}"}],
+                 "structuredContent":{"city":"Tallinn","condition":"Clear sky","temperature":68.0,"unit":"FAHRENHEIT","humidity":60,"windSpeed":10.0},
+                     "resultType":"complete"}
+                """);
+            // language=json
+            assertThat(client.post("""
+                    {"jsonrpc":"2.0","id":2,"method":"prompts/get",
+                     "params":{"name":"rewrite-forecast","arguments":{"forecast":"Sunny","style":"PIRATE"}}}
+                    """)).isSuccess().hasResult("""
+                    {"description":"Rewrite a forecast in PLAIN, CONCISE, or PIRATE style","messages":[{"role":"user","content":{"type":"text","text":"Rewrite the following weather forecast in pirate style. Preserve factual details:\\n\\nSunny"}}],"resultType":"complete"}
+                    """);
+            // language=json
+            assertThat(client.post("""
+                    {"jsonrpc":"2.0","id":5,"method":"resources/read","params":{"uri":"weather://current/Tallinn"}}
+                    """)).isSuccess().hasResult("""
+                {"cacheScope":"public","ttlMs":0,"contents":[{"uri":"weather://current/Tallinn","mimeType":"application/json","text":"{\\\"city\\\":\\\"Tallinn\\\",\\\"condition\\\":\\\"Clear sky\\\",\\\"temperature\\\":20.0,\\\"unit\\\":\\\"CELSIUS\\\",\\\"humidity\\\":60,\\\"windSpeed\\\":10.0}"}],"resultType":"complete"}
+                """);
+            final var health = context.getBean("tachyonHealthIndicator", HealthIndicator.class)
+                    .health();
+            assertThat(health.getStatus()).isEqualTo(Status.UP);
+            assertThat(health.getDetails()).containsEntry("port", server.port());
+            assertThat(server.config().observability().listeners())
+                    .extracting(listener -> listener.getClass().getSimpleName())
+                    .contains("McpOpenTelemetryListener", "TachyonMetricsListener");
+            final var registry = context.getBean(MeterRegistry.class);
+            await().untilAsserted(() -> assertThat(registry.find("mcp.server.operations")
+                            .tag("mcp.method.name", "tools/call")
+                            .timers())
+                    .isNotEmpty());
+            assertThat(registry.get("mcp.server.tools").gauge().value()).isEqualTo(1.0);
+            assertThat(registry.get("mcp.server.prompts").gauge().value()).isEqualTo(1.0);
+            await().atMost(Duration.ofSeconds(15))
+                    .untilAsserted(() -> assertThat(spans.exported)
+                            .extracting(SpanData::getName)
+                            .contains("tools/call get-weather", "prompts/get rewrite-forecast", "resources/read"));
+        });
+    }
+
+    @FunctionalInterface
+    private interface WeatherScenario {
+        void accept(AssertableApplicationContext context, Mcp20260728Client client) throws Exception;
+    }
+
+    private void withWeather(WeatherScenario scenario) {
         new ApplicationContextRunner()
                 .withUserConfiguration(WeatherApplication.class)
                 .withPropertyValues(
@@ -77,105 +271,8 @@ class WeatherApplicationTest {
                     assertThat(context).hasNotFailed();
                     final var server = context.getBean(TachyonServer.class);
                     try (final var client = McpTestClients.latest(server.port())) {
-                        // language=json
-                        assertThat(client.post("""
-                                {"jsonrpc":"2.0","id":1,"method":"tools/call",
-                             "params":{"name":"get-weather","arguments":{"city":"Tallinn","units":"FAHRENHEIT"}}}
-                             """)).isSuccess().hasResult("""
-                            {"content":[{"type":"text","text":"{\\\"city\\\":\\\"Tallinn\\\",\\\"condition\\\":\\\"Clear sky\\\",\\\"temperature\\\":68.0,\\\"unit\\\":\\\"FAHRENHEIT\\\",\\\"humidity\\\":60,\\\"windSpeed\\\":10.0}"}],
-                             "structuredContent":{"city":"Tallinn","condition":"Clear sky","temperature":68.0,"unit":"FAHRENHEIT","humidity":60,"windSpeed":10.0},
-                                 "resultType":"complete"}
-                            """);
-                        // language=json
-                        assertThat(client.post("""
-                                {"jsonrpc":"2.0","id":2,"method":"prompts/get",
-                                 "params":{"name":"rewrite-forecast","arguments":{"forecast":"Sunny","style":"PIRATE"}}}
-                                """)).isSuccess().hasResult("""
-                                {"description":"Rewrite a forecast in PLAIN, CONCISE, or PIRATE style","messages":[{"role":"user","content":{"type":"text","text":"Rewrite the following weather forecast in pirate style. Preserve factual details:\\n\\nSunny"}}],"resultType":"complete"}
-                                """);
-                        // language=json
-                        assertThat(client.post("""
-                                {"jsonrpc":"2.0","id":3,"method":"completion/complete","params":{
-                                 "ref":{"type":"ref/prompt","name":"rewrite-forecast"},"argument":{"name":"style","value":"pi"}}}
-                                """)).isSuccess().hasResult("""
-                                {"completion":{"values":["PIRATE"]},"resultType":"complete"}
-                                """);
-                        // language=json
-                        assertThat(client.post("""
-                                {"jsonrpc":"2.0","id":4,"method":"completion/complete","params":{
-                                 "ref":{"type":"ref/resource","uri":"weather://current/{city}"},"argument":{"name":"city","value":"Ta"}}}
-                                """)).isSuccess().hasResult("""
-                                {"completion":{"values":["Tallinn","Tartu"]},"resultType":"complete"}
-                                """);
-                        // language=json
-                        assertThat(client.post("""
-                                {"jsonrpc":"2.0","id":5,"method":"resources/read","params":{"uri":"weather://current/Tallinn"}}
-                                """)).isSuccess().hasResult("""
-                            {"cacheScope":"public","ttlMs":0,"contents":[{"uri":"weather://current/Tallinn","mimeType":"application/json","text":"{\\\"city\\\":\\\"Tallinn\\\",\\\"condition\\\":\\\"Clear sky\\\",\\\"temperature\\\":20.0,\\\"unit\\\":\\\"CELSIUS\\\",\\\"humidity\\\":60,\\\"windSpeed\\\":10.0}"}],"resultType":"complete"}
-                            """);
-                        // language=json
-                        assertThat(client.post("""
-                                {"jsonrpc":"2.0","id":6,"method":"tools/call",
-                                 "params":{"name":"get-weather","arguments":{"city":"Tallinn"}}}
-                                """)).isSuccess().hasStructuredContent("""
-                            {"city":"Tallinn","condition":"Clear sky","temperature":20.0,"unit":"CELSIUS","humidity":60,"windSpeed":10.0}
-                                """);
-                        // language=json
-                        assertThat(client.post("""
-                                {"jsonrpc":"2.0","id":7,"method":"tools/call",
-                                 "params":{"name":"get-weather","arguments":{"city":"Tallinn","units":"kelvin"}}}
-                                """)).isJsonRpcError().hasErrorCode(-32602);
-                        // language=json
-                        assertThat(client.post("""
-                                {"jsonrpc":"2.0","id":8,"method":"tools/call",
-                                 "params":{"name":"get-weather","arguments":{}}}
-                                """)).isJsonRpcError().hasErrorCode(-32602);
-                        // language=json
-                        assertThat(client.post("""
-                                {"jsonrpc":"2.0","id":9,"method":"completion/complete","params":{
-                                 "ref":{"type":"ref/resource","uri":"weather://current/{city}"},"argument":{"name":"city","value":"T"}}}
-                                """)).isSuccess().hasResult("""
-                                {"completion":{"values":[]},"resultType":"complete"}
-                                """);
-                        // language=json
-                        assertThat(client.post("""
-                                {"jsonrpc":"2.0","id":11,"method":"prompts/get",
-                                 "params":{"name":"rewrite-forecast","arguments":{"forecast":"Sunny","style":"pirate"}}}
-                                """))
-                                .isJsonRpcError()
-                                .hasErrorCode(-32602)
-                                .hasErrorMessage("invalid argument 'style': must be one of [PLAIN, CONCISE, PIRATE]");
-                        // language=json
-                        assertThat(client.post("""
-                                {"jsonrpc":"2.0","id":10,"method":"completion/complete","params":{
-                                 "ref":{"type":"ref/prompt","name":"rewrite-forecast"},"argument":{"name":"forecast","value":"pi"}}}
-                                """)).isSuccess().hasResult("""
-                                {"completion":{"values":[],"hasMore":false},"resultType":"complete"}
-                                """);
+                        scenario.accept(context, client);
                     }
-
-                    final var health = context.getBean("tachyonHealthIndicator", HealthIndicator.class)
-                            .health();
-                    assertThat(health.getStatus()).isEqualTo(Status.UP);
-                    assertThat(health.getDetails()).containsEntry("port", server.port());
-                    assertThat(server.config().observability().listeners())
-                            .extracting(listener -> listener.getClass().getSimpleName())
-                            .contains("McpOpenTelemetryListener", "TachyonMetricsListener");
-                    final var registry = context.getBean(MeterRegistry.class);
-                    await().untilAsserted(() -> assertThat(registry.find("mcp.server.operations")
-                                    .tag("mcp.method.name", "tools/call")
-                                    .timers())
-                            .isNotEmpty());
-                    assertThat(registry.get("mcp.server.tools").gauge().value()).isEqualTo(1.0);
-                    assertThat(registry.get("mcp.server.prompts").gauge().value())
-                            .isEqualTo(1.0);
-                    await().atMost(Duration.ofSeconds(15))
-                            .untilAsserted(() -> assertThat(spans.exported)
-                                    .extracting(SpanData::getName)
-                                    .contains(
-                                            "tools/call get-weather",
-                                            "prompts/get rewrite-forecast",
-                                            "resources/read"));
                 });
     }
 

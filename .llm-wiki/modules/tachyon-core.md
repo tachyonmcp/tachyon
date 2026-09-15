@@ -3,7 +3,7 @@ title: tachyon-core
 tags: [module, core]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/, tachyon-core/src/main/resources/, tachyon-core/pom.xml]
 updated: 2026-09-15
-commit: 751331f4
+commit: 9eec1092
 ---
 
 # ⚙️ tachyon-core
@@ -36,9 +36,9 @@ Verdict: the runtime. ~190 main files. Deps: `slf4j-api`, `netty-codec-http`, `n
 
 - Annotation registration, binding, and proxy invocation: [[declarative-configuration]].
 
-- `DefaultTachyonServer` = state + registries + `methodHandlers` map + pending server→client requests + session manager + event store + extensions; implements `ServerEngine` **and** `ExtensionContext` `DefaultTachyonServer`.
-- `McpDispatcher` = per-request flow, one per `McpChannelInitializer` (i.e. per server start) `McpChannelInitializer.java` ctor.
-- `DefaultDispatchContext` = per request: delegates channel state, adds engine, request id, outbound stream, observation, notifications impl `DefaultDispatchContext`.
+- [DefaultTachyonServer](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java) = state + registries + `methodHandlers` map + pending server→client requests + session manager + event store + extensions; implements [ServerEngine](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/internal/ServerEngine.java) **and** [ExtensionContext](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/extensions/ExtensionContext.java) [DefaultTachyonServer](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java).
+- [McpDispatcher](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java) = per-request flow, one per [McpChannelInitializer](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpChannelInitializer.java) (i.e. per server start) `McpChannelInitializer.java` ctor.
+- [DefaultDispatchContext](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/session/DefaultDispatchContext.java) = per request: delegates channel state, adds engine, request id, outbound stream, observation, notifications impl [DefaultDispatchContext](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/session/DefaultDispatchContext.java).
 
 ## 📦 Resources
 
@@ -49,7 +49,7 @@ Verdict: the runtime. ~190 main files. Deps: `slf4j-api`, `netty-codec-http`, `n
 
 1. Mapper method on `ProtocolRequestMapper` (impl once in `AbstractMcpRequestMapper`, override per version only if shape differs) and `ProtocolResponseMapper` (+ both version impls).
 2. `RpcMethodHandler` record in `server.features.<x>` `*MethodHandlers.register(map, …)` or `server.handlers`.
-3. Wire in `DefaultTachyonServer.registerDefaults` `DefaultDispatchContext`.
+3. Wire in [DefaultTachyonServer#registerDefaults](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java).
 4. 2026-07-28 name/uri header rule? update `RequestValidationHandler.NAME_REQUIRED_METHODS`.
 5. Capability flag? `resolveCapabilities` + `ServerInfoMapper` both versions.
 6. e2e test per protocol package → [[testing]].

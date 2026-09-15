@@ -9,7 +9,6 @@ import dev.tachyonmcp.api.annotations.McpTool;
 import dev.tachyonmcp.core.server.TachyonServer;
 import dev.tachyonmcp.testkit.McpTestClients;
 import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.binder.MeterBinder;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
@@ -66,7 +65,16 @@ class TachyonActuatorAutoConfigurationTest {
 
     @Test
     void metricsTimeOperationsAndGaugeRegisteredFeatures() {
-        runner.withConfiguration(AutoConfigurations.of(MetricsAutoConfiguration.class))
+        assertMetrics(runner.withConfiguration(AutoConfigurations.of(MetricsAutoConfiguration.class)));
+    }
+
+    @Test
+    void metricsWorkWithoutBootMetricsModule() {
+        assertMetrics(runner.withClassLoader(new FilteredClassLoader("org.springframework.boot.micrometer.metrics")));
+    }
+
+    private void assertMetrics(ApplicationContextRunner metricsRunner) {
+        metricsRunner
                 .withBean(SimpleMeterRegistry.class, SimpleMeterRegistry::new)
                 .withBean(Greeter.class)
                 .run(context -> {
@@ -100,7 +108,7 @@ class TachyonActuatorAutoConfigurationTest {
         runner.withBean(Greeter.class).run(context -> {
             assertThat(context)
                     .hasNotFailed()
-                    .doesNotHaveBean(MeterBinder.class)
+                    .doesNotHaveBean("tachyonMeterBinder")
                     .doesNotHaveBean(TachyonServerCustomizer.class);
             assertThat(context.getBean(TachyonServerLifecycle.class).isRunning())
                     .isTrue();

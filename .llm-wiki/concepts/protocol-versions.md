@@ -2,8 +2,8 @@
 title: Protocol versions
 tags: [concept, protocol, mcp]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/, tachyon-core/src/main/resources/META-INF/services/dev.tachyonmcp.core.protocol.Protocol, tachyon-core/ts2java.py, tachyon-core/protocol/, tachyon-core/pom.xml]
-updated: 2026-09-13
-commit: 5821ad56
+updated: 2026-09-15
+commit: 9eec1092
 ---
 
 # 🔀 Protocol versions
@@ -21,7 +21,7 @@ Registry `Protocols` static ServiceLoader, fails if empty `Protocols#PROTOCOLS`;
 | Aspect | 2025-11-25 | 2026-07-28 |
 |---|---|---|
 | Impl | `protocol/mcp/v2025_11_25/McpProtocol.java` | `protocol/mcp/v2026_07_28/McpProtocol.java` |
-| `matches` POST | header absent **or** in `{2025-11-25, 2025-06-18, 2025-03-26}` `McpProtocol.java,57-67` | header == `2026-07-28` `McpProtocol.java` |
+| `matches` POST | header absent **or** in `{2025-11-25, 2025-06-18, 2025-03-26}` [McpProtocol#matches](../../tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/mcp/v2025_11_25/McpProtocol.java) | header == `2026-07-28` [McpProtocol#matches](../../tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/mcp/v2026_07_28/McpProtocol.java) |
 | `matches` GET/DELETE/OPTIONS | yes (endpoint only) | no |
 | `supportsSessions` | true | **false** `McpProtocol#supportsSessions` |
 | Handshake | `initialize` + `notifications/initialized` | none; `server/discover` |

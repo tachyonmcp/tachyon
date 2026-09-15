@@ -2,8 +2,8 @@
 title: tachyon-kotlin
 tags: [module, kotlin, dsl]
 sources: [tachyon-kotlin/src/main/kotlin/dev/tachyonmcp/kotlin/server/, tachyon-kotlin/src/main/resources/META-INF/services/, tachyon-kotlin-kt-schema/src/main/kotlin/dev/tachyonmcp/kotlin/server/json/ktschema/]
-updated: 2026-09-14
-commit: 70e205dc
+updated: 2026-09-15
+commit: 9eec1092
 ---
 
 # 🟣 tachyon-kotlin (+ kt-schema)
@@ -18,7 +18,7 @@ Verdict: thin adapter. DSL builder wraps Java `ServerBuilder`; `suspend` handler
 
 ## 🏗️ DSL
 
-- `TachyonServerBuilder` receiver `TachyonServerBuilder`; `tool(...)` overloads `TachyonServerBuilder`, `TachyonServerBuilder#tool`, `resource` `TachyonServerBuilder#resource`, `prompt` `TachyonServerBuilder#prompt`, `resourceTemplate` `TachyonServerBuilder#resourceTemplate`, `promptCompletion` `TachyonServerBuilder#promptCompletion`, `resourceCompletion` `TachyonServerBuilder#resourceCompletion`, `name`, `extensions`, `pipelineCustomizer` `TachyonServerBuilder#name`.
+- `TachyonServerBuilder` receiver `TachyonServerBuilder`; `tool(...)` overloads `TachyonServerBuilder`, `TachyonServerBuilder#tool`, `resource` `TachyonServerBuilder#resource`, `prompt` `TachyonServerBuilder#prompt`, `resourceTemplate` `TachyonServerBuilder#resourceTemplate`, `promptCompletion` `TachyonServerBuilder#promptCompletion`, `resourceCompletion` `TachyonServerBuilder#resourceCompletion`, [TachyonServerBuilder#name](../../tachyon-kotlin/src/main/kotlin/dev/tachyonmcp/kotlin/server/config/TachyonServerBuilder.kt), `extensions`, [TachyonServerBuilder#pipelineCustomizer](../../tachyon-kotlin/src/main/kotlin/dev/tachyonmcp/kotlin/server/config/TachyonServerBuilder.kt).
 - One scope per file `config/*Scope.kt`: `CapabilitiesScope`, `NetworkScope`, `SessionScope`, `RuntimeScope`, `ServerInfoScope`, `JsonScope`, `ObservabilityScope`, `PayloadCaptureScope`, `MonitoringScope`, `TasksScope`, `ToolScope`, `ResourceScope`, `ResourcesScope`, `PromptScope`, `TemplateScope`, `CompletionScope`, `ContentScope`, `FeatureScope`. `@TachyonDsl` marker `TachyonDsl.kt`.
 - `ToolScope` result helpers: `success`, `text`, `raw`, `empty`, `fail(msg|{content})`, `inputRequired`, `content { }` `ToolScope`.
 - Registration funnels through `KotlinFeatureRegistrar` `KotlinFeatureRegistrar`.

@@ -20,7 +20,8 @@ import java.lang.annotation.Target;
  *
  * <p>A {@link #uri()} containing {@code {...}} registers a resource template; each template
  * variable binds to the method parameter of the same name (compile with {@code -parameters}). A
- * parameter of type {@code InteractionContext} is injected.
+ * parameter of type {@code InteractionContext} is injected. Template variables and non-context
+ * parameter names must match exactly; missing or extra names fail registration.
  *
  * <p><b>Result mapping.</b> {@code ResourceContents} passes through; {@code String} becomes text;
  * {@code byte[]} becomes a blob; any other object becomes JSON text with {@code application/json}

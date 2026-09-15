@@ -3,7 +3,7 @@ title: Findings
 tags: [meta, findings]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/HandlerFutures.java]
 updated: 2026-09-15
-commit: 751331f4
+commit: 9eec1092
 ---
 
 # 🔎 Findings
@@ -26,12 +26,12 @@ Spotted while reading code. Not verified by tests. Fixed in code ⇒ 🗑️ rem
 | 12 | 🪶 | `ResourceTemplateEntry` is public record while sibling entries are package-private. | `ResourceTemplateEntry` |
 | 13 | ⚠️ | `UnsupportedProtocolVersionHandler` errors use latest protocol mapper + HTTP 400 even for legacy-looking clients. Intentional per SEP-2575? | `UnsupportedProtocolVersionHandler#channelRead` |
 | 14 | 🪶 | `HandlerFutures` is `@InternalApi` but lives in public `tachyon-api` and is referenced by user-facing `AbstractToolHandler`. | `HandlerFutures` |
-| 15 | 🪶 | `TachyonServerCustomizer` javadoc says discovered beans are applied before customizers. Annotated beans now register after server construction. | [TachyonServerCustomizer](../integrations/tachyon-spring-boot-starter/src/main/java/dev/tachyonmcp/spring/boot/TachyonServerCustomizer.java), [TachyonBeanRegistrar#afterSingletonsInstantiated](../integrations/tachyon-spring-boot-starter/src/main/java/dev/tachyonmcp/spring/boot/TachyonBeanRegistrar.java) |
 | 16 | ⚠️ | Enum auto-completion registers through last-write-wins `DefaultCompletionRegistry` maps: explicit `@McpCompletion` from another service registered **before** the enum prompt/template is silently replaced. Same-service explicit completion is honored. | `TachyonAnnotationProvider#registerEnumCompletion`, `DefaultCompletionRegistry#registerForPromptAsync` |
+| 17 | 🐛 | HTTP-status mismatch formats three placeholders with two arguments, throwing `MissingFormatArgumentException`. | [JsonRpcResponseAssert.JsonRpcErrorAssert#hasHttpStatusCode](../tachyon-testkit/src/main/java/dev/tachyonmcp/testkit/JsonRpcResponseAssert.java) |
+| 18 | 🐛 | Method-not-found assertion requires HTTP 404 when a response is present; incompatible with legacy protocol HTTP 200 errors. | [JsonRpcResponseAssert.JsonRpcErrorAssert#isMethodNotFound](../tachyon-testkit/src/main/java/dev/tachyonmcp/testkit/JsonRpcResponseAssert.java) |
 
 ## ❓ Open questions
 
 - Multi-node: event log store (`SessionEventStore`) replay across nodes? Only `SessionStore` has CAS/generation fencing; in-memory event log is per process.
 - 2026-07-28 + `session.enabled(true)`: dispatcher bypasses sessions via `supportsSessions=false`; GET stream not matched for 2026 → only `subscriptions/listen`. Confirm intended.
-- 🐛 testkit `JsonRpcErrorAssert.hasHttpStatusCode` failure message has 3 `%s`, passes 2 args ⇒ `MissingFormatArgumentException` instead of assertion error; `isMethodNotFound()` always demands HTTP 404, so unusable on 2025-11-25 (HTTP 200) `JsonRpcErrorAssert#hasHttpStatusCode`, `JsonRpcErrorAssert#isMethodNotFound`.
 - ⚠️ `MISSING_REQUIRED_CLIENT_CAPABILITY` maps to -32003 on 2025-11-25 (`McpResponseMapper.java`), -32021 only on 2026-07-28. SEP-2133 / Python SDK use -32021. Decide whether 2025 wire should switch.

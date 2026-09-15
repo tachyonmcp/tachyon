@@ -2,8 +2,8 @@
 title: Overview
 tags: [concept, architecture]
 sources: [pom.xml, tachyon-core/pom.xml, integrations/pom.xml, tachyon-core/src/main/java/dev/tachyonmcp/core/server/TachyonServer.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/ServerBuilder.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultServerBuilder.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java]
-updated: 2026-09-14
-commit: 8c7738c0
+updated: 2026-09-15
+commit: 9eec1092
 ---
 
 # 🛰️ Overview
@@ -47,7 +47,7 @@ Two-phase: `build()` constructs server + runs registrations, **no socket**; `sta
 
 ## 🏗️ Build → start flow
 
-1. `DefaultServerBuilder.build()` `DefaultServerBuilder#pipelineCustomizer`:
+1. `DefaultServerBuilder.build()` [DefaultServerBuilder#build](../tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultServerBuilder.java):
    - default in-memory `SessionEventStore` + `SessionStore`
    - tasks enabled ⇒ auto-add `TasksExtension` if absent
    - executor = `threadFactory` given ? thread-per-task : VT executor `tachyon-vt-*` (`DefaultTachyonServer#defaultExecutor`)

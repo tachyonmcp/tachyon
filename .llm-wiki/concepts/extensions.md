@@ -3,7 +3,7 @@ title: Extensions
 tags: [concept, extensions, spi]
 sources: [tachyon-api/src/main/java/dev/tachyonmcp/api/server/extensions/, tachyon-api/src/main/java/dev/tachyonmcp/api/runtime/Extension.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/handlers/ExtensionNegotiator.java, tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/mcp/v2026_07_28/transport/ExtensionNegotiationHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java]
 updated: 2026-09-15
-commit: 751331f4
+commit: 9eec1092
 ---
 
 # 🧩 Extensions
@@ -14,19 +14,19 @@ Verdict: `ServerExtension` = bootstrap hook (register features + custom JSON-RPC
 
 | Member | Default | Proof |
 |---|---|---|
-| `extensionId()` | — | `Extension` |
-| `advertiseMode()` | — (`ALWAYS` / `NEVER` / `NEGOTIATED`) | `AdvertiseMode` |
-| `serverSettings()` | empty | `ServerExtension#serverSettings` |
-| `methods()` | empty set (pre-declared owned methods) | `ServerExtension#methods` |
-| `negotiation()` | **`REQUIRED`** (`REQUIRED` / `OPTIONAL`) | `ServerExtension#negotiation`, `.../server/extensions/ExtensionNegotiation.java` |
-| `requiresMetaEnvelope()` | **true** | `ExtensionNegotiation` |
-| `bootstrap(ExtensionContext)` | no-op | `ExtensionNegotiation` |
-| `onConnectionInit(ctx, clientSettings)` | no-op | `ExtensionNegotiation` |
-| `onConnectionClose(ctx)`, `shutdown()` | no-op | `Extension#onConnectionInit` |
+| `extensionId()` | — | [Extension](../../tachyon-api/src/main/java/dev/tachyonmcp/api/runtime/Extension.java) |
+| `advertiseMode()` | — (`ALWAYS` / `NEVER` / `NEGOTIATED`) | [AdvertiseMode](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/extensions/AdvertiseMode.java) |
+| `serverSettings()` | empty | [ServerExtension#serverSettings](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/extensions/ServerExtension.java) |
+| `methods()` | empty set (pre-declared owned methods) | [ServerExtension#methods](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/extensions/ServerExtension.java) |
+| `negotiation()` | **`REQUIRED`** (`REQUIRED` / `OPTIONAL`) | [ServerExtension#negotiation](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/extensions/ServerExtension.java), `.../server/extensions/ExtensionNegotiation.java` |
+| `requiresMetaEnvelope()` | **true** | [ServerExtension#requiresMetaEnvelope](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/extensions/ServerExtension.java) |
+| `bootstrap(ExtensionContext)` | no-op | [ServerExtension#bootstrap](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/extensions/ServerExtension.java) |
+| `onConnectionInit(ctx, clientSettings)` | no-op | [ServerExtension#onConnectionInit](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/extensions/ServerExtension.java) |
+| `onConnectionClose(ctx)`, `shutdown()` | no-op | [Extension#onConnectionClose](../../tachyon-api/src/main/java/dev/tachyonmcp/api/runtime/Extension.java), [Extension#shutdown](../../tachyon-api/src/main/java/dev/tachyonmcp/api/runtime/Extension.java) |
 
-`ExtensionContext` = `tools/resources/prompts/completions/tasks`, `executor`, `runtime`, `registerHandler(method, ExtensionMethodHandler)` `ExtensionContext`. `DefaultTachyonServer` implements it `DefaultTachyonServer`.
+[ExtensionContext](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/extensions/ExtensionContext.java) = `tools/resources/prompts/completions/tasks`, `executor`, `runtime`, `registerHandler(method, ExtensionMethodHandler)` [ExtensionContext](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/extensions/ExtensionContext.java). [DefaultTachyonServer](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java) implements it [DefaultTachyonServer](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java).
 
-`ExtensionMethodHandler.handle(InteractionContext, JsonObject params)` → `Object` (null ⇒ protocol empty result) `ExtensionMethodHandler`, adapter `DefaultTachyonServer#getHandler`.
+`ExtensionMethodHandler.handle(InteractionContext, JsonObject params)` → `Object` (null ⇒ protocol empty result) [ExtensionMethodHandler](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/extensions/ExtensionMethodHandler.java), adapter [DefaultTachyonServer#getHandler](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java).
 
 ## 🔁 Lifecycle
 
