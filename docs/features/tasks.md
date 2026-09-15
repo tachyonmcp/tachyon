@@ -10,6 +10,11 @@ description: |-
 Tachyon exposes external work as MCP tasks. The application, workflow engine, or job system owns
 execution. Tachyon owns protocol mapping, a small snapshot cache, and notifications.
 
+Tools, resources, prompts, and completions can be declared with [annotations](../annotations.md).
+Task configuration uses a `TaskConnector` and an explicit tool descriptor: `@McpTool` exposes name and
+description, but has no `taskSupport` setting. Use the programmatic task-capable tool below alongside
+your annotated services.
+
 ## Configure a task connector
 
 Build a `TaskConnector` from the three operations in the modern Tasks extension. Lookup, cooperative

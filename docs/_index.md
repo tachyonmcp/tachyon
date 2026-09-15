@@ -21,7 +21,9 @@ Start with a running server, add the features your application needs, then prepa
 
 - [Tools](features/tools.md) — define inputs, return results, and handle errors.
 - [Resources](features/resources.md) and [prompts](features/prompts.md) — expose application data and reusable messages.
-- [JSON schemas](json.md) and [annotations](annotations.md) — describe inputs and adapt annotated methods.
+- [Annotations](annotations.md) — declare feature methods and bind typed arguments.
+- [Completions](features/completions.md) — suggest prompt arguments and resource variables.
+- [JSON schemas](json.md) — customize validation and serialization.
 - [Tasks](features/tasks.md) and [client interactions](features/client-interactions.md) — support longer work and request user input.
 
 ## Operate

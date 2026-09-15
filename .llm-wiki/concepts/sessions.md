@@ -60,4 +60,9 @@ Verdict: **stateless by default** (`SessionConfig.enabled=false`). Sessions exis
 - Requests (elicitation/sampling): `sendRequest` registers pending future with `runtime.requestTimeout` (60s) and ownership `DefaultTachyonServer`. Stateless dispatch ctx refuses: "Server-to-client requests require a session" `DefaultDispatchContext#sendRequest`.
 - Broadcasts (`list_changed`, logs) iterate **ACTIVE local** sessions only `DefaultTachyonServer#broadcastNotification`, `DefaultTachyonServer#broadcastLog`.
 
+[WireClientContext#create](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/session/WireClientContext.java)
+encodes an `ElicitationRequest` interface; `toElicitationResult` validates accepted content before
+building the immutable result. Missing/non-object content on `ACCEPT` fails; absent content on
+`DECLINE`/`CANCEL` stays null. Value builders: [[tachyon-api]].
+
 Related: [[sse-streams]], [[configuration]], [[request-lifecycle]].
