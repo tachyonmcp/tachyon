@@ -10,5 +10,4 @@ configuration, bean discovery, customization, and Actuator health and metrics.
 - [Runnable weather example](../../examples/weather-mcp-spring-boot)
 - [Annotation reference](../../docs/annotations.md)
 
-The guide and weather example target Java 21+, Spring Boot 4.1.1, and Tachyon
-`1.0.0-SNAPSHOT` installed from this repository.
+The guide and weather example target Java 21+, Spring Boot 4.1.1, and Tachyon.

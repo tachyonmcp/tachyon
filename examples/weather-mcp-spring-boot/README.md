@@ -1,6 +1,6 @@
 # Weather MCP — Spring Boot
 
-Java 21+, Spring Boot 4.1.1, and **Tachyon 1.0.0-SNAPSHOT only**.
+Java 21+, Spring Boot 4.1.1, and **Tachyon only**.
 Uses native Tachyon annotations, not Spring AI annotations. Boot discovers the
 feature bean and owns the embedded Netty MCP server lifecycle; a separate WebFlux server serves Actuator only.
 

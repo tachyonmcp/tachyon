@@ -15,13 +15,15 @@
         <maven.compiler.release>21</maven.compiler.release>
         <maven.compiler.parameters>true</maven.compiler.parameters>
         <spring-boot.version>4.1.1</spring-boot.version>
+        <tachyon.version>1.0.0-beta.28</tachyon.version>
+<!--        <tachyon.version>1.0.0-SNAPSHOT</tachyon.version>-->
     </properties>
     <dependencyManagement>
         <dependencies>
             <dependency>
                 <groupId>dev.tachyonmcp</groupId>
                 <artifactId>tachyon-bom</artifactId>
-                <version>1.0.0-SNAPSHOT</version>
+                <version>${tachyon.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
