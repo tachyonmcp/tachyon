@@ -13,11 +13,6 @@ builds the MCP server, and starts and stops it with your application context.
 This guide creates a greeting tool at `http://127.0.0.1:8080/mcp` using Java 21+ and
 Spring Boot 4.1.1.
 
-> [!NOTE]
-> This guide targets **Tachyon 1.0.0-SNAPSHOT**, matching the Spring Boot example in this
-> repository. Install that snapshot locally before building the application below. The starter
-> and native annotations are experimental APIs.
-
 ## 1. Add the starter
 
 From a Tachyon repository checkout, install the starter and its dependencies:
@@ -50,7 +45,7 @@ Create a separate `greeting-server` directory with this `pom.xml`:
             <dependency>
                 <groupId>dev.tachyonmcp</groupId>
                 <artifactId>tachyon-bom</artifactId>
-                <version>1.0.0-SNAPSHOT</version>
+                <version>1.0.0-beta.28</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>

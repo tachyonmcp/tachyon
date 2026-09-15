@@ -16,12 +16,13 @@
 
     <modules>
         <module>echo-kotlin</module>
-        <module>weather-mcp</module>
-        <module>weather-mcp-kotlin</module>
         <module>langchain4j-mcp</module>
         <module>mcp-java</module>
         <module>mcp-skills</module>
         <module>temporal</module>
+        <module>weather-mcp-kotlin</module>
+        <module>weather-mcp-spring-boot</module>
+        <module>weather-mcp</module>
     </modules>
     <profiles>
         <profile>

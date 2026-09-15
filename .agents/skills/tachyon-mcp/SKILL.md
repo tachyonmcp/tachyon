@@ -2,7 +2,7 @@
 name: tachyon-mcp
 description: Build MCP (Model Context Protocol) servers using the [Tachyon MCP](https://github.com/tachyonmcp/tachyon).
 compatibility: Designed for Claude Code on JDK 21+ projects
-version: 1.0.0-SNAPSHOT
+version: 1.0.0-beta.28
 metadata:
     author: Konstantin Pavlov
 ---
@@ -20,7 +20,7 @@ Import `tachyon-bom` once, then add modules with no `<version>`:
         <dependency>
             <groupId>dev.tachyonmcp</groupId>
             <artifactId>tachyon-bom</artifactId>
-            <version>1.0.0-beta.27</version> <!-- get latest version from Maven Central -->
+            <version>1.0.0-beta.28</version> <!-- get latest version from Maven Central -->
             <type>pom</type>
             <scope>import</scope>
         </dependency>
