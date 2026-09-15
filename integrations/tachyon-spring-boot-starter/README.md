@@ -1,7 +1,7 @@
 # Tachyon MCP Spring Boot Starter
 
 Runs a Tachyon MCP server inside a Spring Boot 4 application. Beans with `@McpTool`,
-`@McpResource`, or `@McpPrompt` methods are exposed automatically.
+`@McpResource`, `@McpPrompt`, or `@McpCompletion` methods are exposed automatically.
 
 ## Install
 
@@ -44,7 +44,7 @@ tachyon:
 
 | Bean | Effect |
 |---|---|
-| any singleton bean with `@McpTool`/`@McpResource`/`@McpPrompt` methods | registered after singleton initialization; class and JDK proxies preserve advice |
+| any singleton bean with `@McpTool`/`@McpResource`/`@McpPrompt`/`@McpCompletion` methods | registered after singleton initialization; class and JDK proxies preserve advice |
 | `ServerExtension` | passed to `withExtensions(...)` |
 | `TachyonServerCustomizer` | last word on the `ServerBuilder` (sessions, JSON, other annotation providers, …) |
 | `TachyonServer` | built by the starter; inject it for `notifications()` or runtime registration |

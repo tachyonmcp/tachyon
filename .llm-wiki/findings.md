@@ -2,8 +2,8 @@
 title: Findings
 tags: [meta, findings]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/HandlerFutures.java]
-updated: 2026-09-14
-commit: 8c7738c0
+updated: 2026-09-15
+commit: 751331f4
 ---
 
 # 🔎 Findings
@@ -26,6 +26,7 @@ Spotted while reading code. Not verified by tests. Fixed in code ⇒ 🗑️ rem
 | 12 | 🪶 | `ResourceTemplateEntry` is public record while sibling entries are package-private. | `features/resources/ResourceTemplateEntry.java:11` |
 | 13 | ⚠️ | `UnsupportedProtocolVersionHandler` errors use latest protocol mapper + HTTP 400 even for legacy-looking clients. Intentional per SEP-2575? | `UnsupportedProtocolVersionHandler.java:40-47` |
 | 14 | 🪶 | `HandlerFutures` is `@InternalApi` but lives in public `tachyon-api` and is referenced by user-facing `AbstractToolHandler`. | `tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/HandlerFutures.java:17` |
+| 15 | 🪶 | `TachyonServerCustomizer` javadoc says discovered beans are applied before customizers. Annotated beans now register after server construction. | [TachyonServerCustomizer.java:8](../integrations/tachyon-spring-boot-starter/src/main/java/dev/tachyonmcp/spring/boot/TachyonServerCustomizer.java:8), [TachyonBeanRegistrar.java:20](../integrations/tachyon-spring-boot-starter/src/main/java/dev/tachyonmcp/spring/boot/TachyonBeanRegistrar.java:20) |
 
 ## ❓ Open questions
 

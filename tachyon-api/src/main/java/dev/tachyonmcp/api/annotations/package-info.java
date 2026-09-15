@@ -5,7 +5,8 @@
 /**
  * Annotations for marking API stability and visibility, and the declarative MCP feature
  * annotations {@link dev.tachyonmcp.api.annotations.McpTool}, {@link
- * dev.tachyonmcp.api.annotations.McpResource}, and {@link dev.tachyonmcp.api.annotations.McpPrompt}.
+ * dev.tachyonmcp.api.annotations.McpResource}, {@link dev.tachyonmcp.api.annotations.McpPrompt},
+ * and {@link dev.tachyonmcp.api.annotations.McpCompletion}.
  */
 @NullMarked
 package dev.tachyonmcp.api.annotations;

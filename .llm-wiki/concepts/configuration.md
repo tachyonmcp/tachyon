@@ -2,8 +2,8 @@
 title: Configuration
 tags: [concept, config, builder]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/server/ServerBuilder.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultServerBuilder.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/, tachyon-api/src/main/java/dev/tachyonmcp/api/server/config/]
-updated: 2026-09-14
-commit: 8c7738c0
+updated: 2026-09-15
+commit: 751331f4
 ---
 
 # 🎛️ Configuration
@@ -54,7 +54,7 @@ Verdict: `ServerBuilder` exposes grouped `Consumer<X.Builder>` configurers + sho
 
 ## 🧷 Validation gotchas
 
-- Builder annotation configurers compose into one `server.annotations(...)` call, using the constructed server's codecs (`DefaultServerBuilder.java:262`). Spring defers discovered bean registration until singleton initialization; see [[integrations]].
+- Builder annotation configurers (see [[declarative-configuration]]) compose into one `server.annotations(...)` call, using the constructed server's codecs (`DefaultServerBuilder.java:262`). Spring defers discovered bean registration until singleton initialization; see [[spring-boot]].
 
 - `SessionConfig`: any session option while disabled ⇒ ISE "Session options require sessions to be enabled" `SessionConfig.java:39-47`, `:127-137`.
 - `NetworkConfig.Builder`: `address()` XOR `host()/port()` ⇒ ISE `NetworkConfig.java:119-150`.

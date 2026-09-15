@@ -4,14 +4,14 @@ weight: 22
 sidebar_order: 22
 toc: true
 description: |-
-  Declare tools, resources, and prompts on plain Java methods with @McpTool, @McpResource, @McpPrompt — or bridge third-party annotation frameworks (mcp-java, LangChain4j, Spring AI) via the AnnotationProvider SPI.
+  Declare tools, resources, prompts, and completions on plain Java methods — or bridge third-party annotation frameworks (mcp-java, LangChain4j, Spring AI) via the AnnotationProvider SPI.
 ---
 
 The primary way to declare MCP features is a plain Java class with Tachyon's own annotations from
 `dev.tachyonmcp.api.annotations`. Programmatic registration (`server.tools().register(...)`) and
 third-party annotation frameworks map onto the same registries.
 
-`@McpTool`, `@McpResource`, `@McpPrompt`, `ServerBuilder.annotations(...)`, `AnnotationContext`,
+`@McpTool`, `@McpResource`, `@McpPrompt`, `@McpCompletion`, `ServerBuilder.annotations(...)`, `AnnotationContext`,
 `AnnotationProvider`, and `AnnotationRegistrationContext` are `@ExperimentalApi` — the shape may
 still change.
 
@@ -70,8 +70,9 @@ Only the annotation is required. `name` defaults to the method name; `descriptio
 | `@McpTool` result | `void`/`null` → empty; `ToolResult` passes; `String`/number/boolean/enum → text; `ContentBlock` → content; collection/array → JSON text; other object → `structuredContent` and its type becomes `outputSchema` |
 | `@McpResource` | `{var}` in `uri` → template, variables bind to same-named scalar parameters; static resources take no arguments. Result: `ResourceContents` passes, `String` → text, `byte[]` → blob, object → JSON text (`application/json` default) |
 | `@McpPrompt` | scalar parameters become prompt arguments. Result: `PromptResult` passes; `String`, `ContentBlock`, or object (as JSON text) → one message with the annotation's `role`; `PromptMessage` passes with its own role; `List` of those → messages |
-| Exceptions | checked exceptions propagate exactly as from a `ToolFn` |
-| Fail fast at `build()` | two feature annotations on one method, duplicate tool/prompt name or resource URI, private method, static resource with arguments, parameter not a template variable, non-scalar prompt/resource parameter |
+| `@McpCompletion` | one prompt/resource target; `CompletionRequest` or named partial-value/sibling parameters; returns `CompletionResult` or `List<String>` (see below) |
+| Exceptions | checked exceptions propagate as from the corresponding synchronous feature function (`ToolFn`, `CompletionFn`, etc.) |
+| Fail fast at registration | two feature annotations on one method, duplicate tool/prompt name or resource URI, private method, static resource with arguments, parameter not a template variable, non-scalar prompt/resource parameter; completion target/signature/return-type violations or duplicate completion targets |
 
 Schemas come from `JsonSchema.generate(type)`: a build-time kt-schema resource or the kt-schema
 reflection generator when present, otherwise tachyon-core's `JavaTypeSchemaFactory` (records,
@@ -79,6 +80,48 @@ POJOs via public getters/fields, enums, collections, maps, `Optional`, `java.tim
 
 In Spring Boot, the [`tachyon-spring-boot-starter`](https://github.com/tachyonmcp/tachyon/tree/main/integrations/tachyon-spring-boot-starter)
 registers every such bean automatically.
+
+## Argument completions
+
+Use `@McpCompletion(prompt = "trip")` for a prompt or
+`@McpCompletion(resource = "weather://{city}")` for an exact resource URI/template reference.
+Specify exactly one target. The target can be declared elsewhere; a completion-only Spring bean
+is discovered too.
+
+The simple signature uses reflection parameter names (`-parameters` required):
+
+```java
+@McpCompletion(prompt = "trip")
+List<String> completeCity(String city, @Nullable String country) {
+    return cities.findStartingWith(city, country);
+}
+```
+
+The first non-`InteractionContext` parameter must be `String`. Its name (`city`) selects the
+argument being completed and receives the partial text, including an empty string. Later named
+scalar parameters receive resolved sibling arguments from the request context, using the configured
+payload codecs for conversion. Missing siblings need `@Nullable` (or a supported `Optional` type)
+unless they are required. The partial value wins if context also contains a stale value for `city`.
+Requests completing a different argument return no candidates without invoking the method.
+
+For a target that completes several arguments, take `CompletionRequest` instead:
+
+```java
+@McpCompletion(prompt = "trip")
+CompletionResult completeTrip(CompletionRequest request, InteractionContext context) {
+    return suggestions.complete(request.argumentName(), request.argumentValue(), request.resolvedArguments());
+}
+```
+
+These are alternative signatures for one target. Both allow an injected `InteractionContext` in any
+position. Do not mix `CompletionRequest` with named parameters. A service may declare only one
+completion method for each prompt or resource target; duplicates fail registration.
+
+Return `List<String>` for candidates only, or `CompletionResult` to retain `total`, `hasMore`, and
+`_meta`. Null results and invalid candidates fail the request. Existing completion dispatch applies
+the 100-candidate limit. Calls run on virtual threads; checked exceptions follow `CompletionFn` error
+mapping. Spring proxy advice remains active, and parameter names come from the annotated target
+method. Completion annotations do not generate JSON schemas.
 
 ## The AnnotationProvider interface
 

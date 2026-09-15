@@ -2,6 +2,7 @@
 package dev.tachyonmcp.core.server.annotations;
 
 import dev.tachyonmcp.api.annotations.ExperimentalApi;
+import dev.tachyonmcp.api.annotations.McpCompletion;
 import dev.tachyonmcp.api.annotations.McpPrompt;
 import dev.tachyonmcp.api.annotations.McpResource;
 import dev.tachyonmcp.api.annotations.McpTool;
@@ -9,6 +10,8 @@ import dev.tachyonmcp.api.json.JsonSchema;
 import dev.tachyonmcp.api.server.features.annotations.AnnotationInvocationSupport;
 import dev.tachyonmcp.api.server.features.annotations.AnnotationProvider;
 import dev.tachyonmcp.api.server.features.annotations.AnnotationRegistrationContext;
+import dev.tachyonmcp.api.server.features.completions.CompletionFn;
+import dev.tachyonmcp.api.server.features.completions.CompletionResult;
 import dev.tachyonmcp.api.server.features.resources.ResourceTemplateDescriptor;
 import dev.tachyonmcp.core.server.json.JavaTypeSchemas;
 import java.lang.annotation.Annotation;
@@ -24,7 +27,8 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * {@link AnnotationProvider} for Tachyon's own {@link McpTool @McpTool},
- * {@link McpResource @McpResource}, and {@link McpPrompt @McpPrompt}. It is the default provider of {@code
+ * {@link McpResource @McpResource}, {@link McpPrompt @McpPrompt}, and {@link McpCompletion @McpCompletion}.
+ * It is the default provider of {@code
  * ServerBuilder.annotations(...)}, so {@code annotations(a -> a.register(service))} needs no
  * further setup.
  *
@@ -39,7 +43,7 @@ public final class TachyonAnnotationProvider implements AnnotationProvider {
 
     private static final TachyonAnnotationProvider INSTANCE = new TachyonAnnotationProvider();
     private static final List<Class<? extends Annotation>> FEATURES =
-            List.of(McpTool.class, McpResource.class, McpPrompt.class);
+            List.of(McpTool.class, McpResource.class, McpPrompt.class, McpCompletion.class);
     private static final Pattern TEMPLATE_EXPRESSION = Pattern.compile("\\{[+#./;?&]?([^}]*)}");
     private static final String JSON = "application/json";
 
@@ -56,7 +60,7 @@ public final class TachyonAnnotationProvider implements AnnotationProvider {
 
     /**
      * Returns whether {@code type} declares any {@link McpTool @McpTool},
-     * {@link McpResource @McpResource}, or {@link McpPrompt @McpPrompt} method.
+     * {@link McpResource @McpResource}, {@link McpPrompt @McpPrompt}, or {@link McpCompletion @McpCompletion} method.
      * Lets DI containers select candidate beans without instantiating them.
      *
      * @param type the class to inspect
@@ -90,19 +94,21 @@ public final class TachyonAnnotationProvider implements AnnotationProvider {
      */
     public void register(Object instance, Class<?> annotatedType, AnnotationRegistrationContext context) {
         var methods = AnnotationInvocationSupport.discoverMethods(
-                annotatedType, McpTool.class, McpResource.class, McpPrompt.class);
+                annotatedType, McpTool.class, McpResource.class, McpPrompt.class, McpCompletion.class);
         var keys = new HashSet<String>();
         for (Method method : methods) {
             var tool = method.getAnnotation(McpTool.class);
             var resource = method.getAnnotation(McpResource.class);
             var prompt = method.getAnnotation(McpPrompt.class);
-            if ((tool != null ? 1 : 0) + (resource != null ? 1 : 0) + (prompt != null ? 1 : 0) > 1) {
+            final var completion = method.getAnnotation(McpCompletion.class);
+            if (FEATURES.stream().filter(method::isAnnotationPresent).count() > 1) {
                 throw new IllegalStateException(
-                        "Method must carry only one of @McpTool, @McpResource, @McpPrompt: " + method);
+                        "Method must carry only one of @McpTool, @McpResource, @McpPrompt, @McpCompletion: " + method);
             }
             if (tool != null) registerTool(instance, method, tool, context, keys);
             if (resource != null) registerResource(instance, method, resource, context, keys);
             if (prompt != null) registerPrompt(instance, method, prompt, context, keys);
+            if (completion != null) registerCompletion(instance, method, completion, context, keys);
         }
     }
 
@@ -194,6 +200,30 @@ public final class TachyonAnnotationProvider implements AnnotationProvider {
 
     private static boolean isFeature(Method method) {
         return FEATURES.stream().anyMatch(method::isAnnotationPresent);
+    }
+
+    private static void registerCompletion(
+            Object instance,
+            Method method,
+            McpCompletion completion,
+            AnnotationRegistrationContext context,
+            Set<String> keys) {
+        final var prompt = !completion.prompt().isBlank();
+        if (prompt == !completion.resource().isBlank()) {
+            throw new IllegalStateException("@McpCompletion must specify exactly one of prompt or resource: " + method);
+        }
+        final var target = prompt ? completion.prompt() : completion.resource();
+        claim(keys, "completion " + (prompt ? "prompt '" : "resource '") + target + "'", method);
+        ResultMappers.requireCompletionReturnType(method);
+        final var invoker = MethodInvoker.forCompletion(instance, method, context);
+        final var arguments = invoker.argumentNames();
+        final String argument = arguments.isEmpty() ? null : arguments.getFirst();
+        final CompletionFn fn = (ctx, request) -> {
+            if (argument != null && !argument.equals(request.argumentName())) return CompletionResult.empty();
+            return ResultMappers.completionResult(invoker.invokeCompletion(ctx, request));
+        };
+        if (prompt) context.completions().registerForPrompt(target, fn);
+        else context.completions().registerForResource(target, fn);
     }
 
     private static void claim(Set<String> keys, String key, Method method) {

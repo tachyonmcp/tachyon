@@ -2,8 +2,8 @@
 title: Testing
 tags: [module, testing, e2e, conformance]
 sources: [e2e/src/test/, conformance/, Makefile, tachyon-core/src/test/, .github/workflows/build.yml]
-updated: 2026-09-14
-commit: 70e205dc
+updated: 2026-09-15
+commit: 751331f4
 ---
 
 # ✅ Testing
@@ -39,6 +39,8 @@ Pattern: abstract contract in root, one subclass per protocol package → same b
 `conformance/src/test/java/dev/tachyonmcp/conformance/`: `DefaultConformanceServer` + `EdgeConformanceServer`, `*ServerConformanceTest`, `ConformanceRunner`, `ConformanceReportWriter`. Baselines `conformance/conformance-baseline-0.1.yml`, `-0.2.yml` (known failures).
 
 ## 🧪 Unit tests
+
+Declarative completion wire coverage runs on both protocols (`e2e/src/test/java/dev/tachyonmcp/e2e/mcp/DeclarativeCompletionsTest.java:85`): explicit request + metadata, named partial text + sibling binding, nullability, resource refs, checked failures. Invalid declarations and missing parameter-name metadata are build-time edge tests (`tachyon-core/src/test/java/dev/tachyonmcp/core/server/annotations/CompletionAnnotationValidationTest.java:109`); Spring completion-only proxy regression lives in [[spring-boot]].
 
 See module pages: [[tachyon-core]], [[tachyon-api]], [[tachyon-kotlin]], [[tachyon-extensions]]. Rules (AGENTS.md): JUnit 6, AssertJ (Java) / Kotest (Kotlin), Awaitility, `@TempDir`, `TachyonServer` as SUT, many asserts per test, no tautologies; drop unit test when e2e covers.
 

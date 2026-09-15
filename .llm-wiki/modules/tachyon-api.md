@@ -2,8 +2,8 @@
 title: tachyon-api
 tags: [module, api]
 sources: [tachyon-api/src/main/java/dev/tachyonmcp/api/]
-updated: 2026-09-14
-commit: 70e205dc
+updated: 2026-09-15
+commit: 751331f4
 ---
 
 # 📜 tachyon-api
@@ -14,7 +14,7 @@ Verdict: contract module. User-facing SAMs, descriptors, requests, results, doma
 
 | Package | Key types | Page |
 |---|---|---|
-| `annotations` | `ExperimentalApi`, `InternalApi`, `LegacyApi`; declarative `McpTool`, `McpResource`, `McpPrompt` (RUNTIME, experimental, all attrs optional except resource `uri`; prompt `role` default `USER`) | [[api-stability]], [[integrations]] |
+| `annotations` | `ExperimentalApi`, `InternalApi`, `LegacyApi`; declarative `McpTool`, `McpResource`, `McpPrompt`, `McpCompletion` | [[api-stability]], [[declarative-configuration]] |
 | `json`, `json.spi` | `JsonDocument`, `JsonObject`, `JsonArray`, `JsonSchema`, `JsonSchemaValidator`, `PayloadSerde`, `JsonDocumentFactory`, `JsonSchemaFactory` | [[json-layer]] |
 | `runtime` | `InteractionContext`, `ContextNotifications`, `Notifications`, `ClientContext` (elicitation, deprecated sampling), `AttributeKey`, `Extension` | below |
 | `server` | `ServerFeature<D>` (`descriptor()`), `ServerFeature.Descriptor` (`name()`), `.Request extends HasMeta` | |
@@ -27,7 +27,7 @@ Verdict: contract module. User-facing SAMs, descriptors, requests, results, doma
 | `server.features.prompts` | `Prompts`, `PromptFn`, `AsyncPromptFn`, `PromptDescriptor`, `PromptRequest`, `PromptResult` | |
 | `server.features.completions` | `Completions`, `CompletionFn`, `AsyncCompletionFn`, `CompletionRequest`, `CompletionResult` | |
 | `server.features.tasks` | `Tasks`, `TaskConnector`, `TaskSnapshot`, `TaskState`, `TaskSupport`, `Task*Fn`, `Task*Request`, `TaskNotFoundException` | [[tasks]] |
-| `server.features.annotations` | `AnnotationProvider`, `AnnotationRegistrationContext`, `AnnotationInvocationSupport` | [[integrations]] |
+| `server.features.annotations` | `AnnotationProvider`, `AnnotationRegistrationContext`, `AnnotationInvocationSupport` | [[declarative-configuration]] |
 | `server.session` | `SessionIdGenerator<T>` | [[sessions]] |
 
 ## 🎭 InteractionContext (what handlers get)

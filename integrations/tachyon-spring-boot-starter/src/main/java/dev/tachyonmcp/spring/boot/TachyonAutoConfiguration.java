@@ -15,7 +15,7 @@ import org.springframework.context.annotation.Configuration;
 
 /**
  * Builds a {@link TachyonServer} from {@link TachyonProperties}, every singleton bean declaring
- * {@code @McpTool}/{@code @McpResource}/{@code @McpPrompt} methods, every {@link ServerExtension}
+ * {@code @McpTool}/{@code @McpResource}/{@code @McpPrompt}/{@code @McpCompletion} methods, every {@link ServerExtension}
  * bean, and every {@link TachyonServerCustomizer} bean; {@link TachyonServerLifecycle} starts it.
  */
 @ExperimentalApi

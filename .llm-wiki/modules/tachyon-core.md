@@ -2,8 +2,8 @@
 title: tachyon-core
 tags: [module, core]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/, tachyon-core/src/main/resources/, tachyon-core/pom.xml]
-updated: 2026-09-14
-commit: 8c7738c0
+updated: 2026-09-15
+commit: 751331f4
 ---
 
 # ⚙️ tachyon-core
@@ -15,7 +15,7 @@ Verdict: the runtime. ~190 main files. Deps: `slf4j-api`, `netty-codec-http`, `n
 | Package | Holds | Page |
 |---|---|---|
 | `server` | `TachyonServer`, `ServerBuilder`, `DefaultServerBuilder`, `DefaultTachyonServer`, `McpDispatcher`, `RpcMethodHandler`, `OutboundSseStream*`, `AnnotationContext`, `HandlerWatchdog` | [[overview]], [[request-lifecycle]] |
-| `server.annotations` | `TachyonAnnotationProvider` (default `AnnotationContext` provider for `@McpTool/@McpResource/@McpPrompt`), `MethodInvoker`, `ResultMappers` | [[integrations]] |
+| `server.annotations` | `TachyonAnnotationProvider`, `MethodInvoker`, `ResultMappers` | [[declarative-configuration]] |
 | `server.internal` | `ServerEngine` SPI, `OperationTracker`, `AbstractJanitor`, `NotificationLogSupport` | [[concurrency]] |
 | `server.config` | config records + builders | [[configuration]] |
 | `server.domain` | `ServerErrors`, `InitializeResponse`, `MissingRequiredClientCapabilityException` | [[errors]] |
@@ -34,7 +34,7 @@ Verdict: the runtime. ~190 main files. Deps: `slf4j-api`, `netty-codec-http`, `n
 
 ## 🧠 Who holds what
 
-- `TachyonServer.annotations(...)` registers after construction with the server's codecs; builder annotations delegate to it (`TachyonServer.java:60`, `DefaultTachyonServer.java:1044`, `DefaultServerBuilder.java:264`). Proxy metadata/receiver separation lives in [[integrations]].
+- Annotation registration, binding, and proxy invocation: [[declarative-configuration]].
 
 - `DefaultTachyonServer` = state + registries + `methodHandlers` map + pending server→client requests + session manager + event store + extensions; implements `ServerEngine` **and** `ExtensionContext` `tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java:96-127`.
 - `McpDispatcher` = per-request flow, one per `McpChannelInitializer` (i.e. per server start) `McpChannelInitializer.java` ctor.

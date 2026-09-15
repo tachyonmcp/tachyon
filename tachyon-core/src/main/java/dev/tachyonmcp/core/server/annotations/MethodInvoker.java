@@ -9,6 +9,7 @@ import dev.tachyonmcp.api.server.domain.InvalidArgumentException;
 import dev.tachyonmcp.api.server.domain.PromptArgument;
 import dev.tachyonmcp.api.server.features.annotations.AnnotationInvocationSupport;
 import dev.tachyonmcp.api.server.features.annotations.AnnotationRegistrationContext;
+import dev.tachyonmcp.api.server.features.completions.CompletionRequest;
 import dev.tachyonmcp.core.server.json.JavaTypeSchemas;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -18,6 +19,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
 /** Binds MCP argument values to an annotated method's parameters and invokes it. */
@@ -26,6 +28,8 @@ final class MethodInvoker {
     private sealed interface Binding {}
 
     private record ContextBinding() implements Binding {}
+
+    private record CompletionBinding() implements Binding {}
 
     private record WholeBinding(Parameter parameter) implements Binding {}
 
@@ -77,6 +81,29 @@ final class MethodInvoker {
         return new MethodInvoker(instance, method, namedBindings(method, true), context);
     }
 
+    static MethodInvoker forCompletion(Object instance, Method method, AnnotationRegistrationContext context) {
+        final var parameters = valueParameters(method);
+        if (parameters.size() == 1 && parameters.getFirst().getType() == CompletionRequest.class) {
+            final var bindings = new ArrayList<Binding>();
+            for (final var parameter : method.getParameters()) {
+                bindings.add(isContext(parameter) ? new ContextBinding() : new CompletionBinding());
+            }
+            return new MethodInvoker(instance, method, bindings, context);
+        }
+        if (parameters.isEmpty() || parameters.getFirst().getType() != String.class) {
+            throw new IllegalStateException(
+                    "@McpCompletion requires CompletionRequest or a first String argument: " + method);
+        }
+        return forArguments(instance, method, context);
+    }
+
+    @Nullable
+    Object invokeCompletion(InteractionContext ctx, CompletionRequest request) throws Exception {
+        final var values = new LinkedHashMap<String, String>(request.resolvedArguments());
+        values.put(request.argumentName(), request.argumentValue());
+        return invoke(ctx, values, request);
+    }
+
     JsonSchema inputSchema() {
         for (Binding binding : bindings) {
             if (binding instanceof WholeBinding whole)
@@ -115,10 +142,19 @@ final class MethodInvoker {
 
     @Nullable
     Object invoke(InteractionContext ctx, Map<String, ? extends @Nullable Object> values) throws Exception {
+        return invoke(ctx, values, null);
+    }
+
+    private @Nullable Object invoke(
+            InteractionContext ctx,
+            Map<String, ? extends @Nullable Object> values,
+            @Nullable CompletionRequest completion)
+            throws Exception {
         var args = new Object[bindings.size()];
         for (int i = 0; i < args.length; i++) {
             args[i] = switch (bindings.get(i)) {
                 case ContextBinding ignored -> ctx;
+                case CompletionBinding ignored -> Objects.requireNonNull(completion, "completion request");
                 case WholeBinding whole ->
                     coerce("arguments", values, whole.parameter().getParameterizedType());
                 case NamedBinding named -> bindNamed(named, values);
@@ -155,9 +191,7 @@ final class MethodInvoker {
                 continue;
             }
             if (!parameter.isNamePresent()) {
-                throw new IllegalStateException(
-                        "Parameter names unavailable; compile with -parameters or take a single record parameter: "
-                                + method);
+                throw new IllegalStateException("Parameter names unavailable; compile with -parameters: " + method);
             }
             if (scalarsOnly) AnnotationInvocationSupport.requireBindable(parameter, method);
             var required = !JavaTypeSchemas.isOptional(parameter.getAnnotatedType());

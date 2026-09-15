@@ -2,8 +2,8 @@
 title: API stability
 tags: [concept, api, compat]
 sources: [tachyon-api/src/main/java/dev/tachyonmcp/api/annotations/, tachyon-api/revapi.json, tachyon-core/revapi.json, tachyon-core/pom.xml, tachyon-core/src/main/java/dev/tachyonmcp/core/server/internal/ServerEngine.java]
-updated: 2026-09-13
-commit: 582f9c52
+updated: 2026-09-15
+commit: 751331f4
 ---
 
 # 🧱 API stability
@@ -40,6 +40,8 @@ Descriptors/requests/config in api use `@Value.Immutable` + style `typeImmutable
 `make revapi` compares against baseline `oldVersion`; per-module `revapi.json` ignores (generated ts2java classes excluded, commit `3cc96c5f`). Part of `make ci`.
 
 ## 📝 Javadoc rule
+
+Native MCP annotation contracts: [[declarative-configuration]].
 
 AGENTS.md: public API needs Javadoc; no code comments unless explaining why. API/registry naming rules: `docs/architecture/guidance.md`.
 

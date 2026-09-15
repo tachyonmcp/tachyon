@@ -13,8 +13,8 @@ import java.util.List;
  *
  * <p>The active provider starts as {@link TachyonAnnotationProvider}, which reads Tachyon's own
  * {@link dev.tachyonmcp.api.annotations.McpTool @McpTool}, {@link
- * dev.tachyonmcp.api.annotations.McpResource @McpResource}, and {@link
- * dev.tachyonmcp.api.annotations.McpPrompt @McpPrompt}. Each call to {@link #withProvider} switches
+ * dev.tachyonmcp.api.annotations.McpResource @McpResource}, {@link
+ * dev.tachyonmcp.api.annotations.McpPrompt @McpPrompt}, and {@link dev.tachyonmcp.api.annotations.McpCompletion @McpCompletion}. Each call to {@link #withProvider} switches
  * the active provider for subsequent {@link #register} calls. Multiple providers and multiple
  * objects are supported.
  *

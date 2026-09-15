@@ -24,6 +24,8 @@ Use IDE MCP for building/running tests if available. Otherwise see
 
 Code knowledge base: [`.llm-wiki/index.md`](.llm-wiki/index.md). Built from **code**, not `docs/`. Rules: [`.llm-wiki/CONVENTIONS.md`](.llm-wiki/CONVENTIONS.md).
 
+Use [tachyon-wiki](.agents/skills/tachyon-wiki/SKILL.md) when creating, updating, reorganizing, or checking wiki pages, including refreshes after code changes.
+
 - **Before work**: read `index.md`, then relevant pages. Still verify claims in code.
 - **After changing code**: update every page whose `sources` cover touched files — fix `path:line`, bump `updated` + `commit`, add page for new concept/module. Same change set as the code.
 - **Check drift**: `.llm-wiki/tools/stale.sh` (changed sources since page commit + dead `[[links]]`).

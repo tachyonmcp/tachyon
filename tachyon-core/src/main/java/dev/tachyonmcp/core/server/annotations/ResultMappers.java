@@ -9,8 +9,11 @@ import dev.tachyonmcp.api.server.domain.ResourceContents;
 import dev.tachyonmcp.api.server.domain.Role;
 import dev.tachyonmcp.api.server.domain.TextContent;
 import dev.tachyonmcp.api.server.domain.TextResourceContents;
+import dev.tachyonmcp.api.server.features.completions.CompletionResult;
 import dev.tachyonmcp.api.server.features.prompts.PromptResult;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
+import java.lang.reflect.Method;
+import java.lang.reflect.ParameterizedType;
 import java.util.ArrayList;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
@@ -21,6 +24,29 @@ import org.jspecify.annotations.Nullable;
 final class ResultMappers {
 
     private ResultMappers() {}
+
+    static void requireCompletionReturnType(Method method) {
+        if (CompletionResult.class.isAssignableFrom(method.getReturnType())) return;
+        if (List.class.isAssignableFrom(method.getReturnType())
+                && method.getGenericReturnType() instanceof ParameterizedType type
+                && type.getActualTypeArguments()[0] == String.class) return;
+        throw new IllegalStateException("@McpCompletion must return CompletionResult or List<String>: " + method);
+    }
+
+    static CompletionResult completionResult(@Nullable Object result) {
+        if (result instanceof CompletionResult completion) return completion;
+        if (result instanceof List<?> items) {
+            final var values = new ArrayList<String>(items.size());
+            for (final var item : items) {
+                if (!(item instanceof String value)) {
+                    throw new IllegalStateException("@McpCompletion candidates must be non-null strings");
+                }
+                values.add(value);
+            }
+            return CompletionResult.of(values);
+        }
+        throw new IllegalStateException("@McpCompletion must return a non-null CompletionResult or List<String>");
+    }
 
     static ToolResult toolResult(@Nullable Object result, PayloadSerializer serializer) {
         return switch (result) {

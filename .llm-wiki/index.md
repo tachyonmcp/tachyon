@@ -1,8 +1,8 @@
 ---
 title: Index
 tags: [meta]
-updated: 2026-09-13
-commit: 582f9c52
+updated: 2026-09-15
+commit: 751331f4
 ---
 
 # 🗺️ Tachyon MCP — LLM Wiki index
@@ -31,6 +31,7 @@ Read this first. Rules: [[CONVENTIONS]].
 | [[json-layer]] | `JsonDocument`/`JsonSchema` SPI via ServiceLoader, payload serde, networknt validator, JSON-RPC codec |
 | [[errors]] | `ServerError.Kind` → JSON-RPC code + HTTP status per protocol; exception mapping |
 | [[concurrency]] | Platform event loops vs virtual-thread handlers, no `synchronized`, `OperationTracker` shutdown drain |
+| [[declarative-configuration]] | Native Tachyon annotations: registration, binding, results, declarative completions |
 | [[configuration]] | `ServerBuilder` groups, config records, defaults table |
 | [[security-guards]] | DNS-rebinding, header guard, Accept, endpoint, stateless guard, CORS, body limit |
 | [[observability]] | `ObservationListener` lifecycle, outcomes, payload capture, OTel bridge |
@@ -45,5 +46,6 @@ Read this first. Rules: [[CONVENTIONS]].
 | [[tachyon-kotlin]] | Kotlin DSL, coroutine runtime extension, kotlinx JSON factories, kt-schema |
 | [[tachyon-extensions]] | Skills extension (`skill://`), echo + You.com tools |
 | [[tachyon-testkit]] | Raw-HTTP MCP test clients + AssertJ asserts |
-| [[integrations]] | Declarative `@McpTool` flow, annotation providers (mcp-java, LangChain4j, Spring AI), Spring Boot starter, OpenTelemetry, Temporal tasks |
+| [[integrations]] | External library adapters: MCP Java SDK, LangChain4j, Spring AI, OpenTelemetry, Temporal |
+| [[spring-boot]] | Boot starter properties, deferred bean discovery, proxy advice, lifecycle and backoff |
 | [[testing]] | e2e layout by protocol version, conformance suite, unit test map, how to run |
