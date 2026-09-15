@@ -32,6 +32,11 @@ class DeclarativeFeaturesTest {
 
     private record Station(String id, List<String> sensors) {}
 
+    enum Season {
+        SUMMER,
+        WINTER
+    }
+
     @SuppressWarnings("unused")
     static class WeatherService {
 
@@ -71,6 +76,17 @@ class DeclarativeFeaturesTest {
         @McpPrompt(role = Role.ASSISTANT)
         List<String> opener(String city) {
             return List.of("Welcome to " + city + "!", "Where should we start?");
+        }
+
+        @McpResource(uri = "weather://seasons/{season}", mimeType = "text/plain")
+        String season(Season season) {
+            return "Season " + season.name();
+        }
+
+        @McpPrompt
+        String packing(Season season, Optional<Season> next) {
+            return "Pack for " + season.name()
+                    + next.map(s -> " then " + s.name()).orElse("");
         }
     }
 
@@ -223,6 +239,8 @@ class DeclarativeFeaturesTest {
 
             assertThat(list).isSuccess().hasId(9).hasResult("""
                     {"prompts":[{"name":"opener","arguments":[{"name":"city","required":true}]},
+                                {"name":"packing",
+                                 "arguments":[{"name":"season","required":true},{"name":"next","required":false}]},
                                 {"name":"trip","description":"Plan a trip",
                                  "arguments":[{"name":"city","required":true},{"name":"season","required":false}]}],
                      "resultType":"complete","ttlMs":0,"cacheScope":"public"}
@@ -232,6 +250,52 @@ class DeclarativeFeaturesTest {
                      "messages":[{"role":"user","content":{"type":"text","text":"Plan a trip to Riga in summer"}}],
                      "resultType":"complete"}
                     """);
+        }
+    }
+
+    @Test
+    void enumArgumentsBindByConstantName() throws Exception {
+        try (var client = McpTestClients.latest(server.port())) {
+            // language=json
+            assertThat(client.post("""
+                    {"jsonrpc":"2.0","id":13,"method":"resources/read","params":{"uri":"weather://seasons/WINTER"}}
+                    """)).isSuccess().hasId(13).hasResult("""
+                    {"contents":[{"uri":"weather://seasons/WINTER","mimeType":"text/plain","text":"Season WINTER"}],
+                     "resultType":"complete","ttlMs":0,"cacheScope":"public"}
+                    """);
+            // language=json
+            assertThat(client.post("""
+                    {"jsonrpc":"2.0","id":14,"method":"prompts/get",
+                     "params":{"name":"packing","arguments":{"season":"SUMMER","next":"WINTER"}}}
+                    """)).isSuccess().hasId(14).hasResult("""
+                    {"messages":[{"role":"user","content":{"type":"text","text":"Pack for SUMMER then WINTER"}}],
+                     "resultType":"complete"}
+                    """);
+            // language=json
+            assertThat(client.post("""
+                    {"jsonrpc":"2.0","id":15,"method":"prompts/get",
+                     "params":{"name":"packing","arguments":{"season":"SUMMER"}}}
+                    """)).isSuccess().hasId(15).hasResult("""
+                    {"messages":[{"role":"user","content":{"type":"text","text":"Pack for SUMMER"}}],
+                     "resultType":"complete"}
+                    """);
+            // language=json
+            assertThat(client.post("""
+                    {"jsonrpc":"2.0","id":16,"method":"prompts/get",
+                     "params":{"name":"packing","arguments":{"season":"summer"}}}
+                    """))
+                    .isJsonRpcError()
+                    .hasId(16)
+                    .hasErrorCode(-32602)
+                    .hasErrorMessage("invalid argument 'season': must be one of [SUMMER, WINTER]");
+            // language=json
+            assertThat(client.post("""
+                    {"jsonrpc":"2.0","id":17,"method":"resources/read","params":{"uri":"weather://seasons/SPRING"}}
+                    """))
+                    .isJsonRpcError()
+                    .hasId(17)
+                    .hasErrorCode(-32602)
+                    .hasErrorMessage("invalid argument 'season': must be one of [SUMMER, WINTER]");
         }
     }
 

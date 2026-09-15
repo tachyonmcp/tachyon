@@ -16,10 +16,12 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 
 /** Binds MCP argument values to an annotated method's parameters and invokes it. */
@@ -176,11 +178,37 @@ final class MethodInvoker {
     }
 
     private @Nullable Object coerce(String name, @Nullable Object raw, Type type) {
+        final var enumType = enumType(type);
+        if (enumType != null) {
+            final var optional = AnnotationInvocationSupport.isOptionalType(type);
+            if (raw == null) return optional ? Optional.empty() : null;
+            final var constant = enumConstant(name, raw, enumType);
+            return optional ? Optional.of(constant) : constant;
+        }
         try {
             return AnnotationInvocationSupport.coerce(raw, type, serializer, deserializer);
         } catch (RuntimeException e) {
             throw new InvalidArgumentException(name, "could not be decoded as " + type.getTypeName(), e);
         }
+    }
+
+    private static @Nullable Class<?> enumType(Type type) {
+        final var effective = AnnotationInvocationSupport.unwrapOptional(type);
+        return effective instanceof Class<?> cls && cls.isEnum() ? cls : null;
+    }
+
+    private static Enum<?> enumConstant(String name, Object raw, Class<?> enumType) {
+        if (enumType.isInstance(raw)) return (Enum<?>) raw;
+        final var constants = Arrays.stream(enumType.getEnumConstants())
+                .map(constant -> (Enum<?>) constant)
+                .toList();
+        if (raw instanceof String text) {
+            for (final var constant : constants) {
+                if (constant.name().equals(text)) return constant;
+            }
+        }
+        throw new InvalidArgumentException(
+                name, "must be one of " + constants.stream().map(Enum::name).toList());
     }
 
     private static List<Binding> namedBindings(Method method, boolean scalarsOnly) {
@@ -193,7 +221,9 @@ final class MethodInvoker {
             if (!parameter.isNamePresent()) {
                 throw new IllegalStateException("Parameter names unavailable; compile with -parameters: " + method);
             }
-            if (scalarsOnly) AnnotationInvocationSupport.requireBindable(parameter, method);
+            if (scalarsOnly && enumType(parameter.getParameterizedType()) == null) {
+                AnnotationInvocationSupport.requireBindable(parameter, method);
+            }
             var required = !JavaTypeSchemas.isOptional(parameter.getAnnotatedType());
             bindings.add(new NamedBinding(parameter, parameter.getName(), required));
         }

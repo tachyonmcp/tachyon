@@ -10,7 +10,7 @@
     <artifactId>weather-mcp-kotlin</artifactId>
     <version>1.0-SNAPSHOT</version>
 
-    <name>Weather MCP Kotlin Example</name>
+    <name>Weather MCP - Kotlin</name>
     <description>Weather MCP server using Tachyon MCP on Kotlin</description>
     <url>https://github.com/tachyonmcp/tachyon</url>
 
