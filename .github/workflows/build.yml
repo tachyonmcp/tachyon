@@ -24,11 +24,11 @@ jobs:
       fail-fast: false
       matrix:
         java:
-          - 21
-          - 25
-          - 26
+          - { version: 21, distribution: temurin }
+          - { version: 25, distribution: temurin }
+          - { version: 27, distribution: zulu }
         include:
-          - java: 21
+          - java: { version: 21, distribution: temurin }
             codecov: true
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -36,11 +36,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Set up JDK ${{ matrix.java }}
+      - name: Set up JDK ${{ matrix.java.version }}
         uses: actions/setup-java@v6
         with:
-          java-version: ${{ matrix.java }}
-          distribution: temurin
+          java-version: ${{ matrix.java.version }}
+          distribution: ${{ matrix.java.distribution }}
           cache: maven
 
       - name: Build and Verify
@@ -51,7 +51,7 @@ jobs:
         if: ${{ !cancelled() && github.event.pull_request.head.repo.fork != true }}
         with:
           report_paths: '**/target/*-reports/TEST-*.xml'
-          check_name: Test Report (JDK ${{ matrix.java }})
+          check_name: Test Report (JDK ${{ matrix.java.version }})
           detailed_summary: true
           flaky_summary: true
           include_passed: false
@@ -65,7 +65,7 @@ jobs:
         if: ${{ !cancelled() && github.event.pull_request.head.repo.fork != true }}
         with:
           paths: 'reports/target/site/jacoco-aggregate/jacoco.xml'
-          title: Coverage Report (JDK ${{ matrix.java }})
+          title: Coverage Report (JDK ${{ matrix.java.version }})
           update-comment: ${{ github.event_name == 'pull_request' }}
           min-coverage-changed-files: 75
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -74,7 +74,7 @@ jobs:
         if: ${{ !cancelled() && matrix.codecov && github.event.pull_request.head.repo.fork != true }}
         uses: codecov/codecov-action@v7
         with:
-          name: codecov-jdk${{ matrix.java }}
+          name: codecov-jdk${{ matrix.java.version }}
           files: 'reports/target/site/jacoco-aggregate/jacoco.xml'
           token: ${{ secrets.CODECOV_TOKEN }}
           slug: tachyonmcp/tachyon
@@ -90,7 +90,7 @@ jobs:
         uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: reports-jdk-${{ matrix.java }}
+          name: reports-jdk-${{ matrix.java.version }}
           path: |
             **/target/*-reports/**
             reports/target/site/jacoco-aggregate/
@@ -102,7 +102,7 @@ jobs:
       fail-fast: false
       matrix:
         java:
-          - 21
+          - { version: 21, distribution: temurin }
         example:
           - echo-kotlin
           - langchain4j-mcp
@@ -118,11 +118,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Set up JDK ${{ matrix.java }}
+      - name: Set up JDK ${{ matrix.java.version }}
         uses: actions/setup-java@v6
         with:
-          java-version: ${{ matrix.java }}
-          distribution: temurin
+          java-version: ${{ matrix.java.version }}
+          distribution: ${{ matrix.java.distribution }}
           cache: maven
 
       - name: Install jar
@@ -140,7 +140,7 @@ jobs:
         if: ${{ !cancelled() && github.event.pull_request.head.repo.fork != true }}
         with:
           report_paths: 'examples/${{ matrix.example }}/target/*-reports/TEST-*.xml'
-          check_name: 'Test Report: ${{ matrix.example }} (JDK ${{ matrix.java }})'
+          check_name: 'Test Report: ${{ matrix.example }} (JDK ${{ matrix.java.version }})'
           detailed_summary: true
           flaky_summary: true
           include_passed: false
@@ -153,6 +153,6 @@ jobs:
         uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: reports-jdk-${{ matrix.java }}
+          name: reports-jdk-${{ matrix.java.version }}
           path: '**/target/*-reports/**'
 
