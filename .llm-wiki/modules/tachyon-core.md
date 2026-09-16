@@ -50,7 +50,7 @@ Verdict: the runtime. ~190 main files. Deps: `slf4j-api`, `netty-codec-http`, `n
 1. Mapper method on `ProtocolRequestMapper` (impl once in `AbstractMcpRequestMapper`, override per version only if shape differs) and `ProtocolResponseMapper` (+ both version impls).
 2. `RpcMethodHandler` record in `server.features.<x>` `*MethodHandlers.register(map, …)` or `server.handlers`.
 3. Wire in [DefaultTachyonServer#registerDefaults](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java).
-4. 2026-07-28 name/uri header rule? update `RequestValidationHandler.NAME_REQUIRED_METHODS`.
+4. Method addresses a named target (`Mcp-Name` mirror)? add it to `McpHeaderNames#mirroredNameField` — one switch drives both the 2026 presence rule and the all-version agreement check.
 5. Capability flag? `resolveCapabilities` + `ServerInfoMapper` both versions.
 6. e2e test per protocol package → [[testing]].
 

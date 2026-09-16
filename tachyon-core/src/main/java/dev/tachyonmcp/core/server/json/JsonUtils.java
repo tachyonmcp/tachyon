@@ -129,6 +129,26 @@ public final class JsonUtils {
         return node;
     }
 
+    /**
+     * Narrows a raw JSON-RPC {@code params} payload — already a tree, or the decoded {@link Map} an
+     * in-process caller supplied — to the object node a validator can read fields from. A payload
+     * that is neither (absent, or a by-position array) yields an empty object, so every lookup on
+     * the result simply misses rather than the caller branching on the payload's Java type.
+     */
+    public static ObjectNode toParamsNode(@Nullable Object params) {
+        if (params instanceof ObjectNode node) return node;
+        if (params instanceof Map<?, ?> map) return toObjectNode(stringKeyed(map));
+        return JsonNodeFactory.instance.objectNode();
+    }
+
+    private static Map<String, Object> stringKeyed(Map<?, ?> source) {
+        var result = new LinkedHashMap<String, Object>();
+        source.forEach((key, value) -> {
+            if (key instanceof String text) result.put(text, value);
+        });
+        return result;
+    }
+
     private static JsonNode toValueNode(@Nullable Object value) {
         switch (value) {
             case null -> {

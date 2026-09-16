@@ -3,6 +3,10 @@ package dev.tachyonmcp.e2e.mcp.v2026_07_28;
 
 import static dev.tachyonmcp.testkit.McpHttpResponseAssert.assertThatResponse;
 
+import dev.tachyonmcp.api.server.domain.PromptMessage;
+import dev.tachyonmcp.api.server.domain.Role;
+import dev.tachyonmcp.api.server.domain.TextContent;
+import dev.tachyonmcp.api.server.features.prompts.PromptDescriptor;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
 import dev.tachyonmcp.e2e.mcp.AbstractStatelessMcpE2eTest;
 import dev.tachyonmcp.testkit.Mcp20260728Client;
@@ -12,6 +16,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -47,14 +52,27 @@ class CustomHeaderValidationTest extends AbstractStatelessMcpE2eTest<Mcp20260728
             }
             """;
 
+    /**
+     * A prompt deliberately sharing the annotated tool's name: {@code prompts/get} carries the same
+     * {@code {name, arguments}} shape as {@code tools/call}, so this is what catches a mirror lookup
+     * that resolves a prompt's name against the tool registry.
+     */
     @BeforeEach
     void registerFixtures() {
-        startServerWith(s -> s.tools()
-                .register(
-                        d -> d.name("execute_sql").description("Executes SQL").inputSchema(EXECUTE_SQL_SCHEMA),
-                        (ctx, request) ->
-                                ToolResult.text("region=" + request.arguments().stringOr("region", "") + " query="
-                                        + request.arguments().stringOr("query", ""))));
+        startServer(b -> b.capabilities(c -> c.tools().prompts()), s -> {
+            s.tools()
+                    .register(
+                            d -> d.name("execute_sql")
+                                    .description("Executes SQL")
+                                    .inputSchema(EXECUTE_SQL_SCHEMA),
+                            (ctx, request) -> ToolResult.text(
+                                    "region=" + request.arguments().stringOr("region", "") + " query="
+                                            + request.arguments().stringOr("query", "")));
+            s.prompts()
+                    .register(
+                            PromptDescriptor.of("execute_sql", "A prompt that shares the tool's name"),
+                            List.of(PromptMessage.of(Role.USER, TextContent.of("Review this SQL"))));
+        });
     }
 
     private HttpResponse<String> post(String body, String regionHeader) throws Exception {
@@ -82,6 +100,92 @@ class CustomHeaderValidationTest extends AbstractStatelessMcpE2eTest<Mcp20260728
                   }
                 }
                 """.formatted(id, region);
+    }
+
+    /**
+     * SEP-2243 scopes {@code x-mcp-header} to tools — the only primitive whose definition carries an
+     * {@code inputSchema} to annotate — so a {@code prompts/get} naming the same {@code execute_sql}
+     * must not inherit the tool's {@code Mcp-Param-Region} requirement. It sends {@code Mcp-Method}
+     * and {@code Mcp-Name} (both required of it on this revision) and no {@code Mcp-Param-*}, and
+     * that is a complete, conforming request.
+     */
+    @Test
+    void doesNotApplyToolParamMirrorsToASameNamedPrompt() throws Exception {
+        // language=JSON
+        var body = """
+                {
+                  "jsonrpc": "2.0",
+                  "id": 20,
+                  "method": "prompts/get",
+                  "params": {
+                    "name": "execute_sql",
+                    "arguments": {"region": "us-west1"},
+                    "_meta": {
+                      "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+                      "io.modelcontextprotocol/clientInfo": {"name": "t", "version": "1"},
+                      "io.modelcontextprotocol/clientCapabilities": {}
+                    }
+                  }
+                }
+                """;
+
+        var response = postMcpRequest(body, Map.of("Mcp-Method", "prompts/get", "Mcp-Name", "execute_sql"));
+
+        assertThatResponse(response).hasStatus(200).isSuccess().hasId(20);
+    }
+
+    /**
+     * A pre-SEP-2243 revision never demands {@code Mcp-Param-*}, but a client that sends one anyway
+     * has it checked against the body like any other mirror — a gateway rate-limiting or routing on
+     * {@code Mcp-Param-Region: eu-west1} must not wave through a body that queries {@code us-west1}.
+     * 2025-11-25 ties every JSON-RPC error to HTTP 200 and keeps this error's original SEP-2243 code
+     * {@code -32001}, so the rejection reads 200/-32001 rather than 2026-07-28's 400/-32020.
+     */
+    @Test
+    void rejectsMismatchedParamHeaderOnOlderProtocolVersion() throws Exception {
+        // language=JSON
+        var body = """
+            {
+              "jsonrpc": "2.0",
+              "id": 18,
+              "method": "tools/call",
+              "params": {"name": "execute_sql", "arguments": {"region": "us-west1", "query": "SELECT 1"}}
+            }
+            """;
+        var response = postMcpRequest(
+                body,
+                Map.of(
+                        "MCP-Protocol-Version", List.of("2025-11-25"),
+                        "Mcp-Method", List.of("tools/call"),
+                        "Mcp-Name", List.of("execute_sql"),
+                        "Mcp-Param-Region", List.of("eu-west1")),
+                false);
+
+        assertThatResponse(response).hasStatus(200).isJsonRpcError().hasId(18).hasErrorCode(-32001);
+    }
+
+    /**
+     * The same request with an agreeing mirror runs: an optional mirror is checked, not demanded.
+     */
+    @Test
+    void acceptsAgreeingParamHeaderOnOlderProtocolVersion() throws Exception {
+        // language=JSON
+        var body = """
+            {
+              "jsonrpc": "2.0",
+              "id": 19,
+              "method": "tools/call",
+              "params": {"name": "execute_sql", "arguments": {"region": "us-west1", "query": "SELECT 1"}}
+            }
+            """;
+        var response = postMcpRequest(
+                body,
+                Map.of(
+                        "MCP-Protocol-Version", List.of("2025-11-25"),
+                        "Mcp-Param-Region", List.of("us-west1")),
+                false);
+
+        assertThatResponse(response).hasStatus(200).isSuccess().hasTextContent("region=us-west1 query=SELECT 1");
     }
 
     @Test

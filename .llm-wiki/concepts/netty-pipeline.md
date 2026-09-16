@@ -2,8 +2,8 @@
 title: Netty pipeline
 tags: [concept, transport, netty]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/http/]
-updated: 2026-09-13
-commit: 582f9c52
+updated: 2026-09-16
+commit: b3a97d16
 ---
 
 # 🧪 Netty pipeline
@@ -32,7 +32,7 @@ Verdict: one static-order pipeline per channel. Every registered `Protocol`'s ha
 | 4 | `dns-rebinding` | `DnsRebindingProtectionHandler` | 403 → [[security-guards]] |
 | 5 | `cors` | `CorsHandler` | only if CORS config |
 | 6 | `mcp-endpoint` | `EndpointValidatorHandler` | 404 path ≠ endpoint (trailing `/`, query ignored) `EndpointValidatorHandler#channelRead` |
-| 7 | `mcp-header-guard` | `McpHeaderGuardHandler` | 400 duplicate singleton/mirror headers; SEP-2243 mirrors w/o 2026-07-28 |
+| 7 | `mcp-header-guard` | `McpHeaderGuardHandler` | 400 duplicate singleton MCP header (incl. SEP-2243 mirrors); body-independent, so it runs pre-aggregation `McpHeaderGuardHandler#hasDuplicateSingleton` |
 | 8 | `protocol-version` | `ProtocolVersionHandler` | POST: resolve protocol, bind ctx, or flag unsupported |
 | 9 | `accept-header` | `AcceptValidationHandler` | 406 |
 | 10 | `stateless-mcp` | `StatelessValidatorHandler` | only stateless server: 404 on session/Last-Event-ID headers, 405 DELETE |
@@ -40,9 +40,10 @@ Verdict: one static-order pipeline per channel. Every registered `Protocol`'s ha
 | 12 | `unsupported-protocol-version` | `UnsupportedProtocolVersionHandler` | 400 JSON-RPC error with body `id` + supported list `UnsupportedProtocolVersionHandler#channelRead` |
 | 13 | `interaction` | `InteractionHandler` | fallback protocol resolve for GET/DELETE; lifecycle events → ctx `InteractionHandler#userEventTriggered` |
 | 14 | `idle` | `IdleStateHandler` | if reader/writer idle > 0 |
-| 15 | `mcp-<ver>-*` | `Protocol.requestHandlers(server)` for each protocol | 2025: no-op; 2026: validation + extension negotiation |
-| 16 | `mcp-phase-init` | `McpInitializationHandler` (per channel) | first request |
-| 17 | `lifecycle` | `LifecyclePipelineCoordinator` | swaps 16 → `mcp-phase-operations` |
+| 15 | `mcp-<ver>-*` | `Protocol.requestHandlers(server)` for each protocol | 2025: none; 2026: `_meta`/removed-method validation + mirror **presence**, then extension negotiation |
+| 16 | `mcp-mirror-validation` | `McpMirrorValidationHandler` | SEP-2243 mirror **agreement** vs body, every version, ungated `McpMirrorValidationHandler#channelRead` |
+| 17 | `mcp-phase-init` | `McpInitializationHandler` (per channel) | first request |
+| 18 | `lifecycle` | `LifecyclePipelineCoordinator` | swaps 17 → `mcp-phase-operations` |
 | – | customizer | `ServerBuilder.pipelineCustomizer` | user hook, runs last `InteractionHandler` |
 
 ## 🔁 Phase swap
@@ -71,5 +72,7 @@ Verdict: one static-order pipeline per channel. Every registered `Protocol`'s ha
 ## 📤 Response helpers
 
 `ChannelHandlerUtils` `tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/ChannelHandlerUtils.java`: `sendPlainTextAndClose`, `sendResponseAndClose` (keep-alive false ⇒ `Connection: close`), `sendAcceptedAsync` (202), `completeOn(future, transportCompletion)`, `isRefused` (RejectedExecution ⇒ 503 "Server shutting down"), `captureInitRequest` (detached headers copy for custom `SessionIdGenerator`, only if `readsRequest()`) `SessionIdGenerator`.
+
+`rejectWithServerError(ctx, req, id, error)` `ChannelHandlerUtils#rejectWithServerError` is the shared JSON-RPC rejection for post-aggregation validators: maps a `ServerError` through the **negotiated** protocol's `responseMapper`, so the same call answers 400/-32020 on 2026-07-28 and 200/-32001 on 2025-11-25. Releases `req`.
 
 Related: [[request-lifecycle]], [[security-guards]], [[sse-streams]].

@@ -25,7 +25,8 @@ description: >-
   suspend lambdas and Kotlin-specific types; never duplicate validation or registration logic.
 - Keep [`weather-mcp`](../../../examples/weather-mcp) and
   [`weather-mcp-kotlin`](../../../examples/weather-mcp-kotlin) functionally identical.
-- Keep handwritten files focused. Above 300 lines, consider splitting by responsibility; generated code is exempt.
+- Keep files focused. Above 300 lines, consider splitting by responsibility; generated code is exempt.
+- Write self-documenting code. Do not add docs or comments that repeat the code.
 - A public API change (new/changed method, param, wire field, or behaviour contract like TTL/null
   semantics) is not done until its docs are done: update the relevant file under `docs/`, this
   skill, and/or `docs/architecture/guidance.md` in the same change. Don't defer it to a follow-up.

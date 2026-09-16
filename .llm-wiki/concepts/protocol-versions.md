@@ -1,9 +1,9 @@
 ---
 title: Protocol versions
 tags: [concept, protocol, mcp]
-sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/, tachyon-core/src/main/resources/META-INF/services/dev.tachyonmcp.core.protocol.Protocol, tachyon-core/ts2java.py, tachyon-core/protocol/, tachyon-core/pom.xml]
-updated: 2026-09-15
-commit: 9eec1092
+sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/http/McpMirrorValidationHandler.java, tachyon-core/src/main/resources/META-INF/services/dev.tachyonmcp.core.protocol.Protocol, tachyon-core/ts2java.py, tachyon-core/protocol/, tachyon-core/pom.xml]
+updated: 2026-09-16
+commit: b3a97d16
 ---
 
 # 🔀 Protocol versions
@@ -26,7 +26,8 @@ Registry `Protocols` static ServiceLoader, fails if empty `Protocols#PROTOCOLS`;
 | `supportsSessions` | true | **false** `McpProtocol#supportsSessions` |
 | Handshake | `initialize` + `notifications/initialized` | none; `server/discover` |
 | Extensions | once at `initialize` (`InitializeHandler`) | per request `_meta."io.modelcontextprotocol/clientCapabilities".extensions` |
-| Pipeline handlers | no-op `RequestValidationHandler` `RequestValidationHandler.java` | `RequestValidationHandler(server)` + `ExtensionNegotiationHandler(extensions)` `McpProtocol.java` |
+| Pipeline handlers | none (`requestHandlers` default) | `RequestValidationHandler(server)` + `ExtensionNegotiationHandler(extensions)` `McpProtocol#requestHandlers` |
+| SEP-2243 mirrors | optional — but checked if sent | **required** `RequestValidationHandler#requireMirrors` |
 | Logging threshold | `logging/setLevel` per session | `_meta."io.modelcontextprotocol/logLevel"` per request; absent ⇒ **no logs** `NotificationsImpl#shouldEmit` |
 | Resource updates | `resources/subscribe` + GET SSE | `subscriptions/listen` stream (SEP-2575) |
 | Tasks | legacy `tasks/list`, `tasks/result`, task-augmented `tools/call` | `tasks/get|cancel|update` gated on tasks extension (SEP-2663) |
@@ -43,19 +44,33 @@ Response mapper 2026 extends 2025 one `McpResponseMapper.java`.
 
 ## 🛂 2026-07-28 request validation
 
-`v2026_07_28/transport/RequestValidationHandler.java` (peeks `content().duplicate()`, malformed JSON passes through to normal parse error):
+`v2026_07_28/transport/RequestValidationHandler.java` (peeks `content().duplicate()`, malformed JSON passes through to normal parse error). Only what 2026-07-28 alone demands:
 
 1. Removed methods ⇒ method not found: `initialize, ping, logging/setLevel, resources/subscribe, resources/unsubscribe` `RequestValidationHandler#REMOVED_METHODS`.
 2. `_meta` object required; `io.modelcontextprotocol/protocolVersion` string; `clientInfo` shape if present; `clientCapabilities` object `RequestValidationHandler#validate`.
 3. Header `MCP-Protocol-Version` == `_meta` version else header mismatch `RequestValidationHandler#validate`.
-4. `Mcp-Method` == body method (requests **and** notifications) `RequestValidationHandler#validateMethodHeader`.
-5. `Mcp-Name` == `name` (tools/call, prompts/get) or `uri` (resources/read); Base64 sentinel `=?base64?…?=` decoded `RequestValidationHandler#validate`, `RequestValidationHandler#decodeName`.
-6. `Mcp-Param-*` chars: HTAB/space/visible ASCII only `RequestValidationHandler#findInvalidCharacterParamHeader`.
-7. `tools/call`: every top-level property with `x-mcp-header` in tool input schema must have matching `Mcp-Param-<name>`; numbers compared by `BigDecimal`, |n| ≤ 2^53-1; header without body value rejected; Base64 padding strict `RequestValidationHandler`, `RequestValidationHandler#decodeParamValue`.
+4. Mirrors **present**: `Mcp-Method` always (requests **and** notifications); `Mcp-Name` when the method addresses a target; `Mcp-Param-<h>` for every `x-mcp-header` property the call passed a mirrorable value for `RequestValidationHandler#requireMirrors`.
+
+🔴 Nothing here compares a mirror to the body — see below.
+
+## 🪞 SEP-2243 mirror agreement (every version)
+
+`transport/netty/http/McpMirrorValidationHandler.java`, ungated by version, runs after every protocol's own handlers. Rule: a mirror that is **present** must match the body; a mirror that is **absent** is this handler's business on no version.
+
+Why version-free: a gateway routing on `Mcp-Method`/`Mcp-Param-Region` must never authorize an operation the body doesn't run — true whichever revision negotiated. It also lets SEP-2243's canonical example work: `Mcp-Method: initialize` on the handshake, which by construction carries no `MCP-Protocol-Version` and so negotiates a pre-SEP-2243 revision.
+
+1. `Mcp-Method` == body method, requests **and** notifications `McpMirrorValidationHandler#matchMethod`.
+2. `Mcp-Name` == `name` (tools/call, prompts/get) or `uri` (resources/read) `McpHeaderNames#mirroredNameField`, `McpMirrorValidationHandler#matchName`.
+3. `Mcp-Param-*` chars: HTAB/space/visible ASCII only, checked pre-decode `McpMirrorValidationHandler#findInvalidCharacterParamHeader`.
+4. `tools/call`: each `x-mcp-header` property's header must match its argument; numbers compared by `BigDecimal` (so `42` == `42.0`), |n| ≤ 2^53-1, NaN/Infinity rejected; header with no body value behind it rejected `McpMirrorValidationHandler#matchArgument`, `MirroredArgument`.
+
+Wire format `McpHeaderValue`: `=?base64?…?=` sentinel else literal (OWS-stripped). `decodeLenient` (`Mcp-Name`) degrades a bad payload to a mismatch; `decodeStrict` (`Mcp-Param-*`) throws, because SEP-2243 makes invalid Base64/padding its own rejection reason.
 
 Registration side: `x-mcp-header` only on top-level `string|integer|boolean` props, HTTP-token name, case-insensitively unique `JsonSchemaUtils`.
 
 Header names `McpHeaderNames` `McpHeaderNames#MCP_SESSION_ID`: `MCP-Session-Id`, `MCP-Protocol-Version`, `Last-Event-ID`, `Mcp-Method`, `Mcp-Name`, `Mcp-Param-`, schema keyword `x-mcp-header`.
+
+⚠️ Same failure, different wire code per version: 2026-07-28 answers 400/-32020, 2025-11-25 answers 200/-32001 — the handler emits one `ServerError` and `ChannelHandlerUtils#rejectWithServerError` maps it through the negotiated `responseMapper` ([[errors]]).
 
 ## 🗺️ Mapper surface
 

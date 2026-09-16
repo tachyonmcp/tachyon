@@ -2,8 +2,8 @@
 title: Errors
 tags: [concept, errors, protocol]
 sources: [tachyon-api/src/main/java/dev/tachyonmcp/api/server/domain/ServerError.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/domain/ServerErrors.java, tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/mcp/v2025_11_25/codecs/McpResponseMapper.java, tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/mcp/v2026_07_28/codecs/McpResponseMapper.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java]
-updated: 2026-09-15
-commit: 9eec1092
+updated: 2026-09-16
+commit: b3a97d16
 ---
 
 # 🚨 Errors
@@ -49,7 +49,9 @@ Dispatcher-level `McpDispatcher.handleHandlerError` `McpDispatcher#handleHandler
 
 | Status | When | Proof |
 |---|---|---|
-| 400 | missing `MCP-Session-Id` (stateful) ; duplicate MCP header / SEP-2243 mirror w/o 2026 version ; unparseable body (JSON parse error body) | `McpDispatcher#dispatchTrackedRequestAsync`, `McpHeaderGuardHandler#validate` |
+| 400 | missing `MCP-Session-Id` (stateful) ; duplicate singleton MCP header ; unparseable body (JSON parse error body) | `McpDispatcher#dispatchTrackedRequestAsync`, `McpHeaderGuardHandler#hasDuplicateSingleton` |
+
+⚠️ A SEP-2243 mirror disagreeing with the body is **not** here — it is a JSON-RPC error, coded per negotiated version (400/-32020 on 2026-07-28, 200/-32001 on 2025-11-25) via `ChannelHandlerUtils#rejectWithServerError` — [[protocol-versions]].
 | 403 | DNS-rebinding guard | `DnsRebindingProtectionHandler#reject` |
 | 404 | wrong path; unknown session; stateless + session headers | `EndpointValidatorHandler`, `McpOperationHandler#session`, `StatelessValidatorHandler#channelRead` |
 | 405 | DELETE on stateless; unknown HTTP method | same |

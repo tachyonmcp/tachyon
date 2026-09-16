@@ -19,11 +19,13 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 /**
- * The HTTP view of a request and the executed view must not be able to diverge. Two things let them:
- * a repeated singleton MCP header (an intermediary reads the last value, Netty reads the first), and
- * a SEP-2243 mirror sent on a request that does not negotiate {@link McpProtocol#VERSION} (nothing
- * ever compares it to the body). Both must be rejected with {@code 400}, before anything downstream
- * calls {@code headers().get}.
+ * The HTTP view of a request and the executed view must not be able to diverge on a repeated
+ * singleton MCP header — an intermediary reads the last value, Netty reads the first. Rejected with
+ * {@code 400}, before anything downstream calls {@code headers().get}.
+ *
+ * <p>Whether an SEP-2243 mirror's value actually agrees with the body is a separate concern this
+ * handler does not decide (it runs before the body is even aggregated): see {@link
+ * McpMirrorValidationHandlerTest}.
  */
 class McpHeaderGuardHandlerTest {
 
@@ -159,31 +161,37 @@ class McpHeaderGuardHandlerTest {
     }
 
     /**
-     * Header/body agreement is enforced only by the 2026-07-28 {@code RequestValidationHandler}, so a
-     * mirror sent under any older version is never compared to the body: a gateway would route on
-     * {@code Mcp-Method: tools/list} while the body ran {@code tools/call}.
+     * A mirror is a 2026-07-28 introduction, so an older or not-yet-negotiated request is never
+     * required to carry one — and this handler runs before {@code http-aggregator}, so it cannot
+     * compare the mirror to the body anyway. Whether the value agrees with the body is checked
+     * downstream, once the body is available: see {@link
+     * McpMirrorValidationHandlerTest#rejectsMismatchedMethodMirrorWhereItIsOptional}.
      */
     @ParameterizedTest
     @ValueSource(strings = {"Mcp-Method", "Mcp-Name", "Mcp-Param-Region"})
-    void rejectsMirroredHeaderOnOlderProtocolVersion(String header) {
+    void forwardsMirroredHeaderOnOlderProtocolVersion(String header) {
         var req = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/mcp");
         req.headers().set(HttpHeaderNames.HOST, "localhost:8096");
         req.headers().set("MCP-Protocol-Version", "2025-11-25");
         req.headers().add(header, "tools/list");
-        channel.writeInbound(req);
-        assertThat(rejectionStatus()).isEqualTo(HttpResponseStatus.BAD_REQUEST);
+        assertThat(channel.writeInbound(req)).isTrue();
+        assertThat(rejectionStatus()).isNull();
     }
 
+    /**
+     * The {@code initialize} handshake cannot yet know the negotiated version, so it never carries
+     * {@code MCP-Protocol-Version} — a compliant SEP-2243 client may still mirror {@code Mcp-Method}
+     * on it (this is the SEP's own canonical example). This handler must let it through; only the
+     * body/header agreement is checked downstream.
+     */
     @ParameterizedTest
     @ValueSource(strings = {"Mcp-Method", "Mcp-Name", "Mcp-Param-Region"})
-    void rejectsMirroredHeaderWithNoProtocolVersion(String header) {
+    void forwardsMirroredHeaderWithNoProtocolVersion(String header) {
         var req = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/mcp");
         req.headers().set(HttpHeaderNames.HOST, "localhost:8096");
         req.headers().add(header, "tools/list");
-        channel.writeInbound(req);
-        assertThat(rejectionStatus())
-                .as("an absent version header negotiates an older revision, which never checks the mirror")
-                .isEqualTo(HttpResponseStatus.BAD_REQUEST);
+        assertThat(channel.writeInbound(req)).isTrue();
+        assertThat(rejectionStatus()).isNull();
     }
 
     @Test
@@ -198,7 +206,7 @@ class McpHeaderGuardHandlerTest {
     }
 
     @Test
-    void rejectsDuplicateVersionHeaderBeforeReadingItForTheMirrorGate() {
+    void rejectsDuplicateVersionHeaderRegardlessOfMirrors() {
         var req = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/mcp");
         req.headers().set(HttpHeaderNames.HOST, "localhost:8096");
         req.headers().add("MCP-Protocol-Version", "2025-11-25");
@@ -206,7 +214,7 @@ class McpHeaderGuardHandlerTest {
         req.headers().add("Mcp-Method", "tools/call");
         channel.writeInbound(req);
         assertThat(rejectionStatus())
-                .as("the gate must never resolve the version from an ambiguous field")
+                .as("MCP-Protocol-Version is a singleton header regardless of any mirror present")
                 .isEqualTo(HttpResponseStatus.BAD_REQUEST);
     }
 }
