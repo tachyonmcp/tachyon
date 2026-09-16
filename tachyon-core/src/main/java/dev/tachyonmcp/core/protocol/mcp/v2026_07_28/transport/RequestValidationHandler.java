@@ -9,9 +9,9 @@ import dev.tachyonmcp.core.protocol.mcp.v2026_07_28.McpProtocol;
 import dev.tachyonmcp.core.server.domain.ServerErrors;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
 import dev.tachyonmcp.core.server.json.JsonUtils;
-import dev.tachyonmcp.core.transport.jsonrpc.JsonRpcCodec;
 import dev.tachyonmcp.core.transport.jsonrpc.JsonRpcMessage;
 import dev.tachyonmcp.core.transport.netty.ChannelHandlerUtils;
+import dev.tachyonmcp.core.transport.netty.PeekedBody;
 import io.netty.channel.ChannelHandler.Sharable;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
@@ -66,13 +66,9 @@ public final class RequestValidationHandler extends ChannelInboundHandlerAdapter
             return;
         }
 
-        JsonRpcMessage message;
-        try {
-            // A duplicate view shares the backing memory but has its own reader index, so peeking
-            // here doesn't disturb what the operation/init handler reads from req.content() next.
-            message = JsonRpcCodec.parseRequest(req.content().duplicate());
-        } catch (RuntimeException e) {
-            // Malformed JSON: let the normal parse-error path downstream handle it.
+        // Malformed JSON parses to null: let the normal parse-error path downstream handle it.
+        var message = PeekedBody.peek(ctx, req);
+        if (message == null) {
             ctx.fireChannelRead(msg);
             return;
         }

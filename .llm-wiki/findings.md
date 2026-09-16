@@ -2,8 +2,8 @@
 title: Findings
 tags: [meta, findings]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/HandlerFutures.java]
-updated: 2026-09-16
-commit: b3a97d16
+updated: 2026-09-17
+commit: 7cf92303
 ---
 
 # 🔎 Findings
@@ -29,7 +29,6 @@ Spotted while reading code. Not verified by tests. Fixed in code ⇒ 🗑️ rem
 | 16 | ⚠️ | Enum auto-completion registers through last-write-wins `DefaultCompletionRegistry` maps: explicit `@McpCompletion` from another service registered **before** the enum prompt/template is silently replaced. Same-service explicit completion is honored. | `TachyonAnnotationProvider#registerEnumCompletion`, `DefaultCompletionRegistry#registerForPromptAsync` |
 | 17 | 🐛 | HTTP-status mismatch formats three placeholders with two arguments, throwing `MissingFormatArgumentException`. | [JsonRpcResponseAssert.JsonRpcErrorAssert#hasHttpStatusCode](../tachyon-testkit/src/main/java/dev/tachyonmcp/testkit/JsonRpcResponseAssert.java) |
 | 18 | 🐛 | Method-not-found assertion requires HTTP 404 when a response is present; incompatible with legacy protocol HTTP 200 errors. | [JsonRpcResponseAssert.JsonRpcErrorAssert#isMethodNotFound](../tachyon-testkit/src/main/java/dev/tachyonmcp/testkit/JsonRpcResponseAssert.java) |
-| 19 | 🪶 | One POST body is JSON-parsed up to four times: `RequestValidationHandler`, `ExtensionNegotiationHandler`, `McpMirrorValidationHandler` each peek `content().duplicate()` independently, then `McpOperationHandler` parses for real. Each peek is correct in isolation; nothing caches the parsed message on the channel. | `RequestValidationHandler#channelRead`, `ExtensionNegotiationHandler#channelRead`, `McpMirrorValidationHandler#channelRead`, `McpOperationHandler#parseAndDispatchPost` |
 
 ## ❓ Open questions
 

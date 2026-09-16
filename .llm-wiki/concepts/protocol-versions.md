@@ -2,8 +2,8 @@
 title: Protocol versions
 tags: [concept, protocol, mcp]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/http/McpMirrorValidationHandler.java, tachyon-core/src/main/resources/META-INF/services/dev.tachyonmcp.core.protocol.Protocol, tachyon-core/ts2java.py, tachyon-core/protocol/, tachyon-core/pom.xml]
-updated: 2026-09-16
-commit: b3a97d16
+updated: 2026-09-17
+commit: 7cf92303
 ---
 
 # 🔀 Protocol versions
@@ -44,7 +44,7 @@ Response mapper 2026 extends 2025 one `McpResponseMapper.java`.
 
 ## 🛂 2026-07-28 request validation
 
-`v2026_07_28/transport/RequestValidationHandler.java` (peeks `content().duplicate()`, malformed JSON passes through to normal parse error). Only what 2026-07-28 alone demands:
+`v2026_07_28/transport/RequestValidationHandler.java` (peeks via `PeekedBody#peek`, malformed JSON parses to `null` and passes through to the normal parse error). Only what 2026-07-28 alone demands:
 
 1. Removed methods ⇒ method not found: `initialize, ping, logging/setLevel, resources/subscribe, resources/unsubscribe` `RequestValidationHandler#REMOVED_METHODS`.
 2. `_meta` object required; `io.modelcontextprotocol/protocolVersion` string; `clientInfo` shape if present; `clientCapabilities` object `RequestValidationHandler#validate`.

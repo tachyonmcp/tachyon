@@ -1,9 +1,9 @@
 ---
 title: Request lifecycle
 tags: [concept, dispatch]
-sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/RpcMethodHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpInitializationHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpOperationHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tools/ToolMethodHandlers.java, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/HandlerFutures.java]
-updated: 2026-09-16
-commit: b3a97d16
+sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/RpcMethodHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpInitializationHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpOperationHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tools/ToolMethodHandlers.java, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/HandlerFutures.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/PeekedBody.java]
+updated: 2026-09-17
+commit: 7cf92303
 ---
 
 # 🔄 Request lifecycle
@@ -16,12 +16,12 @@ Verdict: event loop parses nothing heavy. Body hop → worker executor (VT) → 
 |---|---|---|---|
 | 1 | Pipeline guards (host, endpoint, headers, Accept, aggregate) | event loop | [[netty-pipeline]] |
 | 2 | `ProtocolVersionHandler` binds `ChannelContext` for negotiated `Protocol` | event loop | `ProtocolVersionHandler#channelRead` |
-| 3 | 2026-07-28 only: `RequestValidationHandler` (`_meta`, removed methods, mirror presence) + `ExtensionNegotiationHandler` peek body | event loop | [[protocol-versions]] |
-| 3b | Every version: `McpMirrorValidationHandler` peeks body, compares SEP-2243 mirrors to it | event loop | [[protocol-versions]] |
+| 3 | 2026-07-28 only: `RequestValidationHandler` (`_meta`, removed methods, mirror presence) + `ExtensionNegotiationHandler` peek body via `PeekedBody#peek` — first peek parses, the rest reuse it | event loop | [[protocol-versions]] |
+| 3b | Every version: `McpMirrorValidationHandler` peeks body (same cache), compares SEP-2243 mirrors to it | event loop | [[protocol-versions]] |
 | 4 | First request on channel hits `McpInitializationHandler`; non-`initialize` → fires `OperationStarted.STATELESS`, forwards to `McpOperationHandler` | event loop | `McpInitializationHandler#handleRequest`, `McpInitializationHandler#forwardToOperationHandler` |
-| 5 | `handlePost`: capture interaction ctx **synchronously** (pipelined next request may rebind), `body.retain()`, `runAsync(parseAndDispatchPost, executor)` | EL → VT | `McpOperationHandler#handlePost` |
+| 5 | `handlePost`: capture interaction ctx **and** `PeekedBody#cached` **synchronously** (pipelined next request may rebind/overwrite), `body.retain()`, `runAsync(parseAndDispatchPost, executor)` | EL → VT | `McpOperationHandler#handlePost` |
 | 6 | Session header ⇒ `server.getSession` (may hydrate from store) → 404 plain text if unknown | VT | `McpOperationHandler#parseAndDispatchPost` |
-| 7 | Parse JSON-RPC → `Request` / `Response` / `Error` / `Notification` | VT | `McpOperationHandler` |
+| 7 | Reuse the peeked parse if one was made, else parse JSON-RPC here → `Request` / `Response` / `Error` / `Notification` | VT | `McpOperationHandler#parseAndDispatchPost` |
 | 8 | New `PostSseStream` per request, `dispatchRequestAsync(... transportCompletion)` | VT | `McpOperationHandler#handlePostRequest` |
 | 9 | `OperationTracker.execute` admission (refuse when closing) | VT | `McpDispatcher#dispatchRequestAsync` |
 | 10 | Observation start; permitted log level from `_meta`; route | VT | `McpDispatcher` |

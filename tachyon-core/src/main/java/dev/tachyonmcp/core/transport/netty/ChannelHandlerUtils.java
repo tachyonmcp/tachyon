@@ -76,6 +76,7 @@ public final class ChannelHandlerUtils {
                 requireInteractionContext(ctx).protocol().responseMapper().error(error);
         var body = JsonRpcCodec.serializeError(id, wireError.code(), wireError.message(), wireError.data());
         var origin = req.headers().get(HttpHeaderNames.ORIGIN);
+        PeekedBody.clear(ctx);
         req.release();
         sendResponseAndClose(ctx, HttpResponseStatus.valueOf(wireError.httpStatus()), "application/json", body, origin);
     }
@@ -89,6 +90,7 @@ public final class ChannelHandlerUtils {
      */
     public static void markRejected(ChannelHandlerContext ctx, Object msg) {
         ctx.channel().attr(REJECTED).set(Boolean.TRUE);
+        PeekedBody.clear(ctx);
         ReferenceCountUtil.release(msg);
     }
 
