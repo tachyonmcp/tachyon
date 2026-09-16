@@ -99,7 +99,7 @@
         <maven-javadoc-plugin.version>3.12.0</maven-javadoc-plugin.version>
         <maven-source-plugin.version>3.4.0</maven-source-plugin.version>
         <maven-surefire-plugin.version>3.6.0</maven-surefire-plugin.version>
-        <palantir-java-format.version>2.92.0</palantir-java-format.version>
+        <palantir-java-format.version>2.98.0</palantir-java-format.version>
         <spotless-maven-plugin.version>3.10.2</spotless-maven-plugin.version>
         <spotbugs-maven-plugin.version>4.10.4.1</spotbugs-maven-plugin.version>
         <detekt.version>2.0.0-alpha.6</detekt.version>
