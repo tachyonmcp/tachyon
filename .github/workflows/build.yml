@@ -24,12 +24,18 @@ jobs:
       fail-fast: false
       matrix:
         java:
-          - { version: 21, distribution: temurin }
-          - { version: 25, distribution: temurin }
-          - { version: 27, distribution: zulu }
-        include:
-          - java: { version: 21, distribution: temurin }
+          - version: 21
+            distribution: temurin
+            command: "clean lint build revapi"
             codecov: true
+          - version: 25
+            distribution: temurin
+            command: "clean build"
+            codecov: false
+          - version: 27
+            distribution: zulu
+            command: "clean build"
+            codecov: false
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -44,7 +50,7 @@ jobs:
           cache: maven
 
       - name: Build and Verify
-        run: make ci
+        run: make ${{ matrix.java.command }}
 
       - name: Publish test results
         uses: mikepenz/action-junit-report@v6
