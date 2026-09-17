@@ -19,7 +19,7 @@ import org.jspecify.annotations.Nullable;
 /**
  * A streamable-HTTP session shared by protocols on this transport. Tracks lifecycle state and
  * the SSE channel (connection, backpressure, replay cursor) for a single client identified by
- * a unique string ID1
+ * a unique string ID
  */
 @InternalApi(since = "1.0.0-beta.26")
 public class Session {

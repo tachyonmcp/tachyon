@@ -8,6 +8,7 @@ import dev.tachyonmcp.api.server.features.tasks.TaskConnector;
 import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
 import dev.tachyonmcp.core.server.OutboundSseStreamMessageRouter;
 import dev.tachyonmcp.core.server.config.TasksConfig;
+import dev.tachyonmcp.core.server.features.ChangeSupport;
 import dev.tachyonmcp.core.server.features.Pagination;
 import dev.tachyonmcp.core.server.internal.AbstractJanitor;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
@@ -34,7 +35,7 @@ public final class DefaultTaskRegistry implements TaskRegistry {
     private final @Nullable Duration pollInterval;
     private final int pageSize;
     private final Clock clock;
-    private volatile Runnable onChange = () -> {};
+    private final ChangeSupport changes = new ChangeSupport();
     private final AbstractJanitor janitor = new AbstractJanitor("task-janitor") {
         @Override
         protected void sweep() {
@@ -97,7 +98,7 @@ public final class DefaultTaskRegistry implements TaskRegistry {
         });
         if (changed[0]) {
             server.notifyTaskStatus(entry.snapshot(), entry.sessionId());
-            onChange.run();
+            changes.fireOnChange();
         }
         return entry.snapshot();
     }
@@ -143,13 +144,13 @@ public final class DefaultTaskRegistry implements TaskRegistry {
     public boolean remove(String taskId) {
         var removed = entries.remove(taskId) != null;
         if (removed) {
-            onChange.run();
+            changes.fireOnChange();
         }
         return removed;
     }
 
     public void onChange(Runnable listener) {
-        onChange = Objects.requireNonNull(listener, "listener");
+        changes.onChange(Objects.requireNonNull(listener, "listener"));
     }
 
     public void startTtlJanitor() {
@@ -163,7 +164,7 @@ public final class DefaultTaskRegistry implements TaskRegistry {
     void runJanitorSweep() {
         var changed = entries.entrySet().removeIf(entry -> entry.getValue().isResultExpired());
         if (changed) {
-            onChange.run();
+            changes.fireOnChange();
         }
     }
 }

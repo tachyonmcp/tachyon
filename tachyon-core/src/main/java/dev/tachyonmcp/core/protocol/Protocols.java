@@ -18,6 +18,8 @@ public final class Protocols {
 
     private static final List<Protocol> PROTOCOLS;
 
+    private static final Protocol BASELINE;
+
     static {
         PROTOCOLS = ServiceLoader.load(Protocol.class).stream()
                 .map(ServiceLoader.Provider::get)
@@ -25,6 +27,9 @@ public final class Protocols {
         if (PROTOCOLS.isEmpty()) {
             throw new IllegalStateException("No Protocol implementations found.");
         }
+        BASELINE = PROTOCOLS.stream()
+                .min(Comparator.comparing(Protocol::versionString).thenComparingInt(Protocol::priority))
+                .orElseThrow();
     }
 
     /**
@@ -39,6 +44,16 @@ public final class Protocols {
         return PROTOCOLS.stream()
                 .filter(pv -> pv.matches(request))
                 .max(Comparator.comparing(Protocol::versionString).thenComparingInt(Protocol::priority));
+    }
+
+    /**
+     * Fallback protocol for call-sites with no negotiated version — programmatic dispatch, stateless
+     * contexts, and broadcasts that fan out to sessions of mixed versions. The oldest registered
+     * version wins, so the fallback is the most widely understood wire form and does not depend on
+     * {@link ServiceLoader} discovery order.
+     */
+    public static Protocol baseline() {
+        return BASELINE;
     }
 
     /**

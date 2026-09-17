@@ -298,7 +298,7 @@ public class JsonRpcResponseAssert extends AbstractAssert<JsonRpcResponseAssert,
             if (httpResponse.statusCode() != expectedHttpStatusCode) {
                 failWithMessage(
                         "Expected HTTP status code <%s> but was <%s> in: %s",
-                        expectedHttpStatusCode, httpResponse.statusCode());
+                        expectedHttpStatusCode, httpResponse.statusCode(), actual);
             }
             return this;
         }
@@ -356,20 +356,17 @@ public class JsonRpcResponseAssert extends AbstractAssert<JsonRpcResponseAssert,
         }
 
         /**
-         * If the server does not implement the requested RPC method,
-         * it MUST respond with 404 Not Found and a JSON-RPC error with code -32601 (Method not found).
-         * The JSON-RPC error body distinguishes this case from a 404 returned by a legacy HTTP+SSE server that does not host the modern MCP endpoint (see Backward Compatibility).
+         * Verifies the JSON-RPC error for an unimplemented RPC method: code -32601 with message
+         * {@code "Method not found"}.
+         *
+         * <p>The HTTP status is protocol-version specific — 2026-07-28 answers 404, older versions
+         * answer 200 — so it is not asserted here. Chain {@link #hasHttpStatusCode(int)} when the
+         * test pins a version.
          *
          * @return this assertion
          */
         public JsonRpcErrorAssert isMethodNotFound() {
-            final JsonRpcErrorAssert result;
-            if (httpResponse != null) {
-                result = hasHttpStatusCode(404);
-            } else {
-                result = this;
-            }
-            return result.hasErrorCode(-32601).hasErrorMessage("Method not found");
+            return hasErrorCode(-32601).hasErrorMessage("Method not found");
         }
 
         /**

@@ -2,8 +2,8 @@
 title: tachyon-testkit
 tags: [module, testing]
 sources: [tachyon-testkit/src/main/java/dev/tachyonmcp/testkit/]
-updated: 2026-09-15
-commit: 9eec1092
+updated: 2026-09-17
+commit: e5c536ea
 ---
 
 # 🧪 tachyon-testkit
@@ -16,7 +16,7 @@ Verdict: published test library. Raw JDK `HttpClient` MCP clients per protocol v
 | `Mcp20251125Client(port\|uri)` | 2025-11-25 headers | `Mcp20251125Client` |
 | `Mcp20260728Client(port\|uri)` | `withExtensions(map)`, `discover()`, `_meta` injection, `initialize()` no-op-ish | `Mcp20260728Client` |
 | `SseStream` | reactive subscriber of `SseFrame`s: `await(pred, timeout)`, `awaitFirstEventId`, `assertNoneArrived`, `received`, `rawResponse` | `SseStream` |
-| `JsonRpcResponseAssert` | `isSuccess().hasId/hasResult/hasTextContent/hasStructuredContent/isToolError/hasResultType`, `isJsonRpcError().hasErrorCode/hasHttpStatusCode/isMethodNotFound/...` | `JsonRpcResponseAssert` |
+| `JsonRpcResponseAssert` | `isSuccess().hasId/hasResult/hasTextContent/hasStructuredContent/isToolError/hasResultType`, `isJsonRpcError().hasErrorCode/hasHttpStatusCode/isMethodNotFound (error code+message only, HTTP status is version-specific)/...` | `JsonRpcResponseAssert` |
 | `McpHttpResponseAssert` | `hasStatus`, `isRejectedWith(status, body)` | `McpHttpResponseAssert` |
 | `DiscoverResponseAssert` | `isSuccess().hasCapabilities(json)` | `DiscoverResponseAssert` |
 | `McpTestServers`, `McpTestClients`, `McpTestClientBuilder` | factories | `McpTestServers.java`, `McpTestClients.java` |

@@ -3,7 +3,7 @@ title: Protocol versions
 tags: [concept, protocol, mcp]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/http/McpHeaderMatchHandler.java, tachyon-core/src/main/resources/META-INF/services/dev.tachyonmcp.core.protocol.Protocol, tachyon-core/ts2java.py, tachyon-core/protocol/, tachyon-core/pom.xml]
 updated: 2026-09-17
-commit: 1a4081f4
+commit: e5c536ea
 ---
 
 # 🔀 Protocol versions
@@ -14,7 +14,7 @@ Verdict: `Protocol` SPI via ServiceLoader, two impls registered. Negotiation = h
 
 `Protocol` `Protocol`: `endpoint`, `familyName`, `versionString` (ISO date ⇒ lexical = chronological), `priority`, `supportsSessions` (`Protocol#supportsSessions`), `matches(HttpRequest)`, `responseMapper`, `requestMapper`, `createInteractionContext`, `requestHandlers(server)` (`Protocol#requestHandlers`, must be `@Sharable`, must no-op for other versions).
 
-Registry `Protocols` static ServiceLoader, fails if empty `Protocols#PROTOCOLS`; `resolve` = filter `matches` → max by version then priority `Protocols#resolve`. Services file `tachyon-core/src/main/resources/META-INF/services/dev.tachyonmcp.core.protocol.Protocol` (2025 first, 2026 second — `getFirst()` callers depend on this order, see [[findings]]).
+Registry `Protocols` static ServiceLoader, fails if empty `Protocols#PROTOCOLS`; `resolve` = filter `matches` → max by version then priority `Protocols#resolve`. Services file `tachyon-core/src/main/resources/META-INF/services/dev.tachyonmcp.core.protocol.Protocol` (order irrelevant). No negotiated version (programmatic dispatch, stateless ctx, `broadcastLog`, `ServerEngine#responseMapper`) ⇒ `Protocols#baseline` = **oldest** registered version, min by version then priority — deterministic, not ServiceLoader order.
 
 ## ⚖️ Compare
 

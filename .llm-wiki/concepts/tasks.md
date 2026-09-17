@@ -2,8 +2,8 @@
 title: Tasks
 tags: [concept, tasks, experimental]
 sources: [tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/tasks/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tasks/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/TasksConfig.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tools/ToolMethodHandlers.java, integrations/tachyon-tasks-temporal/]
-updated: 2026-09-14
-commit: 5bee50aa
+updated: 2026-09-17
+commit: e5c536ea
 ---
 
 # ⏳ Tasks
@@ -44,7 +44,7 @@ Tool returns `ToolResult.task(snapshot)` ⇒ checks (not FORBIDDEN, legacy must 
 `DefaultTaskRegistry.publish` `DefaultTachyonServer`:
 - effective pollInterval = snapshot's or config default.
 - `TaskEntry.publish` accepts only **higher revision**; taskId immutable `TaskEntry#publish`.
-- Changed ⇒ `server.notifyTaskStatus(snapshot, ownerSessionId)` + `onChange`.
+- Changed ⇒ `server.notifyTaskStatus(snapshot, ownerSessionId)` + `ChangeSupport.fireOnChange` (listeners append, like the other registries) `DefaultTaskRegistry#onChange`.
 - Owner session captured from dispatch ThreadLocal at creation (`OutboundSseStreamMessageRouter.currentSessionId()`).
 - `reportProgress(taskId, …)` needs progressToken captured at creation else dropped `TaskEntry`.
 - Janitor every 30s removes terminal entries older than keepAlive `TaskEntry#TaskEntry`, `TaskEntry`, `TaskEntry#isResultExpired`.

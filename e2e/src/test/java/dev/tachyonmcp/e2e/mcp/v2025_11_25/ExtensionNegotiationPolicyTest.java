@@ -148,22 +148,21 @@ class ExtensionNegotiationPolicyTest extends AbstractStatefulMcpE2eTest {
         try (var client = createTestClient()) {
             var sessionId = openSession(client, NO_CAPABILITIES);
 
-            // 2025-11-25 answers HTTP 200, so no isMethodNotFound() (it asserts the 2026 HTTP 404)
             assertThat(call(client, sessionId, 2, "required/unknown"))
                     .isJsonRpcError()
                     .hasId(2)
-                    .hasErrorCode(-32601)
-                    .hasErrorMessage("Method not found");
+                    .hasHttpStatusCode(200)
+                    .isMethodNotFound();
             assertThat(call(client, sessionId, 3, "optional/unknown"))
                     .isJsonRpcError()
                     .hasId(3)
-                    .hasErrorCode(-32601)
-                    .hasErrorMessage("Method not found");
+                    .hasHttpStatusCode(200)
+                    .isMethodNotFound();
             assertThat(call(client, sessionId, 4, "skills/list"))
                     .isJsonRpcError()
                     .hasId(4)
-                    .hasErrorCode(-32601)
-                    .hasErrorMessage("Method not found");
+                    .hasHttpStatusCode(200)
+                    .isMethodNotFound();
         }
     }
 

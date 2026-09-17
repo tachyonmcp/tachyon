@@ -3,7 +3,7 @@ title: Observability
 tags: [concept, observability, otel]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/server/observability/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/ObservabilityConfig.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/PayloadCapturePolicy.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/handlers/SubscriptionsListenHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/OutboundSseStream.java, integrations/tachyon-opentelemetry/]
 updated: 2026-09-17
-commit: e5dc5498
+commit: e5c536ea
 ---
 
 # 🔭 Observability
@@ -48,6 +48,6 @@ Stream failure classification retains the cause type; the throwable is retained 
 
 ⚠️ `subscriptions/listen` completes at real stream end `SubscriptionsListenHandler#handleAsync`, so its **span** covers the whole stream lifetime — but the duration **metric** stays ack-only: the handler stamps `OperationInfo#establishmentNanos` from `OutboundSseStream#start`'s returned `CompletionStage`, once the ack write is actually flushed — not right after `start()` returns, which only schedules that write and can return before it lands (especially off the channel's event loop) `SubscriptionsListenHandler#handleAsync`. Both `McpOpenTelemetryListener` and `TachyonMetricsListener` use `establishmentNanos` (when present) instead of the completion timestamp when recording their histogram/timer. Same mechanism, same reason, in both listeners. Ack write fails → no `establishmentNanos` (metric falls back to completion time); handler settles `pending` itself without waiting on `onClose` — `ClosedChannelException` → `Cancelled`, else `StreamFailed` `SubscriptionsListenHandler#handleAsync`. A stream already closed when `start()` runs also fails `ClosedChannelException` → `Cancelled` `PostSseStream#doStart`.
 
-⚠️ `ObservationListener` is `@InternalApi` + `@Experimental` yet meant for bridges → [[api-stability]].
+⚠️ `ObservationListener` is `@InternalApi` + `@ExperimentalApi` yet meant for bridges — deliberate narrow exception, `tachyon-opentelemetry` compiles against it on purpose (`integrations/tachyon-opentelemetry/pom.xml`), stated in `docs/running/observability.md` → [[api-stability]].
 
 Related: [[request-lifecycle]], [[integrations]].
