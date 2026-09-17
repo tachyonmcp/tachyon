@@ -34,9 +34,12 @@ public final class PeekedBody {
      *
      * @param request the request whose body was parsed
      * @param message the parsed message, or {@code null} when the body was malformed
+     * @param invalidRequest {@code true} when {@code message} is {@code null} because the body was
+     *     syntactically valid JSON that failed JSON-RPC envelope validation ({@code -32600}
+     *     territory), as opposed to a JSON syntax failure ({@code -32700} territory)
      */
     @InternalApi
-    public record Parsed(FullHttpRequest request, @Nullable JsonRpcMessage message) {}
+    public record Parsed(FullHttpRequest request, @Nullable JsonRpcMessage message, boolean invalidRequest) {}
 
     /**
      * Returns the parsed body of {@code req}, parsing it at most once per request. A malformed body
@@ -53,14 +56,21 @@ public final class PeekedBody {
             return existing.message();
         }
         JsonRpcMessage message;
+        boolean invalidRequest = false;
         try {
             // A duplicate view shares the backing memory but has its own reader index, so peeking
             // here doesn't disturb what the operation/init handler reads from req.content() next.
             message = JsonRpcCodec.parseRequest(req.content().duplicate());
+        } catch (IllegalArgumentException e) {
+            // JsonRpcCodec.parseRequest signals a syntactically valid but non-conforming envelope
+            // (not an object, no method/result/error, a malformed id) via IllegalArgumentException;
+            // an actual JSON syntax failure surfaces as UncheckedIOException instead.
+            message = null;
+            invalidRequest = true;
         } catch (RuntimeException e) {
             message = null;
         }
-        attr.set(new Parsed(req, message));
+        attr.set(new Parsed(req, message, invalidRequest));
         return message;
     }
 

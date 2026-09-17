@@ -75,12 +75,20 @@ public final class SubscriptionsListenHandler
 
         var pending = new CompletableFuture<>();
         var key = registry.activate(subscriptionId, stream, filter, context.responseMapper(), pending);
-        stream.start();
         // The returned future — and with it, the Observation the generic dispatch-completion path
         // drives — spans the SSE stream's whole lifetime, resolving only on disconnect, a genuine
         // transport failure, or server shutdown. establishmentNanos marks just the ack, so a
-        // duration-recording listener isn't forced to measure that whole lifetime too.
-        context.observation().info().establishmentNanos(System.nanoTime());
+        // duration-recording listener isn't forced to measure that whole lifetime too. Set from
+        // start()'s completion stage, once the ack is actually written and flushed, rather than
+        // right after start() returns — start() only schedules that write and may return long before
+        // it lands, especially when called off the channel's event loop.
+        stream.start().whenComplete((ignored, failure) -> {
+            if (failure == null) {
+                context.observation().info().establishmentNanos(System.nanoTime());
+            } else {
+                logger.debug("subscriptions/listen ack failed to flush: subscriptionId={}", subscriptionId, failure);
+            }
+        });
         stream.onClose(cause -> {
             registry.remove(key);
             if (cause == null) {

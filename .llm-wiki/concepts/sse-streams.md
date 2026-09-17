@@ -3,7 +3,7 @@ title: SSE streams
 tags: [concept, transport, sse]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/sse/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/OutboundSseStream.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/OutboundSseStreamMessageRouter.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpOperationHandler.java]
 updated: 2026-09-17
-commit: 1a4081f4
+commit: 3f06aa88
 ---
 
 # 📡 SSE streams
@@ -25,7 +25,7 @@ Verdict: two stream kinds. **POST-SSE** = per-request, lazy: JSON response unles
 ## 📮 POST-SSE flow
 
 1. `PostSseStream` created per POST; `streamKey` = one counter draw (not JSON-RPC id — clients reuse ids) `PostSseStream#PostSseStream`.
-2. Handler emits notification/progress/log/request → `start()` → writes 200 + SSE headers (`Connection: close`, `X-Accel-Buffering: no`) + enables heartbeat + priming event `id=<n>#<key>` with empty data (SEP-1699) unless events queued `PostSseStream#doStart`, `HttpHelpers#setSseStreamHeaders`.
+2. Handler emits notification/progress/log/request → `start()` → writes 200 + SSE headers (`Connection: close`, `X-Accel-Buffering: no`) + enables heartbeat + priming event `id=<n>#<key>` with empty data (SEP-1699) unless events queued `PostSseStream#doStart`, `HttpHelpers#setSseStreamHeaders`. `start()` returns a `CompletionStage<Void>` that completes once that initial write (queued events included) is flushed — used by `subscriptions/listen` to time its ack, not just scheduling it `OutboundSseStream#start`, `SubscriptionsListenHandler#handleAsync` → [[observability]].
 3. `ctx.notifications().comment(msg)` self-starts stream → token-free keep-alive `PostSseStream#comment`, `NotificationsImpl#comment`.
 4. Handler done, stream started ⇒ final response finalized on VT: append `ResponseEvent` to log (stateful), write, `terminateAsync()` (last chunk + close) `McpOperationHandler#finalizePostSseResponse`.
 5. Stream never started ⇒ `terminate()` (neutralize so late message can't open a second response on pooled socket) then plain JSON `McpOperationHandler#completePostRequest`.

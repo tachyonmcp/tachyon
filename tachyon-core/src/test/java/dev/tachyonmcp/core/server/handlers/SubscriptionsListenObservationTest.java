@@ -19,6 +19,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -36,10 +37,18 @@ class SubscriptionsListenObservationTest {
     private static final class FakeStream implements OutboundSseStream {
         private final List<SseEvent> events = new CopyOnWriteArrayList<>();
         private final CompletableFuture<Void> onCloseRegistered = new CompletableFuture<>();
+        private final CompletableFuture<Void> startCompletion = new CompletableFuture<>();
         private volatile @Nullable Consumer<@Nullable Throwable> onClose;
 
         @Override
-        public void start() {}
+        public CompletionStage<Void> start() {
+            return startCompletion;
+        }
+
+        /** Simulates the ack write actually flushing — until called, {@code start()}'s stage stays pending. */
+        void completeStart() {
+            startCompletion.complete(null);
+        }
 
         @Override
         public boolean started() {
@@ -103,6 +112,28 @@ class SubscriptionsListenObservationTest {
                     .as("the Observation stays open for the stream's whole lifetime")
                     .isEmpty();
             assertThat(fixture.future()).isNotDone();
+        }
+    }
+
+    @Test
+    void establishmentNanosIsSetOnlyOnceTheAckWriteFlushes() throws Exception {
+        var starts = new CopyOnWriteArrayList<OperationInfo>();
+        var completions = new CopyOnWriteArrayList<OperationOutcome>();
+        ObservationListener listener = recordingListener(starts, completions);
+
+        try (ServerEngine server = newEngine(b -> b.observability(o -> o.listener(listener)))) {
+            var fixture = dispatch(server);
+            fixture.stream().awaitReady();
+
+            assertThat(starts.getFirst().establishmentNanos())
+                    .as("start() only schedules the ack write; establishmentNanos must not be set before it flushes")
+                    .isNull();
+
+            fixture.stream().completeStart();
+
+            assertThat(starts.getFirst().establishmentNanos())
+                    .as("set once start()'s stage reports the ack write flushed")
+                    .isNotNull();
         }
     }
 

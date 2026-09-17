@@ -14,8 +14,9 @@ import org.junit.jupiter.api.Test;
  * failed parse is cached on the channel rather than re-attempted
  * ({@code transport.netty.PeekedBody}). The dispatch site then reads a cache entry that exists but
  * holds no message — a state the pre-cache code could not produce, because it re-parsed and let the
- * parse throw. This pins that the peeked failure still surfaces as JSON-RPC {@code -32700} with
- * HTTP {@code 400} and not as a crash or an empty response.
+ * parse throw. This pins that the peeked failure still surfaces as a JSON-RPC error with HTTP
+ * {@code 400} and not as a crash or an empty response — {@code -32700} for a JSON syntax failure,
+ * {@code -32600} for well-formed JSON that isn't a JSON-RPC envelope.
  *
  * <p>2026-07-28 has no protocol sessions (SEP-2575), so every POST is answered by
  * {@code McpInitializationHandler#handlePostWithoutSession}. Its {@code RequestValidationHandler}
@@ -46,18 +47,18 @@ class MalformedBodyParseErrorTest extends AbstractStatelessMcpE2eTest<Mcp2026072
     }
 
     /**
-     * Well-formed JSON that is not a JSON-RPC envelope fails the same way: the peek caches the
-     * rejection rather than the shape, so the dispatch site cannot tell the two apart — and must not
-     * need to.
+     * Well-formed JSON that is not a JSON-RPC envelope is cached distinctly from a syntax failure
+     * ({@code transport.netty.PeekedBody.Parsed#invalidRequest}), so the dispatch site answers
+     * {@code -32600} (invalid request) rather than {@code -32700} (parse error).
      */
     @Test
-    void peekedNonJsonRpcObjectStillYieldsParseError() throws Exception {
+    void peekedNonJsonRpcObjectYieldsInvalidRequest() throws Exception {
         var response = postMcpRequest("{\"hello\":\"world\"}", Map.of());
 
         assertThatResponse(response)
                 .hasStatus(400)
                 .isJsonRpcError()
-                .hasErrorCode(-32700)
-                .hasErrorMessage("Parse error");
+                .hasErrorCode(-32600)
+                .hasErrorMessage("Invalid Request");
     }
 }

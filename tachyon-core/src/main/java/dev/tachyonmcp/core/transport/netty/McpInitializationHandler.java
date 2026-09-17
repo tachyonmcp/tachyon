@@ -118,7 +118,8 @@ public class McpInitializationHandler extends ChannelInboundHandlerAdapter {
                             } finally {
                                 body.release();
                             }
-                            dispatchNoSessionMessage(ctx, message, origin);
+                            var invalidRequest = peeked != null && peeked.invalidRequest();
+                            dispatchNoSessionMessage(ctx, message, invalidRequest, origin);
                         },
                         executor)
                 .exceptionally(ex -> {
@@ -133,7 +134,10 @@ public class McpInitializationHandler extends ChannelInboundHandlerAdapter {
     }
 
     private void dispatchNoSessionMessage(
-            ChannelHandlerContext ctx, @Nullable JsonRpcMessage message, @Nullable String origin) {
+            ChannelHandlerContext ctx,
+            @Nullable JsonRpcMessage message,
+            boolean invalidRequest,
+            @Nullable String origin) {
         switch (message) {
             case null ->
                 ctx.executor()
@@ -141,7 +145,9 @@ public class McpInitializationHandler extends ChannelInboundHandlerAdapter {
                                 ctx,
                                 HttpResponseStatus.BAD_REQUEST,
                                 "application/json",
-                                dispatcher.parseError(ChannelHandlerUtils.getInteractionContext(ctx)),
+                                invalidRequest
+                                        ? dispatcher.invalidRequestError(ChannelHandlerUtils.getInteractionContext(ctx))
+                                        : dispatcher.parseError(ChannelHandlerUtils.getInteractionContext(ctx)),
                                 origin));
             case JsonRpcMessage.Request<?> req
             when METHOD_INITIALIZE.equals(req.method()) -> handleInitialize(ctx, req.id(), req.params(), origin);

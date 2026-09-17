@@ -14,6 +14,7 @@ import dev.tachyonmcp.core.server.OutboundSseStream;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -111,7 +112,9 @@ class SubscriptionRegistryTest {
         }
 
         @Override
-        public void start() {}
+        public CompletionStage<Void> start() {
+            return CompletableFuture.completedFuture(null);
+        }
 
         @Override
         public boolean started() {

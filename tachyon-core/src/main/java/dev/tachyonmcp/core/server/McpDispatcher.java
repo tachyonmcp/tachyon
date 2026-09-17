@@ -210,6 +210,17 @@ public class McpDispatcher {
         return encodeError(null, ServerErrors.parseError(), mapper);
     }
 
+    /**
+     * Like {@link #parseError}, for a body that parsed as valid JSON but not a valid JSON-RPC
+     * envelope — {@code -32600} rather than {@code -32700}.
+     */
+    public byte[] invalidRequestError(@Nullable ChannelContext channelContext) {
+        var mapper = channelContext != null
+                ? channelContext.protocol().responseMapper()
+                : dispatchContext(null).responseMapper();
+        return encodeError(null, ServerErrors.invalidRequest("Invalid Request"), mapper);
+    }
+
     public CompletableFuture<DispatchResult> dispatchRequestAsync(
             RequestId id, String method, Object params, @Nullable String sessionId) {
         return dispatchRequestAsync(id, method, params, sessionId, null, null);

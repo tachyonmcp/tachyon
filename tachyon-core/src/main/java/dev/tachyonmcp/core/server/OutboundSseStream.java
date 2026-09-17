@@ -3,6 +3,7 @@ package dev.tachyonmcp.core.server;
 
 import dev.tachyonmcp.api.annotations.InternalApi;
 import dev.tachyonmcp.core.runtime.SseEvent;
+import java.util.concurrent.CompletionStage;
 import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 
@@ -41,10 +42,15 @@ public interface OutboundSseStream {
     }
 
     /**
-     * Activates the SSE stream and emits initial framing.
-     * Idempotent — subsequent calls are no-ops. May be called from any thread.
+     * Activates the SSE stream and emits initial framing, including any events queued before this
+     * call (e.g. {@code subscriptions/listen}'s ack, which must be queued ahead of {@code start()}
+     * so it lands first). Idempotent — subsequent calls are no-ops. May be called from any thread.
+     *
+     * @return a stage that completes once that initial write — ack included — has been flushed to
+     *     the transport, or completes exceptionally if the write failed or the channel was already
+     *     inactive; a second, no-op call completes immediately without waiting on the first
      */
-    void start();
+    CompletionStage<Void> start();
 
     /**
      * @return {@code true} once the stream has been opened.

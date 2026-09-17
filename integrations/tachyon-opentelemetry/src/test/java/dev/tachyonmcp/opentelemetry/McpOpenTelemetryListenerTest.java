@@ -504,6 +504,7 @@ class McpOpenTelemetryListenerTest {
                     .filteredOn(point ->
                             "subscriptions/listen".equals(point.getAttributes().get(MCP_METHOD_NAME)))
                     .as("recorded duration should reflect the ack, not the ~300ms the stream stayed open after it")
+                    .isNotEmpty()
                     .allSatisfy(point -> assertThat(point.getSum()).isLessThan(0.1));
         }
     }

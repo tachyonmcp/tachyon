@@ -62,6 +62,20 @@ class PeekedBodyTest {
         var cached = PeekedBody.cached(ctx, request);
         assertThat(cached).isNotNull();
         assertThat(cached.message()).isNull();
+        assertThat(cached.invalidRequest()).isFalse();
+        request.release();
+    }
+
+    @Test
+    void wellFormedJsonThatIsNotAJsonRpcEnvelopeCachesAsInvalidRequest() {
+        var request = post("{\"hello\":\"world\"}");
+
+        assertThat(PeekedBody.peek(ctx, request)).isNull();
+
+        var cached = PeekedBody.cached(ctx, request);
+        assertThat(cached).isNotNull();
+        assertThat(cached.message()).isNull();
+        assertThat(cached.invalidRequest()).isTrue();
         request.release();
     }
 

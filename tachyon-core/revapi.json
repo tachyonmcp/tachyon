@@ -1204,6 +1204,26 @@
           "attachments": {
             "since": "1.0.0-beta.29"
           }
+        },
+        {
+          "ignore": true,
+          "code": "java.method.returnTypeChanged",
+          "old": "method void dev.tachyonmcp.core.transport.netty.sse.PostSseStream::start()",
+          "new": "method java.util.concurrent.CompletionStage<java.lang.Void> dev.tachyonmcp.core.transport.netty.sse.PostSseStream::start()",
+          "justification": "Differentiate unparsable vs wrong json",
+          "attachments": {
+            "since": "1.0.0-beta.29"
+          }
+        },
+        {
+          "ignore": true,
+          "code": "java.method.removed",
+          "old": "method boolean dev.tachyonmcp.core.transport.netty.sse.PostSseStream::writable()",
+          "justification": "Unused",
+          "attachments": {
+            "since": "1.0.0-beta.29"
+          }
+
         }
       ]
     }

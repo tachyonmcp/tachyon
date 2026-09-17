@@ -17,10 +17,13 @@ import io.netty.handler.codec.http.DefaultHttpResponse;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http.LastHttpContent;
+import java.nio.channels.ClosedChannelException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.function.Consumer;
 import java.util.function.LongSupplier;
 import org.jspecify.annotations.Nullable;
@@ -32,8 +35,8 @@ import org.slf4j.LoggerFactory;
  * when the dispatching handler emits a server-to-client message.
  *
  * <p>All state transitions and queued-event mutations are serialized onto the channel's
- * {@link io.netty.channel.EventLoop}. The state is volatile only because {@link #started()} and
- * {@link #writable()} may be queried from another thread; only the event loop writes it.
+ * {@link io.netty.channel.EventLoop}. The state is volatile only because {@link #started()} may
+ * be queried from another thread; only the event loop writes it.
  */
 public final class PostSseStream implements OutboundSseStream {
 
@@ -86,18 +89,19 @@ public final class PostSseStream implements OutboundSseStream {
     }
 
     @Override
-    public void start() {
-        runOnEventLoop(this::doStart);
+    public CompletionStage<Void> start() {
+        var completion = new CompletableFuture<Void>();
+        try {
+            runOnEventLoop(() -> doStart(completion));
+        } catch (java.util.concurrent.RejectedExecutionException e) {
+            completion.completeExceptionally(e);
+        }
+        return completion;
     }
 
     @Override
     public boolean started() {
         return state.opened;
-    }
-
-    /** Returns whether the stream is currently open and its channel can accept a write. */
-    public boolean writable() {
-        return state == State.OPEN && channel.isActive();
     }
 
     @Override
@@ -124,7 +128,7 @@ public final class PostSseStream implements OutboundSseStream {
         // Self-starting: a comment upgrades the buffered POST to SSE even when no event was written
         // yet — this is the token-free keep-alive path. doStart is idempotent.
         runOnEventLoop(() -> {
-            doStart();
+            doStart(new CompletableFuture<>());
             doWriteComment(message);
         });
     }
@@ -177,10 +181,21 @@ public final class PostSseStream implements OutboundSseStream {
 
     /* ------- methods below run on the channel's EventLoop only ------- */
 
-    private void doStart() {
-        if (state != State.NEW) return;
+    /**
+     * Opens the stream and flushes its initial write — the queued events (e.g. subscriptions/listen's
+     * ack) if any, otherwise a priming event. {@code completion} completes once that flush finishes,
+     * so a caller can observe when the ack actually reached the transport rather than just when
+     * {@code start()} returned.
+     */
+    private void doStart(CompletableFuture<Void> completion) {
+        if (state != State.NEW) {
+            // Idempotent no-op: nothing new was flushed for this call, so there is nothing to wait on.
+            completion.complete(null);
+            return;
+        }
         if (!channel.isActive()) {
             state = State.CLOSED_UNOPENED;
+            completion.completeExceptionally(new ClosedChannelException());
             return;
         }
         state = State.OPEN;
@@ -189,6 +204,7 @@ public final class PostSseStream implements OutboundSseStream {
         HttpHelpers.setSseStreamHeaders(response, origin);
         channel.write(response);
         SseHeartbeat.enable(channel, heartbeatInterval);
+        ChannelFuture initialWrite;
         if (queued.isEmpty()) {
             // Priming event: gives the client a Last-Event-ID baseline for reconnection (SEP-1699).
             // Carries this stream's key so a resume from the priming id replays only this stream.
@@ -196,15 +212,21 @@ public final class PostSseStream implements OutboundSseStream {
             // requires to be the stream's first message) — that queued event is itself a valid baseline.
             var primingId = eventIdSupplier.getAsLong();
             var priming = new SseEvent(ServerEngine.wireEventId(primingId, streamKey), "message", "");
-            channel.write(new DefaultHttpContent(SseSerializer.encode(channel.alloc(), priming)));
+            initialWrite = channel.write(new DefaultHttpContent(SseSerializer.encode(channel.alloc(), priming)));
             logger.trace("POST-SSE stream started, priming event id={}, channel={}", primingId, channel.id());
         } else {
+            ChannelFuture lastQueuedWrite = null;
             for (var event : queued) {
-                channel.write(new DefaultHttpContent(SseSerializer.encode(channel.alloc(), event)));
+                lastQueuedWrite = channel.write(new DefaultHttpContent(SseSerializer.encode(channel.alloc(), event)));
             }
             queued.clear();
+            initialWrite = lastQueuedWrite;
         }
         channel.flush();
+        initialWrite.addListener(f -> {
+            if (f.isSuccess()) completion.complete(null);
+            else completion.completeExceptionally(f.cause());
+        });
     }
 
     private void doWriteEvent(SseEvent event) {
