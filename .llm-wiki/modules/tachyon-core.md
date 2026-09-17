@@ -3,7 +3,7 @@ title: tachyon-core
 tags: [module, core]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/, tachyon-core/src/main/resources/, tachyon-core/pom.xml]
 updated: 2026-09-17
-commit: aba402de
+commit: 1a4081f4
 ---
 
 # ⚙️ tachyon-core
@@ -26,7 +26,7 @@ Verdict: the runtime. ~190 main files. Deps: `slf4j-api`, `netty-codec-http`, `n
 | `server.observability` | `Observation`, listener/scope/info/outcome, `CapturedPayload` | [[observability]] |
 | `runtime` | `Session`, `SessionState`, `ChannelContext`, `DefaultChannelContext`, `InteractionEvent`, `SseConnection`, `SseEvent`, `Backpressure` | [[sessions]] |
 | `protocol` | `Protocol`, `Protocols`, `ProtocolRequestMapper`, `ProtocolResponseMapper`, `ProtocolMappers`, `RequestMappingException` | [[protocol-versions]] |
-| `protocol.mcp` | `McpHeaderNames`, `AbstractMcpRequestMapper` (shared request mapping); `v2025_11_25`, `v2026_07_28` (`McpProtocol`, `codecs/`, `transport/`, generated `models/`) | [[protocol-versions]] |
+| `protocol.mcp` | `McpHeaderNames`, `McpHeaderValue` (SEP-2243 Base64 sentinel), `MirroredArgument` (`x-mcp-header` ↔ argument), `AbstractMcpRequestMapper` (shared request mapping); `v2025_11_25`, `v2026_07_28` (`McpProtocol`, `codecs/`, `transport/`, generated `models/`) | [[protocol-versions]] |
 | `transport.jsonrpc` | `JsonRpcCodec`, `JsonRpcMessage`, `JsonRpcError`, `ValueSerializer` | [[json-layer]] |
 | `transport.netty` | `NettyServer`, `NettyServerConfig`, `NettyIoEngine`, `McpChannelInitializer`, init/operation handlers, `InteractionHandler`, lifecycle coordinator, `ChannelHandlerUtils` | [[netty-pipeline]] |
 | `transport.netty.http` | guards | [[security-guards]] |
@@ -50,7 +50,7 @@ Verdict: the runtime. ~190 main files. Deps: `slf4j-api`, `netty-codec-http`, `n
 1. Mapper method on `ProtocolRequestMapper` (impl once in `AbstractMcpRequestMapper`, override per version only if shape differs) and `ProtocolResponseMapper` (+ both version impls).
 2. `RpcMethodHandler` record in `server.features.<x>` `*MethodHandlers.register(map, …)` or `server.handlers`.
 3. Wire in [DefaultTachyonServer#registerDefaults](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java).
-4. Method addresses a named target (`Mcp-Name` mirror)? add it to `McpHeaderNames#mirroredNameField` — one switch drives both the 2026 presence rule and the all-version agreement check.
+4. Method addresses a named target (`Mcp-Name` mirror)? add it to `McpHeaderNames#mirroredNameField` — one switch drives both the all-version agreement check `McpHeaderMatchHandler#matchName` and the 2026 presence rule `RequiredHeadersHandler#requireMirrors`.
 5. Capability flag? `resolveCapabilities` + `ServerInfoMapper` both versions.
 6. e2e test per protocol package → [[testing]].
 
