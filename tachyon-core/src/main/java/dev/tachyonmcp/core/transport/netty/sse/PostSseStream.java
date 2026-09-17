@@ -6,6 +6,7 @@ import static dev.tachyonmcp.core.transport.netty.sse.SseManager.SSE_RETRY_DELAY
 import dev.tachyonmcp.core.runtime.SseEvent;
 import dev.tachyonmcp.core.server.OutboundSseStream;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
+import dev.tachyonmcp.core.transport.netty.ChannelHandlerUtils;
 import dev.tachyonmcp.core.transport.netty.http.HttpHelpers;
 import io.netty.buffer.ByteBufUtil;
 import io.netty.channel.Channel;
@@ -20,6 +21,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 import java.util.function.LongSupplier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -160,8 +162,8 @@ public final class PostSseStream implements OutboundSseStream {
     }
 
     @Override
-    public void onClose(Runnable callback) {
-        channel.closeFuture().addListener(f -> callback.run());
+    public void onClose(Consumer<@Nullable Throwable> callback) {
+        channel.closeFuture().addListener(f -> callback.accept(ChannelHandlerUtils.closeFailure(channel)));
     }
 
     private void runOnEventLoop(Runnable task) {
@@ -222,6 +224,7 @@ public final class PostSseStream implements OutboundSseStream {
                         "POST-SSE write failed, closing channel={}: {}",
                         channel.id(),
                         f.cause().getMessage());
+                ChannelHandlerUtils.markCloseFailure(channel, f.cause());
                 channel.close();
             }
         });
@@ -242,7 +245,10 @@ public final class PostSseStream implements OutboundSseStream {
         }
         var buf = SseSerializer.encode(channel.alloc(), ServerEngine.wireEventId(sseEventId, streamKey), body);
         channel.writeAndFlush(new DefaultHttpContent(buf)).addListener((ChannelFutureListener) f -> {
-            if (!f.isSuccess()) channel.close();
+            if (!f.isSuccess()) {
+                ChannelHandlerUtils.markCloseFailure(channel, f.cause());
+                channel.close();
+            }
         });
     }
 
@@ -255,7 +261,10 @@ public final class PostSseStream implements OutboundSseStream {
                 : ": " + message.replace('\r', ' ').replace('\n', ' ') + "\r\n";
         var buf = ByteBufUtil.writeUtf8(channel.alloc(), line);
         channel.writeAndFlush(new DefaultHttpContent(buf)).addListener((ChannelFutureListener) f -> {
-            if (!f.isSuccess()) channel.close();
+            if (!f.isSuccess()) {
+                ChannelHandlerUtils.markCloseFailure(channel, f.cause());
+                channel.close();
+            }
         });
     }
 

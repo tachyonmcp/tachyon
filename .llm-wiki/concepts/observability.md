@@ -2,8 +2,8 @@
 title: Observability
 tags: [concept, observability, otel]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/server/observability/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/ObservabilityConfig.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/PayloadCapturePolicy.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java, integrations/tachyon-opentelemetry/]
-updated: 2026-09-14
-commit: 582f9c52
+updated: 2026-09-17
+commit: 0854b7c3
 ---
 
 # 🔭 Observability
@@ -24,9 +24,9 @@ Verdict: passive listener lifecycle per operation. Zero listeners ⇒ `Observati
 
 Listener throwing on interrupted thread ⇒ rethrown, else warn `Observation#fault`.
 
-`OperationInfo` (mutable): kind `REQUEST|NOTIFICATION|INITIALIZE`, method, requestId, sessionId, `traceparent` (from `_meta.traceparent`, always extracted `McpDispatcher#extractTraceParent`), protocolVersion, server address/port, request/response payload, `target` (tool/prompt name), exceptionCause `OperationInfo`.
+`OperationInfo` (mutable): kind `REQUEST|NOTIFICATION|INITIALIZE`, method, requestId, sessionId, `traceparent` (from `_meta.traceparent`, always extracted `McpDispatcher#extractTraceParent`), protocolVersion, server address/port, request/response payload, `target` (tool/prompt name), exceptionCause, `establishmentNanos` (streaming ops only — see below) `OperationInfo`.
 
-`OperationOutcome` sealed `OperationOutcome`: `Rejected(error?, httpStatus, wireCode)`, `Completed`, `PayloadFailure`, `SerializationFailed`, `HandlerFailed(error, wireCode, cause?)`, `Cancelled`, `TaskHandoff(taskId)`, `NotificationAccepted`, `NotificationIgnored`, `StreamEstablished`.
+`OperationOutcome` sealed `OperationOutcome`: `Rejected(error?, httpStatus, wireCode)`, `Completed`, `PayloadFailure`, `SerializationFailed`, `HandlerFailed(error, wireCode, cause?)`, `Cancelled`, `TaskHandoff(taskId)`, `NotificationAccepted`, `NotificationIgnored`, `StreamFailed(cause)` (a `subscriptions/listen` stream's genuine post-establishment transport failure — an ordinary disconnect reports `Cancelled` instead).
 
 ## 📦 Payload capture
 
@@ -38,7 +38,9 @@ Listener throwing on interrupted thread ⇒ rethrown, else warn `Observation#fau
 
 ## 📈 OpenTelemetry bridge
 
-`McpOpenTelemetryListener.create(openTelemetry)` `McpOpenTelemetryListener`: SERVER span named by method, histogram `mcp.server.operation.duration` (s), attributes `mcp.method.name`, `mcp.session.id`, `mcp.protocol.version`, `gen_ai.tool.name`, `gen_ai.prompt.name`, `gen_ai.operation.name`, optional `gen_ai.tool.call.arguments/result` `McpAttributes`; `error.type` from error kind / tool error / cause type. Follows OTel GenAI MCP semconv.
+`McpOpenTelemetryListener.create(openTelemetry)` `McpOpenTelemetryListener`: SERVER span named by method, histogram `mcp.server.operation.duration` (s), attributes `mcp.method.name`, `mcp.session.id`, `mcp.protocol.version`, `gen_ai.tool.name`, `gen_ai.prompt.name`, `gen_ai.operation.name`, optional `gen_ai.tool.call.arguments/result` `McpAttributes`; `error.type` from error kind / tool error / cause type. Span status is `ERROR` whenever `error.type` is set — no caller-fault-vs-server-fault carve-out, per the MCP semconv's unconditional rule. Follows OTel GenAI MCP semconv.
+
+⚠️ `subscriptions/listen` completes at real stream end `SubscriptionsListenHandler#handleAsync`, so its **span** covers the whole stream lifetime — but the duration **metric** stays ack-only: the handler stamps `OperationInfo#establishmentNanos` right after `stream.start()`, and both `McpOpenTelemetryListener` and `TachyonMetricsListener` use it (when present) instead of the completion timestamp when recording their histogram/timer. Same mechanism, same reason, in both listeners.
 
 ⚠️ `ObservationListener` is `@InternalApi` + `@Experimental` yet meant for bridges → [[api-stability]].
 

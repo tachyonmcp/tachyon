@@ -23,10 +23,14 @@ import static net.javacrumbs.jsonunit.assertj.JsonAssertions.assertThatJson;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
+import dev.tachyonmcp.api.server.domain.RequestId;
 import dev.tachyonmcp.api.server.domain.TextResourceContents;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
 import dev.tachyonmcp.core.server.TachyonServer;
 import dev.tachyonmcp.core.server.config.ObservabilityConfig;
+import dev.tachyonmcp.core.server.observability.OperationInfo;
+import dev.tachyonmcp.core.server.observability.OperationKind;
+import dev.tachyonmcp.core.server.observability.OperationOutcome;
 import dev.tachyonmcp.testkit.Mcp20251125Client;
 import dev.tachyonmcp.testkit.Mcp20260728Client;
 import dev.tachyonmcp.testkit.McpTestServers;
@@ -132,7 +136,7 @@ class McpOpenTelemetryListenerTest {
     }
 
     @Test
-    @DisplayName("a tool returning ToolResult.error is error.type=tool_error on a successful, UNSET span")
+    @DisplayName("a tool returning ToolResult.error is a JSON-RPC success but an ERROR span: error.type=tool_error")
     void toolErrorIsClassified() throws Exception {
         try (var server = startServer();
                 var client = new Mcp20251125Client(server.port())) {
@@ -146,7 +150,7 @@ class McpOpenTelemetryListenerTest {
             assertThat(response).isSuccess().isToolError();
 
             var span = spanFor("tools/call failing");
-            assertThat(span.getStatus().getStatusCode()).isEqualTo(StatusCode.UNSET);
+            assertThat(span.getStatus().getStatusCode()).isEqualTo(StatusCode.ERROR);
             assertThat(span.getAttributes().asMap())
                     .containsEntry(ERROR_TYPE, TOOL_ERROR)
                     .doesNotContainKey(RPC_RESPONSE_STATUS_CODE)
@@ -300,8 +304,8 @@ class McpOpenTelemetryListenerTest {
     }
 
     @Test
-    @DisplayName("an unknown tool records the JSON-RPC code but leaves the span UNSET — the caller's fault")
-    void callerFaultIsNotAServerFault() throws Exception {
+    @DisplayName("an unknown tool is a caller-fault rejection, but still an ERROR span per MCP semconv")
+    void rejectionSetsErrorStatus() throws Exception {
         try (var server = startServer();
                 var client = new Mcp20251125Client(server.port())) {
             var sessionId = client.initialize();
@@ -314,7 +318,7 @@ class McpOpenTelemetryListenerTest {
             assertThat(response).isJsonRpcError().hasErrorCode(-32602);
 
             var span = spanFor("tools/call");
-            assertThat(span.getStatus().getStatusCode()).isEqualTo(StatusCode.UNSET);
+            assertThat(span.getStatus().getStatusCode()).isEqualTo(StatusCode.ERROR);
             assertThat(span.getAttributes().asMap())
                     .containsEntry(RPC_RESPONSE_STATUS_CODE, "-32602")
                     .containsEntry(ERROR_TYPE, "INVALID_PARAMS")
@@ -335,7 +339,7 @@ class McpOpenTelemetryListenerTest {
             assertThat(response).isJsonRpcError().hasErrorCode(-32601);
 
             var span = spanFor("definitely/unknown");
-            assertThat(span.getStatus().getStatusCode()).isEqualTo(StatusCode.UNSET);
+            assertThat(span.getStatus().getStatusCode()).isEqualTo(StatusCode.ERROR);
             assertThat(span.getAttributes().asMap())
                     .containsEntry(RPC_RESPONSE_STATUS_CODE, "-32601")
                     .containsEntry(ERROR_TYPE, "METHOD_NOT_FOUND");
@@ -460,16 +464,64 @@ class McpOpenTelemetryListenerTest {
                       "params":{"_meta":{"io.modelcontextprotocol/subscriptionId":50}}
                     }
                     """);
-
-                final var span = awaitSpanFor("subscriptions/listen");
-                assertThat(span.getKind()).isEqualTo(SpanKind.SERVER);
-                assertThat(span.getStatus().getStatusCode()).isEqualTo(StatusCode.UNSET);
-                assertThat(span.getAttributes().asMap())
-                        .containsEntry(MCP_METHOD_NAME, "subscriptions/listen")
-                        .containsEntry(JSONRPC_REQUEST_ID, "50")
-                        .doesNotContainKey(MCP_SESSION_ID);
             }
+            // The span now spans the stream's whole lifetime -- it only finishes once the client
+            // closes the stream above, not at the establishment handshake.
+            final var span = awaitSpanFor("subscriptions/listen");
+            assertThat(span.getKind()).isEqualTo(SpanKind.SERVER);
+            assertThat(span.getStatus().getStatusCode()).isEqualTo(StatusCode.UNSET);
+            assertThat(span.getAttributes().asMap())
+                    .containsEntry(MCP_METHOD_NAME, "subscriptions/listen")
+                    .containsEntry(JSONRPC_REQUEST_ID, "50")
+                    .doesNotContainKey(MCP_SESSION_ID);
         }
+    }
+
+    @Test
+    @DisplayName("mcp.server.operation.duration for subscriptions/listen measures the ack, not the stream's lifetime")
+    void subscriptionDurationMetricMeasuresAckNotStreamLifetime() throws Exception {
+        try (var server = startServer();
+                var client = new Mcp20260728Client(server.port())) {
+            try (var stream = client.openPostStream(null, """
+                {"jsonrpc":"2.0","id":53,"method":"subscriptions/listen","params":{}}
+                """)) {
+                stream.await(
+                        frame -> frame.data().contains("notifications/subscriptions/acknowledged"),
+                        Duration.ofSeconds(5));
+                // The stream stays open well past the ack -- the recorded duration must not include this.
+                Thread.sleep(300);
+            }
+            // The server detects the close (and records the metric) asynchronously relative to the
+            // client closing its side -- wait for the span first, since it's recorded in the same
+            // complete() call as the metric.
+            awaitSpanFor("subscriptions/listen");
+
+            var histogram = metrics.collectAllMetrics().stream()
+                    .filter(metric -> "mcp.server.operation.duration".equals(metric.getName()))
+                    .findFirst()
+                    .orElseThrow();
+            assertThat(histogram.getHistogramData().getPoints())
+                    .filteredOn(point ->
+                            "subscriptions/listen".equals(point.getAttributes().get(MCP_METHOD_NAME)))
+                    .as("recorded duration should reflect the ack, not the ~300ms the stream stayed open after it")
+                    .allSatisfy(point -> assertThat(point.getSum()).isLessThan(0.1));
+        }
+    }
+
+    @Test
+    @DisplayName("a subscriptions/listen stream that fails genuinely is an ERROR span: error.type=cause class name")
+    void subscriptionStreamFailureFailsSpan() {
+        var listener = McpOpenTelemetryListener.create(otel);
+        var info = OperationInfo.builder(OperationKind.REQUEST, "subscriptions/listen", RequestId.of(99))
+                .build();
+        var cause = new IOException("connection reset");
+
+        listener.start(info).close();
+        listener.complete(info, new OperationOutcome.StreamFailed(cause));
+
+        var span = spanFor("subscriptions/listen");
+        assertThat(span.getStatus().getStatusCode()).isEqualTo(StatusCode.ERROR);
+        assertThat(span.getAttributes().get(ERROR_TYPE)).isEqualTo(IOException.class.getName());
     }
 
     @Test

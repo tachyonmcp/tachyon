@@ -31,6 +31,7 @@ public final class OperationInfo {
     private @Nullable CapturedPayload responsePayload;
     private @Nullable String target;
     private @Nullable Throwable exceptionCause;
+    private @Nullable Long establishmentNanos;
 
     public OperationInfo(OperationKind kind, String method, @Nullable RequestId requestId) {
         this.kind = kind;
@@ -142,6 +143,22 @@ public final class OperationInfo {
 
     public void exceptionCause(@Nullable Throwable exceptionCause) {
         this.exceptionCause = exceptionCause;
+    }
+
+    /**
+     * The {@link System#nanoTime()} reading at which a streaming operation's own synchronous
+     * establishment (e.g. {@code subscriptions/listen}'s ack) finished, or {@code null} for an
+     * ordinary request/notification. Lets a duration-recording listener measure just that latency
+     * at {@link ObservationListener#complete} instead of the operation's full — potentially very
+     * long — lifetime through to its terminal outcome, which is what the completion timestamp would
+     * otherwise measure once completion is deferred past establishment.
+     */
+    public @Nullable Long establishmentNanos() {
+        return establishmentNanos;
+    }
+
+    public void establishmentNanos(long establishmentNanos) {
+        this.establishmentNanos = establishmentNanos;
     }
 
     /**

@@ -7,8 +7,8 @@ import dev.tachyonmcp.core.protocol.RequestMappingException;
 import dev.tachyonmcp.core.server.RpcMethodHandler;
 import dev.tachyonmcp.core.server.domain.ServerErrors;
 import dev.tachyonmcp.core.server.features.subscriptions.SubscriptionRegistry;
+import dev.tachyonmcp.core.server.features.subscriptions.SubscriptionStreamFailedException;
 import dev.tachyonmcp.core.server.features.tasks.TasksExtension;
-import dev.tachyonmcp.core.server.observability.OperationOutcome;
 import dev.tachyonmcp.core.server.session.DispatchContext;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -76,18 +76,21 @@ public final class SubscriptionsListenHandler
         var pending = new CompletableFuture<>();
         var key = registry.activate(subscriptionId, stream, filter, context.responseMapper(), pending);
         stream.start();
-        // Registered before completing observation: an implementation without Netty's
-        // already-closed-future-fires-immediately semantics could otherwise miss a disconnect that
-        // races in between the two calls.
-        stream.onClose(() -> {
+        // The returned future — and with it, the Observation the generic dispatch-completion path
+        // drives — spans the SSE stream's whole lifetime, resolving only on disconnect, a genuine
+        // transport failure, or server shutdown. establishmentNanos marks just the ack, so a
+        // duration-recording listener isn't forced to measure that whole lifetime too.
+        context.observation().info().establishmentNanos(System.nanoTime());
+        stream.onClose(cause -> {
             registry.remove(key);
-            pending.cancel(false);
-            logger.debug("subscriptions/listen stream ended: subscriptionId={}", subscriptionId);
+            if (cause == null) {
+                pending.cancel(false);
+            } else {
+                pending.completeExceptionally(new SubscriptionStreamFailedException(cause));
+            }
+            logger.debug(
+                    "subscriptions/listen stream ended: subscriptionId={}, failed={}", subscriptionId, cause != null);
         });
-        // Establishment is this operation's terminal observation fact — the returned future spans
-        // the SSE stream's whole lifetime (resolves only on disconnect/shutdown), so the generic
-        // dispatch-completion path must not be made to wait for it.
-        context.observation().complete(new OperationOutcome.StreamEstablished());
         return pending;
     }
 }

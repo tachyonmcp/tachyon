@@ -3,6 +3,7 @@ package dev.tachyonmcp.core.server;
 
 import dev.tachyonmcp.api.annotations.InternalApi;
 import dev.tachyonmcp.core.runtime.SseEvent;
+import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -78,9 +79,11 @@ public interface OutboundSseStream {
      * Registers a callback invoked when the underlying transport connection closes, however that
      * happens — client disconnect, {@link #close()}, or a dead socket detected on write. Used by a
      * long-lived handler (e.g. {@code subscriptions/listen}) to clean up stream-scoped state it
-     * cannot otherwise learn about. Default is a no-op for transports with no close signal.
+     * cannot otherwise learn about, and to distinguish a genuine transport failure from an ordinary
+     * close. Default is a no-op for transports with no close signal.
      *
-     * @param callback invoked at most once, on an unspecified thread
+     * @param callback invoked at most once, on an unspecified thread, with the failure cause when
+     *                 the close was abnormal, or {@code null} for an ordinary close
      */
-    default void onClose(Runnable callback) {}
+    default void onClose(Consumer<@Nullable Throwable> callback) {}
 }

@@ -66,6 +66,10 @@ public sealed interface OperationOutcome {
     /** A notification with no matching handler was silently accepted per protocol. */
     record NotificationIgnored() implements OperationOutcome {}
 
-    /** A {@code subscriptions/listen} SSE stream was established; its stream lifetime is tracked separately. */
-    record StreamEstablished() implements OperationOutcome {}
+    /**
+     * A {@code subscriptions/listen} SSE stream ended in a genuine transport failure rather than an
+     * ordinary client disconnect or server shutdown (both of which report {@link Cancelled} or
+     * {@link Completed}). No wire code: the connection is already gone, so nothing is sent back.
+     */
+    record StreamFailed(Throwable cause) implements OperationOutcome {}
 }

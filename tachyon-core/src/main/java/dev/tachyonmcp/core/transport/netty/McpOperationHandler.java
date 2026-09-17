@@ -582,6 +582,7 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
             logger.debug("Connection reset on MCP endpoint", cause);
         } else {
             logger.error("MCP endpoint error", cause);
+            ChannelHandlerUtils.markCloseFailure(ctx.channel(), cause);
         }
         ctx.close();
     }

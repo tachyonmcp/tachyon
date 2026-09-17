@@ -13,6 +13,7 @@ import dev.tachyonmcp.core.runtime.ChannelContext;
 import dev.tachyonmcp.core.runtime.Session;
 import dev.tachyonmcp.core.runtime.SessionState;
 import dev.tachyonmcp.core.server.domain.ServerErrors;
+import dev.tachyonmcp.core.server.features.subscriptions.SubscriptionStreamFailedException;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
 import dev.tachyonmcp.core.server.observability.Observation;
 import dev.tachyonmcp.core.server.observability.ObservationListener;
@@ -469,6 +470,10 @@ public class McpDispatcher {
                 logger.debug("Handler cancelled: method={}, id={}", method, id);
                 dispatchResult = errorResult(id, ServerErrors.internalError("Internal error"), context);
                 outcome = new OperationOutcome.Cancelled();
+            } else if (unwrapped instanceof SubscriptionStreamFailedException sfe) {
+                logger.debug("Subscription stream failed: method={}, id={}", method, id, sfe.getCause());
+                dispatchResult = errorResult(id, ServerErrors.internalError("Internal error"), context);
+                outcome = new OperationOutcome.StreamFailed(sfe.getCause());
             } else if (unwrapped instanceof RequestMappingException rme) {
                 logger.debug("Request mapping failed: method={}, id={}: {}", method, id, rme.getMessage());
                 var error = rme.error();

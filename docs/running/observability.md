@@ -168,7 +168,11 @@ Registering two listeners produces two spans per operation, the second nested un
 | `gen_ai.tool.call.result` | `responseContent` |
 | Exception span event (message + stack) | `exceptionDetail` |
 
-`error.type` distinguishes caller faults (unknown method, bad params, malformed session) — span status `UNSET` — from server faults, which set `StatusCode.ERROR`.
+`error.type` is set for any rejection, tool error, or handler/serialization failure, whether it's the caller's fault (unknown method, bad params, malformed session) or the server's. Per the MCP semantic conventions, span status is `StatusCode.ERROR` whenever `error.type` is present — there's no separate "caller fault" status.
+
+### Long-lived streams
+
+`subscriptions/listen`'s span covers the whole SSE stream's lifetime: it only ends when the stream closes, whether that's an ordinary client disconnect, a genuine transport failure (`error.type` set to the failure's exception class, span status `ERROR`), or server shutdown. The `mcp.server.operation.duration` metric, however, still measures only the time to acknowledge the subscription — not the stream's full duration — so a long-lived subscription doesn't skew latency metrics or get lost in fixed histogram buckets sized for ordinary request/response latencies.
 
 ## Examples
 

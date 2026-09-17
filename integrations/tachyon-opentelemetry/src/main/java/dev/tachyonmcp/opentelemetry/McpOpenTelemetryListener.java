@@ -37,7 +37,6 @@ import io.opentelemetry.api.trace.Tracer;
 import io.opentelemetry.context.Context;
 import io.opentelemetry.context.Scope;
 import java.util.Objects;
-import java.util.Set;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import org.jspecify.annotations.Nullable;
@@ -87,14 +86,6 @@ public class McpOpenTelemetryListener implements ObservationListener {
 
     /** This listener only instruments {@code tachyon-core}'s Streamable HTTP transport. */
     private static final String NETWORK_PROTOCOL_HTTP = "http";
-
-    /**
-     * JSON-RPC codes a server returns because the <em>caller</em> sent something it could not
-     * serve. The conventions say these must not count as server errors, and state the rule in terms
-     * of codes — which is why the code is resolved by the dispatcher and handed to us rather than
-     * re-derived here from {@code ServerError.Kind}, whose mapping differs between MCP versions.
-     */
-    private static final Set<Integer> CALLER_FAULT_CODES = Set.of(-32700, -32600, -32601, -32602, -32002);
 
     private final Tracer tracer;
     private final DoubleHistogram operationDuration;
@@ -148,7 +139,10 @@ public class McpOpenTelemetryListener implements ObservationListener {
         span.setAllAttributes(spanOnlyAttributes(info));
         recordOutcome(span, metricAttributes, info, outcome);
         span.end();
-        operationDuration.record((System.nanoTime() - op.startNanos) / NANOS_PER_SECOND, metricAttributes.build());
+        var establishmentNanos = info.establishmentNanos();
+        var elapsedNanos =
+                establishmentNanos != null ? establishmentNanos - op.startNanos : System.nanoTime() - op.startNanos;
+        operationDuration.record(elapsedNanos / NANOS_PER_SECOND, metricAttributes.build());
     }
 
     private static @Nullable String target(OperationInfo info) {
@@ -221,14 +215,15 @@ public class McpOpenTelemetryListener implements ObservationListener {
                     var code = String.valueOf(rejected.wireCode());
                     span.setAttribute(RPC_RESPONSE_STATUS_CODE, code);
                     metricAttributes.put(RPC_RESPONSE_STATUS_CODE, code);
+                    span.setStatus(StatusCode.ERROR, error.message());
                 }
-                // Rejections are caller-fault by construction (unknown method, bad session state,
-                // missing header) -- span status stays UNSET.
             }
             case OperationOutcome.PayloadFailure ignored -> {
                 classify(span, metricAttributes, TOOL_ERROR);
                 recordToolCall(span, info);
-                // Still a JSON-RPC success -- no status code, span status stays UNSET.
+                // A JSON-RPC success -- no status code -- but error.type is present, so per the MCP
+                // semconv the span status is still ERROR.
+                span.setStatus(StatusCode.ERROR, "Tool call returned an error result");
             }
             case OperationOutcome.HandlerFailed failed -> {
                 var code = String.valueOf(failed.wireCode());
@@ -238,9 +233,7 @@ public class McpOpenTelemetryListener implements ObservationListener {
                 if (failed.cause() != null) {
                     span.recordException(unwrap(failed.cause()));
                 }
-                if (!CALLER_FAULT_CODES.contains(failed.wireCode())) {
-                    span.setStatus(StatusCode.ERROR, failed.error().message());
-                }
+                span.setStatus(StatusCode.ERROR, failed.error().message());
             }
             case OperationOutcome.SerializationFailed serializationFailed -> {
                 var cause = serializationFailed.cause();
@@ -255,7 +248,12 @@ public class McpOpenTelemetryListener implements ObservationListener {
             case OperationOutcome.Cancelled ignored -> {}
             case OperationOutcome.NotificationAccepted ignored -> {}
             case OperationOutcome.NotificationIgnored ignored -> {}
-            case OperationOutcome.StreamEstablished ignored -> {}
+            case OperationOutcome.StreamFailed streamFailed -> {
+                var cause = streamFailed.cause();
+                span.recordException(cause);
+                classify(span, metricAttributes, cause.getClass().getName());
+                span.setStatus(StatusCode.ERROR, Objects.toString(cause.getMessage(), ""));
+            }
         }
     }
 

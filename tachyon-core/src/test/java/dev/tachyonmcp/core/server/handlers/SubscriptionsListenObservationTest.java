@@ -15,24 +15,28 @@ import dev.tachyonmcp.core.server.observability.ObservationScope;
 import dev.tachyonmcp.core.server.observability.OperationInfo;
 import dev.tachyonmcp.core.server.observability.OperationOutcome;
 import dev.tachyonmcp.core.server.session.DefaultDispatchContext;
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 
 /**
- * {@code subscriptions/listen} is the one handler whose returned {@code CompletionStage} spans
- * the whole SSE stream lifetime, resolving only on disconnect or shutdown. Observation must treat
- * stream establishment as the operation's terminal fact and must not wait for the stream to end.
+ * {@code subscriptions/listen} is the one handler whose returned {@code CompletionStage} spans the
+ * whole SSE stream lifetime. Observation must stay open until that stream actually ends, and must
+ * classify an ordinary disconnect ({@link OperationOutcome.Cancelled}) separately from a genuine
+ * transport failure ({@link OperationOutcome.StreamFailed}).
  */
 class SubscriptionsListenObservationTest {
 
     private static final class FakeStream implements OutboundSseStream {
         private final List<SseEvent> events = new CopyOnWriteArrayList<>();
-        private volatile @Nullable Runnable onClose;
+        private final CompletableFuture<Void> onCloseRegistered = new CompletableFuture<>();
+        private volatile @Nullable Consumer<@Nullable Throwable> onClose;
 
         @Override
         public void start() {}
@@ -51,22 +55,99 @@ class SubscriptionsListenObservationTest {
         public void close() {}
 
         @Override
-        public void onClose(Runnable callback) {
+        public void onClose(Consumer<@Nullable Throwable> callback) {
             this.onClose = callback;
+            onCloseRegistered.complete(null);
         }
 
-        void disconnect() {
+        /** The handler runs asynchronously on the server's executor — wait for it to reach {@link #onClose}. */
+        void awaitReady() throws Exception {
+            onCloseRegistered.get(5, TimeUnit.SECONDS);
+        }
+
+        void disconnect(@Nullable Throwable cause) {
             var callback = onClose;
-            if (callback != null) callback.run();
+            if (callback != null) callback.accept(cause);
+        }
+    }
+
+    private record Fixture(FakeStream stream, CompletableFuture<McpDispatcher.DispatchResult> future) {}
+
+    private static Fixture dispatch(ServerEngine server) {
+        var session = server.createSession("sess_sub_listen_obs");
+        session.activate();
+        var dispatcher = new McpDispatcher(server, server.executor());
+        var protocol = Protocols.list().stream()
+                .filter(p -> p.versionString().equals("2026-07-28"))
+                .findFirst()
+                .orElseThrow();
+        var ctx = DefaultDispatchContext.create(protocol, server);
+        var stream = new FakeStream();
+        var future = dispatcher.dispatchRequestAsync(
+                RequestId.of(1), "subscriptions/listen", Map.of(), session.id(), stream, ctx);
+        return new Fixture(stream, future);
+    }
+
+    @Test
+    void establishmentDoesNotCompleteObservationWhileStreamStaysOpen() throws Exception {
+        var starts = new CopyOnWriteArrayList<OperationInfo>();
+        var completions = new CopyOnWriteArrayList<OperationOutcome>();
+        ObservationListener listener = recordingListener(starts, completions);
+
+        try (ServerEngine server = newEngine(b -> b.observability(o -> o.listener(listener)))) {
+            var fixture = dispatch(server);
+            fixture.stream().awaitReady();
+
+            assertThat(starts).hasSize(1);
+            assertThat(completions)
+                    .as("the Observation stays open for the stream's whole lifetime")
+                    .isEmpty();
+            assertThat(fixture.future()).isNotDone();
         }
     }
 
     @Test
-    void establishmentCompletesObservationWithoutWaitingForStreamEnd() throws Exception {
-        var established = new CompletableFuture<OperationOutcome>();
+    void ordinaryDisconnectCompletesObservationAsCancelled() throws Exception {
         var starts = new CopyOnWriteArrayList<OperationInfo>();
         var completions = new CopyOnWriteArrayList<OperationOutcome>();
-        ObservationListener listener = new ObservationListener() {
+        ObservationListener listener = recordingListener(starts, completions);
+
+        try (ServerEngine server = newEngine(b -> b.observability(o -> o.listener(listener)))) {
+            var fixture = dispatch(server);
+            fixture.stream().awaitReady();
+
+            fixture.stream().disconnect(null);
+            fixture.future().get(5, TimeUnit.SECONDS);
+
+            assertThat(completions).hasSize(1);
+            assertThat(completions.getFirst()).isInstanceOf(OperationOutcome.Cancelled.class);
+        }
+    }
+
+    @Test
+    void genuineStreamFailureCompletesObservationAsStreamFailed() throws Exception {
+        var starts = new CopyOnWriteArrayList<OperationInfo>();
+        var completions = new CopyOnWriteArrayList<OperationOutcome>();
+        ObservationListener listener = recordingListener(starts, completions);
+        var cause = new IOException("connection reset");
+
+        try (ServerEngine server = newEngine(b -> b.observability(o -> o.listener(listener)))) {
+            var fixture = dispatch(server);
+            fixture.stream().awaitReady();
+
+            fixture.stream().disconnect(cause);
+            fixture.future().get(5, TimeUnit.SECONDS);
+
+            assertThat(completions).hasSize(1);
+            assertThat(completions.getFirst()).isInstanceOf(OperationOutcome.StreamFailed.class);
+            assertThat(((OperationOutcome.StreamFailed) completions.getFirst()).cause())
+                    .isEqualTo(cause);
+        }
+    }
+
+    private static ObservationListener recordingListener(
+            List<OperationInfo> starts, List<OperationOutcome> completions) {
+        return new ObservationListener() {
             @Override
             public ObservationScope start(OperationInfo info) {
                 starts.add(info);
@@ -76,38 +157,7 @@ class SubscriptionsListenObservationTest {
             @Override
             public void complete(OperationInfo info, OperationOutcome outcome) {
                 completions.add(outcome);
-                established.complete(outcome);
             }
         };
-
-        try (ServerEngine server = newEngine(b -> b.observability(o -> o.listener(listener)))) {
-            var session = server.createSession("sess_sub_listen_obs");
-            session.activate();
-            var dispatcher = new McpDispatcher(server, server.executor());
-
-            var protocol = Protocols.list().stream()
-                    .filter(p -> p.versionString().equals("2026-07-28"))
-                    .findFirst()
-                    .orElseThrow();
-            var ctx = DefaultDispatchContext.create(protocol, server);
-            var stream = new FakeStream();
-
-            var future = dispatcher.dispatchRequestAsync(
-                    RequestId.of(1), "subscriptions/listen", Map.of(), session.id(), stream, ctx);
-
-            // Establishment is synchronous inside the handler -- complete() must fire promptly even
-            // though `future` itself stays pending for the stream's whole lifetime.
-            var outcome = established.get(5, TimeUnit.SECONDS);
-            assertThat(starts).hasSize(1);
-            assertThat(outcome).isInstanceOf(OperationOutcome.StreamEstablished.class);
-            assertThat(future)
-                    .as("the handler's own future spans the stream lifetime")
-                    .isNotDone();
-
-            stream.disconnect();
-            future.join();
-            // Disconnect resolves the handler's own future but must not re-fire observation.
-            assertThat(completions).hasSize(1);
-        }
     }
 }
