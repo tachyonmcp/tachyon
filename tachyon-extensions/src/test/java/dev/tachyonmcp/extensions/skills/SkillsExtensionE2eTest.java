@@ -56,7 +56,7 @@ class SkillsExtensionE2eTest {
             new CompositeSkillsRegistry(filesystemSkillsRegistry, classpathSkillsRegistry);
 
     // quickstart example
-    public static void main(String... args) throws InterruptedException {
+     static void main(String... args) throws InterruptedException {
         try (var server = TachyonServer.builder()
                 .port(8080)
                 .withExtensions(SkillsExtension.builder()
@@ -241,7 +241,7 @@ class SkillsExtensionE2eTest {
                   "id":1,
                   "result":{
                     "resources":[
-                      {"uri":"skill://pdf-processing/scripts/extract.py","name":"extract.py","mimeType":"text/plain"}
+                      {"uri":"skill://pdf-processing/scripts/extract.py","name":"extract.py","mimeType":"text/x-python"}
                     ],
                     "resultType":"complete"
                   }
@@ -758,7 +758,7 @@ class SkillsExtensionE2eTest {
                       {
                         "uri":"skill://pdf-processing/scripts/extract.py",
                         "name":"pdf-processing/scripts/extract.py",
-                        "mimeType":"text/plain"
+                        "mimeType":"text/x-python"
                       },
                       {
                         "uri":"skill://pdf-processing/templates/invoice.md",

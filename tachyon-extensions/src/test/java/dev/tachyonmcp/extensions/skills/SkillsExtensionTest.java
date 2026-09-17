@@ -60,7 +60,7 @@ class SkillsExtensionTest {
         assertThat(server.resources().findByUri("skill://pdf-processing/scripts/extract.py"))
                 .get()
                 .extracting(ResourceDescriptor::mimeType)
-                .isEqualTo("text/plain");
+                .isEqualTo("text/x-python");
         assertThat(server.resources().findByUri("skill://pdf-processing/templates/invoice.md"))
                 .get()
                 .extracting(ResourceDescriptor::mimeType)
