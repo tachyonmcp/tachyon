@@ -13,7 +13,7 @@ class MimeTypesTest {
         "SKILL.md,text/markdown",
         "notes.MARKDOWN,text/markdown",
         "readme.txt,text/plain",
-        "extract.py,text/plain",
+        "extract.py,text/x-python",
         "run.sh,text/plain",
         "manifest.json,application/json",
         "app.js,text/javascript",
