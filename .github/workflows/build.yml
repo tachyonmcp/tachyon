@@ -26,15 +26,15 @@ jobs:
         java:
           - version: 21
             distribution: temurin
-            command: "clean lint build revapi"
+            command: "clean lint build revapi jmh"
             codecov: true
           - version: 25
             distribution: temurin
-            command: "clean build"
+            command: "clean build jmh"
             codecov: false
           - version: 27
             distribution: zulu
-            command: "clean build"
+            command: "clean build jmh"
             codecov: false
     runs-on: ubuntu-latest
     timeout-minutes: 10

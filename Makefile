@@ -1,4 +1,4 @@
-.PHONY: all ci build test lint package install-server conformance apidocs e2e clean format help mcp-inspector examples examples-snapshot
+.PHONY: all ci build test lint package install-server conformance apidocs e2e clean format help mcp-inspector examples examples-snapshot jmh
 
 .DEFAULT_GOAL := help
 
@@ -17,7 +17,7 @@ help: ## List available targets
 
 all: clean format lint install-server revapi examples-snapshot examples ## Full build: clean, format, lint, live examples, build+install, SNAPSHOT examples
 
-ci: clean lint build revapi ## CI pipeline: clean + lint + build
+ci: clean lint build revapi jmh ## CI pipeline: clean + lint + build + jmh regression check
 
 build: ## Compile, test, verify (mvn verify)
 	@echo " 🏗️ Building..."
@@ -31,6 +31,11 @@ test: ## Run unit + e2e tests
 revapi: ## Check API compatibility against baseline (oldVersion) + write report
 	@echo " 🔄  Checking API compatibility..."
 	@./mvnw revapi:check revapi:report -pl tachyon-api,tachyon-core,tachyon-extensions,tachyon-testkit -DskipTests --no-transfer-progress
+	@echo " ✅  Done!"
+
+jmh: ## Run JMH benchmarks (perf regression check)
+	@echo " 🏎️   Running JMH benchmarks..."
+	@./mvnw -q -pl tachyon-core -am verify -Pjmh -DskipTests --no-transfer-progress
 	@echo " ✅  Done!"
 
 install-server: ## Build with tests and install to local Maven repo
