@@ -92,7 +92,10 @@ public class InMemorySessionStoreBenchmark {
 
     @Benchmark
     public boolean touch(OwnedSession session) {
-        return store.touch(session.key, EXPIRES_AT);
+        if (!store.touch(session.key, EXPIRES_AT)) {
+            throw new IllegalStateException("Touch rejected for " + session.key);
+        }
+        return true;
     }
 
     @Benchmark
