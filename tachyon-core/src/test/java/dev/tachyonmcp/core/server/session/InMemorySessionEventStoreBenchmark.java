@@ -2,6 +2,7 @@
 package dev.tachyonmcp.core.server.session;
 
 import dev.tachyonmcp.api.server.domain.RequestId;
+import dev.tachyonmcp.api.server.session.SessionIdGenerator;
 import java.util.concurrent.TimeUnit;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -16,11 +17,11 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Threads;
 import org.openjdk.jmh.annotations.Warmup;
-import org.openjdk.jmh.runner.Runner;
-import org.openjdk.jmh.runner.RunnerException;
-import org.openjdk.jmh.runner.options.Options;
-import org.openjdk.jmh.runner.options.OptionsBuilder;
 
+/**
+ * Steady-state append throughput with one session per worker thread: every session fills its
+ * per-session cap during warmup, so each measured append also runs the eviction path.
+ */
 @BenchmarkMode(Mode.Throughput)
 @OutputTimeUnit(TimeUnit.SECONDS)
 @State(Scope.Benchmark)
@@ -30,7 +31,7 @@ import org.openjdk.jmh.runner.options.OptionsBuilder;
 @Threads(3)
 public class InMemorySessionEventStoreBenchmark {
 
-    private static final long MIN_OPS_PER_SEC = 1_000_000;
+    private static final long TIMESTAMP = 1_767_225_600_000L;
 
     private InMemorySessionEventStore store;
 
@@ -45,27 +46,19 @@ public class InMemorySessionEventStoreBenchmark {
     }
 
     @State(Scope.Thread)
-    public static class SessionState {
-        private final String sessionId = "sess_" + Thread.currentThread().threadId();
+    public static class Writer {
+        private String sessionId;
         private int seq;
+
+        @Setup(Level.Trial)
+        public void setUp() {
+            sessionId = SessionIdGenerator.DEFAULT.generate(null, null);
+        }
     }
 
     @Benchmark
-    public void append(SessionState state) {
-        store.append(new SessionEvent.RequestEvent(
-                state.sessionId, RequestId.of(state.seq++), "ping", "{}", System.currentTimeMillis()));
-    }
-
-    public static void main(String[] args) throws RunnerException {
-        Options options = new OptionsBuilder()
-                .include(InMemorySessionEventStoreBenchmark.class.getSimpleName())
-                .build();
-        var results = new Runner(options).run();
-        var score = results.iterator().next().getPrimaryResult().getScore();
-        if (score < MIN_OPS_PER_SEC) {
-            throw new AssertionError(
-                    "InMemorySessionEventStore.append() throughput regression: %.0f ops/sec, expected >= %d"
-                            .formatted(score, MIN_OPS_PER_SEC));
-        }
+    public void append(Writer writer) {
+        store.append(
+                new SessionEvent.RequestEvent(writer.sessionId, RequestId.of(writer.seq++), "ping", "{}", TIMESTAMP));
     }
 }

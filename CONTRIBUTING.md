@@ -14,7 +14,8 @@ make build   # compile, test, verify (mvn verify)
 make test    # unit + e2e tests
 make lint    # check style: Spotless + Detekt (SpotBugs runs automatically during build)
 make format  # auto-fix style: Spotless + Detekt
-make ci      # what CI runs: clean + lint + build + revapi
+make jmh     # JMH benchmarks + throughput regression gate (BenchmarkGate)
+make ci      # what CI runs: clean + lint + build + revapi + jmh
 make all     # everything: clean + format + lint + full install + examples
 ```
 

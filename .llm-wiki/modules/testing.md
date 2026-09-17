@@ -2,8 +2,8 @@
 title: Testing
 tags: [module, testing, e2e, conformance]
 sources: [e2e/src/test/, conformance/, Makefile, tachyon-core/src/test/, .github/workflows/build.yml]
-updated: 2026-09-15
-commit: 210237ec
+updated: 2026-09-17
+commit: aba402de
 ---
 
 # ✅ Testing
@@ -14,11 +14,12 @@ Verdict: E2E-first (AGENTS.md). Real server on port 0, clients = official MCP Ja
 
 | Want | Command |
 |---|---|
-| all + lint + revapi (CI) | `make ci` (CI matrix runs this `.github/workflows/build.yml`) |
+| all + lint + revapi + jmh (CI) | `make ci` (CI matrix runs this `.github/workflows/build.yml`) |
 | unit + e2e | `make test` |
 | one module | `mvn -q test -pl tachyon-core -am` |
 | Kotlin | `mvn test -pl tachyon-kotlin -am` |
 | conformance | `make conformance` |
+| JMH perf gate | `make jmh` → `-Pjmh` profile runs `BenchmarkGate` (`tachyon-core/src/test/java/dev/tachyonmcp/core/BenchmarkGate.java`): every `*Benchmark` via JMH, fails below per-benchmark ops/sec floors; accepts JMH CLI (`-prof gc`, `-t`, regex) via `-Dexec.args` |
 | format/lint | `make format` / `make lint` (Spotless + Detekt; SpotBugs in build) |
 
 `e2e`, `conformance`, `reports` are profile modules in root `pom.xml` — not in default module list.

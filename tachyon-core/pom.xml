@@ -315,7 +315,7 @@
                                 </goals>
                                 <configuration>
                                     <classpathScope>test</classpathScope>
-                                    <mainClass>dev.tachyonmcp.core.server.session.InMemorySessionEventStoreBenchmark</mainClass>
+                                    <mainClass>dev.tachyonmcp.core.BenchmarkGate</mainClass>
                                     <systemProperties>
                                         <systemProperty>
                                             <!-- JMH's real @Fork spawns a child JVM and builds its -cp from this
