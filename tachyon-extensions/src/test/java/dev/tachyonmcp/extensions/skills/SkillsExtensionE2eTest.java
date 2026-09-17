@@ -56,7 +56,7 @@ class SkillsExtensionE2eTest {
             new CompositeSkillsRegistry(filesystemSkillsRegistry, classpathSkillsRegistry);
 
     // quickstart example
-    public void main(String... args) throws InterruptedException {
+    public static void main(String... args) throws InterruptedException {
         try (var server = TachyonServer.builder()
                 .port(8080)
                 .withExtensions(SkillsExtension.builder()
