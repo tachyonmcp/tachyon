@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.function.Consumer;
 import java.util.function.LongSupplier;
 import org.jspecify.annotations.Nullable;
@@ -59,23 +60,27 @@ public final class PostSseStream implements OutboundSseStream {
 
     private final Channel channel;
     private final @Nullable String origin;
-    private final LongSupplier eventIdSupplier;
+    private final long streamKeyId;
     private final String streamKey;
     private final Duration heartbeatInterval;
     private final List<SseEvent> queued = new ArrayList<>();
     private volatile State state = State.NEW;
     private @Nullable ChannelFuture closeWrite;
+    private @Nullable CompletableFuture<Void> startCompletion;
+    private final ChannelFutureListener writeFailureListener = this::closeOnWriteFailure;
 
     public PostSseStream(
             Channel channel, @Nullable String origin, LongSupplier eventIdSupplier, Duration heartbeatInterval) {
         this.channel = channel;
         this.origin = origin;
-        this.eventIdSupplier = eventIdSupplier;
         this.heartbeatInterval = heartbeatInterval;
         // Session-unique key (one counter draw per POST) tagging this stream's events in the log
         // and suffixing its SSE ids, so Last-Event-ID resolves to THIS stream on replay. Not the
-        // JSON-RPC request id — clients may reuse those across sequential requests.
-        this.streamKey = String.valueOf(eventIdSupplier.getAsLong());
+        // JSON-RPC request id — clients may reuse those across sequential requests. Drawn at POST
+        // arrival, so it also serves as the priming event's id: lower than every event id drawn
+        // later during dispatch, keeping this stream's wire ids ascending.
+        this.streamKeyId = eventIdSupplier.getAsLong();
+        this.streamKey = String.valueOf(streamKeyId);
     }
 
     @Override
@@ -93,7 +98,7 @@ public final class PostSseStream implements OutboundSseStream {
         var completion = new CompletableFuture<Void>();
         try {
             runOnEventLoop(() -> doStart(completion));
-        } catch (java.util.concurrent.RejectedExecutionException e) {
+        } catch (RejectedExecutionException e) {
             completion.completeExceptionally(e);
         }
         return completion;
@@ -107,7 +112,7 @@ public final class PostSseStream implements OutboundSseStream {
     @Override
     public void writeEvent(@Nullable SseEvent event) {
         if (event == null) return;
-        runOnEventLoop(() -> doWriteEvent(event));
+        runOnEventLoopQuietly(() -> doWriteEvent(event), "event");
     }
 
     /**
@@ -118,7 +123,7 @@ public final class PostSseStream implements OutboundSseStream {
     public void writeEvent(long sseEventId, byte[] body, @Nullable Runnable onDropped) {
         try {
             runOnEventLoop(() -> doWriteEvent(sseEventId, body, onDropped));
-        } catch (java.util.concurrent.RejectedExecutionException e) {
+        } catch (RejectedExecutionException e) {
             if (onDropped != null) onDropped.run();
         }
     }
@@ -127,19 +132,21 @@ public final class PostSseStream implements OutboundSseStream {
     public void comment(@Nullable String message) {
         // Self-starting: a comment upgrades the buffered POST to SSE even when no event was written
         // yet — this is the token-free keep-alive path. doStart is idempotent.
-        runOnEventLoop(() -> {
-            doStart(new CompletableFuture<>());
-            doWriteComment(message);
-        });
+        runOnEventLoopQuietly(
+                () -> {
+                    doStart(new CompletableFuture<>());
+                    doWriteComment(message);
+                },
+                "comment");
     }
 
     @Override
     public void close() {
-        runOnEventLoop(() -> doClose(true));
+        runOnEventLoopQuietly(() -> doClose(true), "close");
     }
 
     public void terminate() {
-        runOnEventLoop(() -> doClose(false));
+        runOnEventLoopQuietly(() -> doClose(false), "terminate");
     }
 
     /** Terminates the stream and completes after its final write succeeds or fails. */
@@ -170,6 +177,18 @@ public final class PostSseStream implements OutboundSseStream {
         channel.closeFuture().addListener(f -> callback.accept(ChannelHandlerUtils.closeFailure(channel)));
     }
 
+    /**
+     * Fire-and-forget variant: a loop already shutting down rejects the task, and there is no
+     * caller left to hand that to — the channel is going away with the server.
+     */
+    private void runOnEventLoopQuietly(Runnable task, String what) {
+        try {
+            runOnEventLoop(task);
+        } catch (RejectedExecutionException e) {
+            logger.debug("POST-SSE {} dropped, event loop shutting down: channel={}", what, channel.id());
+        }
+    }
+
     private void runOnEventLoop(Runnable task) {
         var eventLoop = channel.eventLoop();
         if (eventLoop.inEventLoop()) {
@@ -188,13 +207,19 @@ public final class PostSseStream implements OutboundSseStream {
      * {@code start()} returned.
      */
     private void doStart(CompletableFuture<Void> completion) {
-        if (state != State.NEW) {
-            // Idempotent no-op: nothing new was flushed for this call, so there is nothing to wait on.
-            completion.complete(null);
+        if (startCompletion != null) {
+            // Already opened — by an earlier start() or by comment()'s self-start. Mirror that
+            // flush's outcome instead of reporting success before it has landed.
+            startCompletion.whenComplete((ignored, failure) -> {
+                if (failure == null) completion.complete(null);
+                else completion.completeExceptionally(failure);
+            });
             return;
         }
-        if (!channel.isActive()) {
+        if (!state.closed && !channel.isActive()) {
             state = State.CLOSED_UNOPENED;
+        }
+        if (state.closed) {
             completion.completeExceptionally(new ClosedChannelException());
             return;
         }
@@ -202,7 +227,7 @@ public final class PostSseStream implements OutboundSseStream {
 
         var response = new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK);
         HttpHelpers.setSseStreamHeaders(response, origin);
-        channel.write(response);
+        channel.write(response).addListener(writeFailureListener);
         SseHeartbeat.enable(channel, heartbeatInterval);
         ChannelFuture initialWrite;
         if (queued.isEmpty()) {
@@ -210,10 +235,9 @@ public final class PostSseStream implements OutboundSseStream {
             // Carries this stream's key so a resume from the priming id replays only this stream.
             // Skipped when an event is already queued (e.g. subscriptions/listen's ack, which SEP-2575
             // requires to be the stream's first message) — that queued event is itself a valid baseline.
-            var primingId = eventIdSupplier.getAsLong();
-            var priming = new SseEvent(ServerEngine.wireEventId(primingId, streamKey), "message", "");
+            var priming = new SseEvent(ServerEngine.wireEventId(streamKeyId, streamKey), "message", "");
             initialWrite = channel.write(new DefaultHttpContent(SseSerializer.encode(channel.alloc(), priming)));
-            logger.trace("POST-SSE stream started, priming event id={}, channel={}", primingId, channel.id());
+            logger.trace("POST-SSE stream started, priming event id={}, channel={}", streamKeyId, channel.id());
         } else {
             ChannelFuture lastQueuedWrite = null;
             for (var event : queued) {
@@ -223,7 +247,8 @@ public final class PostSseStream implements OutboundSseStream {
             initialWrite = lastQueuedWrite;
         }
         channel.flush();
-        initialWrite.addListener(f -> {
+        startCompletion = completion;
+        initialWrite.addListener(writeFailureListener).addListener(f -> {
             if (f.isSuccess()) completion.complete(null);
             else completion.completeExceptionally(f.cause());
         });
@@ -240,16 +265,7 @@ public final class PostSseStream implements OutboundSseStream {
         }
         logger.trace("POST-SSE writing event, id={}, data={}", event.id(), abbreviate(event.data()));
         var buf = SseSerializer.encode(channel.alloc(), event);
-        channel.writeAndFlush(new DefaultHttpContent(buf)).addListener((ChannelFutureListener) f -> {
-            if (!f.isSuccess()) {
-                logger.warn(
-                        "POST-SSE write failed, closing channel={}: {}",
-                        channel.id(),
-                        f.cause().getMessage());
-                ChannelHandlerUtils.markCloseFailure(channel, f.cause());
-                channel.close();
-            }
-        });
+        channel.writeAndFlush(new DefaultHttpContent(buf)).addListener(writeFailureListener);
     }
 
     private void doWriteEvent(long sseEventId, byte[] body, @Nullable Runnable onDropped) {
@@ -266,12 +282,7 @@ public final class PostSseStream implements OutboundSseStream {
             return;
         }
         var buf = SseSerializer.encode(channel.alloc(), ServerEngine.wireEventId(sseEventId, streamKey), body);
-        channel.writeAndFlush(new DefaultHttpContent(buf)).addListener((ChannelFutureListener) f -> {
-            if (!f.isSuccess()) {
-                ChannelHandlerUtils.markCloseFailure(channel, f.cause());
-                channel.close();
-            }
-        });
+        channel.writeAndFlush(new DefaultHttpContent(buf)).addListener(writeFailureListener);
     }
 
     private void doWriteComment(@Nullable String message) {
@@ -282,12 +293,7 @@ public final class PostSseStream implements OutboundSseStream {
                 ? ":\r\n"
                 : ": " + message.replace('\r', ' ').replace('\n', ' ') + "\r\n";
         var buf = ByteBufUtil.writeUtf8(channel.alloc(), line);
-        channel.writeAndFlush(new DefaultHttpContent(buf)).addListener((ChannelFutureListener) f -> {
-            if (!f.isSuccess()) {
-                ChannelHandlerUtils.markCloseFailure(channel, f.cause());
-                channel.close();
-            }
-        });
+        channel.writeAndFlush(new DefaultHttpContent(buf)).addListener(writeFailureListener);
     }
 
     private ChannelFuture doClose(boolean reconnect) {
@@ -295,12 +301,32 @@ public final class PostSseStream implements OutboundSseStream {
         var wasOpen = state.opened;
         state = wasOpen ? State.CLOSED_OPENED : State.CLOSED_UNOPENED;
         if (!channel.isActive() || !wasOpen) return channel.newSucceededFuture();
+        // Before the terminating chunk: a heartbeat tick firing in the window between that chunk's
+        // flush and the channel's close would write a comment the encoder no longer expects.
+        SseHeartbeat.cancel(channel);
         if (reconnect) {
             channel.write(new DefaultHttpContent(
-                    ByteBufUtil.writeUtf8(channel.alloc(), "retry: " + SSE_RETRY_DELAY_MS + "\n")));
+                            ByteBufUtil.writeUtf8(channel.alloc(), "retry: " + SSE_RETRY_DELAY_MS + "\n")))
+                    .addListener(writeFailureListener);
         }
-        closeWrite = channel.writeAndFlush(LastHttpContent.EMPTY_LAST_CONTENT).addListener(ChannelFutureListener.CLOSE);
+        closeWrite = channel.writeAndFlush(LastHttpContent.EMPTY_LAST_CONTENT)
+                .addListener(writeFailureListener)
+                .addListener(ChannelFutureListener.CLOSE);
         return closeWrite;
+    }
+
+    /**
+     * Records a failed write as the channel's close cause before closing it, so {@link #onClose}
+     * reports a genuine transport failure instead of an ordinary disconnect.
+     */
+    private void closeOnWriteFailure(ChannelFuture f) {
+        if (f.isSuccess()) return;
+        logger.warn(
+                "POST-SSE write failed, closing channel={}: {}",
+                channel.id(),
+                f.cause().getMessage());
+        ChannelHandlerUtils.markCloseFailure(channel, f.cause());
+        channel.close();
     }
 
     private static String abbreviate(String s) {

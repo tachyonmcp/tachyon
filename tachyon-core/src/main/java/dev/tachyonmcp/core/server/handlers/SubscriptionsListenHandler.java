@@ -10,8 +10,10 @@ import dev.tachyonmcp.core.server.features.subscriptions.SubscriptionRegistry;
 import dev.tachyonmcp.core.server.features.subscriptions.SubscriptionStreamFailedException;
 import dev.tachyonmcp.core.server.features.tasks.TasksExtension;
 import dev.tachyonmcp.core.server.session.DispatchContext;
+import java.nio.channels.ClosedChannelException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -82,20 +84,25 @@ public final class SubscriptionsListenHandler
         // start()'s completion stage, once the ack is actually written and flushed, rather than
         // right after start() returns — start() only schedules that write and may return long before
         // it lands, especially when called off the channel's event loop.
-        stream.start().whenComplete((ignored, failure) -> {
-            if (failure == null) {
-                context.observation().info().establishmentNanos(System.nanoTime());
-            } else {
-                logger.debug("subscriptions/listen ack failed to flush: subscriptionId={}", subscriptionId, failure);
-            }
-        });
-        stream.onClose(cause -> {
+        Consumer<@Nullable Throwable> settle = cause -> {
             registry.remove(key);
             if (cause == null) {
                 pending.cancel(false);
             } else {
                 pending.completeExceptionally(new SubscriptionStreamFailedException(cause));
             }
+        };
+        stream.start().whenComplete((ignored, failure) -> {
+            if (failure == null) {
+                context.observation().info().establishmentNanos(System.nanoTime());
+            } else {
+                logger.debug("subscriptions/listen ack failed to flush: subscriptionId={}", subscriptionId, failure);
+                // onClose may never fire (default no-op); a closed channel is an ordinary disconnect.
+                settle.accept(failure instanceof ClosedChannelException ? null : failure);
+            }
+        });
+        stream.onClose(cause -> {
+            settle.accept(cause);
             logger.debug(
                     "subscriptions/listen stream ended: subscriptionId={}, failed={}", subscriptionId, cause != null);
         });

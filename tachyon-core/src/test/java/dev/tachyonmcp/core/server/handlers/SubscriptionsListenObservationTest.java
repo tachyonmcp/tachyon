@@ -16,6 +16,7 @@ import dev.tachyonmcp.core.server.observability.OperationInfo;
 import dev.tachyonmcp.core.server.observability.OperationOutcome;
 import dev.tachyonmcp.core.server.session.DefaultDispatchContext;
 import java.io.IOException;
+import java.nio.channels.ClosedChannelException;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -48,6 +49,11 @@ class SubscriptionsListenObservationTest {
         /** Simulates the ack write actually flushing — until called, {@code start()}'s stage stays pending. */
         void completeStart() {
             startCompletion.complete(null);
+        }
+
+        /** Simulates the ack write failing, with no {@link #onClose} callback ever following it. */
+        void failStart(Throwable cause) {
+            startCompletion.completeExceptionally(cause);
         }
 
         @Override
@@ -173,6 +179,46 @@ class SubscriptionsListenObservationTest {
             assertThat(completions.getFirst()).isInstanceOf(OperationOutcome.StreamFailed.class);
             assertThat(((OperationOutcome.StreamFailed) completions.getFirst()).cause())
                     .isEqualTo(cause);
+        }
+    }
+
+    @Test
+    void ackWriteFailureWithoutCloseSignalCompletesObservationAsStreamFailed() throws Exception {
+        var starts = new CopyOnWriteArrayList<OperationInfo>();
+        var completions = new CopyOnWriteArrayList<OperationOutcome>();
+        ObservationListener listener = recordingListener(starts, completions);
+        var cause = new IOException("broken pipe");
+
+        try (ServerEngine server = newEngine(b -> b.observability(o -> o.listener(listener)))) {
+            var fixture = dispatch(server);
+            fixture.stream().awaitReady();
+
+            fixture.stream().failStart(cause);
+            fixture.future().get(5, TimeUnit.SECONDS);
+
+            assertThat(starts.getFirst().establishmentNanos()).isNull();
+            assertThat(completions).hasSize(1);
+            assertThat(completions.getFirst()).isInstanceOf(OperationOutcome.StreamFailed.class);
+            assertThat(((OperationOutcome.StreamFailed) completions.getFirst()).cause())
+                    .isEqualTo(cause);
+        }
+    }
+
+    @Test
+    void ackOnAlreadyClosedChannelCompletesObservationAsCancelled() throws Exception {
+        var starts = new CopyOnWriteArrayList<OperationInfo>();
+        var completions = new CopyOnWriteArrayList<OperationOutcome>();
+        ObservationListener listener = recordingListener(starts, completions);
+
+        try (ServerEngine server = newEngine(b -> b.observability(o -> o.listener(listener)))) {
+            var fixture = dispatch(server);
+            fixture.stream().awaitReady();
+
+            fixture.stream().failStart(new ClosedChannelException());
+            fixture.future().get(5, TimeUnit.SECONDS);
+
+            assertThat(completions).hasSize(1);
+            assertThat(completions.getFirst()).isInstanceOf(OperationOutcome.Cancelled.class);
         }
     }
 

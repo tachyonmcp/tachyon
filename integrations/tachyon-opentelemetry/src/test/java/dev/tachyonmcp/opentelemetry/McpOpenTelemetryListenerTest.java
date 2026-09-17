@@ -489,7 +489,7 @@ class McpOpenTelemetryListenerTest {
                         frame -> frame.data().contains("notifications/subscriptions/acknowledged"),
                         Duration.ofSeconds(5));
                 // The stream stays open well past the ack -- the recorded duration must not include this.
-                Thread.sleep(300);
+                Thread.sleep(1_000);
             }
             // The server detects the close (and records the metric) asynchronously relative to the
             // client closing its side -- wait for the span first, since it's recorded in the same
@@ -503,9 +503,9 @@ class McpOpenTelemetryListenerTest {
             assertThat(histogram.getHistogramData().getPoints())
                     .filteredOn(point ->
                             "subscriptions/listen".equals(point.getAttributes().get(MCP_METHOD_NAME)))
-                    .as("recorded duration should reflect the ack, not the ~300ms the stream stayed open after it")
+                    .as("recorded duration should reflect the ack, not the ~1s the stream stayed open after it")
                     .isNotEmpty()
-                    .allSatisfy(point -> assertThat(point.getSum()).isLessThan(0.1));
+                    .allSatisfy(point -> assertThat(point.getSum()).isLessThan(0.5));
         }
     }
 

@@ -150,7 +150,7 @@ Registering two listeners produces two spans per operation, the second nested un
 |---|---|
 | `gen_ai.tool.name`, `gen_ai.operation.name` | `tools/call` |
 | `gen_ai.prompt.name` | `prompts/get` |
-| `error.type` | Rejection, tool error, handler/serialization failure |
+| `error.type` | Rejection with an error classification, tool error, handler/serialization failure, `subscriptions/listen` stream transport failure |
 | `rpc.response.status_code` | Any JSON-RPC error response |
 
 **Span-only (high cardinality):**
@@ -168,11 +168,11 @@ Registering two listeners produces two spans per operation, the second nested un
 | `gen_ai.tool.call.result` | `responseContent` |
 | Exception span event (message + stack) | `exceptionDetail` |
 
-`error.type` is set for any rejection, tool error, or handler/serialization failure, whether it's the caller's fault (unknown method, bad params, malformed session) or the server's. Per the MCP semantic conventions, span status is `StatusCode.ERROR` whenever `error.type` is present — there's no separate "caller fault" status.
+`error.type` is set for any rejection that carries an error classification, tool error, handler/serialization failure, or stream transport failure, whether it's the caller's fault (unknown method, bad params, malformed session) or the server's. Per the MCP semantic conventions, span status is `StatusCode.ERROR` whenever `error.type` is present — there's no separate "caller fault" status.
 
 ### Long-lived streams
 
-`subscriptions/listen`'s span covers the whole SSE stream's lifetime: it only ends when the stream closes, whether that's an ordinary client disconnect, a genuine transport failure (`error.type` set to the failure's exception class, span status `ERROR`), or server shutdown. The `mcp.server.operation.duration` metric, however, still measures only the time to acknowledge the subscription — not the stream's full duration — so a long-lived subscription doesn't skew latency metrics or get lost in fixed histogram buckets sized for ordinary request/response latencies.
+`subscriptions/listen`'s span covers the whole SSE stream's lifetime: it only ends when the stream closes, whether that's an ordinary client disconnect, a genuine transport failure (`error.type` set to the failure's exception class, span status `ERROR`), or server shutdown. The `mcp.server.operation.duration` metric, however, still measures only the time until the subscription's acknowledgement is flushed — not the stream's full duration — so a long-lived subscription doesn't skew latency metrics or get lost in fixed histogram buckets sized for ordinary request/response latencies. If the acknowledgement never lands (the write fails or the client is already gone), there is no acknowledgement time, so the metric falls back to the elapsed time until the operation completed.
 
 ## Examples
 

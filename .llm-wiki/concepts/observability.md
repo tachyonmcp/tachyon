@@ -3,7 +3,7 @@ title: Observability
 tags: [concept, observability, otel]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/server/observability/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/ObservabilityConfig.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/PayloadCapturePolicy.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/handlers/SubscriptionsListenHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/OutboundSseStream.java, integrations/tachyon-opentelemetry/]
 updated: 2026-09-17
-commit: 3f06aa88
+commit: b9546c38
 ---
 
 # 🔭 Observability
@@ -40,7 +40,7 @@ Listener throwing on interrupted thread ⇒ rethrown, else warn `Observation#fau
 
 `McpOpenTelemetryListener.create(openTelemetry)` `McpOpenTelemetryListener`: SERVER span named by method, histogram `mcp.server.operation.duration` (s), attributes `mcp.method.name`, `mcp.session.id`, `mcp.protocol.version`, `gen_ai.tool.name`, `gen_ai.prompt.name`, `gen_ai.operation.name`, optional `gen_ai.tool.call.arguments/result` `McpAttributes`; `error.type` from error kind / tool error / cause type. Span status is `ERROR` whenever `error.type` is set — no caller-fault-vs-server-fault carve-out, per the MCP semconv's unconditional rule. Follows OTel GenAI MCP semconv.
 
-⚠️ `subscriptions/listen` completes at real stream end `SubscriptionsListenHandler#handleAsync`, so its **span** covers the whole stream lifetime — but the duration **metric** stays ack-only: the handler stamps `OperationInfo#establishmentNanos` from `OutboundSseStream#start`'s returned `CompletionStage`, once the ack write is actually flushed — not right after `start()` returns, which only schedules that write and can return before it lands (especially off the channel's event loop) `SubscriptionsListenHandler#handleAsync`. Both `McpOpenTelemetryListener` and `TachyonMetricsListener` use `establishmentNanos` (when present) instead of the completion timestamp when recording their histogram/timer. Same mechanism, same reason, in both listeners.
+⚠️ `subscriptions/listen` completes at real stream end `SubscriptionsListenHandler#handleAsync`, so its **span** covers the whole stream lifetime — but the duration **metric** stays ack-only: the handler stamps `OperationInfo#establishmentNanos` from `OutboundSseStream#start`'s returned `CompletionStage`, once the ack write is actually flushed — not right after `start()` returns, which only schedules that write and can return before it lands (especially off the channel's event loop) `SubscriptionsListenHandler#handleAsync`. Both `McpOpenTelemetryListener` and `TachyonMetricsListener` use `establishmentNanos` (when present) instead of the completion timestamp when recording their histogram/timer. Same mechanism, same reason, in both listeners. Ack write fails → no `establishmentNanos` (metric falls back to completion time); handler settles `pending` itself without waiting on `onClose` — `ClosedChannelException` → `Cancelled`, else `StreamFailed` `SubscriptionsListenHandler#handleAsync`. A stream already closed when `start()` runs also fails `ClosedChannelException` → `Cancelled` `PostSseStream#doStart`.
 
 ⚠️ `ObservationListener` is `@InternalApi` + `@Experimental` yet meant for bridges → [[api-stability]].
 

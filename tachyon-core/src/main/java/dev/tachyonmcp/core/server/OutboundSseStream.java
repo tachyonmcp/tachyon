@@ -47,8 +47,9 @@ public interface OutboundSseStream {
      * so it lands first). Idempotent — subsequent calls are no-ops. May be called from any thread.
      *
      * @return a stage that completes once that initial write — ack included — has been flushed to
-     *     the transport, or completes exceptionally if the write failed or the channel was already
-     *     inactive; a second, no-op call completes immediately without waiting on the first
+     *     the transport, or completes exceptionally if the write failed, the channel was already
+     *     inactive, or the stream was already closed; a second, no-op call mirrors the outcome of
+     *     the call that actually opened the stream rather than completing ahead of its flush
      */
     CompletionStage<Void> start();
 

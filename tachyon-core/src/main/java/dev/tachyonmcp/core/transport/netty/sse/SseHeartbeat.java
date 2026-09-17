@@ -59,6 +59,20 @@ public final class SseHeartbeat {
         });
     }
 
+    /**
+     * Stops heartbeats on {@code channel}. Call on the channel's event loop before writing a
+     * stream's terminating chunk: the scheduled tick is otherwise cancelled only once the channel
+     * closes, so it could still emit a comment after that chunk, which the HTTP encoder no longer
+     * accepts. Idempotent.
+     */
+    public static void cancel(Channel channel) {
+        var future = channel.attr(HEARTBEAT_FUTURE).getAndSet(null);
+        if (future != null) {
+            future.cancel(false);
+        }
+        channel.attr(ACTIVE).set(null);
+    }
+
     /** @return {@code true} if {@code channel} carries an open SSE stream. */
     public static boolean isEnabled(Channel channel) {
         return Boolean.TRUE.equals(channel.attr(ACTIVE).get());
