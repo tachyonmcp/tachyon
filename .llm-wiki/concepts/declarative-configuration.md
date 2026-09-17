@@ -2,8 +2,8 @@
 title: Declarative configuration
 tags: [concept, configuration, annotations]
 sources: [tachyon-api/src/main/java/dev/tachyonmcp/api/annotations/, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/annotations/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/annotations/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/AnnotationContext.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultServerBuilder.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/json/JavaTypeSchemas.java]
-updated: 2026-09-15
-commit: 9eec1092
+updated: 2026-09-17
+commit: 92b7a28d
 ---
 
 # 🏷️ Declarative configuration
@@ -105,7 +105,7 @@ Registration order per service: all tools/resources/prompts first, then completi
 
 Prompt or resource-template enum arguments (incl. `Optional<Enum>`) get a completion handler for free: case-insensitive prefix over constant `name()`s; other arguments ⇒ empty. Skipped when the same service declares `@McpCompletion` for that target ([TachyonAnnotationProvider#registerEnumCompletion](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/annotations/TachyonAnnotationProvider.java), [MethodInvoker#enumArguments](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/annotations/MethodInvoker.java)).
 
-⚠️ Registry is last-write-wins per target; an explicit completion from a different service registered *before* the enum prompt gets replaced. See [[findings]].
+Derived, never overriding: it registers if-absent, so an explicit `@McpCompletion` from **any** service wins whichever order the services register in — registered earlier it survives, registered later it replaces the fallback ([TachyonAnnotationProvider#registerFallbackForPrompt](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/annotations/TachyonAnnotationProvider.java), [TachyonAnnotationProvider#registerFallbackForResource](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/annotations/TachyonAnnotationProvider.java), [DefaultCompletionRegistry#registerForPromptIfAbsent](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/completions/DefaultCompletionRegistry.java)). See [[feature-registries]].
 
 ## 🎁 Result mapping
 

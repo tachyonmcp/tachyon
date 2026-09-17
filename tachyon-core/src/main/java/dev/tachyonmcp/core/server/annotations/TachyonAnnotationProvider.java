@@ -13,7 +13,9 @@ import dev.tachyonmcp.api.server.features.annotations.AnnotationProvider;
 import dev.tachyonmcp.api.server.features.annotations.AnnotationRegistrationContext;
 import dev.tachyonmcp.api.server.features.completions.CompletionFn;
 import dev.tachyonmcp.api.server.features.completions.CompletionResult;
+import dev.tachyonmcp.api.server.features.completions.Completions;
 import dev.tachyonmcp.api.server.features.resources.ResourceTemplateDescriptor;
+import dev.tachyonmcp.core.server.features.completions.CompletionRegistry;
 import dev.tachyonmcp.core.server.json.JavaTypeSchemas;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
@@ -206,7 +208,7 @@ public final class TachyonAnnotationProvider implements AnnotationProvider {
                         });
         declared.put(RESOURCE + uri, List.copyOf(variables));
         registerEnumCompletion(
-                invoker, RESOURCE + uri, completed, fn -> context.completions().registerForResource(uri, fn));
+                invoker, RESOURCE + uri, completed, fn -> registerFallbackForResource(context.completions(), uri, fn));
     }
 
     private static void registerPrompt(
@@ -232,7 +234,17 @@ public final class TachyonAnnotationProvider implements AnnotationProvider {
                                 serializer));
         declared.put(PROMPT + name, invoker.argumentNames());
         registerEnumCompletion(
-                invoker, PROMPT + name, completed, fn -> context.completions().registerForPrompt(name, fn));
+                invoker, PROMPT + name, completed, fn -> registerFallbackForPrompt(context.completions(), name, fn));
+    }
+
+    private static void registerFallbackForPrompt(Completions completions, String promptName, CompletionFn fn) {
+        if (completions instanceof CompletionRegistry registry) registry.registerForPromptIfAbsent(promptName, fn);
+        else completions.registerForPrompt(promptName, fn);
+    }
+
+    private static void registerFallbackForResource(Completions completions, String uriOrTemplate, CompletionFn fn) {
+        if (completions instanceof CompletionRegistry registry) registry.registerForResourceIfAbsent(uriOrTemplate, fn);
+        else completions.registerForResource(uriOrTemplate, fn);
     }
 
     private static void registerEnumCompletion(

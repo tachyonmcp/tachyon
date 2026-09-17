@@ -3,7 +3,7 @@ title: Findings
 tags: [meta, findings]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/HandlerFutures.java]
 updated: 2026-09-17
-commit: 42bb5fdb
+commit: 92b7a28d
 ---
 
 # 🔎 Findings
@@ -11,7 +11,6 @@ commit: 42bb5fdb
 Spotted while reading code. Not verified by tests. Fixed in code ⇒ 🗑️ remove row.
 
 - ⚠️ Notifications route onto the POST-SSE stream only from the dispatching thread (ThreadLocal). A handler continuing on another thread ⇒ event goes to the GET stream, or is dropped when there is none (stateful) — surprising for async tools. `OutboundSseStreamMessageRouter#currentSessionId`, `McpDispatcher#invokeHandlerAsync`
-- ⚠️ Enum auto-completion registers through last-write-wins `DefaultCompletionRegistry` maps: an explicit `@McpCompletion` from **another** service registered before the enum prompt/template is silently replaced. Same-service explicit completion is honored (`completed` guard). `TachyonAnnotationProvider#registerEnumCompletion`, `DefaultCompletionRegistry#registerForPromptAsync`
 - ⚠️ `UnsupportedProtocolVersionHandler` encodes the rejection with `ProtocolVersionHandler#LATEST_PROTOCOL` (not `Protocols#baseline`) + HTTP 400, even for legacy-looking clients. Intentional per SEP-2575? `UnsupportedProtocolVersionHandler#channelRead`
 - 🪶 `HandlerFutures` is `@InternalApi` but lives in public `tachyon-api`, is statically imported by user-facing `AbstractToolHandler`, and is shown to users in `RpcMethodHandler`'s javadoc example. `HandlerFutures`, `RpcMethodHandler`
 

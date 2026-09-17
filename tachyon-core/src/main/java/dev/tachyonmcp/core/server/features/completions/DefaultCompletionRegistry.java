@@ -35,10 +35,7 @@ public class DefaultCompletionRegistry implements CompletionRegistry {
 
     @Override
     public Completions registerForPrompt(String promptName, CompletionFn fn) {
-        return registerForPromptAsync(promptName, (context, request) -> {
-            HandlerFutures.assumeVirtualThread();
-            return HandlerFutures.completedOrFailed(() -> fn.apply(context, request));
-        });
+        return registerForPromptAsync(promptName, adapt(fn));
     }
 
     @Override
@@ -54,10 +51,7 @@ public class DefaultCompletionRegistry implements CompletionRegistry {
 
     @Override
     public Completions registerForResource(String uriOrTemplate, CompletionFn fn) {
-        return registerForResourceAsync(uriOrTemplate, (context, request) -> {
-            HandlerFutures.assumeVirtualThread();
-            return HandlerFutures.completedOrFailed(() -> fn.apply(context, request));
-        });
+        return registerForResourceAsync(uriOrTemplate, adapt(fn));
     }
 
     @Override
@@ -68,6 +62,35 @@ public class DefaultCompletionRegistry implements CompletionRegistry {
         }
         resourceFns.put(uriOrTemplate, fn);
         return this;
+    }
+
+    @Override
+    public boolean registerForPromptIfAbsent(String promptName, CompletionFn fn) {
+        if (mode == Mode.OFF) {
+            logger.debug("Completion '{}' not registered: completions capability is OFF", promptName);
+            return false;
+        }
+        if (promptFns.putIfAbsent(promptName, adapt(fn)) == null) return true;
+        logger.debug("Derived completion for prompt '{}' skipped: a handler is already registered", promptName);
+        return false;
+    }
+
+    @Override
+    public boolean registerForResourceIfAbsent(String uriOrTemplate, CompletionFn fn) {
+        if (mode == Mode.OFF) {
+            logger.debug("Completion for '{}' not registered: completions capability is OFF", uriOrTemplate);
+            return false;
+        }
+        if (resourceFns.putIfAbsent(uriOrTemplate, adapt(fn)) == null) return true;
+        logger.debug("Derived completion for resource '{}' skipped: a handler is already registered", uriOrTemplate);
+        return false;
+    }
+
+    private static AsyncCompletionFn adapt(CompletionFn fn) {
+        return (context, request) -> {
+            HandlerFutures.assumeVirtualThread();
+            return HandlerFutures.completedOrFailed(() -> fn.apply(context, request));
+        };
     }
 
     @Override
