@@ -33,13 +33,10 @@ public final class PeekedBody {
      * A body parse, tied to the request it came from.
      *
      * @param request the request whose body was parsed
-     * @param message the parsed message, or {@code null} when the body was malformed
-     * @param invalidRequest {@code true} when {@code message} is {@code null} because the body was
-     *     syntactically valid JSON that failed JSON-RPC envelope validation ({@code -32600}
-     *     territory), as opposed to a JSON syntax failure ({@code -32700} territory)
+     * @param parse the parse outcome, malformed bodies included
      */
     @InternalApi
-    public record Parsed(FullHttpRequest request, @Nullable JsonRpcMessage message, boolean invalidRequest) {}
+    public record Parsed(FullHttpRequest request, JsonRpcCodec.Parse parse) {}
 
     /**
      * Returns the parsed body of {@code req}, parsing it at most once per request. A malformed body
@@ -53,32 +50,20 @@ public final class PeekedBody {
         var attr = ctx.channel().attr(PEEKED_BODY);
         var existing = attr.get();
         if (existing != null && existing.request() == req) {
-            return existing.message();
+            return existing.parse().message();
         }
-        JsonRpcMessage message;
-        boolean invalidRequest = false;
-        try {
-            // A duplicate view shares the backing memory but has its own reader index, so peeking
-            // here doesn't disturb what the operation/init handler reads from req.content() next.
-            message = JsonRpcCodec.parseRequest(req.content().duplicate());
-        } catch (IllegalArgumentException e) {
-            // JsonRpcCodec.parseRequest signals a syntactically valid but non-conforming envelope
-            // (not an object, no method/result/error, a malformed id) via IllegalArgumentException;
-            // an actual JSON syntax failure surfaces as UncheckedIOException instead.
-            message = null;
-            invalidRequest = true;
-        } catch (RuntimeException e) {
-            message = null;
-        }
-        attr.set(new Parsed(req, message, invalidRequest));
-        return message;
+        // A duplicate view shares the backing memory but has its own reader index, so peeking
+        // here doesn't disturb what the operation/init handler reads from req.content() next.
+        var parse = JsonRpcCodec.tryParseRequest(req.content().duplicate());
+        attr.set(new Parsed(req, parse));
+        return parse.message();
     }
 
     /**
      * Consumes the cached parse of {@code req}, clearing the attribute. A {@code null} return means
      * no peek ran for this request and the caller must parse the body itself; a non-null holder
-     * whose {@link Parsed#message()} is {@code null} means a peek ran and the body was malformed —
-     * the two cases a plain {@code JsonRpcMessage} return could not tell apart.
+     * whose {@link JsonRpcCodec.Parse#message()} is {@code null} means a peek ran and the body was
+     * malformed — the two cases a plain {@code JsonRpcMessage} return could not tell apart.
      *
      * <p>Call on the event loop, before any async hop: a pipelined next request must not be able to
      * overwrite the entry between the hop and the read.

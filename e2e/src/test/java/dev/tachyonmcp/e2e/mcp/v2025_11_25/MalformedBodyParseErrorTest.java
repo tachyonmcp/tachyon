@@ -54,4 +54,56 @@ class MalformedBodyParseErrorTest extends AbstractStatefulMcpE2eTest {
                     .hasErrorMessage("Parse error");
         }
     }
+
+    /**
+     * Valid JSON in the wrong shape earns {@code -32600} on this sink too. The classification used
+     * to reach only the session-less initialization sink, so the same body answered {@code -32600}
+     * there and {@code -32700} here — and, on this version, differed again depending on whether a
+     * mirror header happened to arm the peek. Both branches are pinned for that reason.
+     */
+    @Test
+    void peekedNonJsonRpcObjectYieldsInvalidRequest() throws Exception {
+        try (var client = createTestClient()) {
+            var sessionId = client.initialize();
+
+            var response = client.post(sessionId, "{\"hello\":\"world\"}", Map.of("Mcp-Method", "tools/call"));
+
+            assertThatResponse(response)
+                    .hasStatus(400)
+                    .isJsonRpcError()
+                    .hasErrorCode(-32600)
+                    .hasErrorMessage("Invalid Request");
+        }
+    }
+
+    @Test
+    void unpeekedNonJsonRpcObjectYieldsInvalidRequest() throws Exception {
+        try (var client = createTestClient()) {
+            var sessionId = client.initialize();
+
+            var response = client.post(sessionId, "{\"hello\":\"world\"}");
+
+            assertThatResponse(response)
+                    .hasStatus(400)
+                    .isJsonRpcError()
+                    .hasErrorCode(-32600)
+                    .hasErrorMessage("Invalid Request");
+        }
+    }
+
+    /** An empty body never was JSON, so it is a parse failure and not an envelope violation. */
+    @Test
+    void emptyBodyYieldsParseError() throws Exception {
+        try (var client = createTestClient()) {
+            var sessionId = client.initialize();
+
+            var response = client.post(sessionId, "");
+
+            assertThatResponse(response)
+                    .hasStatus(400)
+                    .isJsonRpcError()
+                    .hasErrorCode(-32700)
+                    .hasErrorMessage("Parse error");
+        }
+    }
 }

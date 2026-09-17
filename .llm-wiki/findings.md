@@ -3,7 +3,7 @@ title: Findings
 tags: [meta, findings]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/HandlerFutures.java]
 updated: 2026-09-17
-commit: e5dc5498
+commit: d831e9b1
 ---
 
 # 🔎 Findings
@@ -29,16 +29,6 @@ Spotted while reading code. Not verified by tests. Fixed in code ⇒ 🗑️ rem
 | 16 | ⚠️ | Enum auto-completion registers through last-write-wins `DefaultCompletionRegistry` maps: explicit `@McpCompletion` from another service registered **before** the enum prompt/template is silently replaced. Same-service explicit completion is honored. | `TachyonAnnotationProvider#registerEnumCompletion`, `DefaultCompletionRegistry#registerForPromptAsync` |
 | 17 | 🐛 | HTTP-status mismatch formats three placeholders with two arguments, throwing `MissingFormatArgumentException`. | [JsonRpcResponseAssert.JsonRpcErrorAssert#hasHttpStatusCode](../tachyon-testkit/src/main/java/dev/tachyonmcp/testkit/JsonRpcResponseAssert.java) |
 | 18 | 🐛 | Method-not-found assertion requires HTTP 404 when a response is present; incompatible with legacy protocol HTTP 200 errors. | [JsonRpcResponseAssert.JsonRpcErrorAssert#isMethodNotFound](../tachyon-testkit/src/main/java/dev/tachyonmcp/testkit/JsonRpcResponseAssert.java) |
-
-## 🐛 Branch review — 2026-09-17
-
-Verified against `1011a627` plus working-tree SSE edits. Probes reproduced rows 19 and 21; row 20 traced in code.
-
-| # | Kind | Finding | Proof |
-|---|---|---|---|
-| 19 | 🐛 | Empty, whitespace-only, and truncated array bodies throw `IllegalArgumentException` before JSON syntax is fully checked. Peek treats these as valid JSON with an invalid envelope, yielding -32600 instead of -32700. | [PeekedBody#peek](../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/PeekedBody.java), [JsonRpcCodec#parseRootObject](../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/JsonRpcCodec.java) |
-| 20 | 🐛 | Invalid-envelope classification reaches only cached initialization dispatch. Session-bearing dispatch ignores the flag; unpeeked initialization exceptions also still yield -32700. Same `{}` body can receive different codes depending on routing/mirror headers. | [McpInitializationHandler#handlePostWithoutSession](../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpInitializationHandler.java), [McpOperationHandler#dispatchPostMessage](../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpOperationHandler.java) |
-| 21 | 🐛 | Failed heartbeat writes close without recording a cause. Subscription close callback sees null and reports cancellation instead of transport failure, omitting the new OTel error classification. | [SseHeartbeat#send](../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/sse/SseHeartbeat.java), [SubscriptionsListenHandler#handleAsync](../tachyon-core/src/main/java/dev/tachyonmcp/core/server/handlers/SubscriptionsListenHandler.java) |
 
 ## ❓ Open questions
 

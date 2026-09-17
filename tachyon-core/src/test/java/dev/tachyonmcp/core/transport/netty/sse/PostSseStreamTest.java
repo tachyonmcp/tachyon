@@ -176,6 +176,27 @@ class PostSseStreamTest {
         assertThat(sink.writes.getLast()).isEqualTo("LAST");
     }
 
+    @Test
+    void failedHeartbeatWriteIsRecordedAsTheCloseCause() {
+        var stream = newStream(Duration.ofMillis(10));
+        sink.completeHeaders = true;
+        stream.start();
+        var closeCause = new ArrayList<Throwable>();
+        stream.onClose(closeCause::add);
+        sink.failWrites = true;
+
+        channel.advanceTimeBy(1, TimeUnit.SECONDS);
+        channel.runScheduledPendingTasks();
+
+        assertThat(channel.isActive()).isFalse();
+        assertThat(ChannelHandlerUtils.closeFailure(channel))
+                .as("a heartbeat is how an idle stream finds a dead peer; without the cause every"
+                        + " listener reads that failure as an ordinary disconnect")
+                .isInstanceOf(IOException.class)
+                .hasMessage("write failed");
+        assertThat(closeCause).singleElement().isSameAs(ChannelHandlerUtils.closeFailure(channel));
+    }
+
     private PostSseStream newStream(Duration heartbeatInterval) {
         return new PostSseStream(channel, null, eventIds::incrementAndGet, heartbeatInterval);
     }

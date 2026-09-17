@@ -61,4 +61,31 @@ class MalformedBodyParseErrorTest extends AbstractStatelessMcpE2eTest<Mcp2026072
                 .hasErrorCode(-32600)
                 .hasErrorMessage("Invalid Request");
     }
+
+    /**
+     * A body that never produced a JSON value is a parse failure, not an envelope violation. The
+     * root-token check used to reject a non-object root before reading the rest of the body, so
+     * these answered {@code -32600}.
+     */
+    @Test
+    void emptyBodyYieldsParseError() throws Exception {
+        var response = postMcpRequest("", Map.of());
+
+        assertThatResponse(response)
+                .hasStatus(400)
+                .isJsonRpcError()
+                .hasErrorCode(-32700)
+                .hasErrorMessage("Parse error");
+    }
+
+    @Test
+    void truncatedArrayBodyYieldsParseError() throws Exception {
+        var response = postMcpRequest("[{\"jsonrpc\":\"2.0\"", Map.of());
+
+        assertThatResponse(response)
+                .hasStatus(400)
+                .isJsonRpcError()
+                .hasErrorCode(-32700)
+                .hasErrorMessage("Parse error");
+    }
 }

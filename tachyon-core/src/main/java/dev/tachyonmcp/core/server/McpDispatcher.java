@@ -25,7 +25,6 @@ import dev.tachyonmcp.core.server.session.DispatchContext;
 import dev.tachyonmcp.core.server.session.SessionEvent;
 import dev.tachyonmcp.core.transport.jsonrpc.JsonRpcCodec;
 import dev.tachyonmcp.core.transport.jsonrpc.JsonRpcError;
-import dev.tachyonmcp.core.transport.jsonrpc.JsonRpcMessage;
 import dev.tachyonmcp.core.transport.netty.McpInitializationHandler;
 import io.netty.buffer.ByteBuf;
 import io.netty.handler.codec.http.DefaultHttpRequest;
@@ -193,14 +192,19 @@ public class McpDispatcher {
         record Status(int code, String message) implements DispatchResult {}
     }
 
-    @Nullable
-    public JsonRpcMessage parseMessage(ByteBuf body) {
-        try {
-            return JsonRpcCodec.parseRequest(body);
-        } catch (Exception e) {
-            logger.debug("Failed to parse JSON-RPC message", e);
-            return null;
+    /**
+     * Parses a POST body, classifying a malformed one the same way a peek upstream would have, so
+     * the answer does not depend on whether a validation handler already looked inside it.
+     *
+     * @param body the body to parse
+     * @return the parse outcome
+     */
+    public JsonRpcCodec.Parse parseBody(ByteBuf body) {
+        var parse = JsonRpcCodec.tryParseRequest(body);
+        if (parse.message() == null) {
+            logger.debug("Failed to parse JSON-RPC message, invalidRequest={}", parse.invalidRequest());
         }
+        return parse;
     }
 
     public byte[] parseError(@Nullable ChannelContext channelContext) {
@@ -219,6 +223,18 @@ public class McpDispatcher {
                 ? channelContext.protocol().responseMapper()
                 : dispatchContext(null).responseMapper();
         return encodeError(null, ServerErrors.invalidRequest("Invalid Request"), mapper);
+    }
+
+    /**
+     * Encodes the error a body that produced no message earns: {@code -32600} when it was valid
+     * JSON in the wrong shape, {@code -32700} when it was not valid JSON at all.
+     *
+     * @param invalidRequest the classification carried by {@link JsonRpcCodec.Parse}
+     * @param channelContext the channel's context, or {@code null} before one is bound
+     * @return the encoded JSON-RPC error
+     */
+    public byte[] malformedBodyError(boolean invalidRequest, @Nullable ChannelContext channelContext) {
+        return invalidRequest ? invalidRequestError(channelContext) : parseError(channelContext);
     }
 
     public CompletableFuture<DispatchResult> dispatchRequestAsync(

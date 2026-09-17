@@ -52,6 +52,35 @@ public final class JsonRpcCodec {
         }
     }
 
+    /**
+     * The outcome of parsing a request body, with the two failure kinds JSON-RPC answers
+     * differently kept apart instead of collapsed into one exception.
+     *
+     * @param message the parsed message, or {@code null} when the body yielded none
+     * @param invalidRequest {@code true} when {@code message} is {@code null} because the body was
+     *     syntactically valid JSON that is not a JSON-RPC envelope ({@code -32600} territory), as
+     *     opposed to a JSON syntax failure ({@code -32700} territory)
+     */
+    public record Parse(@Nullable JsonRpcMessage message, boolean invalidRequest) {}
+
+    /**
+     * Parses a JSON-RPC message from a {@link ByteBuf}, classifying a failure rather than throwing
+     * it. The single place that decides which of {@code -32700} and {@code -32600} a malformed body
+     * earns, so every dispatch path answers the same body the same way.
+     *
+     * @param buf the buffer to parse
+     * @return the parse outcome
+     */
+    public static Parse tryParseRequest(ByteBuf buf) {
+        try {
+            return new Parse(parseRequest(buf), false);
+        } catch (IllegalArgumentException e) {
+            return new Parse(null, true);
+        } catch (RuntimeException e) {
+            return new Parse(null, false);
+        }
+    }
+
     /** Serializes a JSON-RPC response. */
     public static byte[] serializeResponse(@Nullable RequestId id, @Nullable String resultJson) {
         return serialize(gen -> {
@@ -138,7 +167,17 @@ public final class JsonRpcCodec {
     }
 
     private static JsonRpcMessage parseRootObject(JsonParser p) throws IOException {
-        if (p.nextToken() != JsonToken.START_OBJECT) {
+        var first = p.nextToken();
+        if (first == null) {
+            // An empty or whitespace-only body never produced JSON at all: a syntax failure, not an
+            // envelope that happens to be wrong.
+            throw new IOException("Empty JSON-RPC message");
+        }
+        if (first != JsonToken.START_OBJECT) {
+            // Consume the value before rejecting it: only that tells a complete array or scalar
+            // (valid JSON, wrong envelope) apart from a truncated one (a syntax failure, which
+            // surfaces here as the parser's own unchecked read exception).
+            p.skipChildren();
             throw new IllegalArgumentException("Expected JSON object");
         }
         return parseMessage(p);

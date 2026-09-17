@@ -3,7 +3,7 @@ title: SSE streams
 tags: [concept, transport, sse]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/sse/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/OutboundSseStream.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/OutboundSseStreamMessageRouter.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpOperationHandler.java]
 updated: 2026-09-17
-commit: 1011a627
+commit: d831e9b1
 ---
 
 # 📡 SSE streams
@@ -18,7 +18,7 @@ Verdict: two stream kinds. **POST-SSE** = per-request, lazy: JSON response unles
 | `PostSseStream` | Netty impl, state machine `NEW/OPEN/CLOSED_UNOPENED/CLOSED_OPENED`, all mutations on event loop | `PostSseStream` |
 | `NettySseConnection` | `SseConnection` for GET stream, close listener | `NettySseConnection` |
 | `SseManager` | open GET streams, priming, replay | `SseManager` |
-| `SseHeartbeat` | `:\r\n` comment every interval on EL; skip when unwritable | `SseHeartbeat#enable` |
+| `SseHeartbeat` | `:\r\n` comment every interval on EL; skip when unwritable; failed tick stashes the cause then closes | `SseHeartbeat#enable`, `SseHeartbeat#send` |
 | `SseSerializer` | `id:/event:/data:` framing into pooled buf, split on newlines | `SseSerializer` |
 | `OutboundSseStreamMessageRouter` | ThreadLocal `(sessionId, stream)` during dispatch → divert session notifications onto POST stream | `OutboundSseStreamMessageRouter#logger` |
 
@@ -55,7 +55,7 @@ Initial headers and every queued event are aggregated with Netty `PromiseCombine
 - `terminateAsync` also completes on channel close so shutdown drain never hangs `PostSseStream#terminateAsync`.
 - `doClose` cancels heartbeats before the terminating chunk: the scheduled tick is otherwise cancelled only on channel close and could emit a comment the HTTP encoder no longer accepts `SseHeartbeat#cancel`, `NettySseConnection#doClose`.
 - Fire-and-forget calls (`writeEvent`, `comment`, `close`, `terminate`) swallow a shutting-down loop's rejection; `start` fails its stage and `writeEvent(long, byte[], Runnable)` runs `onDropped` instead `PostSseStream#runOnEventLoopQuietly`.
-- Every write (headers, priming/queued, events, comments, retry, last chunk) shares one failure listener: stash cause via `ChannelHandlerUtils#markCloseFailure`, then close — so `onClose` reports a transport failure, not an ordinary disconnect `PostSseStream#closeOnWriteFailure`.
+- Every write (headers, priming/queued, events, comments, retry, last chunk) shares one failure listener: stash cause via `ChannelHandlerUtils#markCloseFailure`, then close — so `onClose` reports a transport failure, not an ordinary disconnect `PostSseStream#closeOnWriteFailure`. A heartbeat is written by the scheduler, not that listener, and does the same for itself — it is how an idle stream finds a dead peer `SseHeartbeat#send`.
 - SSE responses always `Connection: close` — server hard-closes on end; advertising keep-alive raced FIN vs next request `HttpHelpers#HttpHelpers`.
 
 Related: [[sessions]], [[request-lifecycle]], [[concurrency]].

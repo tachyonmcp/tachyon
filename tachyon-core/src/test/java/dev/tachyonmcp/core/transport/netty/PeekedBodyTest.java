@@ -61,8 +61,8 @@ class PeekedBodyTest {
 
         var cached = PeekedBody.cached(ctx, request);
         assertThat(cached).isNotNull();
-        assertThat(cached.message()).isNull();
-        assertThat(cached.invalidRequest()).isFalse();
+        assertThat(cached.parse().message()).isNull();
+        assertThat(cached.parse().invalidRequest()).isFalse();
         request.release();
     }
 
@@ -74,8 +74,8 @@ class PeekedBodyTest {
 
         var cached = PeekedBody.cached(ctx, request);
         assertThat(cached).isNotNull();
-        assertThat(cached.message()).isNull();
-        assertThat(cached.invalidRequest()).isTrue();
+        assertThat(cached.parse().message()).isNull();
+        assertThat(cached.parse().invalidRequest()).isTrue();
         request.release();
     }
 
@@ -89,7 +89,7 @@ class PeekedBodyTest {
         var cached = PeekedBody.cached(ctx, request);
         assertThat(cached).isNotNull();
         assertThat(cached.request()).isSameAs(request);
-        assertThat(cached.message()).isSameAs(message);
+        assertThat(cached.parse().message()).isSameAs(message);
         // Consumed: a second read finds nothing, so a re-peek cannot serve a stale entry.
         assertThat(PeekedBody.cached(ctx, request)).isNull();
         request.release();
