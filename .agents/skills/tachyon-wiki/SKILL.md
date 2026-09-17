@@ -12,6 +12,15 @@ It owns page format, evidence rules, layout, and ingest/query/lint procedures;
 do not copy those rules into this skill. Then read the
 [index](../../../.llm-wiki/index.md) and the relevant pages before verifying their sources.
 
+## Index, not specification
+
+🗺️ Wiki indexes code. It never defines behavior.
+
+- Page ≠ code → page wrong. Fix page, never code/tests/API.
+- Page ≠ evidence. Verify in code, cite `Type#member` + source path.
+- Pages state what code does now. Wishes, suspicions, open questions → `findings.md`.
+- Claim untraceable to code → 🗑️ delete, not rephrase.
+
 ## Page ownership
 
 - Keep each behavior's explanation on one canonical page. Module catalogs and

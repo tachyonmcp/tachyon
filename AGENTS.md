@@ -24,6 +24,8 @@ Use IDE MCP for building/running tests if available. Otherwise see
 
 Code knowledge base: [`.llm-wiki/index.md`](.llm-wiki/index.md). Built from **code**, not `docs/`. Rules: [`.llm-wiki/CONVENTIONS.md`](.llm-wiki/CONVENTIONS.md).
 
+**🗺️ Index, not spec.** Page ≠ code → code wins, fix the page. 🔴 Never implement a page, never cite one as proof, update page.
+
 Use [tachyon-wiki](.agents/skills/tachyon-wiki/SKILL.md) when creating, updating, reorganizing, or checking wiki pages, including refreshes after code changes.
 
 - **Before work**: read `index.md`, then relevant pages. Still verify claims in code.

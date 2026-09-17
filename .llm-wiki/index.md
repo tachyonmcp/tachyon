@@ -1,13 +1,15 @@
 ---
 title: Index
 tags: [meta]
-updated: 2026-09-15
-commit: 751331f4
+updated: 2026-09-17
+commit: b9546c38
 ---
 
 # 🗺️ Tachyon MCP — LLM Wiki index
 
 Read this first. Rules: [[CONVENTIONS]].
+
+Index into code, **not** a spec. Page vs code mismatch → code wins, fix the page. Verify every claim in code before using it.
 
 ## 🧭 Start
 
