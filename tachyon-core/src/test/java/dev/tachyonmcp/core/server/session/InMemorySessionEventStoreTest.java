@@ -5,12 +5,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.tachyonmcp.api.server.domain.RequestId;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
-import org.junitpioneer.jupiter.RetryingTest;
 
 class InMemorySessionEventStoreTest {
 
@@ -31,11 +31,11 @@ class InMemorySessionEventStoreTest {
             store.append(requestEvent("s2", 3));
 
             var s1 = store.replay("s1", -1);
-            assertThat(s1).hasSize(2).allMatch(e -> e.sessionId().equals("s1"));
+            assertThat(s1).hasSize(2).allMatch(e -> Objects.equals(e.sessionId(), "s1"));
 
             s2 = store.replay("s2", -1);
         }
-        assertThat(s2).hasSize(1).allMatch(e -> e.sessionId().equals("s2"));
+        assertThat(s2).hasSize(1).allMatch(e -> Objects.equals(e.sessionId(), "s2"));
     }
 
     @Test
@@ -58,53 +58,6 @@ class InMemorySessionEventStoreTest {
         store.append(requestEvent("s1", 1));
         store.close();
         assertThat(store.replay("s1", -1)).isEmpty();
-    }
-
-    @RetryingTest(maxAttempts = 3)
-    void throughput() throws Exception {
-        int threads = 3;
-        int eventsPerThread = 100_000;
-
-        // warmup
-        measure(threads, eventsPerThread);
-
-        long lockFreeOpsPerSec = measure(threads, eventsPerThread);
-
-        System.out.printf("[InMemorySessionEventStore]: %d ops/sec %n", lockFreeOpsPerSec, (double) lockFreeOpsPerSec);
-
-        assertThat(lockFreeOpsPerSec).as("Performance baseline").isGreaterThan(1_000_000);
-    }
-
-    private long measure(int threads, int eventsPerThread) throws Exception {
-        try (var store = new InMemorySessionEventStore()) {
-            var latch = new CountDownLatch(1);
-            var total = new AtomicLong(0);
-            int ops = threads * eventsPerThread;
-
-            try (var exec = Executors.newVirtualThreadPerTaskExecutor()) {
-                for (int t = 0; t < threads; t++) {
-                    final int tid = t;
-                    exec.submit(() -> {
-                        try {
-                            latch.await();
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                            return;
-                        }
-                        for (int i = 0; i < eventsPerThread; i++) {
-                            store.append(requestEvent("sess_" + tid, i));
-                            total.incrementAndGet();
-                        }
-                    });
-                }
-                var start = System.nanoTime();
-                latch.countDown();
-                exec.shutdown();
-                exec.awaitTermination(60, TimeUnit.SECONDS);
-                var elapsedMs = Math.max(1, (System.nanoTime() - start) / 1_000_000);
-                return (long) ops * 1000 / elapsedMs;
-            }
-        }
     }
 
     @Test

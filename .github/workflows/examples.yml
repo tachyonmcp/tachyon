@@ -18,6 +18,7 @@ permissions:
 
 jobs:
   examples:
+    name: examples (${{ matrix.example }})
     strategy:
       fail-fast: false
       matrix:

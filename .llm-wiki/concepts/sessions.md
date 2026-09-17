@@ -2,8 +2,8 @@
 title: Sessions
 tags: [concept, session, state]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/runtime/Session.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/session/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/SessionConfig.java, tachyon-api/src/main/java/dev/tachyonmcp/api/server/session/SessionIdGenerator.java]
-updated: 2026-09-15
-commit: b1aeff64
+updated: 2026-09-17
+commit: aba402de
 ---
 
 # 🪪 Sessions
@@ -40,7 +40,7 @@ Verdict: **stateless by default** (`SessionConfig.enabled=false`). Sessions exis
 - `getSession` → local map, else **hydrate** from store (skip + terminate if CLOSED or expired; incompatible protocol version ⇒ empty) `SessionManager`. `getLocalSession` never hits store (used on hot paths: GET SSE, redelivery).
 - Mutations (`activate`, `protocol`, `enableExtension`, `loggingLevel`, `close`) call `onChange` → `persist` → `store.compareAndSet(expected, revision+1)`; lost CAS ⇒ **evict local** (another node owns it) `SessionManager#persist`.
 - `touch()` → `onTouch` → async expiry refresh only when within `ttl/2` of `expiresAt`, deduped per key, on persistence executor `SessionManager`.
-- In-memory store `InMemorySessionStore` — CAS requires same key + higher revision.
+- In-memory store `InMemorySessionStore` — `ConcurrentHashMap` keyed by session id. CAS requires same key + higher revision `InMemorySessionStore#compareAndSet`. `touch`/`terminate` are lock-free `get` → `replace`/`remove` loops: replacement snapshot built outside the map's bin monitor, lost race re-reads and retries `InMemorySessionStore#touch`, `InMemorySessionStore#terminate`. JMH: `tachyon-core/src/test/java/dev/tachyonmcp/core/server/session/InMemorySessionStoreBenchmark.java` (`make jmh`).
 
 ## 📚 Event log
 

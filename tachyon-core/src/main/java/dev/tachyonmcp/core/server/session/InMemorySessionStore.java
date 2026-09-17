@@ -8,7 +8,13 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-/** Default process-local session snapshot store. */
+/**
+ * Default process-local session snapshot store.
+ *
+ * <p>Every mutation is a lock-free read-then-swap on the current value: the replacement snapshot is
+ * built outside the map's bin monitor, so a contended session never pins a virtual thread while
+ * allocating, and a lost race re-reads and retries instead of blocking.
+ */
 @InternalApi
 public final class InMemorySessionStore implements SessionStore {
 
@@ -36,39 +42,45 @@ public final class InMemorySessionStore implements SessionStore {
 
     @Override
     public boolean touch(SessionKey key, Instant expiresAt) {
-        final var touched = new boolean[1];
-        snapshots.computeIfPresent(key.sessionId(), (sessionId, current) -> {
-            if (!current.key().equals(key)) {
-                return current;
+        final var sessionId = key.sessionId();
+        while (true) {
+            final var current = snapshots.get(sessionId);
+            if (current == null || !current.key().equals(key)) {
+                return false;
             }
-            touched[0] = true;
-            return new SessionSnapshot(
-                    current.key(),
-                    current.state(),
-                    current.protocolVersion(),
-                    current.enabledExtensionIds(),
-                    current.loggingLevel(),
-                    expiresAt,
-                    current.revision() + 1);
-        });
-        return touched[0];
+            if (snapshots.replace(sessionId, current, touched(current, expiresAt))) {
+                return true;
+            }
+        }
     }
 
     @Override
     public boolean terminate(SessionKey key) {
-        final var removed = new boolean[1];
-        snapshots.computeIfPresent(key.sessionId(), (sessionId, current) -> {
-            if (current.key().equals(key)) {
-                removed[0] = true;
-                return null;
+        final var sessionId = key.sessionId();
+        while (true) {
+            final var current = snapshots.get(sessionId);
+            if (current == null || !current.key().equals(key)) {
+                return false;
             }
-            return current;
-        });
-        return removed[0];
+            if (snapshots.remove(sessionId, current)) {
+                return true;
+            }
+        }
     }
 
     @Override
     public void close() {
         snapshots.clear();
+    }
+
+    private static SessionSnapshot touched(SessionSnapshot current, Instant expiresAt) {
+        return new SessionSnapshot(
+                current.key(),
+                current.state(),
+                current.protocolVersion(),
+                current.enabledExtensionIds(),
+                current.loggingLevel(),
+                expiresAt,
+                current.revision() + 1);
     }
 }
