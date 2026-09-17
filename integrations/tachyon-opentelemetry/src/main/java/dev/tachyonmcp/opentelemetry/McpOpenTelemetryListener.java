@@ -34,8 +34,12 @@ import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.SpanKind;
 import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.api.trace.propagation.W3CTraceContextPropagator;
 import io.opentelemetry.context.Context;
+import io.opentelemetry.context.ContextKey;
 import io.opentelemetry.context.Scope;
+import io.opentelemetry.context.propagation.TextMapGetter;
+import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
@@ -55,7 +59,9 @@ import org.jspecify.annotations.Nullable;
  *
  * <h2>Trace context</h2>
  *
- * <p>Spans are parented by {@link Context#current()} on whichever thread {@link #start} runs on.
+ * <p>A valid payload {@code _meta.traceparent} supplies the remote parent using OpenTelemetry's
+ * W3C propagator. Missing or invalid values fall back to {@link Context#current()}. Additional
+ * listeners for the same operation nest under its current span without extracting the parent again.
  * Because the dispatcher only ever attaches this listener's {@link ObservationScope} around
  * synchronous dispatch work — decode, the call that kicks off an async handler, and (after
  * {@link ObservationScope#reattach()}) the handler's completion callback — a span an application
@@ -87,6 +93,19 @@ public class McpOpenTelemetryListener implements ObservationListener {
     /** This listener only instruments {@code tachyon-core}'s Streamable HTTP transport. */
     private static final String NETWORK_PROTOCOL_HTTP = "http";
 
+    private static final ContextKey<OperationInfo> CURRENT_OPERATION = ContextKey.named("tachyon-operation");
+    private static final TextMapGetter<OperationInfo> TRACE_CONTEXT_GETTER = new TextMapGetter<>() {
+        @Override
+        public Iterable<String> keys(OperationInfo carrier) {
+            return List.of("traceparent");
+        }
+
+        @Override
+        public @Nullable String get(@Nullable OperationInfo carrier, String key) {
+            return carrier != null && "traceparent".equalsIgnoreCase(key) ? carrier.traceparent() : null;
+        }
+    };
+
     private final Tracer tracer;
     private final DoubleHistogram operationDuration;
     private final ConcurrentHashMap<OperationInfo, PendingOperation> pending = new ConcurrentHashMap<>();
@@ -113,10 +132,16 @@ public class McpOpenTelemetryListener implements ObservationListener {
 
     @Override
     public ObservationScope start(OperationInfo info) {
-        var span =
-                tracer.spanBuilder(info.method()).setSpanKind(SpanKind.SERVER).startSpan();
+        var parent = Context.current();
+        if (info.traceparent() != null && parent.get(CURRENT_OPERATION) != info) {
+            parent = W3CTraceContextPropagator.getInstance().extract(parent, info, TRACE_CONTEXT_GETTER);
+        }
+        var span = tracer.spanBuilder(info.method())
+                .setParent(parent)
+                .setSpanKind(SpanKind.SERVER)
+                .startSpan();
         pending.put(info, new PendingOperation(span, System.nanoTime()));
-        var context = Context.current().with(span);
+        var context = parent.with(span).with(CURRENT_OPERATION, info);
         return new SpanScope(context, context.makeCurrent());
     }
 

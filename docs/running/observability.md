@@ -19,6 +19,8 @@ OpenTelemetry using the [MCP semantic conventions](https://github.com/open-telem
 - `start(OperationInfo)` — fires once, before any handler runs
 - `complete(OperationInfo, OperationOutcome)` — fires once, at the terminal boundary
 
+`OperationInfo` exposes trace context and server address/port through getters. When constructing one programmatically, supply these values through `OperationInfo.builder(...)`.
+
 Listeners cannot short-circuit, reject, or substitute results. Exceptions in listeners are fault-isolated and never affect handler execution, responses, or other listeners.
 
 Listeners nest in registration order: the scope a listener returns from `start` is opened inside the scope of every listener registered before it, so a later-registered listener's context is the active one while dispatch work runs. Scopes close innermost-first, which means each `close()` runs while its own context is current and restores whatever it displaced.

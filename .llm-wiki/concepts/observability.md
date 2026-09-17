@@ -3,7 +3,7 @@ title: Observability
 tags: [concept, observability, otel]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/server/observability/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/ObservabilityConfig.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/PayloadCapturePolicy.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/handlers/SubscriptionsListenHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/OutboundSseStream.java, integrations/tachyon-opentelemetry/]
 updated: 2026-09-17
-commit: 1011a627
+commit: e5dc5498
 ---
 
 # 🔭 Observability
@@ -29,6 +29,8 @@ Listener throwing on interrupted thread ⇒ rethrown, else warn `Observation#fau
 `OperationOutcome` sealed `OperationOutcome`: `Rejected(error?, httpStatus, wireCode)`, `Completed`, `PayloadFailure`, `SerializationFailed`, `HandlerFailed(error, wireCode, cause?)`, `Cancelled`, `TaskHandoff(taskId)`, `NotificationAccepted`, `NotificationIgnored`, `StreamFailed(causeType, cause?)` (a `subscriptions/listen` stream's genuine post-establishment transport failure — an ordinary disconnect reports `Cancelled` instead).
 
 Transport-triggered subscription terminal continuations run through the server executor, with a virtual-thread fallback after executor rejection; Netty close callbacks remove the registry entry and schedule settlement of the pending result [SubscriptionsListenHandler#executeCompletion](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/handlers/SubscriptionsListenHandler.java). Graceful shutdown completes the pending result directly on the shutdown caller. The ack timestamp is volatile for independent shutdown completion [OperationInfo#establishmentNanos](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/observability/OperationInfo.java).
+
+Trace context and server address/port enter through the builder; only getters remain on the built object [OperationInfo#build](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/observability/OperationInfo.java).
 
 ## 📦 Payload capture
 
