@@ -20,8 +20,6 @@ import dev.tachyonmcp.core.server.config.SessionConfig;
 import dev.tachyonmcp.core.server.features.tasks.TasksExtension;
 import dev.tachyonmcp.core.server.json.JacksonPayloadSerde;
 import dev.tachyonmcp.core.server.json.NetworkntJsonSchemaValidator;
-import dev.tachyonmcp.core.server.session.InMemorySessionEventStore;
-import dev.tachyonmcp.core.server.session.InMemorySessionStore;
 import io.netty.channel.ChannelPipeline;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -289,10 +287,8 @@ final class DefaultServerBuilder implements ServerBuilder {
     @Override
     public TachyonServer build() {
         var sessionConfig = sessionBuilder.build();
-        var sessionEventStore = sessionConfig.sessionEventStore() != null
-                ? sessionConfig.sessionEventStore()
-                : new InMemorySessionEventStore();
-        var store = sessionConfig.sessionStore() != null ? sessionConfig.sessionStore() : new InMemorySessionStore();
+        var sessionEventStore = sessionConfig.sessionEventStoreOrDefault();
+        var sessionStore = sessionConfig.sessionStoreOrDefault();
         var serverConfig = buildConfig();
         if (serverConfig.capabilities().tasks().enabled() && !extensionIds.contains(TasksExtension.ID)) {
             addExtension(TasksExtension.instance());
@@ -307,7 +303,7 @@ final class DefaultServerBuilder implements ServerBuilder {
         var server = new DefaultTachyonServer(
                 resolvedExecutor,
                 sessionEventStore,
-                store,
+                sessionStore,
                 serverConfig,
                 inputSchemaValidator,
                 outputSchemaValidator,

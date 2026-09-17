@@ -3,7 +3,7 @@ title: Findings
 tags: [meta, findings]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/HandlerFutures.java]
 updated: 2026-09-17
-commit: e5c536ea
+commit: 42bb5fdb
 ---
 
 # 🔎 Findings
@@ -14,7 +14,6 @@ Spotted while reading code. Not verified by tests. Fixed in code ⇒ 🗑️ rem
 - ⚠️ Enum auto-completion registers through last-write-wins `DefaultCompletionRegistry` maps: an explicit `@McpCompletion` from **another** service registered before the enum prompt/template is silently replaced. Same-service explicit completion is honored (`completed` guard). `TachyonAnnotationProvider#registerEnumCompletion`, `DefaultCompletionRegistry#registerForPromptAsync`
 - ⚠️ `UnsupportedProtocolVersionHandler` encodes the rejection with `ProtocolVersionHandler#LATEST_PROTOCOL` (not `Protocols#baseline`) + HTTP 400, even for legacy-looking clients. Intentional per SEP-2575? `UnsupportedProtocolVersionHandler#channelRead`
 - 🪶 `HandlerFutures` is `@InternalApi` but lives in public `tachyon-api`, is statically imported by user-facing `AbstractToolHandler`, and is shown to users in `RpcMethodHandler`'s javadoc example. `HandlerFutures`, `RpcMethodHandler`
-- 🪶 In-memory stores defaulted in two places: `SessionConfig.Builder#build` (enabled sessions — asserted non-null by `SessionConfigTest`) and `DefaultServerBuilder#build` (needed because `SessionConfig#STATELESS` carries nulls). Same `new InMemory…Store()` literal twice.
 
 ## ❓ Open questions
 

@@ -17,8 +17,8 @@ import org.jspecify.annotations.Nullable;
  * @param enabled            when {@code false} (the default) the server is stateless: no session is
  *                           created and no TTL tracking occurs; set {@code true} to enable sessions
  * @param sessionTtl         duration after which idle sessions are evicted (default 30s)
- * @param sessionEventStore   optional custom event store; {@code null} uses in-memory default
- * @param sessionStore       optional custom session store; {@code null} uses in-memory default
+ * @param sessionEventStore  custom event store; when enabled, {@code null} becomes in-memory
+ * @param sessionStore       custom session store; when enabled, {@code null} becomes in-memory
  * @param sessionIdGenerator session id generator; defaults to {@link SessionIdGenerator#DEFAULT}
  * @param janitorInterval    interval between janitor sweeps (default 5s);
  *                           {@code null} uses the default
@@ -49,7 +49,29 @@ public record SessionConfig(
             if (sessionTtl == null) sessionTtl = DEFAULT_SESSION_TTL;
             if (janitorInterval == null) janitorInterval = DEFAULT_JANITOR_INTERVAL;
             if (sessionIdGenerator == null) sessionIdGenerator = SessionIdGenerator.DEFAULT;
+            if (sessionEventStore == null) sessionEventStore = new InMemorySessionEventStore();
+            if (sessionStore == null) sessionStore = new InMemorySessionStore();
         }
+    }
+
+    /**
+     * Returns {@link #sessionEventStore()}, or a new in-memory store when sessions are disabled.
+     *
+     * @return the event store to use, never {@code null}
+     */
+    @ExperimentalApi(since = "1.0.0-beta.26")
+    public SessionEventStore sessionEventStoreOrDefault() {
+        return sessionEventStore != null ? sessionEventStore : new InMemorySessionEventStore();
+    }
+
+    /**
+     * Returns {@link #sessionStore()}, or a new in-memory store when sessions are disabled.
+     *
+     * @return the session store to use, never {@code null}
+     */
+    @ExperimentalApi(since = "1.0.0-beta.26")
+    public SessionStore sessionStoreOrDefault() {
+        return sessionStore != null ? sessionStore : new InMemorySessionStore();
     }
 
     public static Builder builder() {
@@ -138,12 +160,7 @@ public record SessionConfig(
                 return SessionConfig.STATELESS;
             } else {
                 return new SessionConfig(
-                        enabled,
-                        sessionTtl,
-                        sessionEventStore != null ? sessionEventStore : new InMemorySessionEventStore(),
-                        sessionStore != null ? sessionStore : new InMemorySessionStore(),
-                        sessionIdGenerator,
-                        janitorInterval);
+                        enabled, sessionTtl, sessionEventStore, sessionStore, sessionIdGenerator, janitorInterval);
             }
         }
     }
