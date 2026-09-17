@@ -6,12 +6,8 @@ import dev.tachyonmcp.core.protocol.ProtocolRequestMapper;
 import dev.tachyonmcp.core.protocol.ProtocolResponseMapper;
 import dev.tachyonmcp.core.protocol.mcp.McpHeaderNames;
 import dev.tachyonmcp.core.protocol.mcp.v2025_11_25.codecs.McpResponseMapper;
-import dev.tachyonmcp.core.protocol.mcp.v2025_11_25.transport.RequestValidationHandler;
-import dev.tachyonmcp.core.server.internal.ServerEngine;
-import io.netty.channel.ChannelHandler;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpRequest;
-import java.util.List;
 import java.util.Set;
 
 /**
@@ -74,10 +70,5 @@ public final class McpProtocol implements Protocol {
     @Override
     public ProtocolRequestMapper requestMapper() {
         return REQUEST_MAPPER;
-    }
-
-    @Override
-    public List<ChannelHandler> requestHandlers(ServerEngine server) {
-        return List.of(new RequestValidationHandler());
     }
 }

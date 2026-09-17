@@ -3,11 +3,14 @@ package dev.tachyonmcp.core.transport.netty;
 
 import static dev.tachyonmcp.core.transport.netty.InteractionHandler.INTERACTION_CONTEXT_KEY;
 
+import dev.tachyonmcp.api.server.domain.RequestId;
+import dev.tachyonmcp.api.server.domain.ServerError;
 import dev.tachyonmcp.api.server.session.SessionIdGenerator;
 import dev.tachyonmcp.core.runtime.ChannelContext;
 import dev.tachyonmcp.core.runtime.Session;
 import dev.tachyonmcp.core.server.McpDispatcher;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
+import dev.tachyonmcp.core.transport.jsonrpc.JsonRpcCodec;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.Unpooled;
@@ -17,6 +20,7 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.DefaultHttpHeaders;
 import io.netty.handler.codec.http.DefaultHttpRequest;
+import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpResponseStatus;
@@ -55,6 +59,28 @@ public final class ChannelHandlerUtils {
     }
 
     /**
+     * Rejects an aggregated MCP request with the negotiated protocol's wire form of {@code error} —
+     * a JSON-RPC error body echoing {@code id}, under the HTTP status that protocol assigns the
+     * error (2026-07-28 maps a header mismatch to {@code 400}, 2025-11-25 to {@code 200}, the
+     * classic JSON-RPC-over-HTTP convention where the transport succeeded and the RPC did not).
+     * Releases {@code req}: it is not forwarded on, so nothing else would free it.
+     *
+     * @param ctx   the channel handler context, carrying the negotiated interaction
+     * @param req   the aggregated request being rejected
+     * @param id    the JSON-RPC id to echo, or {@code null} for a notification
+     * @param error the validation failure to report
+     */
+    public static void rejectWithServerError(
+            ChannelHandlerContext ctx, FullHttpRequest req, @Nullable RequestId id, ServerError error) {
+        var wireError =
+                requireInteractionContext(ctx).protocol().responseMapper().error(error);
+        var body = JsonRpcCodec.serializeError(id, wireError.code(), wireError.message(), wireError.data());
+        var origin = req.headers().get(HttpHeaderNames.ORIGIN);
+        markRejected(ctx, req);
+        sendResponseAndClose(ctx, HttpResponseStatus.valueOf(wireError.httpStatus()), "application/json", body, origin);
+    }
+
+    /**
      * {@link #rejectAndClose} bookkeeping without the response, for handlers writing their own. Call
      * after reading anything still needed from {@code msg} — it releases the message.
      *
@@ -63,6 +89,7 @@ public final class ChannelHandlerUtils {
      */
     public static void markRejected(ChannelHandlerContext ctx, Object msg) {
         ctx.channel().attr(REJECTED).set(Boolean.TRUE);
+        PeekedBody.clear(ctx);
         ReferenceCountUtil.release(msg);
     }
 

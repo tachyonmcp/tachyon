@@ -2,8 +2,8 @@
 title: SSE streams
 tags: [concept, transport, sse]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/sse/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/OutboundSseStream.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/OutboundSseStreamMessageRouter.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpOperationHandler.java]
-updated: 2026-09-14
-commit: 582f9c52
+updated: 2026-09-17
+commit: 1a4081f4
 ---
 
 # 📡 SSE streams

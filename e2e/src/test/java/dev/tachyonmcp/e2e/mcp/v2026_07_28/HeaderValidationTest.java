@@ -17,9 +17,12 @@ import org.junit.jupiter.api.Test;
 
 /**
  * MCP 2026-07-28 mirrors {@code method}/{@code params.name} into the {@code Mcp-Method}/
- * {@code Mcp-Name} HTTP headers (SEP-2243). A server processing the body must reject a request
- * where the header doesn't match with JSON-RPC {@code -32020} (HeaderMismatch) and HTTP
- * {@code 400 Bad Request}.
+ * {@code Mcp-Name} HTTP headers (SEP-2243). This is the revision that made the mirrors mandatory
+ * ({@code v2026_07_28.transport.RequiredHeadersHandler}); that a mirror which is present agrees
+ * with the body is checked first, on every revision, by
+ * {@code transport.netty.http.McpHeaderMatchHandler}. Either failure is JSON-RPC {@code -32020}
+ * (HeaderMismatch) under HTTP {@code 400 Bad Request}. The older revision's optional-mirror cases
+ * live in {@code v2025_11_25.HeaderValidationTest}.
  */
 class HeaderValidationTest extends AbstractStatelessMcpE2eTest<McpClient> {
 
@@ -51,8 +54,6 @@ class HeaderValidationTest extends AbstractStatelessMcpE2eTest<McpClient> {
             }
             """;
 
-    private static final String VERSION_REJECTION = "SEP-2243 headers require MCP-Protocol-Version: 2026-07-28";
-
     private HttpResponse<String> post(String mcpMethodHeader, String mcpNameHeader) throws Exception {
         var headers = new LinkedHashMap<String, String>();
         if (mcpMethodHeader != null) headers.put("Mcp-Method", mcpMethodHeader);
@@ -60,23 +61,44 @@ class HeaderValidationTest extends AbstractStatelessMcpE2eTest<McpClient> {
         return postMcpRequest(TOOLS_CALL_ECHO_BODY, headers);
     }
 
-    private void assertHeaderMismatch(HttpResponse<String> response) {
-        assertThatResponse(response).hasStatus(400).isJsonRpcError().hasId(9).hasErrorCode(-32020);
+    private void assertHeaderMismatch(HttpResponse<String> response, String offendingHeader, String reason) {
+        assertThatResponse(response)
+                .hasStatus(400)
+                .isJsonRpcError()
+                .hasId(9)
+                .hasErrorCode(-32020)
+                .hasErrorMessageContaining(offendingHeader)
+                .hasErrorMessageContaining(reason);
     }
 
     @Test
     void rejectsMismatchedNameHeader() throws Exception {
-        assertHeaderMismatch(post("tools/call", "not_echo"));
+        assertHeaderMismatch(post("tools/call", "not_echo"), "Mcp-Name", "does not match");
     }
 
     @Test
     void rejectsMissingNameHeaderWhenBodyHasName() throws Exception {
-        assertHeaderMismatch(post("tools/call", null));
+        assertHeaderMismatch(post("tools/call", null), "Mcp-Name", "is required");
     }
 
     @Test
     void rejectsMismatchedMethodHeader() throws Exception {
-        assertHeaderMismatch(post("tools/list", "echo"));
+        assertHeaderMismatch(post("tools/list", "echo"), "Mcp-Method", "does not match");
+    }
+
+    @Test
+    void rejectsMissingMethodHeader() throws Exception {
+        assertHeaderMismatch(post(null, "echo"), "Mcp-Method", "is required");
+    }
+
+    /**
+     * Agreement is checked before presence: a mirror that lies about the body is the graver fault,
+     * and the same rule every revision applies, so it is reported ahead of what this revision alone
+     * demands.
+     */
+    @Test
+    void reportsMismatchBeforeMissing() throws Exception {
+        assertHeaderMismatch(post("tools/list", null), "Mcp-Method", "does not match");
     }
 
     @Test
@@ -155,32 +177,5 @@ class HeaderValidationTest extends AbstractStatelessMcpE2eTest<McpClient> {
                         "Mcp-Method", List.of("tools/call"),
                         "Mcp-Name", List.of("echo")),
                 false));
-    }
-
-    /**
-     * Header/body agreement is enforced only by this revision's {@code RequestValidationHandler}. A
-     * mirrored header on a request negotiating an older revision is therefore never compared to the
-     * body: a gateway would authorize the benign {@code Mcp-Method} while the body ran something
-     * else. Rejecting costs nothing — the mirrors did not exist before 2026-07-28.
-     */
-    @Test
-    void rejectsMirroredHeadersOnOlderProtocolVersion() throws Exception {
-        var response = postMcpRequest(
-                TOOLS_CALL_ECHO_BODY,
-                Map.of(
-                        "MCP-Protocol-Version", List.of("2025-11-25"),
-                        "Mcp-Method", List.of("tools/list"),
-                        "Mcp-Name", List.of("echo")),
-                false);
-
-        assertThatResponse(response).isRejectedWith(400, VERSION_REJECTION);
-    }
-
-    @Test
-    void rejectsMirroredHeadersWithNoProtocolVersion() throws Exception {
-        var response = postMcpRequest(
-                TOOLS_CALL_ECHO_BODY, Map.of("Mcp-Method", List.of("tools/list"), "Mcp-Name", List.of("echo")), false);
-
-        assertThatResponse(response).isRejectedWith(400, VERSION_REJECTION);
     }
 }

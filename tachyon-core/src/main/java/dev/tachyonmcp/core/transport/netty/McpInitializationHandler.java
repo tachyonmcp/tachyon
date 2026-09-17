@@ -103,13 +103,18 @@ public class McpInitializationHandler extends ChannelInboundHandlerAdapter {
     }
 
     private void handlePostWithoutSession(ChannelHandlerContext ctx, FullHttpRequest req, @Nullable String origin) {
+        // Read on the event loop, before the async hop: a pipelined next request must not be able
+        // to overwrite the entry between the hop and the read.
+        final PeekedBody.@Nullable Parsed peeked = PeekedBody.cached(ctx, req);
         var body = req.content().retain();
 
         CompletableFuture.runAsync(
                         () -> {
                             final JsonRpcMessage message;
                             try {
-                                message = dispatcher.parseMessage(body);
+                                // A validation handler upstream already parsed this body; a null
+                                // holder means none did.
+                                message = peeked != null ? peeked.message() : dispatcher.parseMessage(body);
                             } finally {
                                 body.release();
                             }

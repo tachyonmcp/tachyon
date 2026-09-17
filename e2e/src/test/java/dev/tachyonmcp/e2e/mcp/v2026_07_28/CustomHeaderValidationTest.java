@@ -3,6 +3,10 @@ package dev.tachyonmcp.e2e.mcp.v2026_07_28;
 
 import static dev.tachyonmcp.testkit.McpHttpResponseAssert.assertThatResponse;
 
+import dev.tachyonmcp.api.server.domain.PromptMessage;
+import dev.tachyonmcp.api.server.domain.Role;
+import dev.tachyonmcp.api.server.domain.TextContent;
+import dev.tachyonmcp.api.server.features.prompts.PromptDescriptor;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
 import dev.tachyonmcp.e2e.mcp.AbstractStatelessMcpE2eTest;
 import dev.tachyonmcp.testkit.Mcp20260728Client;
@@ -12,6 +16,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -47,14 +52,27 @@ class CustomHeaderValidationTest extends AbstractStatelessMcpE2eTest<Mcp20260728
             }
             """;
 
+    /**
+     * A prompt deliberately sharing the annotated tool's name: {@code prompts/get} carries the same
+     * {@code {name, arguments}} shape as {@code tools/call}, so this is what catches a mirror lookup
+     * that resolves a prompt's name against the tool registry.
+     */
     @BeforeEach
     void registerFixtures() {
-        startServerWith(s -> s.tools()
-                .register(
-                        d -> d.name("execute_sql").description("Executes SQL").inputSchema(EXECUTE_SQL_SCHEMA),
-                        (ctx, request) ->
-                                ToolResult.text("region=" + request.arguments().stringOr("region", "") + " query="
-                                        + request.arguments().stringOr("query", ""))));
+        startServer(b -> b.capabilities(c -> c.tools().prompts()), s -> {
+            s.tools()
+                    .register(
+                            d -> d.name("execute_sql")
+                                    .description("Executes SQL")
+                                    .inputSchema(EXECUTE_SQL_SCHEMA),
+                            (ctx, request) -> ToolResult.text(
+                                    "region=" + request.arguments().stringOr("region", "") + " query="
+                                            + request.arguments().stringOr("query", "")));
+            s.prompts()
+                    .register(
+                            PromptDescriptor.of("execute_sql", "A prompt that shares the tool's name"),
+                            List.of(PromptMessage.of(Role.USER, TextContent.of("Review this SQL"))));
+        });
     }
 
     private HttpResponse<String> post(String body, String regionHeader) throws Exception {
@@ -84,6 +102,38 @@ class CustomHeaderValidationTest extends AbstractStatelessMcpE2eTest<Mcp20260728
                 """.formatted(id, region);
     }
 
+    /**
+     * SEP-2243 scopes {@code x-mcp-header} to tools — the only primitive whose definition carries an
+     * {@code inputSchema} to annotate — so a {@code prompts/get} naming the same {@code execute_sql}
+     * must not inherit the tool's {@code Mcp-Param-Region} requirement. It sends {@code Mcp-Method}
+     * and {@code Mcp-Name} (both required of it on this revision) and no {@code Mcp-Param-*}, and
+     * that is a complete, conforming request.
+     */
+    @Test
+    void doesNotApplyToolParamMirrorsToASameNamedPrompt() throws Exception {
+        // language=JSON
+        var body = """
+                {
+                  "jsonrpc": "2.0",
+                  "id": 20,
+                  "method": "prompts/get",
+                  "params": {
+                    "name": "execute_sql",
+                    "arguments": {"region": "us-west1"},
+                    "_meta": {
+                      "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+                      "io.modelcontextprotocol/clientInfo": {"name": "t", "version": "1"},
+                      "io.modelcontextprotocol/clientCapabilities": {}
+                    }
+                  }
+                }
+                """;
+
+        var response = postMcpRequest(body, Map.of("Mcp-Method", "prompts/get", "Mcp-Name", "execute_sql"));
+
+        assertThatResponse(response).hasStatus(200).isSuccess().hasId(20);
+    }
+
     @Test
     void acceptsMatchingParamHeader() throws Exception {
         var response = post(toolCallBody(1, "us-west1"), "us-west1");
@@ -93,7 +143,13 @@ class CustomHeaderValidationTest extends AbstractStatelessMcpE2eTest<Mcp20260728
     @Test
     void rejectsMissingParamHeaderWhenBodyHasValue() throws Exception {
         var response = post(toolCallBody(2, "us-west1"), null);
-        assertThatResponse(response).hasStatus(400).isJsonRpcError().hasId(2).hasErrorCode(-32020);
+        assertThatResponse(response)
+                .hasStatus(400)
+                .isJsonRpcError()
+                .hasId(2)
+                .hasErrorCode(-32020)
+                .hasErrorMessageContaining("Mcp-Param-Region")
+                .hasErrorMessageContaining("is required");
     }
 
     /** A header claiming a value with nothing in the body to back it is spoofable, not just extra. */

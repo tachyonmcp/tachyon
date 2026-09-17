@@ -126,9 +126,12 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
         // null (e.g. no InteractionHandler configured); enforced non-null only where the
         // original code enforced it, in handlePostRequest.
         final @Nullable ChannelContext ic = ChannelHandlerUtils.getInteractionContext(ctx);
+        // Read for the same reason and in the same place: the entry belongs to this request, and a
+        // pipelined next request must not be able to overwrite it between the hop and the read.
+        final PeekedBody.@Nullable Parsed peeked = PeekedBody.cached(ctx, req);
         var body = req.content().retain();
         try {
-            CompletableFuture.runAsync(() -> parseAndDispatchPost(ctx, sessionId, body, origin, ic), executor)
+            CompletableFuture.runAsync(() -> parseAndDispatchPost(ctx, sessionId, body, origin, ic, peeked), executor)
                     .exceptionally(ex -> {
                         logger.debug("Failed to parse POST body", ex);
                         ctx.executor()
@@ -156,7 +159,8 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
             @Nullable String sessionId,
             ByteBuf body,
             @Nullable String origin,
-            @Nullable ChannelContext ic) {
+            @Nullable ChannelContext ic,
+            PeekedBody.@Nullable Parsed peeked) {
         final JsonRpcMessage message;
         try {
             if (sessionId != null) {
@@ -178,7 +182,8 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
                 }
                 bindSession(ctx.channel(), session.orElseThrow());
             }
-            message = dispatcher.parseMessage(body);
+            // A validation handler upstream already parsed this body; a null holder means none did.
+            message = peeked != null ? peeked.message() : dispatcher.parseMessage(body);
         } finally {
             body.release();
         }

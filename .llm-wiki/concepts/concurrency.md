@@ -1,9 +1,9 @@
 ---
 title: Concurrency & shutdown
 tags: [concept, concurrency, virtual-threads]
-sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/internal/OperationTracker.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/NettyServer.java, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/HandlerFutures.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/OutboundSseStreamMessageRouter.java]
-updated: 2026-09-15
-commit: 9eec1092
+sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/internal/OperationTracker.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/NettyServer.java, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/HandlerFutures.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/OutboundSseStreamMessageRouter.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/PeekedBody.java]
+updated: 2026-09-17
+commit: 1a4081f4
 ---
 
 # 🧵 Concurrency & shutdown
@@ -55,6 +55,6 @@ New requests during drain ⇒ `RejectedExecutionException` ⇒ 503 "Server shutt
 - Handler may block (VT) but not pin: no `synchronized`, no long native calls; CPU-heavy → `context.engine().executor()` `RpcMethodHandler`.
 - Any Netty write off EL → `eventLoop.execute` / `runOnEventLoop`; catch `RejectedExecutionException` on shutdown.
 - `ByteBuf` ownership: `retain()` before async hop, `release()` in `finally`; rejecting handler must `markRejected` (releases + drops rest) `ChannelHandlerUtils#rejectAndClose`.
-- Peeking handlers read `content().duplicate()` so downstream reader index intact.
+- Peeking handlers call `PeekedBody.peek` — one parse per POST body, cached on a channel attribute keyed by the request instance, reused by the dispatch site via `PeekedBody.cached` (read on the event loop, before the async hop). It parses `content().duplicate()`, so the downstream reader index stays intact `PeekedBody#peek`.
 
 Related: [[request-lifecycle]], [[sse-streams]].

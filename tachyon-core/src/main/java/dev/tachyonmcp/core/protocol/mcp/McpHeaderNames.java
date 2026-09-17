@@ -2,6 +2,7 @@
 package dev.tachyonmcp.core.protocol.mcp;
 
 import io.netty.util.AsciiString;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Constants for MCP HTTP header names, and the schema keyword that declares the custom ones.
@@ -32,6 +33,22 @@ public final class McpHeaderNames {
 
     /** Prefix of the headers mirroring {@link #X_MCP_HEADER}-annotated tool arguments (SEP-2243). */
     public static final String MCP_PARAM_PREFIX = "Mcp-Param-";
+
+    /**
+     * The {@code params} field {@link #MCP_NAME} mirrors for {@code method}, or {@code null} for a
+     * method that addresses no named target and therefore never carries the header (SEP-2243).
+     *
+     * @param method the JSON-RPC method name from the request body
+     * @return {@code "uri"} for {@code resources/read}, {@code "name"} for the other addressed
+     *     methods, {@code null} otherwise
+     */
+    public static @Nullable String mirroredNameField(String method) {
+        return switch (method) {
+            case "resources/read" -> "uri";
+            case "tools/call", "prompts/get" -> "name";
+            default -> null;
+        };
+    }
 
     /**
      * Whether {@code name} is an {@code Mcp-Param-*} header, matched case-insensitively per RFC 9110.
