@@ -2,8 +2,8 @@
 title: Security guards
 tags: [concept, security, transport]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/http/, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpChannelInitializer.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/NetworkConfig.java]
-updated: 2026-09-16
-commit: b3a97d16
+updated: 2026-09-17
+commit: 0179f556
 ---
 
 # 🛡️ Security guards
@@ -22,14 +22,14 @@ Verdict: fail-closed HTTP guards, most of them before body aggregation. Loopback
 | Stateless guard | session/Last-Event-ID headers ⇒ 404; DELETE ⇒ 405 | `StatelessValidatorHandler#channelRead` |
 | Body limit | 1 MB default, 413 | `McpChannelInitializer#DEFAULT_MAX_CONTENT_LENGTH`, `McpChannelInitializer#initChannel` |
 | CORS | Netty `CorsHandler` from `allowedOrigins/allowNullOrigin/allowPrivateNetworks/allowedHeaders` | `NettyServerConfig.buildCorsConfig`, `McpChannelInitializer#initChannel` |
-| Body/header agreement (**all** versions) | SEP-2243 mirror present ⇒ must match body, whichever version negotiated — a gateway must not route on a header the server never executes | `McpMirrorValidationHandler`, [[protocol-versions]] |
-| Mirror **required** (2026-07-28 only) | the revision that adopted SEP-2243 also demands the mirrors be present | `RequestValidationHandler#requireMirrors` |
+| Body/header agreement (**all** versions) | SEP-2243 mirror present ⇒ must match body, whichever version negotiated — a gateway must not route on a header the server never executes | `McpHeaderMatchHandler`, [[protocol-versions]] |
+| Mirror **required** (2026-07-28 only) | the revision that adopted SEP-2243 also demands the mirrors be present; runs after agreement | `RequiredHeadersHandler#requireMirrors` |
 | Pending-request ownership | client response must come from owning session (stateful) / channel (stateless) | `DefaultTachyonServer#failPendingRequest` |
 | Error message hygiene | bare IAE message hidden; client-controlled values not echoed in header errors | [[errors]] |
 | SSE comment injection | CR/LF flattened | `PostSseStream#doWriteComment` |
 
 Rejection path: `rejectAndClose` marks channel rejected (drops remaining chunks) + `Connection: close` `ChannelHandlerUtils#rejectAndClose`.
 
-Tests: `DnsRebindingProtectionHandlerTest`, `McpHeaderGuardHandlerTest`, `McpMirrorValidationHandlerTest`, `EndpointValidatorHandlerTest`, e2e `DnsRebindingTest`, `AcceptHeaderValidationTest`, `MaxContentLengthTest`, `v2026_07_28/HeaderValidationTest`, `CustomHeaderValidationTest`.
+Tests: `DnsRebindingProtectionHandlerTest`, `McpHeaderGuardHandlerTest`, `McpHeaderMatchHandlerTest`, `EndpointValidatorHandlerTest`, e2e `DnsRebindingTest`, `AcceptHeaderValidationTest`, `MaxContentLengthTest`, `v2025_11_25/HeaderValidationTest` (optional mirrors, mcp-remote `initialize` preflight), `v2026_07_28/HeaderValidationTest`, `CustomHeaderValidationTest`.
 
 Related: [[netty-pipeline]], [[errors]].

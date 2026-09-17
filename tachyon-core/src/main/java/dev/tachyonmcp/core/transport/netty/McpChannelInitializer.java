@@ -8,7 +8,7 @@ import dev.tachyonmcp.core.transport.netty.http.AcceptValidationHandler;
 import dev.tachyonmcp.core.transport.netty.http.DnsRebindingProtectionHandler;
 import dev.tachyonmcp.core.transport.netty.http.EndpointValidatorHandler;
 import dev.tachyonmcp.core.transport.netty.http.McpHeaderGuardHandler;
-import dev.tachyonmcp.core.transport.netty.http.McpMirrorValidationHandler;
+import dev.tachyonmcp.core.transport.netty.http.McpHeaderMatchHandler;
 import dev.tachyonmcp.core.transport.netty.http.StatelessValidatorHandler;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelInitializer;
@@ -66,7 +66,7 @@ public class McpChannelInitializer extends ChannelInitializer<SocketChannel> {
     private final boolean stateless;
     private final EndpointValidatorHandler endpointValidatorHandler;
     private final InteractionHandler interactionHandler;
-    private final McpMirrorValidationHandler mirrorValidationHandler;
+    private final McpHeaderMatchHandler headerMatchHandler;
     // Per-server, not static: carries this server's allowedHosts allowlist (DNS-rebinding protection).
     private final DnsRebindingProtectionHandler dnsRebindingHandler;
 
@@ -112,7 +112,7 @@ public class McpChannelInitializer extends ChannelInitializer<SocketChannel> {
         this.childChannels = childChannels;
         this.dispatcher = new McpDispatcher(server, server.executor());
         this.interactionHandler = new InteractionHandler();
-        this.mirrorValidationHandler = new McpMirrorValidationHandler(server);
+        this.headerMatchHandler = new McpHeaderMatchHandler(server);
 
         var handlers = new LinkedHashMap<String, ChannelHandler>();
         for (var protocol : Protocols.list()) {
@@ -189,21 +189,22 @@ public class McpChannelInitializer extends ChannelInitializer<SocketChannel> {
                             readerIdleTimeout.toMillis(), writerIdleTimeout.toMillis(), 0, TimeUnit.MILLISECONDS));
         }
 
-        // Every registered Protocol's own request handlers (see Protocol#requestHandlers), e.g.
-        // request-shape validation and, for 2026-07-28, per-request extension negotiation. Each
-        // checks the negotiated protocol on the interaction context and no-ops for any other
-        // version, so all of them can sit unconditionally ahead of dispatch — no dynamic pipeline
-        // surgery, since a channel's negotiated protocol isn't fixed at construction time (a
-        // keep-alive connection can carry requests for different negotiated versions, e.g. behind a
-        // proxy that pools upstream connections across unrelated clients). Needs the aggregated body
-        // (peeked read-only), so it must run after http-aggregator and before the phase handlers below.
-        protocolRequestHandlers.forEach(p::addLast);
+        // Version-independent: a SEP-2243 header mirror that is present must agree with the body on
+        // every protocol version. Runs ahead of the per-version handlers below so the rule every
+        // revision shares is settled first, and a mirror that lies is reported before one that is
+        // merely missing (2026-07-28's RequiredHeadersHandler).
+        p.addLast("mcp-header-match", headerMatchHandler);
 
-        // Version-independent, unlike the handlers above: whether a request must carry the SEP-2243
-        // header mirrors is a protocol trait it reads off the negotiated Protocol, but whether a
-        // mirror it does carry agrees with the body is a rule every version owes a gateway. Runs
-        // after them so a request malformed for its own revision is reported as that first.
-        p.addLast("mcp-mirror-validation", mirrorValidationHandler);
+        // Every registered Protocol's own request handlers (see Protocol#requestHandlers), e.g.
+        // request-shape validation and, for 2026-07-28, required header mirrors and per-request
+        // extension negotiation. Each checks the negotiated protocol on the interaction context and
+        // no-ops for any other version, so all of them can sit unconditionally ahead of dispatch —
+        // no dynamic pipeline surgery, since a channel's negotiated protocol isn't fixed at
+        // construction time (a keep-alive connection can carry requests for different negotiated
+        // versions, e.g. behind a proxy that pools upstream connections across unrelated clients).
+        // Needs the aggregated body (peeked read-only), so it must run after http-aggregator and
+        // before the phase handlers below.
+        protocolRequestHandlers.forEach(p::addLast);
 
         // Both stateless and stateful modes go through the initialization phase handler.
         // It negotiates the protocol, fires InteractionEvent.OperationStarted, then the

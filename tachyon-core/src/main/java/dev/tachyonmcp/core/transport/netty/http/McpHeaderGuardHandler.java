@@ -36,7 +36,7 @@ import io.netty.util.AsciiString;
  * duplicate {@code Host}/{@code Origin} already get in {@link DnsRebindingProtectionHandler}.
  *
  * <p>Whether a mirror's <em>value</em> agrees with the body is a different question, unanswerable
- * until the body exists: {@link McpMirrorValidationHandler} answers it post-aggregation, on every
+ * until the body exists: {@link McpHeaderMatchHandler} answers it post-aggregation, on every
  * protocol version.
  */
 @Sharable

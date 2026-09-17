@@ -25,7 +25,7 @@ import org.junit.jupiter.params.provider.ValueSource;
  *
  * <p>Whether an SEP-2243 mirror's value actually agrees with the body is a separate concern this
  * handler does not decide (it runs before the body is even aggregated): see {@link
- * McpMirrorValidationHandlerTest}.
+ * McpHeaderMatchHandlerTest}.
  */
 class McpHeaderGuardHandlerTest {
 
@@ -165,7 +165,7 @@ class McpHeaderGuardHandlerTest {
      * required to carry one — and this handler runs before {@code http-aggregator}, so it cannot
      * compare the mirror to the body anyway. Whether the value agrees with the body is checked
      * downstream, once the body is available: see {@link
-     * McpMirrorValidationHandlerTest#rejectsMismatchedMethodMirrorWhereItIsOptional}.
+     * McpHeaderMatchHandlerTest#rejectsMismatchedMethodMirrorWhereItIsOptional}.
      */
     @ParameterizedTest
     @ValueSource(strings = {"Mcp-Method", "Mcp-Name", "Mcp-Param-Region"})

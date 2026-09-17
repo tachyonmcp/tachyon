@@ -2,8 +2,8 @@
 title: Netty pipeline
 tags: [concept, transport, netty]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/http/]
-updated: 2026-09-16
-commit: b3a97d16
+updated: 2026-09-17
+commit: 0179f556
 ---
 
 # 🧪 Netty pipeline
@@ -40,8 +40,8 @@ Verdict: one static-order pipeline per channel. Every registered `Protocol`'s ha
 | 12 | `unsupported-protocol-version` | `UnsupportedProtocolVersionHandler` | 400 JSON-RPC error with body `id` + supported list `UnsupportedProtocolVersionHandler#channelRead` |
 | 13 | `interaction` | `InteractionHandler` | fallback protocol resolve for GET/DELETE; lifecycle events → ctx `InteractionHandler#userEventTriggered` |
 | 14 | `idle` | `IdleStateHandler` | if reader/writer idle > 0 |
-| 15 | `mcp-<ver>-*` | `Protocol.requestHandlers(server)` for each protocol | 2025: none; 2026: `_meta`/removed-method validation + mirror **presence**, then extension negotiation |
-| 16 | `mcp-mirror-validation` | `McpMirrorValidationHandler` | SEP-2243 mirror **agreement** vs body, every version, ungated `McpMirrorValidationHandler#channelRead` |
+| 15 | `mcp-header-match` | `McpHeaderMatchHandler` | SEP-2243 mirror **agreement** vs body, every version, ungated `McpHeaderMatchHandler#channelRead` |
+| 16 | `mcp-<ver>-*` | `Protocol.requestHandlers(server)` for each protocol | 2025: none; 2026: `RequestValidationHandler` (`_meta`/removed methods) → `RequiredHeadersHandler` (mirror **presence**) → `ExtensionNegotiationHandler` |
 | 17 | `mcp-phase-init` | `McpInitializationHandler` (per channel) | first request |
 | 18 | `lifecycle` | `LifecyclePipelineCoordinator` | swaps 17 → `mcp-phase-operations` |
 | – | customizer | `ServerBuilder.pipelineCustomizer` | user hook, runs last `InteractionHandler` |

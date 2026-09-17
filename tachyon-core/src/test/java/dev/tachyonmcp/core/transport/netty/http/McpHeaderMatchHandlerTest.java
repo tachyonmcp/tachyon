@@ -35,7 +35,7 @@ import org.junit.jupiter.params.provider.ValueSource;
  * {@code header()} time or substitutes {@code '?'}), which is why this is a channel-level test and
  * not e2e — per the sibling {@code McpHeaderGuardHandlerTest}/{@code ProtocolVersionHandlerTest}.
  */
-class McpMirrorValidationHandlerTest {
+class McpHeaderMatchHandlerTest {
 
     private static final String V2026 = "2026-07-28";
     private static final String V2025 = "2025-11-25";
@@ -47,7 +47,7 @@ class McpMirrorValidationHandlerTest {
     private static final int HEADER_MISMATCH_2026 = -32020;
 
     private final EmbeddedChannel channel =
-            new EmbeddedChannel(new ProtocolVersionHandler("/mcp"), new McpMirrorValidationHandler(emptyServer()));
+            new EmbeddedChannel(new ProtocolVersionHandler("/mcp"), new McpHeaderMatchHandler(emptyServer()));
 
     private static ServerEngine emptyServer() {
         var server = mock(ServerEngine.class);
@@ -236,7 +236,7 @@ class McpMirrorValidationHandlerTest {
 
     /**
      * An absent mirror is never this handler's business, on any revision — there is nothing to
-     * compare. Demanding one is {@code v2026_07_28.transport.RequestValidationHandler}'s job,
+     * compare. Demanding one is {@code v2026_07_28.transport.RequiredHeadersHandler}'s job,
      * exercised by {@code CustomHeaderValidationTest} and {@code HeaderValidationTest} e2e.
      */
     @ParameterizedTest

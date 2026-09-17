@@ -134,60 +134,6 @@ class CustomHeaderValidationTest extends AbstractStatelessMcpE2eTest<Mcp20260728
         assertThatResponse(response).hasStatus(200).isSuccess().hasId(20);
     }
 
-    /**
-     * A pre-SEP-2243 revision never demands {@code Mcp-Param-*}, but a client that sends one anyway
-     * has it checked against the body like any other mirror — a gateway rate-limiting or routing on
-     * {@code Mcp-Param-Region: eu-west1} must not wave through a body that queries {@code us-west1}.
-     * 2025-11-25 ties every JSON-RPC error to HTTP 200 and keeps this error's original SEP-2243 code
-     * {@code -32001}, so the rejection reads 200/-32001 rather than 2026-07-28's 400/-32020.
-     */
-    @Test
-    void rejectsMismatchedParamHeaderOnOlderProtocolVersion() throws Exception {
-        // language=JSON
-        var body = """
-            {
-              "jsonrpc": "2.0",
-              "id": 18,
-              "method": "tools/call",
-              "params": {"name": "execute_sql", "arguments": {"region": "us-west1", "query": "SELECT 1"}}
-            }
-            """;
-        var response = postMcpRequest(
-                body,
-                Map.of(
-                        "MCP-Protocol-Version", List.of("2025-11-25"),
-                        "Mcp-Method", List.of("tools/call"),
-                        "Mcp-Name", List.of("execute_sql"),
-                        "Mcp-Param-Region", List.of("eu-west1")),
-                false);
-
-        assertThatResponse(response).hasStatus(200).isJsonRpcError().hasId(18).hasErrorCode(-32001);
-    }
-
-    /**
-     * The same request with an agreeing mirror runs: an optional mirror is checked, not demanded.
-     */
-    @Test
-    void acceptsAgreeingParamHeaderOnOlderProtocolVersion() throws Exception {
-        // language=JSON
-        var body = """
-            {
-              "jsonrpc": "2.0",
-              "id": 19,
-              "method": "tools/call",
-              "params": {"name": "execute_sql", "arguments": {"region": "us-west1", "query": "SELECT 1"}}
-            }
-            """;
-        var response = postMcpRequest(
-                body,
-                Map.of(
-                        "MCP-Protocol-Version", List.of("2025-11-25"),
-                        "Mcp-Param-Region", List.of("us-west1")),
-                false);
-
-        assertThatResponse(response).hasStatus(200).isSuccess().hasTextContent("region=us-west1 query=SELECT 1");
-    }
-
     @Test
     void acceptsMatchingParamHeader() throws Exception {
         var response = post(toolCallBody(1, "us-west1"), "us-west1");
@@ -197,7 +143,13 @@ class CustomHeaderValidationTest extends AbstractStatelessMcpE2eTest<Mcp20260728
     @Test
     void rejectsMissingParamHeaderWhenBodyHasValue() throws Exception {
         var response = post(toolCallBody(2, "us-west1"), null);
-        assertThatResponse(response).hasStatus(400).isJsonRpcError().hasId(2).hasErrorCode(-32020);
+        assertThatResponse(response)
+                .hasStatus(400)
+                .isJsonRpcError()
+                .hasId(2)
+                .hasErrorCode(-32020)
+                .hasErrorMessageContaining("Mcp-Param-Region")
+                .hasErrorMessageContaining("is required");
     }
 
     /** A header claiming a value with nothing in the body to back it is spoofable, not just extra. */

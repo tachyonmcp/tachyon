@@ -44,24 +44,25 @@ import tools.jackson.databind.JsonNode;
  * question the advice works around, so it applies the check rather than the rejection.
  *
  * <p>Requiring a mirror in the first place is the separate, genuinely version-scoped half, left to
- * the revision that adopted SEP-2243: see {@code v2026_07_28.transport.RequestValidationHandler}.
+ * the revision that adopted SEP-2243: see {@code v2026_07_28.transport.RequiredHeadersHandler}.
  *
  * <p>One instance per server (constructed with that server's {@link ServerEngine} to resolve
  * {@code x-mcp-header} tool-schema annotations). Runs after {@code http-aggregator} — it needs the
- * parsed body — and after each version's own request validation, so a request malformed for its
- * revision is reported as that rather than as a mirror mismatch. A duplicate mirror field line is a
- * body-independent concern rejected pre-aggregation by {@link McpHeaderGuardHandler}.
+ * parsed body — and before each version's own request handlers: agreement is the rule every
+ * revision shares, so it is settled first, and a mirror that lies about the body is reported ahead
+ * of one that is merely missing. A duplicate mirror field line is a body-independent concern
+ * rejected pre-aggregation by {@link McpHeaderGuardHandler}.
  */
 @Sharable
 @InternalApi
-public final class McpMirrorValidationHandler extends ChannelInboundHandlerAdapter {
+public final class McpHeaderMatchHandler extends ChannelInboundHandlerAdapter {
 
     /** 2^53-1. Past it a JSON number cannot round-trip through a JavaScript intermediary intact. */
     private static final BigDecimal MAX_SAFE_INTEGER = BigDecimal.valueOf(9007199254740991L);
 
     private final ServerEngine server;
 
-    public McpMirrorValidationHandler(ServerEngine server) {
+    public McpHeaderMatchHandler(ServerEngine server) {
         this.server = server;
     }
 
