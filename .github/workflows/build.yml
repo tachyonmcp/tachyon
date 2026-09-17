@@ -105,6 +105,7 @@ jobs:
             **/target/revapi-report.txt
 
   examples-snapshot:
+    name: examples-snapshot (${{ matrix.example }})
     strategy:
       fail-fast: false
       matrix:
