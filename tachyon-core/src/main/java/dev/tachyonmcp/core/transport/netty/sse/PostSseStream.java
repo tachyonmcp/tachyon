@@ -154,8 +154,17 @@ public final class PostSseStream implements OutboundSseStream {
     public ChannelFuture terminateAsync() {
         final var completion = channel.newPromise();
         // Fallback: a shutting-down event loop can accept the task below and never run it, which
-        // would leave this promise — and the shutdown drain waiting on it — pending forever.
-        channel.closeFuture().addListener(f -> completion.trySuccess());
+        // would leave this promise — and the shutdown drain waiting on it — pending forever. A
+        // failed terminating write closes the channel from its own listener, so this fires before
+        // the one below and must not report success for it: the recorded cause tells the two apart.
+        channel.closeFuture().addListener(f -> {
+            var failure = ChannelHandlerUtils.closeFailure(channel);
+            if (failure == null) {
+                completion.trySuccess();
+            } else {
+                completion.tryFailure(failure);
+            }
+        });
         try {
             runOnEventLoop(() -> {
                 try {

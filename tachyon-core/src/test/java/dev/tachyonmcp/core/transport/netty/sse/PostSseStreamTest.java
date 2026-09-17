@@ -197,6 +197,26 @@ class PostSseStreamTest {
         assertThat(closeCause).singleElement().isSameAs(ChannelHandlerUtils.closeFailure(channel));
     }
 
+    @Test
+    void terminateAsyncReportsAFailedTerminatingWrite() {
+        var stream = newStream(Duration.ZERO);
+        sink.completeHeaders = true;
+        stream.start();
+        sink.failWrites = true;
+
+        var completion = stream.terminateAsync();
+
+        assertThat(channel.isActive()).isFalse();
+        assertThat(completion.isSuccess())
+                .as("the failed write closes the channel from its own listener, so the close-future"
+                        + " fallback fires first and used to report success for it")
+                .isFalse();
+        assertThat(completion.cause())
+                .isSameAs(ChannelHandlerUtils.closeFailure(channel))
+                .isInstanceOf(IOException.class)
+                .hasMessage("write failed");
+    }
+
     private PostSseStream newStream(Duration heartbeatInterval) {
         return new PostSseStream(channel, null, eventIds::incrementAndGet, heartbeatInterval);
     }

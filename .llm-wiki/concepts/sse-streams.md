@@ -52,7 +52,7 @@ Initial headers and every queued event are aggregated with Netty `PromiseCombine
 ## 🧯 Close semantics
 
 - `close()` writes `retry: 3000` then last chunk + close (client should reconnect) vs `terminate()` no retry `PostSseStream#doClose`, `NettySseConnection#doClose`.
-- `terminateAsync` also completes on channel close so shutdown drain never hangs `PostSseStream#terminateAsync`.
+- `terminateAsync` also completes on channel close so shutdown drain never hangs — but consults the recorded close cause first, because a failed terminating write closes the channel from its own listener and that fallback would otherwise report success for it `PostSseStream#terminateAsync`.
 - `doClose` cancels heartbeats before the terminating chunk: the scheduled tick is otherwise cancelled only on channel close and could emit a comment the HTTP encoder no longer accepts `SseHeartbeat#cancel`, `NettySseConnection#doClose`.
 - Fire-and-forget calls (`writeEvent`, `comment`, `close`, `terminate`) swallow a shutting-down loop's rejection; `start` fails its stage and `writeEvent(long, byte[], Runnable)` runs `onDropped` instead `PostSseStream#runOnEventLoopQuietly`.
 - Every write (headers, priming/queued, events, comments, retry, last chunk) shares one failure listener: stash cause via `ChannelHandlerUtils#markCloseFailure`, then close — so `onClose` reports a transport failure, not an ordinary disconnect `PostSseStream#closeOnWriteFailure`. A heartbeat is written by the scheduler, not that listener, and does the same for itself — it is how an idle stream finds a dead peer `SseHeartbeat#send`.
