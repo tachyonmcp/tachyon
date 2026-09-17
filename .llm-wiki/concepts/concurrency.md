@@ -3,7 +3,7 @@ title: Concurrency & shutdown
 tags: [concept, concurrency, virtual-threads]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/internal/OperationTracker.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/NettyServer.java, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/HandlerFutures.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/OutboundSseStreamMessageRouter.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/PeekedBody.java]
 updated: 2026-09-17
-commit: 1a4081f4
+commit: 1011a627
 ---
 
 # 🧵 Concurrency & shutdown
@@ -20,7 +20,10 @@ Verdict: **platform** threads for Netty I/O, **virtual thread per task** for eve
 | session/task janitors | daemon single-thread scheduler | [AbstractJanitor#start](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/internal/AbstractJanitor.java) |
 | slow handler watchdog log | daemon `handler-watchdog` (only when DEBUG) | [HandlerWatchdog#SCHEDULER](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/HandlerWatchdog.java) |
 | extension shutdown | VT `ext-shutdown-<id>` | [DefaultTachyonServer#shutdownExtensions](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java) |
+| transport-triggered subscription terminal observation | server executor; fallback VT after shutdown rejection (graceful shutdown uses its caller) | [SubscriptionsListenHandler#executeCompletion](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/handlers/SubscriptionsListenHandler.java) |
 | Kotlin coroutines | dispatcher over server executor | [[tachyon-kotlin]] |
+
+Ack timestamp publication and stream exception capture: [[observability]].
 
 ## 🔒 Lock inventory (all `ReentrantLock`)
 

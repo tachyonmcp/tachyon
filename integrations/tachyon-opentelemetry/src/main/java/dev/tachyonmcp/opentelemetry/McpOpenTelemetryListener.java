@@ -250,9 +250,13 @@ public class McpOpenTelemetryListener implements ObservationListener {
             case OperationOutcome.NotificationIgnored ignored -> {}
             case OperationOutcome.StreamFailed streamFailed -> {
                 var cause = streamFailed.cause();
-                span.recordException(cause);
-                classify(span, metricAttributes, cause.getClass().getName());
-                span.setStatus(StatusCode.ERROR, Objects.toString(cause.getMessage(), ""));
+                if (cause != null) {
+                    span.recordException(cause);
+                    span.setStatus(StatusCode.ERROR, Objects.toString(cause.getMessage(), ""));
+                } else {
+                    span.setStatus(StatusCode.ERROR, "Subscription stream failed");
+                }
+                classify(span, metricAttributes, streamFailed.causeType());
             }
         }
     }

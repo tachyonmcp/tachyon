@@ -484,7 +484,8 @@ public class McpDispatcher {
             } else if (unwrapped instanceof SubscriptionStreamFailedException sfe) {
                 logger.debug("Subscription stream failed: method={}, id={}", method, id, sfe.getCause());
                 dispatchResult = errorResult(id, ServerErrors.internalError("Internal error"), context);
-                outcome = new OperationOutcome.StreamFailed(sfe.getCause());
+                outcome = new OperationOutcome.StreamFailed(
+                        sfe.getCause().getClass().getName(), exceptionDetail ? sfe.getCause() : null);
             } else if (unwrapped instanceof RequestMappingException rme) {
                 logger.debug("Request mapping failed: method={}, id={}: {}", method, id, rme.getMessage());
                 var error = rme.error();

@@ -17,6 +17,7 @@ import io.netty.handler.codec.http.DefaultHttpResponse;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http.LastHttpContent;
+import io.netty.util.concurrent.PromiseCombiner;
 import java.nio.channels.ClosedChannelException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -224,34 +225,36 @@ public final class PostSseStream implements OutboundSseStream {
             return;
         }
         state = State.OPEN;
+        startCompletion = completion;
+        final var writes = new PromiseCombiner(channel.eventLoop());
+        final var initialWrite = channel.newPromise();
+        initialWrite.addListener(f -> {
+            if (f.isSuccess()) completion.complete(null);
+            else completion.completeExceptionally(f.cause());
+        });
 
         var response = new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK);
         HttpHelpers.setSseStreamHeaders(response, origin);
-        channel.write(response).addListener(writeFailureListener);
+        writes.add(channel.write(response).addListener(writeFailureListener));
         SseHeartbeat.enable(channel, heartbeatInterval);
-        ChannelFuture initialWrite;
         if (queued.isEmpty()) {
             // Priming event: gives the client a Last-Event-ID baseline for reconnection (SEP-1699).
             // Carries this stream's key so a resume from the priming id replays only this stream.
             // Skipped when an event is already queued (e.g. subscriptions/listen's ack, which SEP-2575
             // requires to be the stream's first message) — that queued event is itself a valid baseline.
             var priming = new SseEvent(ServerEngine.wireEventId(streamKeyId, streamKey), "message", "");
-            initialWrite = channel.write(new DefaultHttpContent(SseSerializer.encode(channel.alloc(), priming)));
+            writes.add(channel.write(new DefaultHttpContent(SseSerializer.encode(channel.alloc(), priming)))
+                    .addListener(writeFailureListener));
             logger.trace("POST-SSE stream started, priming event id={}, channel={}", streamKeyId, channel.id());
         } else {
-            ChannelFuture lastQueuedWrite = null;
             for (var event : queued) {
-                lastQueuedWrite = channel.write(new DefaultHttpContent(SseSerializer.encode(channel.alloc(), event)));
+                writes.add(channel.write(new DefaultHttpContent(SseSerializer.encode(channel.alloc(), event)))
+                        .addListener(writeFailureListener));
             }
             queued.clear();
-            initialWrite = lastQueuedWrite;
         }
+        writes.finish(initialWrite);
         channel.flush();
-        startCompletion = completion;
-        initialWrite.addListener(writeFailureListener).addListener(f -> {
-            if (f.isSuccess()) completion.complete(null);
-            else completion.completeExceptionally(f.cause());
-        });
     }
 
     private void doWriteEvent(SseEvent event) {

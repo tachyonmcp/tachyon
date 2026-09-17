@@ -2,8 +2,8 @@
 title: integrations
 tags: [module, integrations]
 sources: [integrations/pom.xml, integrations/tachyon-annotations-mcp-java/, integrations/tachyon-annotations-langchain4j/, integrations/tachyon-annotations-spring-ai/, integrations/tachyon-opentelemetry/, integrations/tachyon-tasks-temporal/]
-updated: 2026-09-15
-commit: 751331f4
+updated: 2026-09-17
+commit: 1011a627
 ---
 
 # 🔌 integrations

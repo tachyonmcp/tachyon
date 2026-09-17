@@ -13,6 +13,7 @@ import dev.tachyonmcp.core.server.session.DispatchContext;
 import java.nio.channels.ClosedChannelException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -86,15 +87,19 @@ public final class SubscriptionsListenHandler
         // it lands, especially when called off the channel's event loop.
         Consumer<@Nullable Throwable> settle = cause -> {
             registry.remove(key);
-            if (cause == null) {
-                pending.cancel(false);
-            } else {
-                pending.completeExceptionally(new SubscriptionStreamFailedException(cause));
-            }
+            executeCompletion(context, () -> {
+                if (cause == null) {
+                    pending.cancel(false);
+                } else {
+                    pending.completeExceptionally(new SubscriptionStreamFailedException(cause));
+                }
+            });
         };
         stream.start().whenComplete((ignored, failure) -> {
             if (failure == null) {
-                context.observation().info().establishmentNanos(System.nanoTime());
+                if (context.observation().active()) {
+                    context.observation().info().establishmentNanos(System.nanoTime());
+                }
             } else {
                 logger.debug("subscriptions/listen ack failed to flush: subscriptionId={}", subscriptionId, failure);
                 // onClose may never fire (default no-op); a closed channel is an ordinary disconnect.
@@ -107,5 +112,13 @@ public final class SubscriptionsListenHandler
                     "subscriptions/listen stream ended: subscriptionId={}, failed={}", subscriptionId, cause != null);
         });
         return pending;
+    }
+
+    private static void executeCompletion(DispatchContext context, Runnable task) {
+        try {
+            context.engine().executor().execute(task);
+        } catch (RejectedExecutionException e) {
+            Thread.ofVirtual().name("tachyon-subscription-completion").start(task);
+        }
     }
 }

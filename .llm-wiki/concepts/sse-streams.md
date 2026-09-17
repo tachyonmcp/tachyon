@@ -3,7 +3,7 @@ title: SSE streams
 tags: [concept, transport, sse]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/sse/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/OutboundSseStream.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/OutboundSseStreamMessageRouter.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpOperationHandler.java]
 updated: 2026-09-17
-commit: b9546c38
+commit: 1011a627
 ---
 
 # 📡 SSE streams
@@ -30,6 +30,8 @@ Verdict: two stream kinds. **POST-SSE** = per-request, lazy: JSON response unles
 4. Handler done, stream started ⇒ final response finalized on VT: append `ResponseEvent` to log (stateful), write, `terminateAsync()` (last chunk + close) `McpOperationHandler#finalizePostSseResponse`.
 5. Stream never started ⇒ `terminate()` (neutralize so late message can't open a second response on pooled socket) then plain JSON `McpOperationHandler#completePostRequest`.
 6. Final write dropped (client gone) ⇒ `redeliverOnReconnect`: if session's current GET connection resumed **this** stream key, send live; else wait for replay `McpOperationHandler#redeliverOnReconnect`.
+
+Initial headers and every queued event are aggregated with Netty `PromiseCombiner`; a successful final write cannot hide an earlier failure [PostSseStream#doStart](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/sse/PostSseStream.java). The close attribute preserves the first failure with `setIfAbsent` [ChannelHandlerUtils#markCloseFailure](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/ChannelHandlerUtils.java).
 
 ## 👂 GET-SSE flow
 

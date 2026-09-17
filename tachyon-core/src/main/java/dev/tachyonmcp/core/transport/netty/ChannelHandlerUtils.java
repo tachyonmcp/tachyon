@@ -120,7 +120,7 @@ public final class ChannelHandlerUtils {
     private static final AttributeKey<Throwable> CLOSE_FAILURE = AttributeKey.valueOf("closeFailure");
 
     /**
-     * Stashes the cause of an abnormal channel close for {@link #closeFailure} to read back once
+     * Stashes the first cause of an abnormal channel close for {@link #closeFailure} to read back once
      * the channel's close future fires — Netty's {@code ChannelFuture} for that event carries no
      * cause of its own, so a genuine failure (an inbound {@code exceptionCaught}, a failed outbound
      * write) has to be recorded here before the channel is closed, distinguishing it from an
@@ -130,7 +130,7 @@ public final class ChannelHandlerUtils {
      * @param cause   the failure that caused the close
      */
     public static void markCloseFailure(Channel channel, Throwable cause) {
-        channel.attr(CLOSE_FAILURE).set(cause);
+        channel.attr(CLOSE_FAILURE).setIfAbsent(cause);
     }
 
     /**

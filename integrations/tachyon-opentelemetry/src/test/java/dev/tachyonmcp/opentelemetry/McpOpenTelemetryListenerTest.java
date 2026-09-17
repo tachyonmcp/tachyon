@@ -28,6 +28,8 @@ import dev.tachyonmcp.api.server.domain.TextResourceContents;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
 import dev.tachyonmcp.core.server.TachyonServer;
 import dev.tachyonmcp.core.server.config.ObservabilityConfig;
+import dev.tachyonmcp.core.server.observability.ObservationListener;
+import dev.tachyonmcp.core.server.observability.ObservationScope;
 import dev.tachyonmcp.core.server.observability.OperationInfo;
 import dev.tachyonmcp.core.server.observability.OperationKind;
 import dev.tachyonmcp.core.server.observability.OperationOutcome;
@@ -47,12 +49,16 @@ import io.opentelemetry.sdk.trace.export.SimpleSpanProcessor;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 /**
  * E2E: a real Tachyon server with {@link McpOpenTelemetryListener} registered via {@code
@@ -510,19 +516,64 @@ class McpOpenTelemetryListenerTest {
     }
 
     @Test
+    void subscriptionCompletionRunsOffNettyEventLoop() throws Exception {
+        var completionThread = new CompletableFuture<Thread>();
+        var observer = new ObservationListener() {
+            @Override
+            public ObservationScope start(OperationInfo info) {
+                return ObservationScope.NOOP;
+            }
+
+            @Override
+            public void complete(OperationInfo info, OperationOutcome outcome) {
+                if (info.method().equals("subscriptions/listen")) {
+                    completionThread.complete(Thread.currentThread());
+                }
+            }
+        };
+        try (var server = startServer(o -> o.listener(observer));
+                var client = new Mcp20260728Client(server.port())) {
+            try (var stream = client.openPostStream(null, """
+                {"jsonrpc":"2.0","id":51,"method":"subscriptions/listen",
+                 "params":{"notifications":{"toolsListChanged":true}}}
+                """)) {
+                stream.await(
+                        frame -> frame.data().contains("notifications/subscriptions/acknowledged"),
+                        Duration.ofSeconds(5));
+            }
+            var thread = completionThread.get(5, TimeUnit.SECONDS);
+            assertThat(thread.isVirtual()).isTrue();
+            assertThat(thread.getName()).doesNotStartWith("netty-");
+            assertThat(awaitSpanFor("subscriptions/listen").getStatus().getStatusCode())
+                    .isEqualTo(StatusCode.UNSET);
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
     @DisplayName("a subscriptions/listen stream that fails genuinely is an ERROR span: error.type=cause class name")
-    void subscriptionStreamFailureFailsSpan() {
+    void subscriptionStreamFailureFailsSpan(boolean exceptionDetail) {
         var listener = McpOpenTelemetryListener.create(otel);
         var info = OperationInfo.builder(OperationKind.REQUEST, "subscriptions/listen", RequestId.of(99))
                 .build();
         var cause = new IOException("connection reset");
 
         listener.start(info).close();
-        listener.complete(info, new OperationOutcome.StreamFailed(cause));
+        listener.complete(
+                info, new OperationOutcome.StreamFailed(cause.getClass().getName(), exceptionDetail ? cause : null));
 
         var span = spanFor("subscriptions/listen");
         assertThat(span.getStatus().getStatusCode()).isEqualTo(StatusCode.ERROR);
         assertThat(span.getAttributes().get(ERROR_TYPE)).isEqualTo(IOException.class.getName());
+        if (exceptionDetail) {
+            assertThat(span.getEvents())
+                    .singleElement()
+                    .satisfies(event -> assertThat(event.getAttributes().get(EXCEPTION_MESSAGE))
+                            .isEqualTo("connection reset"));
+        } else {
+            assertThat(span.getEvents()).isEmpty();
+            assertThat(span.getStatus().getDescription()).doesNotContain("connection reset");
+        }
     }
 
     @Test

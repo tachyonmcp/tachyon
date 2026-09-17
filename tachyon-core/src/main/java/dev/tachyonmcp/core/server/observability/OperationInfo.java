@@ -13,7 +13,8 @@ import org.jspecify.annotations.Nullable;
  * #sessionId(String)} and {@link #traceparent(String)} are set at most once, as that information
  * becomes available, and are safe to read from a different thread once set: every write here
  * happens-before the {@link ObservationListener#complete} call that follows it, via the same
- * {@code CompletableFuture} chain the dispatcher already uses.
+ * {@code CompletableFuture} chain the dispatcher already uses. The independently written streaming
+ * establishment timestamp is volatile so shutdown completion also observes it.
  */
 @InternalApi
 public final class OperationInfo {
@@ -31,7 +32,7 @@ public final class OperationInfo {
     private @Nullable CapturedPayload responsePayload;
     private @Nullable String target;
     private @Nullable Throwable exceptionCause;
-    private @Nullable Long establishmentNanos;
+    private volatile @Nullable Long establishmentNanos;
 
     public OperationInfo(OperationKind kind, String method, @Nullable RequestId requestId) {
         this.kind = kind;

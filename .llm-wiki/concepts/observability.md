@@ -3,7 +3,7 @@ title: Observability
 tags: [concept, observability, otel]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/server/observability/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/ObservabilityConfig.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/PayloadCapturePolicy.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/handlers/SubscriptionsListenHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/OutboundSseStream.java, integrations/tachyon-opentelemetry/]
 updated: 2026-09-17
-commit: b9546c38
+commit: 1011a627
 ---
 
 # 🔭 Observability
@@ -26,11 +26,15 @@ Listener throwing on interrupted thread ⇒ rethrown, else warn `Observation#fau
 
 `OperationInfo` (mutable): kind `REQUEST|NOTIFICATION|INITIALIZE`, method, requestId, sessionId, `traceparent` (from `_meta.traceparent`, always extracted `McpDispatcher#extractTraceParent`), protocolVersion, server address/port, request/response payload, `target` (tool/prompt name), exceptionCause, `establishmentNanos` (streaming ops only — see below) `OperationInfo`.
 
-`OperationOutcome` sealed `OperationOutcome`: `Rejected(error?, httpStatus, wireCode)`, `Completed`, `PayloadFailure`, `SerializationFailed`, `HandlerFailed(error, wireCode, cause?)`, `Cancelled`, `TaskHandoff(taskId)`, `NotificationAccepted`, `NotificationIgnored`, `StreamFailed(cause)` (a `subscriptions/listen` stream's genuine post-establishment transport failure — an ordinary disconnect reports `Cancelled` instead).
+`OperationOutcome` sealed `OperationOutcome`: `Rejected(error?, httpStatus, wireCode)`, `Completed`, `PayloadFailure`, `SerializationFailed`, `HandlerFailed(error, wireCode, cause?)`, `Cancelled`, `TaskHandoff(taskId)`, `NotificationAccepted`, `NotificationIgnored`, `StreamFailed(causeType, cause?)` (a `subscriptions/listen` stream's genuine post-establishment transport failure — an ordinary disconnect reports `Cancelled` instead).
+
+Transport-triggered subscription terminal continuations run through the server executor, with a virtual-thread fallback after executor rejection; Netty close callbacks remove the registry entry and schedule settlement of the pending result [SubscriptionsListenHandler#executeCompletion](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/handlers/SubscriptionsListenHandler.java). Graceful shutdown completes the pending result directly on the shutdown caller. The ack timestamp is volatile for independent shutdown completion [OperationInfo#establishmentNanos](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/observability/OperationInfo.java).
 
 ## 📦 Payload capture
 
 `PayloadCapturePolicy(requestArgs, responseContent, rawMessage, exceptionDetail, maxBytes=4096)` `PayloadCapturePolicy`. Capture only when toggle on **and** observation active. `CapturedPayload.capture` truncates on UTF-8 boundary with `…(truncated)` `CapturedPayload#capture`. Tool args/result captured in `ToolsCallHandler#handleAsync`, `ToolsCallHandler#captureResponseContent`. Exception cause only via `DispatchContext.captureExceptionCause` gated by `exceptionDetail` `DispatchContext#captureExceptionCause`.
+
+Stream failure classification retains the cause type; the throwable is retained only with `exceptionDetail` [McpDispatcher#handleHandlerError](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java). OTel exports an exception event only when that throwable is present [McpOpenTelemetryListener#recordOutcome](../../integrations/tachyon-opentelemetry/src/main/java/dev/tachyonmcp/opentelemetry/McpOpenTelemetryListener.java).
 
 ## 🐢 Slow requests
 

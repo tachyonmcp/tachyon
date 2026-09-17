@@ -26,6 +26,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 /**
  * {@code subscriptions/listen} is the one handler whose returned {@code CompletionStage} spans the
@@ -161,14 +163,16 @@ class SubscriptionsListenObservationTest {
         }
     }
 
-    @Test
-    void genuineStreamFailureCompletesObservationAsStreamFailed() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void genuineStreamFailureCompletesObservationAsStreamFailed(boolean exceptionDetail) throws Exception {
         var starts = new CopyOnWriteArrayList<OperationInfo>();
         var completions = new CopyOnWriteArrayList<OperationOutcome>();
         ObservationListener listener = recordingListener(starts, completions);
         var cause = new IOException("connection reset");
 
-        try (ServerEngine server = newEngine(b -> b.observability(o -> o.listener(listener)))) {
+        try (ServerEngine server = newEngine(b ->
+                b.observability(o -> o.listener(listener).payloadCapture(p -> p.exceptionDetail(exceptionDetail))))) {
             var fixture = dispatch(server);
             fixture.stream().awaitReady();
 
@@ -177,8 +181,10 @@ class SubscriptionsListenObservationTest {
 
             assertThat(completions).hasSize(1);
             assertThat(completions.getFirst()).isInstanceOf(OperationOutcome.StreamFailed.class);
+            assertThat(((OperationOutcome.StreamFailed) completions.getFirst()).causeType())
+                    .isEqualTo(IOException.class.getName());
             assertThat(((OperationOutcome.StreamFailed) completions.getFirst()).cause())
-                    .isEqualTo(cause);
+                    .isEqualTo(exceptionDetail ? cause : null);
         }
     }
 
@@ -189,7 +195,8 @@ class SubscriptionsListenObservationTest {
         ObservationListener listener = recordingListener(starts, completions);
         var cause = new IOException("broken pipe");
 
-        try (ServerEngine server = newEngine(b -> b.observability(o -> o.listener(listener)))) {
+        try (ServerEngine server = newEngine(
+                b -> b.observability(o -> o.listener(listener).payloadCapture(p -> p.exceptionDetail(true))))) {
             var fixture = dispatch(server);
             fixture.stream().awaitReady();
 
@@ -199,6 +206,8 @@ class SubscriptionsListenObservationTest {
             assertThat(starts.getFirst().establishmentNanos()).isNull();
             assertThat(completions).hasSize(1);
             assertThat(completions.getFirst()).isInstanceOf(OperationOutcome.StreamFailed.class);
+            assertThat(((OperationOutcome.StreamFailed) completions.getFirst()).causeType())
+                    .isEqualTo(IOException.class.getName());
             assertThat(((OperationOutcome.StreamFailed) completions.getFirst()).cause())
                     .isEqualTo(cause);
         }
@@ -219,6 +228,68 @@ class SubscriptionsListenObservationTest {
 
             assertThat(completions).hasSize(1);
             assertThat(completions.getFirst()).isInstanceOf(OperationOutcome.Cancelled.class);
+        }
+    }
+
+    @Test
+    void shutdownCompletionRetainsAckTimestampFromAnotherThread() throws Exception {
+        var starts = new CopyOnWriteArrayList<OperationInfo>();
+        var completedTimestamp = new CompletableFuture<Long>();
+        var outcome = new CompletableFuture<OperationOutcome>();
+        var listener = new ObservationListener() {
+            @Override
+            public ObservationScope start(OperationInfo info) {
+                starts.add(info);
+                return ObservationScope.NOOP;
+            }
+
+            @Override
+            public void complete(OperationInfo info, OperationOutcome result) {
+                completedTimestamp.complete(info.establishmentNanos());
+                outcome.complete(result);
+            }
+        };
+        try (ServerEngine server = newEngine(b -> b.observability(o -> o.listener(listener)))) {
+            var fixture = dispatch(server);
+            fixture.stream().awaitReady();
+            var ack = server.executor().submit(() -> {
+                fixture.stream().completeStart();
+                return starts.getFirst().establishmentNanos();
+            });
+            var timestamp = ack.get(5, TimeUnit.SECONDS);
+            assertThat(timestamp).isNotNull();
+
+            server.close();
+
+            assertThat(fixture.future()).isDone();
+            assertThat(completedTimestamp).isCompletedWithValue(timestamp);
+            assertThat(outcome.get(5, TimeUnit.SECONDS)).isInstanceOf(OperationOutcome.Completed.class);
+        }
+    }
+
+    @Test
+    void disconnectAfterExecutorShutdownStillCompletesObservationOffCallerThread() throws Exception {
+        var completion = new CompletableFuture<Thread>();
+        ObservationListener listener = new ObservationListener() {
+            @Override
+            public ObservationScope start(OperationInfo info) {
+                return ObservationScope.NOOP;
+            }
+
+            @Override
+            public void complete(OperationInfo info, OperationOutcome outcome) {
+                completion.complete(Thread.currentThread());
+            }
+        };
+        try (ServerEngine server = newEngine(b -> b.observability(o -> o.listener(listener)))) {
+            var fixture = dispatch(server);
+            fixture.stream().awaitReady();
+            server.executor().shutdown();
+            assertThat(server.executor().awaitTermination(5, TimeUnit.SECONDS)).isTrue();
+            fixture.stream().disconnect(null);
+            fixture.future().get(5, TimeUnit.SECONDS);
+            assertThat(completion.get(5, TimeUnit.SECONDS)).isNotSameAs(Thread.currentThread());
+            assertThat(completion.get().isVirtual()).isTrue();
         }
     }
 

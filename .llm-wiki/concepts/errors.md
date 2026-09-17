@@ -3,7 +3,7 @@ title: Errors
 tags: [concept, errors, protocol]
 sources: [tachyon-api/src/main/java/dev/tachyonmcp/api/server/domain/ServerError.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/domain/ServerErrors.java, tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/mcp/v2025_11_25/codecs/McpResponseMapper.java, tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/mcp/v2026_07_28/codecs/McpResponseMapper.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/PeekedBody.java]
 updated: 2026-09-17
-commit: 3f06aa88
+commit: 1011a627
 ---
 
 # 🚨 Errors
@@ -42,6 +42,8 @@ Extension gate: `ServerErrors.missingRequiredExtension(id)` ⇒ `MISSING_REQUIRE
 | anything else | INTERNAL_ERROR with fixed detail (`"Tool handler failed"` …) |
 
 Dispatcher-level `McpDispatcher.handleHandlerError` `McpDispatcher#handleHandlerError`: `CancellationException` ⇒ internal error + `Cancelled`; `RequestMappingException` ⇒ its error; other ⇒ `"Internal error"`. Serialization failure ⇒ `"Failed to encode response"` + `SerializationFailed` outcome `OperationOutcome`.
+
+Subscription transport failures produce `StreamFailed(causeType, cause?)`, with throwable capture gated by `exceptionDetail` [McpDispatcher#handleHandlerError](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java); see [[observability]].
 
 `tools/call` cancel ⇒ `"Tool call cancelled"` `ToolsCallHandler#handlerError`. Output-schema failure ⇒ **tool result** `isError` (not JSON-RPC error).
 

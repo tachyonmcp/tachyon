@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.tachyonmcp.core.runtime.SseEvent;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
+import dev.tachyonmcp.core.transport.netty.ChannelHandlerUtils;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelOutboundHandlerAdapter;
 import io.netty.channel.ChannelPromise;
@@ -71,6 +72,46 @@ class PostSseStreamTest {
                 .as("the priming event reuses the stream key's draw as its baseline id")
                 .isEqualTo(Long.parseLong(stream.streamKey()));
         assertThat(sink.streamKeys()).containsOnly(stream.streamKey());
+    }
+
+    @Test
+    void failedWriteOfAnEarlierQueuedEventIsRecordedAndClosesTheChannel() {
+        var stream = newStream(Duration.ZERO);
+        stream.writeEvent(new SseEvent(ServerEngine.wireEventId(1, stream.streamKey()), "message", "first"));
+        stream.writeEvent(new SseEvent(ServerEngine.wireEventId(2, stream.streamKey()), "message", "second"));
+        sink.failContentWrite = 0;
+        sink.completeHeaders = true;
+
+        var start = stream.start().toCompletableFuture();
+
+        assertThat(ChannelHandlerUtils.closeFailure(channel))
+                .as("only the last queued write used to carry the failure listener, so this one"
+                        + " failed silently and onClose reported an ordinary disconnect")
+                .isInstanceOf(IOException.class)
+                .hasMessage("write failed");
+        assertThat(channel.isActive()).isFalse();
+        assertThat(start).isCompletedExceptionally();
+        assertThat(start.exceptionNow()).isSameAs(ChannelHandlerUtils.closeFailure(channel));
+    }
+
+    @Test
+    void startWaitsForAllInitialWritesAndPreservesAnEarlierFailure() {
+        var stream = newStream(Duration.ZERO);
+        stream.writeEvent(new SseEvent("2#1", "message", "ack"));
+        stream.writeEvent(new SseEvent("3#1", "message", "notification"));
+        var start = stream.start().toCompletableFuture();
+        var failure = new IOException("ack failed after notification write completed");
+
+        sink.pending.getLast().setSuccess();
+        assertThat(start).isNotDone();
+        sink.pending.getFirst().setSuccess();
+        assertThat(start).isNotDone();
+        sink.pending.get(1).setFailure(failure);
+
+        assertThat(start).isCompletedExceptionally();
+        assertThat(start.exceptionNow()).isSameAs(failure);
+        assertThat(ChannelHandlerUtils.closeFailure(channel)).isSameAs(failure);
+        assertThat(channel.isActive()).isFalse();
     }
 
     @Test
@@ -145,6 +186,9 @@ class PostSseStreamTest {
         private final List<String> writes = new ArrayList<>();
         private final List<ChannelPromise> pending = new ArrayList<>();
         private boolean failWrites;
+        private boolean completeHeaders;
+        private int failContentWrite = -1;
+        private int contentWrites;
 
         @Override
         public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) {
@@ -155,9 +199,12 @@ class PostSseStreamTest {
             } else {
                 writes.add(msg.getClass().getSimpleName());
             }
+            var contentIndex = msg instanceof HttpContent ? contentWrites++ : -1;
             ReferenceCountUtil.release(msg);
-            if (failWrites) {
+            if (failWrites || (contentIndex >= 0 && contentIndex == failContentWrite)) {
                 promise.setFailure(new IOException("write failed"));
+            } else if (completeHeaders && !(msg instanceof HttpContent)) {
+                promise.setSuccess();
             } else {
                 pending.add(promise);
             }
