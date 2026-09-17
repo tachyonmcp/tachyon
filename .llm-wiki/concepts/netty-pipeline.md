@@ -3,7 +3,7 @@ title: Netty pipeline
 tags: [concept, transport, netty]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/http/]
 updated: 2026-09-17
-commit: 1a4081f4
+commit: d831e9b1
 ---
 
 # 🧪 Netty pipeline
@@ -61,7 +61,10 @@ Verdict: one static-order pipeline per channel. Every registered `Protocol`'s ha
 | `Session` | `tachyonSession` | `ChannelHandlerUtils#SESSION_KEY` |
 | rejected flag (drop rest of request) | `tachyonRequestRejected` | `ChannelHandlerUtils` |
 | unsupported version | `unsupportedProtocolVersion` | `ProtocolVersionHandler.java` (`UNSUPPORTED_VERSION_KEY`) |
+| first abnormal close cause | `closeFailure` (`setIfAbsent`) | [ChannelHandlerUtils#markCloseFailure](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/ChannelHandlerUtils.java) |
 | SSE heartbeat active/future | `sseHeartbeatActive` | `SseHeartbeat` |
+
+Written by `PostSseStream#closeOnWriteFailure`, `SseHeartbeat#send` and `McpOperationHandler#exceptionCaught` — [[sse-streams]].
 
 ⚠️ Keep-alive socket may carry different protocol versions (proxy pooling). 2026-07-28 always gets fresh ctx; older version keeps ctx only while version matches `ProtocolVersionHandler#channelRead`.
 

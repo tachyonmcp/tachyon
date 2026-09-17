@@ -9,11 +9,12 @@ import org.jspecify.annotations.Nullable;
  * Identity facts for one inbound MCP operation (request, notification, or {@code initialize}),
  * independent of JSON-RPC id so repeated ids across sessions never collide.
  *
- * <p>Created once, as early as {@code method} (and {@code id}, if any) are known. {@link
- * #sessionId(String)} and {@link #traceparent(String)} are set at most once, as that information
- * becomes available, and are safe to read from a different thread once set: every write here
- * happens-before the {@link ObservationListener#complete} call that follows it, via the same
- * {@code CompletableFuture} chain the dispatcher already uses.
+ * <p>Created once, as early as {@code method} (and {@code id}, if any) are known. Trace context
+ * and server address/port are supplied through {@link Builder}; {@link #sessionId(String)} can
+ * fill in a session established later. These values are safe to read from a different thread:
+ * every write happens-before the {@link ObservationListener#complete} call that follows it, via the
+ * same {@code CompletableFuture} chain the dispatcher already uses. The independently written streaming
+ * establishment timestamp is volatile so shutdown completion also observes it.
  */
 @InternalApi
 public final class OperationInfo {
@@ -31,6 +32,7 @@ public final class OperationInfo {
     private @Nullable CapturedPayload responsePayload;
     private @Nullable String target;
     private @Nullable Throwable exceptionCause;
+    private volatile @Nullable Long establishmentNanos;
 
     public OperationInfo(OperationKind kind, String method, @Nullable RequestId requestId) {
         this.kind = kind;
@@ -67,10 +69,6 @@ public final class OperationInfo {
         return traceParent;
     }
 
-    public void traceparent(@Nullable String traceparent) {
-        this.traceParent = traceparent;
-    }
-
     /** The MCP protocol version negotiated for the channel this operation arrived on, if known. */
     public @Nullable String protocolVersion() {
         return protocolVersion;
@@ -85,17 +83,9 @@ public final class OperationInfo {
         return serverAddress;
     }
 
-    public void serverAddress(@Nullable String serverAddress) {
-        this.serverAddress = serverAddress;
-    }
-
     /** The server's bound port, or {@code null} when the server hadn't started yet at dispatch time. */
     public @Nullable Integer serverPort() {
         return serverPort;
-    }
-
-    public void serverPort(@Nullable Integer serverPort) {
-        this.serverPort = serverPort;
     }
 
     public @Nullable CapturedPayload requestPayload() {
@@ -142,6 +132,22 @@ public final class OperationInfo {
 
     public void exceptionCause(@Nullable Throwable exceptionCause) {
         this.exceptionCause = exceptionCause;
+    }
+
+    /**
+     * The {@link System#nanoTime()} reading at which a streaming operation's own synchronous
+     * establishment (e.g. {@code subscriptions/listen}'s ack) finished, or {@code null} for an
+     * ordinary request/notification. Lets a duration-recording listener measure just that latency
+     * at {@link ObservationListener#complete} instead of the operation's full — potentially very
+     * long — lifetime through to its terminal outcome, which is what the completion timestamp would
+     * otherwise measure once completion is deferred past establishment.
+     */
+    public @Nullable Long establishmentNanos() {
+        return establishmentNanos;
+    }
+
+    public void establishmentNanos(long establishmentNanos) {
+        this.establishmentNanos = establishmentNanos;
     }
 
     /**

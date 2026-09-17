@@ -34,10 +34,13 @@ import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.SpanKind;
 import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.api.trace.propagation.W3CTraceContextPropagator;
 import io.opentelemetry.context.Context;
+import io.opentelemetry.context.ContextKey;
 import io.opentelemetry.context.Scope;
+import io.opentelemetry.context.propagation.TextMapGetter;
+import java.util.List;
 import java.util.Objects;
-import java.util.Set;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import org.jspecify.annotations.Nullable;
@@ -56,7 +59,9 @@ import org.jspecify.annotations.Nullable;
  *
  * <h2>Trace context</h2>
  *
- * <p>Spans are parented by {@link Context#current()} on whichever thread {@link #start} runs on.
+ * <p>A valid payload {@code _meta.traceparent} supplies the remote parent using OpenTelemetry's
+ * W3C propagator. Missing or invalid values fall back to {@link Context#current()}. Additional
+ * listeners for the same operation nest under its current span without extracting the parent again.
  * Because the dispatcher only ever attaches this listener's {@link ObservationScope} around
  * synchronous dispatch work — decode, the call that kicks off an async handler, and (after
  * {@link ObservationScope#reattach()}) the handler's completion callback — a span an application
@@ -88,13 +93,18 @@ public class McpOpenTelemetryListener implements ObservationListener {
     /** This listener only instruments {@code tachyon-core}'s Streamable HTTP transport. */
     private static final String NETWORK_PROTOCOL_HTTP = "http";
 
-    /**
-     * JSON-RPC codes a server returns because the <em>caller</em> sent something it could not
-     * serve. The conventions say these must not count as server errors, and state the rule in terms
-     * of codes — which is why the code is resolved by the dispatcher and handed to us rather than
-     * re-derived here from {@code ServerError.Kind}, whose mapping differs between MCP versions.
-     */
-    private static final Set<Integer> CALLER_FAULT_CODES = Set.of(-32700, -32600, -32601, -32602, -32002);
+    private static final ContextKey<OperationInfo> CURRENT_OPERATION = ContextKey.named("tachyon-operation");
+    private static final TextMapGetter<OperationInfo> TRACE_CONTEXT_GETTER = new TextMapGetter<>() {
+        @Override
+        public Iterable<String> keys(OperationInfo carrier) {
+            return List.of("traceparent");
+        }
+
+        @Override
+        public @Nullable String get(@Nullable OperationInfo carrier, String key) {
+            return carrier != null && "traceparent".equalsIgnoreCase(key) ? carrier.traceparent() : null;
+        }
+    };
 
     private final Tracer tracer;
     private final DoubleHistogram operationDuration;
@@ -122,10 +132,16 @@ public class McpOpenTelemetryListener implements ObservationListener {
 
     @Override
     public ObservationScope start(OperationInfo info) {
-        var span =
-                tracer.spanBuilder(info.method()).setSpanKind(SpanKind.SERVER).startSpan();
+        var parent = Context.current();
+        if (info.traceparent() != null && parent.get(CURRENT_OPERATION) != info) {
+            parent = W3CTraceContextPropagator.getInstance().extract(parent, info, TRACE_CONTEXT_GETTER);
+        }
+        var span = tracer.spanBuilder(info.method())
+                .setParent(parent)
+                .setSpanKind(SpanKind.SERVER)
+                .startSpan();
         pending.put(info, new PendingOperation(span, System.nanoTime()));
-        var context = Context.current().with(span);
+        var context = parent.with(span).with(CURRENT_OPERATION, info);
         return new SpanScope(context, context.makeCurrent());
     }
 
@@ -148,7 +164,10 @@ public class McpOpenTelemetryListener implements ObservationListener {
         span.setAllAttributes(spanOnlyAttributes(info));
         recordOutcome(span, metricAttributes, info, outcome);
         span.end();
-        operationDuration.record((System.nanoTime() - op.startNanos) / NANOS_PER_SECOND, metricAttributes.build());
+        var establishmentNanos = info.establishmentNanos();
+        var elapsedNanos =
+                establishmentNanos != null ? establishmentNanos - op.startNanos : System.nanoTime() - op.startNanos;
+        operationDuration.record(elapsedNanos / NANOS_PER_SECOND, metricAttributes.build());
     }
 
     private static @Nullable String target(OperationInfo info) {
@@ -221,14 +240,15 @@ public class McpOpenTelemetryListener implements ObservationListener {
                     var code = String.valueOf(rejected.wireCode());
                     span.setAttribute(RPC_RESPONSE_STATUS_CODE, code);
                     metricAttributes.put(RPC_RESPONSE_STATUS_CODE, code);
+                    span.setStatus(StatusCode.ERROR, error.message());
                 }
-                // Rejections are caller-fault by construction (unknown method, bad session state,
-                // missing header) -- span status stays UNSET.
             }
             case OperationOutcome.PayloadFailure ignored -> {
                 classify(span, metricAttributes, TOOL_ERROR);
                 recordToolCall(span, info);
-                // Still a JSON-RPC success -- no status code, span status stays UNSET.
+                // A JSON-RPC success -- no status code -- but error.type is present, so per the MCP
+                // semconv the span status is still ERROR.
+                span.setStatus(StatusCode.ERROR, "Tool call returned an error result");
             }
             case OperationOutcome.HandlerFailed failed -> {
                 var code = String.valueOf(failed.wireCode());
@@ -238,9 +258,7 @@ public class McpOpenTelemetryListener implements ObservationListener {
                 if (failed.cause() != null) {
                     span.recordException(unwrap(failed.cause()));
                 }
-                if (!CALLER_FAULT_CODES.contains(failed.wireCode())) {
-                    span.setStatus(StatusCode.ERROR, failed.error().message());
-                }
+                span.setStatus(StatusCode.ERROR, failed.error().message());
             }
             case OperationOutcome.SerializationFailed serializationFailed -> {
                 var cause = serializationFailed.cause();
@@ -255,7 +273,16 @@ public class McpOpenTelemetryListener implements ObservationListener {
             case OperationOutcome.Cancelled ignored -> {}
             case OperationOutcome.NotificationAccepted ignored -> {}
             case OperationOutcome.NotificationIgnored ignored -> {}
-            case OperationOutcome.StreamEstablished ignored -> {}
+            case OperationOutcome.StreamFailed streamFailed -> {
+                var cause = streamFailed.cause();
+                if (cause != null) {
+                    span.recordException(cause);
+                    span.setStatus(StatusCode.ERROR, Objects.toString(cause.getMessage(), ""));
+                } else {
+                    span.setStatus(StatusCode.ERROR, "Subscription stream failed");
+                }
+                classify(span, metricAttributes, streamFailed.causeType());
+            }
         }
     }
 

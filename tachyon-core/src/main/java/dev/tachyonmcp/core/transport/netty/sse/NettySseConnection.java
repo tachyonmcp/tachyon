@@ -63,6 +63,7 @@ public final class NettySseConnection implements SseConnection {
 
     private void doClose() {
         if (channel.isActive()) {
+            SseHeartbeat.cancel(channel);
             channel.write(new DefaultHttpContent(
                     ByteBufUtil.writeUtf8(channel.alloc(), "retry: " + SSE_RETRY_DELAY_MS + "\n")));
             channel.writeAndFlush(LastHttpContent.EMPTY_LAST_CONTENT).addListener(ChannelFutureListener.CLOSE);

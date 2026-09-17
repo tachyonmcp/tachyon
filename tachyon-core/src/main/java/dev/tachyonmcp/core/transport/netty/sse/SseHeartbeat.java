@@ -1,6 +1,7 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
 package dev.tachyonmcp.core.transport.netty.sse;
 
+import dev.tachyonmcp.core.transport.netty.ChannelHandlerUtils;
 import dev.tachyonmcp.core.transport.netty.SessionTouchHandler;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
@@ -21,7 +22,8 @@ import org.jspecify.annotations.Nullable;
  * <p>A heartbeat byte flowing through the pipeline triggers {@link SessionTouchHandler}
  * which refreshes session liveness — no scattered {@code touch()} calls needed.
  *
- * <p>A heartbeat is itself a chunk write, so a failed write (dead client, RST) closes the channel.
+ * <p>A heartbeat is itself a chunk write, so a failed write (dead client, RST) closes the channel,
+ * recording the cause via {@link ChannelHandlerUtils#markCloseFailure} first.
  *
  * <p>Call with {@code interval <= 0} to disable heartbeats (silent SSE channels then close on idle
  * via the existing idle handler).
@@ -59,6 +61,20 @@ public final class SseHeartbeat {
         });
     }
 
+    /**
+     * Stops heartbeats on {@code channel}. Call on the channel's event loop before writing a
+     * stream's terminating chunk: the scheduled tick is otherwise cancelled only once the channel
+     * closes, so it could still emit a comment after that chunk, which the HTTP encoder no longer
+     * accepts. Idempotent.
+     */
+    public static void cancel(Channel channel) {
+        var future = channel.attr(HEARTBEAT_FUTURE).getAndSet(null);
+        if (future != null) {
+            future.cancel(false);
+        }
+        channel.attr(ACTIVE).set(null);
+    }
+
     /** @return {@code true} if {@code channel} carries an open SSE stream. */
     public static boolean isEnabled(Channel channel) {
         return Boolean.TRUE.equals(channel.attr(ACTIVE).get());
@@ -75,7 +91,12 @@ public final class SseHeartbeat {
         }
         var buf = Unpooled.wrappedBuffer(HEARTBEAT_BYTES);
         channel.writeAndFlush(new DefaultHttpContent(buf)).addListener((ChannelFutureListener) f -> {
-            if (!f.isSuccess()) channel.close();
+            if (f.isSuccess()) return;
+            // A heartbeat is how an otherwise idle stream discovers a dead peer, so its failure is
+            // the close cause: without recording it, the close future carries none and every
+            // listener downstream reads a genuine transport failure as an ordinary disconnect.
+            ChannelHandlerUtils.markCloseFailure(channel, f.cause());
+            channel.close();
         });
     }
 }

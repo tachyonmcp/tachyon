@@ -34,12 +34,14 @@ final class TachyonMetricsListener implements ObservationListener {
     public void complete(OperationInfo info, OperationOutcome outcome) {
         final var start = started.remove(info);
         if (start == null) return;
+        final var establishmentNanos = info.establishmentNanos();
+        final var end = establishmentNanos != null ? establishmentNanos : System.nanoTime();
         Timer.builder(OPERATIONS)
                 .description("Inbound MCP operation duration")
                 .tag("mcp.method.name", info.method())
                 .tag("outcome", outcome(outcome))
                 .register(registry)
-                .record(System.nanoTime() - start, TimeUnit.NANOSECONDS);
+                .record(end - start, TimeUnit.NANOSECONDS);
     }
 
     static String outcome(OperationOutcome outcome) {

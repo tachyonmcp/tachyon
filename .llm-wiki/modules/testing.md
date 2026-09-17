@@ -3,7 +3,7 @@ title: Testing
 tags: [module, testing, e2e, conformance]
 sources: [e2e/src/test/, conformance/, Makefile, tachyon-core/src/test/, .github/workflows/build.yml]
 updated: 2026-09-17
-commit: 1a4081f4
+commit: 1011a627
 ---
 
 # ✅ Testing
@@ -51,6 +51,10 @@ uses the MCP SDK and an isolated stateful server. All three client actions run t
 method with injected context; assertions cover the form request, tool result, and exclusion of
 context from the advertised input schema. Requests use `ElicitationRequest.builder()` and wire
 decoding constructs `ElicitationResult` through its builder.
+
+## 📡 Subscription regression coverage
+
+`PostSseStreamTest` exercises out-of-order write completion and preservation of the first transport failure. `SubscriptionsListenObservationTest` covers shutdown fallback, ack timestamp retention, and exception-detail gating. `McpOpenTelemetryListenerTest#subscriptionCompletionRunsOffNettyEventLoop` checks the completion thread over real HTTP; `subscriptionStreamFailureFailsSpan` checks optional exception export.
 
 ## 🧪 Unit tests
 

@@ -3,6 +3,8 @@ package dev.tachyonmcp.core.server;
 
 import dev.tachyonmcp.api.annotations.InternalApi;
 import dev.tachyonmcp.core.runtime.SseEvent;
+import java.util.concurrent.CompletionStage;
+import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -40,10 +42,16 @@ public interface OutboundSseStream {
     }
 
     /**
-     * Activates the SSE stream and emits initial framing.
-     * Idempotent — subsequent calls are no-ops. May be called from any thread.
+     * Activates the SSE stream and emits initial framing, including any events queued before this
+     * call (e.g. {@code subscriptions/listen}'s ack, which must be queued ahead of {@code start()}
+     * so it lands first). Idempotent — subsequent calls are no-ops. May be called from any thread.
+     *
+     * @return a stage that completes once that initial write — ack included — has been flushed to
+     *     the transport, or completes exceptionally if the write failed, the channel was already
+     *     inactive, or the stream was already closed; a second, no-op call mirrors the outcome of
+     *     the call that actually opened the stream rather than completing ahead of its flush
      */
-    void start();
+    CompletionStage<Void> start();
 
     /**
      * @return {@code true} once the stream has been opened.
@@ -78,9 +86,11 @@ public interface OutboundSseStream {
      * Registers a callback invoked when the underlying transport connection closes, however that
      * happens — client disconnect, {@link #close()}, or a dead socket detected on write. Used by a
      * long-lived handler (e.g. {@code subscriptions/listen}) to clean up stream-scoped state it
-     * cannot otherwise learn about. Default is a no-op for transports with no close signal.
+     * cannot otherwise learn about, and to distinguish a genuine transport failure from an ordinary
+     * close. Default is a no-op for transports with no close signal.
      *
-     * @param callback invoked at most once, on an unspecified thread
+     * @param callback invoked at most once, on an unspecified thread, with the failure cause when
+     *                 the close was abnormal, or {@code null} for an ordinary close
      */
-    default void onClose(Runnable callback) {}
+    default void onClose(Consumer<@Nullable Throwable> callback) {}
 }

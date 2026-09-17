@@ -1,9 +1,9 @@
 ---
 title: Errors
 tags: [concept, errors, protocol]
-sources: [tachyon-api/src/main/java/dev/tachyonmcp/api/server/domain/ServerError.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/domain/ServerErrors.java, tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/mcp/v2025_11_25/codecs/McpResponseMapper.java, tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/mcp/v2026_07_28/codecs/McpResponseMapper.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java]
+sources: [tachyon-api/src/main/java/dev/tachyonmcp/api/server/domain/ServerError.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/domain/ServerErrors.java, tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/mcp/v2025_11_25/codecs/McpResponseMapper.java, tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/mcp/v2026_07_28/codecs/McpResponseMapper.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/PeekedBody.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/JsonRpcCodec.java]
 updated: 2026-09-17
-commit: 1a4081f4
+commit: d831e9b1
 ---
 
 # 🚨 Errors
@@ -43,13 +43,15 @@ Extension gate: `ServerErrors.missingRequiredExtension(id)` ⇒ `MISSING_REQUIRE
 
 Dispatcher-level `McpDispatcher.handleHandlerError` `McpDispatcher#handleHandlerError`: `CancellationException` ⇒ internal error + `Cancelled`; `RequestMappingException` ⇒ its error; other ⇒ `"Internal error"`. Serialization failure ⇒ `"Failed to encode response"` + `SerializationFailed` outcome `OperationOutcome`.
 
+Subscription transport failures produce `StreamFailed(causeType, cause?)`, with throwable capture gated by `exceptionDetail` [McpDispatcher#handleHandlerError](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java); see [[observability]].
+
 `tools/call` cancel ⇒ `"Tool call cancelled"` `ToolsCallHandler#handlerError`. Output-schema failure ⇒ **tool result** `isError` (not JSON-RPC error).
 
 ## 🌐 Plain HTTP responses (no JSON-RPC)
 
 | Status | When | Proof |
 |---|---|---|
-| 400 | missing `MCP-Session-Id` (stateful) ; duplicate singleton MCP header ; unparseable body (JSON parse error body) | `McpDispatcher#dispatchTrackedRequestAsync`, `McpHeaderGuardHandler#hasDuplicateSingleton` |
+| 400 | missing `MCP-Session-Id` (stateful) ; duplicate singleton MCP header ; malformed body — JSON-RPC error body, `-32700` for a JSON syntax failure or `-32600` for well-formed JSON that isn't a JSON-RPC envelope, per `JsonRpcCodec.Parse#invalidRequest` | `McpDispatcher#dispatchTrackedRequestAsync`, `McpHeaderGuardHandler#hasDuplicateSingleton`, `McpDispatcher#malformedBodyError` |
 
 ⚠️ A SEP-2243 mirror disagreeing with the body is **not** here — it is a JSON-RPC error, coded per negotiated version (400/-32020 on 2026-07-28, 200/-32001 on 2025-11-25) via `ChannelHandlerUtils#rejectWithServerError` — [[protocol-versions]].
 | 403 | DNS-rebinding guard | `DnsRebindingProtectionHandler#reject` |

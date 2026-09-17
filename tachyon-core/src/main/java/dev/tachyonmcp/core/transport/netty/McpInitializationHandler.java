@@ -17,6 +17,7 @@ import dev.tachyonmcp.core.protocol.mcp.McpHeaderNames;
 import dev.tachyonmcp.core.runtime.InteractionEvent;
 import dev.tachyonmcp.core.server.McpDispatcher;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
+import dev.tachyonmcp.core.transport.jsonrpc.JsonRpcCodec;
 import dev.tachyonmcp.core.transport.jsonrpc.JsonRpcMessage;
 import dev.tachyonmcp.core.transport.netty.sse.PostSseStream;
 import io.netty.channel.ChannelFuture;
@@ -110,15 +111,15 @@ public class McpInitializationHandler extends ChannelInboundHandlerAdapter {
 
         CompletableFuture.runAsync(
                         () -> {
-                            final JsonRpcMessage message;
+                            final JsonRpcCodec.Parse parse;
                             try {
                                 // A validation handler upstream already parsed this body; a null
                                 // holder means none did.
-                                message = peeked != null ? peeked.message() : dispatcher.parseMessage(body);
+                                parse = peeked != null ? peeked.parse() : dispatcher.parseBody(body);
                             } finally {
                                 body.release();
                             }
-                            dispatchNoSessionMessage(ctx, message, origin);
+                            dispatchNoSessionMessage(ctx, parse.message(), parse.invalidRequest(), origin);
                         },
                         executor)
                 .exceptionally(ex -> {
@@ -133,7 +134,10 @@ public class McpInitializationHandler extends ChannelInboundHandlerAdapter {
     }
 
     private void dispatchNoSessionMessage(
-            ChannelHandlerContext ctx, @Nullable JsonRpcMessage message, @Nullable String origin) {
+            ChannelHandlerContext ctx,
+            @Nullable JsonRpcMessage message,
+            boolean invalidRequest,
+            @Nullable String origin) {
         switch (message) {
             case null ->
                 ctx.executor()
@@ -141,7 +145,8 @@ public class McpInitializationHandler extends ChannelInboundHandlerAdapter {
                                 ctx,
                                 HttpResponseStatus.BAD_REQUEST,
                                 "application/json",
-                                dispatcher.parseError(ChannelHandlerUtils.getInteractionContext(ctx)),
+                                dispatcher.malformedBodyError(
+                                        invalidRequest, ChannelHandlerUtils.getInteractionContext(ctx)),
                                 origin));
             case JsonRpcMessage.Request<?> req
             when METHOD_INITIALIZE.equals(req.method()) -> handleInitialize(ctx, req.id(), req.params(), origin);

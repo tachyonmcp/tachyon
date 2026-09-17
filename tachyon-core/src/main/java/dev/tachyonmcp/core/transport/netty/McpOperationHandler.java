@@ -21,6 +21,7 @@ import dev.tachyonmcp.core.runtime.SseEvent;
 import dev.tachyonmcp.core.server.McpDispatcher;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
 import dev.tachyonmcp.core.server.session.SessionEvent;
+import dev.tachyonmcp.core.transport.jsonrpc.JsonRpcCodec;
 import dev.tachyonmcp.core.transport.jsonrpc.JsonRpcMessage;
 import dev.tachyonmcp.core.transport.netty.sse.PostSseStream;
 import dev.tachyonmcp.core.transport.netty.sse.SseHeartbeat;
@@ -161,7 +162,7 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
             @Nullable String origin,
             @Nullable ChannelContext ic,
             PeekedBody.@Nullable Parsed peeked) {
-        final JsonRpcMessage message;
+        final JsonRpcCodec.Parse parse;
         try {
             if (sessionId != null) {
                 final Optional<Session> session;
@@ -183,25 +184,30 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
                 bindSession(ctx.channel(), session.orElseThrow());
             }
             // A validation handler upstream already parsed this body; a null holder means none did.
-            message = peeked != null ? peeked.message() : dispatcher.parseMessage(body);
+            parse = peeked != null ? peeked.parse() : dispatcher.parseBody(body);
         } finally {
             body.release();
         }
-        dispatchPostMessage(ctx, sessionId, message, origin, ic);
+        dispatchPostMessage(ctx, sessionId, parse, origin, ic);
     }
 
     private void dispatchPostMessage(
             ChannelHandlerContext ctx,
             @Nullable String sessionId,
-            @Nullable JsonRpcMessage message,
+            JsonRpcCodec.Parse parse,
             @Nullable String origin,
             @Nullable ChannelContext ic) {
         // Named to not shadow the worker `executor` field: every write below must run on the
         // channel's event loop, while `executor` off-loads work away from it.
         final var eventLoop = ctx.executor();
+        var message = parse.message();
         if (message == null) {
             eventLoop.execute(() -> sendResponseAndClose(
-                    ctx, HttpResponseStatus.BAD_REQUEST, "application/json", dispatcher.parseError(ic), origin));
+                    ctx,
+                    HttpResponseStatus.BAD_REQUEST,
+                    "application/json",
+                    dispatcher.malformedBodyError(parse.invalidRequest(), ic),
+                    origin));
             return;
         }
         if (!server.isStateless() && sessionId == null && !(message instanceof JsonRpcMessage.Request<?>)) {
@@ -582,6 +588,7 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
             logger.debug("Connection reset on MCP endpoint", cause);
         } else {
             logger.error("MCP endpoint error", cause);
+            ChannelHandlerUtils.markCloseFailure(ctx.channel(), cause);
         }
         ctx.close();
     }

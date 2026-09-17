@@ -101,15 +101,14 @@ final class MethodInvoker {
 
     @Nullable
     Object invokeCompletion(InteractionContext ctx, CompletionRequest request) throws Exception {
-        final var values = new LinkedHashMap<String, String>(request.resolvedArguments());
+        final var values = new LinkedHashMap<>(request.resolvedArguments());
         values.put(request.argumentName(), request.argumentValue());
         return invoke(ctx, values, request);
     }
 
     JsonSchema inputSchema() {
         for (Binding binding : bindings) {
-            if (binding instanceof WholeBinding whole) {
-                final var parameter = whole.parameter();
+            if (binding instanceof WholeBinding(Parameter parameter)) {
                 if (Map.class.isAssignableFrom(parameter.getType())) {
                     return JsonSchema.from(JavaTypeSchemas.schemaFor(parameter.getParameterizedType()));
                 }

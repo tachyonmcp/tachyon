@@ -2,13 +2,25 @@
 title: Wiki conventions (schema)
 tags: [meta]
 sources: [.llm-wiki/tools/, .agents/skills/tachyon-wiki/SKILL.md]
-updated: 2026-09-15
-commit: 9eec1092
+updated: 2026-09-17
+commit: b9546c38
 ---
 
 # 📐 LLM Wiki — conventions
 
 LLM owns this dir. Humans read. Source of truth = **code**, never `docs/`, never memory.
+
+## 🗺️ Index, not spec
+
+Every page is derivative: an index into code, written to make code findable. It specifies nothing.
+
+| Rule | Why |
+|---|---|
+| Page disagrees with code → page is wrong | Code shipped, page is a note about it |
+| Never change code to match a page | No page is a requirement; requirements live in issues, javadoc, `docs/`, SEPs |
+| Never cite a page as proof | Proof = `Type#member` + path into code |
+| Page states what code *does* | Wish/plan/bug → `findings.md` row, never page prose |
+| Page can't be verified in code → delete it | Unverifiable page misleads. Dead docs go fire 🔥 |
 
 ## 🗂️ Layout
 

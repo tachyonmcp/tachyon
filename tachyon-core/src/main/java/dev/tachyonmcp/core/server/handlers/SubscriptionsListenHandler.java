@@ -7,11 +7,14 @@ import dev.tachyonmcp.core.protocol.RequestMappingException;
 import dev.tachyonmcp.core.server.RpcMethodHandler;
 import dev.tachyonmcp.core.server.domain.ServerErrors;
 import dev.tachyonmcp.core.server.features.subscriptions.SubscriptionRegistry;
+import dev.tachyonmcp.core.server.features.subscriptions.SubscriptionStreamFailedException;
 import dev.tachyonmcp.core.server.features.tasks.TasksExtension;
-import dev.tachyonmcp.core.server.observability.OperationOutcome;
 import dev.tachyonmcp.core.server.session.DispatchContext;
+import java.nio.channels.ClosedChannelException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -75,19 +78,47 @@ public final class SubscriptionsListenHandler
 
         var pending = new CompletableFuture<>();
         var key = registry.activate(subscriptionId, stream, filter, context.responseMapper(), pending);
-        stream.start();
-        // Registered before completing observation: an implementation without Netty's
-        // already-closed-future-fires-immediately semantics could otherwise miss a disconnect that
-        // races in between the two calls.
-        stream.onClose(() -> {
+        // The returned future — and with it, the Observation the generic dispatch-completion path
+        // drives — spans the SSE stream's whole lifetime, resolving only on disconnect, a genuine
+        // transport failure, or server shutdown. establishmentNanos marks just the ack, so a
+        // duration-recording listener isn't forced to measure that whole lifetime too. Set from
+        // start()'s completion stage, once the ack is actually written and flushed, rather than
+        // right after start() returns — start() only schedules that write and may return long before
+        // it lands, especially when called off the channel's event loop.
+        Consumer<@Nullable Throwable> settle = cause -> {
             registry.remove(key);
-            pending.cancel(false);
-            logger.debug("subscriptions/listen stream ended: subscriptionId={}", subscriptionId);
+            executeCompletion(context, () -> {
+                if (cause == null) {
+                    pending.cancel(false);
+                } else {
+                    pending.completeExceptionally(new SubscriptionStreamFailedException(cause));
+                }
+            });
+        };
+        stream.start().whenComplete((ignored, failure) -> {
+            if (failure == null) {
+                if (context.observation().active()) {
+                    context.observation().info().establishmentNanos(System.nanoTime());
+                }
+            } else {
+                logger.debug("subscriptions/listen ack failed to flush: subscriptionId={}", subscriptionId, failure);
+                // onClose may never fire (default no-op); a closed channel is an ordinary disconnect.
+                settle.accept(failure instanceof ClosedChannelException ? null : failure);
+            }
         });
-        // Establishment is this operation's terminal observation fact — the returned future spans
-        // the SSE stream's whole lifetime (resolves only on disconnect/shutdown), so the generic
-        // dispatch-completion path must not be made to wait for it.
-        context.observation().complete(new OperationOutcome.StreamEstablished());
+        stream.onClose(cause -> {
+            settle.accept(cause);
+            logger.debug(
+                    "subscriptions/listen stream ended: subscriptionId={}, failed={}", subscriptionId, cause != null);
+        });
         return pending;
+    }
+
+    private static void executeCompletion(DispatchContext context, Runnable task) {
+        try {
+            context.engine().executor().execute(task);
+        } catch (RejectedExecutionException e) {
+            Thread.ofVirtual().name("tachyon-subscription-completion").start(task);
+        }
     }
 }

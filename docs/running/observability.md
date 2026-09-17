@@ -19,6 +19,8 @@ OpenTelemetry using the [MCP semantic conventions](https://github.com/open-telem
 - `start(OperationInfo)` — fires once, before any handler runs
 - `complete(OperationInfo, OperationOutcome)` — fires once, at the terminal boundary
 
+`OperationInfo` exposes trace context and server address/port through getters. When constructing one programmatically, supply these values through `OperationInfo.builder(...)`.
+
 Listeners cannot short-circuit, reject, or substitute results. Exceptions in listeners are fault-isolated and never affect handler execution, responses, or other listeners.
 
 Listeners nest in registration order: the scope a listener returns from `start` is opened inside the scope of every listener registered before it, so a later-registered listener's context is the active one while dispatch work runs. Scopes close innermost-first, which means each `close()` runs while its own context is current and restores whatever it displaced.
@@ -150,7 +152,7 @@ Registering two listeners produces two spans per operation, the second nested un
 |---|---|
 | `gen_ai.tool.name`, `gen_ai.operation.name` | `tools/call` |
 | `gen_ai.prompt.name` | `prompts/get` |
-| `error.type` | Rejection, tool error, handler/serialization failure |
+| `error.type` | Rejection with an error classification, tool error, handler/serialization failure, `subscriptions/listen` stream transport failure |
 | `rpc.response.status_code` | Any JSON-RPC error response |
 
 **Span-only (high cardinality):**
@@ -168,7 +170,11 @@ Registering two listeners produces two spans per operation, the second nested un
 | `gen_ai.tool.call.result` | `responseContent` |
 | Exception span event (message + stack) | `exceptionDetail` |
 
-`error.type` distinguishes caller faults (unknown method, bad params, malformed session) — span status `UNSET` — from server faults, which set `StatusCode.ERROR`.
+`error.type` is set for any rejection that carries an error classification, tool error, handler/serialization failure, or stream transport failure, whether it's the caller's fault (unknown method, bad params, malformed session) or the server's. Per the MCP semantic conventions, span status is `StatusCode.ERROR` whenever `error.type` is present — there's no separate "caller fault" status.
+
+### Long-lived streams
+
+`subscriptions/listen`'s span covers the whole SSE stream's lifetime: it only ends when the stream closes, whether that's an ordinary client disconnect, a genuine transport failure (`error.type` set to the failure's exception class, span status `ERROR`), or server shutdown. The `mcp.server.operation.duration` metric, however, still measures only the time until the subscription's acknowledgement is flushed — not the stream's full duration — so a long-lived subscription doesn't skew latency metrics or get lost in fixed histogram buckets sized for ordinary request/response latencies. If the acknowledgement never lands (the write fails or the client is already gone), there is no acknowledgement time, so the metric falls back to the elapsed time until the operation completed. The acknowledgement timestamp is published across threads, including shutdown completion. Transport-triggered subscription completion and its observation callbacks run on the server executor; if it rejects work during shutdown, a virtual thread completes the observation. Graceful shutdown completes subscriptions directly on the shutdown caller. Transport failure messages and stack traces are exported only with `exceptionDetail(true)`; `error.type` remains available when capture is disabled.
 
 ## Examples
 

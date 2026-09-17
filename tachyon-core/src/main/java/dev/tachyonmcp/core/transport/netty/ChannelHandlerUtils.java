@@ -117,6 +117,32 @@ public final class ChannelHandlerUtils {
         return true;
     }
 
+    private static final AttributeKey<Throwable> CLOSE_FAILURE = AttributeKey.valueOf("closeFailure");
+
+    /**
+     * Stashes the first cause of an abnormal channel close for {@link #closeFailure} to read back once
+     * the channel's close future fires — Netty's {@code ChannelFuture} for that event carries no
+     * cause of its own, so a genuine failure (an inbound {@code exceptionCaught}, a failed outbound
+     * write) has to be recorded here before the channel is closed, distinguishing it from an
+     * ordinary client-initiated disconnect.
+     *
+     * @param channel the channel about to be closed
+     * @param cause   the failure that caused the close
+     */
+    public static void markCloseFailure(Channel channel, Throwable cause) {
+        channel.attr(CLOSE_FAILURE).setIfAbsent(cause);
+    }
+
+    /**
+     * Returns the cause stashed by {@link #markCloseFailure}, or {@code null} for an ordinary close.
+     *
+     * @param channel the channel that closed
+     * @return the failure cause, or {@code null}
+     */
+    public static @Nullable Throwable closeFailure(Channel channel) {
+        return channel.attr(CLOSE_FAILURE).get();
+    }
+
     /**
      * Binds a session to the channel and installs the {@link SessionTouchHandler} if not already
      * present. Every outbound byte written to this channel will refresh the session's liveness.
