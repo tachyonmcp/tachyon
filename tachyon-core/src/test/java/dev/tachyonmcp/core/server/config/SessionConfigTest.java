@@ -67,7 +67,7 @@ class SessionConfigTest {
     void sessionOptionsWhileDisabledFailFast() {
         SessionIdGenerator<HttpRequest> custom = (channelContext, request) -> "custom";
 
-        final var expectedMessage = "Session options require sessions to be enabled — call enabled(true)";
+        final var expectedMessage = "Session options require sessions to be enabled — call enabled()";
 
         assertThatIllegalStateException()
                 .isThrownBy(() -> SessionConfig.builder()

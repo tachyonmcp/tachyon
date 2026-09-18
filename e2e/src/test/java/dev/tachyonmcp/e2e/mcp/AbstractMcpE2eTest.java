@@ -88,6 +88,8 @@ public abstract class AbstractMcpE2eTest<C extends McpClient> {
         configurer.accept(builder);
         if (sessionMode() == SessionMode.STATEFUL) {
             builder.session(SessionConfig.Builder::enabled);
+        } else {
+            builder.stateless();
         }
         var started = McpTestServers.startSafely(builder, registrar);
         this.server = started;

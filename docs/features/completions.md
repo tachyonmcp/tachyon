@@ -121,6 +121,8 @@ declares it and whichever order the services register in.
 Turn it off per provider:
 
 ```java
+import dev.tachyonmcp.core.server.annotations.TachyonAnnotationProvider;
+
 TachyonServer.builder()
     .annotations(a -> a
         .withProvider(TachyonAnnotationProvider.withEnumCompletions(false))
