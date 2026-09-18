@@ -4,10 +4,14 @@ package dev.tachyonmcp.core.server.annotations;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 
+import dev.tachyonmcp.api.annotations.McpParam;
 import dev.tachyonmcp.api.annotations.McpPrompt;
 import dev.tachyonmcp.api.annotations.McpResource;
 import dev.tachyonmcp.api.annotations.McpTool;
+import dev.tachyonmcp.api.annotations.Meta;
 import dev.tachyonmcp.core.server.TachyonServer;
+import java.util.Map;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -178,5 +182,115 @@ class TachyonAnnotationProviderTest {
         assertThatIllegalStateException()
                 .isThrownBy(() -> build(new PromptWithRecord()))
                 .withMessageContaining("Unsupported parameter type");
+    }
+
+    private record Payload(String city, int days) {}
+
+    private record Trace(String id) {}
+
+    @SuppressWarnings("unused")
+    static class ParamAndMeta {
+        @McpTool
+        String named(
+                @McpParam(name = "q", description = "Search text") String arg0,
+                @McpParam(description = "Row cap") @Nullable Integer limit) {
+            return arg0;
+        }
+
+        @McpTool
+        String forcedNamed(@McpParam(name = "payload") Payload payload) {
+            return payload.city();
+        }
+
+        @McpTool
+        String whole(Payload payload) {
+            return payload.city();
+        }
+
+        @McpTool
+        String rawMeta(String text, @Meta Map<String, Object> meta) {
+            return text;
+        }
+
+        @McpTool
+        String typedMeta(String text, @Meta @Nullable Trace trace) {
+            return text;
+        }
+
+        @McpPrompt
+        String prompt(@McpParam(name = "topic", description = "What to ask") String subject, @Meta Trace trace) {
+            return subject;
+        }
+
+        @McpResource(uri = "doc://{id}")
+        String doc(@McpParam(name = "id") String docId, @Meta Map<String, Object> meta) {
+            return docId;
+        }
+    }
+
+    @Test
+    void mcpParamRenamesAndDescribesToolArguments() {
+        try (var server = build(new ParamAndMeta())) {
+            var schema = server.tools().find("named").orElseThrow().inputSchema();
+            assertThat(schema.toString())
+                    .contains("\"q\"")
+                    .contains("Search text")
+                    .contains("Row cap")
+                    .doesNotContain("\"arg0\"");
+            assertThat(schema.toString()).contains("\"required\":[\"q\"]");
+        }
+    }
+
+    @Test
+    void mcpParamOnSingleObjectForcesNamedBinding() {
+        try (var server = build(new ParamAndMeta())) {
+            var forced = server.tools()
+                    .find("forcedNamed")
+                    .orElseThrow()
+                    .inputSchema()
+                    .json();
+            assertThat(forced).contains("\"payload\"").contains("\"city\"");
+            var whole = server.tools().find("whole").orElseThrow().inputSchema().json();
+            assertThat(whole).doesNotContain("\"payload\"").contains("\"city\"");
+        }
+    }
+
+    @Test
+    void metaParameterIsExcludedFromSchemaAndPromptArguments() {
+        try (var server = build(new ParamAndMeta())) {
+            assertThat(server.tools()
+                            .find("rawMeta")
+                            .orElseThrow()
+                            .inputSchema()
+                            .json())
+                    .doesNotContain("meta");
+            assertThat(server.tools()
+                            .find("typedMeta")
+                            .orElseThrow()
+                            .inputSchema()
+                            .json())
+                    .doesNotContain("trace");
+            var prompt = server.prompts().find("prompt").orElseThrow();
+            assertThat(prompt.arguments()).hasSize(1);
+            assertThat(prompt.arguments().getFirst().name()).isEqualTo("topic");
+            assertThat(prompt.arguments().getFirst().description()).isEqualTo("What to ask");
+            assertThat(server.resources().templateDescriptors())
+                    .anySatisfy(t -> assertThat(t.uriTemplate()).isEqualTo("doc://{id}"));
+        }
+    }
+
+    @SuppressWarnings("unused")
+    static class TwoMetas {
+        @McpTool
+        String bad(@Meta Map<String, Object> a, @Meta Trace b) {
+            return "";
+        }
+    }
+
+    @Test
+    void rejectsTwoMetaParameters() {
+        assertThatIllegalStateException()
+                .isThrownBy(() -> build(new TwoMetas()))
+                .withMessageContaining("only one @Meta");
     }
 }

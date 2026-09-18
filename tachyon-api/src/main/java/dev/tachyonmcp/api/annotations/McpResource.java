@@ -19,9 +19,10 @@ import java.lang.annotation.Target;
  * }</pre>
  *
  * <p>A {@link #uri()} containing {@code {...}} registers a resource template; each template
- * variable binds to the method parameter of the same name (compile with {@code -parameters}). A
- * parameter of type {@code InteractionContext} is injected. Template variables and non-context
- * parameter names must match exactly; missing or extra names fail registration.
+ * variable binds by {@link McpParam#name()} or Java parameter name (the latter requires
+ * {@code -parameters}). Parameters of type {@code InteractionContext} and parameters annotated
+ * with {@link Meta} are injected. Template variables and non-injected parameter names must match
+ * exactly; missing or extra names fail registration. Static resources may also inject metadata.
  *
  * <p><b>Result mapping.</b> {@code ResourceContents} passes through; {@code String} becomes text;
  * {@code byte[]} becomes a blob; any other object becomes JSON text with {@code application/json}

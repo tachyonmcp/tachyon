@@ -182,7 +182,7 @@ public final class TachyonAnnotationProvider implements AnnotationProvider {
                                                 ? JsonSchema.generate(returnType)
                                                 : null),
                         (ctx, request) -> ResultMappers.toolResult(
-                                invoker.invoke(ctx, request.arguments().asMap()), serializer));
+                                invoker.invoke(ctx, request.arguments().asMap(), request.meta()), serializer));
     }
 
     private void registerResource(
@@ -213,7 +213,10 @@ public final class TachyonAnnotationProvider implements AnnotationProvider {
                                     .description(emptyToNull(resource.description()))
                                     .mimeType(mimeType),
                             (ctx, request) -> ResultMappers.resourceContents(
-                                    invoker.invoke(ctx, Map.of()), request.uri(), mimeType, serializer));
+                                    invoker.invoke(ctx, Map.of(), request.meta()),
+                                    request.uri(),
+                                    mimeType,
+                                    serializer));
             return;
         }
         if (!variables.equals(new LinkedHashSet<>(invoker.argumentNames()))) {
@@ -232,7 +235,7 @@ public final class TachyonAnnotationProvider implements AnnotationProvider {
                             var values = new LinkedHashMap<String, @Nullable Object>();
                             request.params().forEach((variable, value) -> values.put(variable, value.scalarValue()));
                             return ResultMappers.resourceContents(
-                                    invoker.invoke(ctx, values), request.uri(), mimeType, serializer);
+                                    invoker.invoke(ctx, values, request.meta()), request.uri(), mimeType, serializer);
                         });
         declared.put(RESOURCE + uri, List.copyOf(variables));
         registerEnumCompletion(
@@ -262,7 +265,7 @@ public final class TachyonAnnotationProvider implements AnnotationProvider {
                                 .arguments(invoker.promptArguments()),
                         (ctx, request) -> ResultMappers.promptResult(
                                 prompt.role(),
-                                invoker.invoke(ctx, request.arguments().asMap()),
+                                invoker.invoke(ctx, request.arguments().asMap(), request.meta()),
                                 serializer));
         declared.put(PROMPT + name, invoker.argumentNames());
         registerEnumCompletion(

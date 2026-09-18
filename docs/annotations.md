@@ -65,8 +65,8 @@ Only the annotation is required. `name` defaults to the method name; `descriptio
 |---|---|
 | Discovery | non-private methods on the class, superclasses, public interfaces (class proxies work) |
 | `InteractionContext` parameter | injected, never advertised |
-| `@McpTool` with one record/POJO/`Map` parameter | whole `arguments` object decoded into it; its schema is `inputSchema` |
-| Other parameters | one named argument each (compile with `-parameters`); required unless JSpecify `@Nullable` (preferred) or `Optional*` |
+| `@McpTool` with one record/POJO/`Map` argument and no `@McpParam` | whole `arguments` object decoded into it; its schema is `inputSchema` |
+| Other parameters | one named argument each (explicit `@McpParam(name)` or compile with `-parameters`); required unless JSpecify `@Nullable` (preferred) or `Optional*` |
 | Missing required named argument | invalid-params error |
 | `@McpTool` result | `void`/`null` → empty; `ToolResult` passes; `String`/number/boolean/enum → text; `ContentBlock` → content; collection/array → JSON text; other object → `structuredContent` and its type becomes `outputSchema` |
 | `@McpResource` | `{var}` in `uri` → template, variables must exactly match non-context parameter names and bind to same-named scalar parameters; static resources take no arguments. Result: `ResourceContents` passes, `String` → text, `byte[]` → blob, object → JSON text (`application/json` default) |
@@ -74,6 +74,43 @@ Only the annotation is required. `name` defaults to the method name; `descriptio
 | `@McpCompletion` | one prompt/resource target; `CompletionRequest` or named partial-value/sibling parameters; returns `CompletionResult` or `List<String>` (see below) |
 | Exceptions | checked exceptions propagate as from the corresponding synchronous feature function (`ToolFn`, `CompletionFn`, etc.) |
 | Fail fast at registration | two feature annotations on one method, duplicate tool/prompt name or resource URI, private method, static resource with arguments, missing or extra resource-template parameter, non-scalar prompt/resource parameter; completion target/signature/return-type violations or duplicate completion targets |
+
+### Explicit parameter names and request metadata
+
+Use `@McpParam(name = "query", description = "Search text")` to override a Java
+parameter name and describe its tool schema property or prompt argument.
+An explicit nonblank name works without `-parameters`; an omitted name still
+requires that compiler flag. Names also select resource-template variables and
+completion arguments. Duplicate argument names fail registration.
+
+Single-object tool binding remains available: after excluding injected context and
+metadata, one record, POJO, or map receives the whole arguments object.
+Adding `@McpParam`, even with only a description, switches that tool to named binding.
+
+```java
+record TenantMeta(String tenant) {}
+
+@McpTool
+String search(
+        @McpParam(name = "query", description = "Search text") String text,
+        @Meta TenantMeta metadata) {
+    return metadata.tenant() + ":" + text;
+}
+```
+
+`@Meta` injects request `_meta` into tools, resources, prompts, and completions,
+including methods accepting `CompletionRequest`. It never contributes to argument
+schemas or prompt arguments. Declare either `Map<String, Object>` for raw entries
+(empty when absent), or a record/POJO decoded by the configured payload deserializer.
+Missing typed metadata becomes null for `@Nullable` parameters; otherwise it rejects
+the request. Decode failures are invalid-argument errors. An empty metadata object
+is decoded normally. In protocol 2026-07-28, required protocol envelope fields
+mean metadata is present even when no application metadata was sent; missing record
+fields then follow the configured deserializer's behavior.
+
+Only one `@Meta` parameter is allowed. Scalar metadata, other map declarations, and
+combining `@Meta` with `@McpParam` fail registration. Neither annotation may decorate
+injected `InteractionContext` or `CompletionRequest` parameters.
 
 Schemas come from `JsonSchema.generate(type)`: a build-time kt-schema resource or the kt-schema
 reflection generator when present, otherwise tachyon-core's `JavaTypeSchemaFactory` (records,
@@ -89,7 +126,8 @@ Use `@McpCompletion(prompt = "trip")` for a prompt or
 Specify exactly one target. The target can be declared elsewhere; a completion-only Spring bean
 is discovered too.
 
-The simple signature uses reflection parameter names (`-parameters` required):
+The simple signature uses explicit `@McpParam(name)` values or reflection parameter names
+(`-parameters` required for reflection names):
 
 ```java
 @McpCompletion(prompt = "trip")
@@ -98,7 +136,8 @@ List<String> completeCity(String city, @Nullable String country) {
 }
 ```
 
-The first non-`InteractionContext` parameter must be `String`. Its name (`city`) selects the
+After excluding `InteractionContext` and `@Meta`, the first parameter must be `String`.
+Its effective name (`city`) selects the
 argument being completed and receives the partial text, including an empty string. Later named
 scalar parameters receive resolved sibling arguments from the request context, using the configured
 payload codecs for conversion. Missing siblings need `@Nullable` (or a supported `Optional` type)
@@ -115,14 +154,14 @@ CompletionResult completeTrip(CompletionRequest request, InteractionContext cont
 ```
 
 These are alternative signatures for one target. Both allow an injected `InteractionContext` in any
-position. Do not mix `CompletionRequest` with named parameters. A service may declare only one
+position and one `@Meta` parameter. Do not mix `CompletionRequest` with named arguments. A service may declare only one
 completion method for each prompt or resource target; duplicates fail registration.
 
 Return `List<String>` for candidates only, or `CompletionResult` to retain `total`, `hasMore`, and
 `_meta`. Null results and invalid candidates fail the request. Existing completion dispatch applies
 the 100-candidate limit. Calls run on virtual threads; checked exceptions follow `CompletionFn` error
-mapping. Spring proxy advice remains active, and parameter names come from the annotated target
-method. Completion annotations do not generate JSON schemas.
+mapping. Spring proxy advice remains active; parameter annotations and reflection names come
+from the annotated target method. Completion annotations do not generate JSON schemas.
 
 ## Registration and dependency injection
 

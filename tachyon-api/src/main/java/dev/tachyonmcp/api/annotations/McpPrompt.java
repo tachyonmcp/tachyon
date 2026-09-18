@@ -18,9 +18,11 @@ import java.lang.annotation.Target;
  * }
  * }</pre>
  *
- * <p>Each parameter is one prompt argument named after the parameter (compile with {@code
- * -parameters}); it is required unless it is {@code Optional}-typed or JSpecify {@code @Nullable}.
- * A parameter of type {@code InteractionContext} is injected.
+ * <p>Each non-injected parameter is one prompt argument, named by {@link McpParam#name()} or
+ * its Java parameter name (the latter requires {@code -parameters}). {@link McpParam#description()}
+ * describes the prompt argument. Arguments are required unless {@code Optional}-typed or JSpecify
+ * {@code @Nullable}. Parameters of type {@code InteractionContext} and parameters annotated with
+ * {@link Meta} are injected.
  *
  * <p><b>Result mapping.</b> {@code PromptResult} passes through; a {@code String}, {@code
  * ContentBlock}, or any other object (as JSON text) becomes one message with {@link #role()}; a
