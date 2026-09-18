@@ -16,7 +16,6 @@ import kotlin.contracts.contract
  * `CompletionResult { values = candidates.filter { it.startsWith(argumentValue) } }`.
  */
 public class CompletionResultBuilder
-    @PublishedApi
     internal constructor() {
         /** Candidate values ranked by relevance. */
         public var values: List<String> = emptyList()
@@ -30,7 +29,6 @@ public class CompletionResultBuilder
         /** Optional protocol extension metadata. */
         public var meta: Map<String, Any>? = null
 
-        @PublishedApi
         internal fun build(): CompletionResult =
             CompletionResult
                 .builder()
@@ -43,7 +41,7 @@ public class CompletionResultBuilder
 
 /** Builds a [CompletionResult] with a receiver DSL. */
 @OptIn(ExperimentalContracts::class)
-public inline fun CompletionResult(block: CompletionResultBuilder.() -> Unit): CompletionResult {
+public fun CompletionResult(block: CompletionResultBuilder.() -> Unit): CompletionResult {
     contract { callsInPlace(block, InvocationKind.EXACTLY_ONCE) }
     return CompletionResultBuilder().apply(block).build()
 }

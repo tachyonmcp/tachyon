@@ -12,7 +12,6 @@ import kotlin.time.toKotlinDuration
 
 @TachyonDsl
 public class TasksScope
-    @PublishedApi
     internal constructor(
         private val connector: TaskConnector,
     ) {
@@ -28,7 +27,6 @@ public class TasksScope
         /** Suggested client polling interval, or `null` to omit it. */
         public var pollInterval: Duration? = null
 
-        @PublishedApi
         internal fun toConfig(): TasksConfig =
             TasksConfig
                 .builder()

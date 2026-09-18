@@ -15,19 +15,14 @@ import kotlin.contracts.contract
 
 @TachyonDsl
 public class CapabilitiesScope
-    @PublishedApi
     internal constructor() {
-        @PublishedApi
-        internal var toolsConfig: FeatureConfig = FeatureConfig.builder().build()
+        private var toolsConfig: FeatureConfig = FeatureConfig.builder().build()
 
-        @PublishedApi
-        internal var resourcesConfig: ResourcesConfig = ResourcesConfig.builder().build()
+        private var resourcesConfig: ResourcesConfig = ResourcesConfig.builder().build()
 
-        @PublishedApi
-        internal var promptsConfig: FeatureConfig = FeatureConfig.builder().build()
+        private var promptsConfig: FeatureConfig = FeatureConfig.builder().build()
 
-        @PublishedApi
-        internal var tasksConfig: TasksConfig = TasksConfig.builder().build()
+        private var tasksConfig: TasksConfig = TasksConfig.builder().build()
 
         /** Completions capability mode. */
         public var completionsMode: Mode = Mode.AUTO
@@ -36,19 +31,19 @@ public class CapabilitiesScope
         public var logging: Boolean = false
 
         @OptIn(ExperimentalContracts::class)
-        public inline fun tools(configure: (@TachyonDsl FeatureScope).() -> Unit) {
+        public fun tools(configure: (@TachyonDsl FeatureScope).() -> Unit) {
             contract { callsInPlace(configure, InvocationKind.EXACTLY_ONCE) }
             toolsConfig = FeatureScope().apply(configure).toConfig()
         }
 
         @OptIn(ExperimentalContracts::class)
-        public inline fun resources(configure: (@TachyonDsl ResourcesScope).() -> Unit) {
+        public fun resources(configure: (@TachyonDsl ResourcesScope).() -> Unit) {
             contract { callsInPlace(configure, InvocationKind.EXACTLY_ONCE) }
             resourcesConfig = ResourcesScope().apply(configure).toConfig()
         }
 
         @OptIn(ExperimentalContracts::class)
-        public inline fun prompts(configure: (@TachyonDsl FeatureScope).() -> Unit) {
+        public fun prompts(configure: (@TachyonDsl FeatureScope).() -> Unit) {
             contract { callsInPlace(configure, InvocationKind.EXACTLY_ONCE) }
             promptsConfig = FeatureScope().apply(configure).toConfig()
         }
@@ -61,7 +56,7 @@ public class CapabilitiesScope
          */
         @OptIn(ExperimentalContracts::class)
         @ExperimentalApi
-        public inline fun tasks(
+        public fun tasks(
             connector: TaskConnector,
             configure: (@TachyonDsl TasksScope).() -> Unit = {},
         ) {
@@ -69,7 +64,6 @@ public class CapabilitiesScope
             tasksConfig = TasksScope(connector).apply(configure).toConfig()
         }
 
-        @PublishedApi
         internal fun applyTo(builder: CapabilitiesConfig.Builder) {
             builder.tools(toolsConfig)
             builder.resources(resourcesConfig)

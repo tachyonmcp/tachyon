@@ -17,7 +17,6 @@ import kotlin.contracts.contract
 /** Builds a [dev.tachyonmcp.api.server.features.resources.ResourceTemplateDescriptor]. */
 @TachyonDsl
 public class ResourceTemplateDescriptorBuilder
-    @PublishedApi
     internal constructor() {
         /** Template name. */
         public var name: String? = null
@@ -47,7 +46,6 @@ public class ResourceTemplateDescriptorBuilder
         /** Protocol extension metadata. */
         public var meta: Map<String, Any>? = null
 
-        @PublishedApi
         internal fun build(): ResourceTemplateDescriptor =
             ResourceTemplateDescriptor
                 .builder()
@@ -71,7 +69,7 @@ public class ResourceTemplateDescriptorBuilder
 
 /** Builds a [ResourceTemplateDescriptor] with a receiver DSL. */
 @OptIn(ExperimentalContracts::class)
-public inline fun ResourceTemplateDescriptor(
+public fun ResourceTemplateDescriptor(
     block: ResourceTemplateDescriptorBuilder.() -> Unit,
 ): ResourceTemplateDescriptor {
     contract { callsInPlace(block, InvocationKind.EXACTLY_ONCE) }

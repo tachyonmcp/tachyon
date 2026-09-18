@@ -14,7 +14,7 @@ import kotlin.contracts.contract
 
 /** Builds [Annotations] with a receiver DSL. */
 @OptIn(ExperimentalContracts::class)
-public inline fun Annotations(block: AnnotationsBuilder.() -> Unit): Annotations {
+public fun Annotations(block: AnnotationsBuilder.() -> Unit): Annotations {
     contract { callsInPlace(block, InvocationKind.EXACTLY_ONCE) }
     return AnnotationsBuilder().apply(block).build()
 }

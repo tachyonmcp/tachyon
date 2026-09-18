@@ -30,7 +30,7 @@ public fun PromptMessage(
 
 /** Builds a [PromptArgument] with a receiver DSL. */
 @OptIn(ExperimentalContracts::class)
-public inline fun PromptArgument(block: PromptArgumentBuilder.() -> Unit): PromptArgument {
+public fun PromptArgument(block: PromptArgumentBuilder.() -> Unit): PromptArgument {
     contract { callsInPlace(block, InvocationKind.EXACTLY_ONCE) }
     return PromptArgumentBuilder().apply(block).build()
 }

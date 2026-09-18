@@ -8,7 +8,6 @@ import dev.tachyonmcp.kotlin.server.TachyonDsl
 
 @TachyonDsl
 public class FeatureScope
-    @PublishedApi
     internal constructor() {
         /** Enablement mode: `ON`, `OFF`, or `AUTO`. */
         public var mode: Mode = Mode.AUTO
@@ -19,7 +18,6 @@ public class FeatureScope
         /** Default page size when a list request omits its limit. */
         public var pageSize: Int = Pagination.DEFAULT_PAGE_SIZE
 
-        @PublishedApi
         internal fun toConfig(): FeatureConfig =
             FeatureConfig
                 .builder()

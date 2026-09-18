@@ -7,7 +7,6 @@ import dev.tachyonmcp.kotlin.server.TachyonDsl
 /** Kotlin DSL scope for the opt-in payload and exception-detail capture policy. */
 @TachyonDsl
 public class PayloadCaptureScope
-    @PublishedApi
     internal constructor() {
         /** Capture the request's params/arguments. */
         public var requestArgs: Boolean? = null
@@ -24,7 +23,6 @@ public class PayloadCaptureScope
         /** Truncation limit, in UTF-8 bytes, applied to every captured value. */
         public var maxBytes: Int? = null
 
-        @PublishedApi
         internal fun applyTo(builder: PayloadCapturePolicy.Builder) {
             requestArgs?.let(builder::requestArgs)
             responseContent?.let(builder::responseContent)
