@@ -6,4 +6,4 @@ import dev.tachyonmcp.api.server.features.resources.AsyncResourceFn;
 import dev.tachyonmcp.api.server.features.resources.ResourceDescriptor;
 
 @InternalApi
-record ResourceEntry(ResourceDescriptor descriptor, AsyncResourceFn fn) {}
+record ResourceEntry(ResourceDescriptor descriptor, AsyncResourceFn fn, boolean privateCaching) {}

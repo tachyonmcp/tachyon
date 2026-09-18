@@ -177,6 +177,10 @@ final class MethodInvoker {
                 .toList();
     }
 
+    boolean usesMeta() {
+        return bindings.stream().anyMatch(MetaBinding.class::isInstance);
+    }
+
     @Nullable
     Object invoke(
             InteractionContext ctx, Map<String, ? extends @Nullable Object> values, @Nullable Map<String, Object> meta)

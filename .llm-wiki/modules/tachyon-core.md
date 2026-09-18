@@ -3,7 +3,7 @@ title: tachyon-core
 tags: [module, core]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/, tachyon-core/src/main/resources/, tachyon-core/pom.xml]
 updated: 2026-09-18
-commit: f2adbaed
+commit: 1c15ddda
 ---
 
 # ⚙️ tachyon-core
@@ -35,6 +35,7 @@ Verdict: the runtime. ~190 main files. Deps: `slf4j-api`, `netty-codec-http`, `n
 ## 🧠 Who holds what
 
 - Native parameter binding, including explicit names and metadata injection: [MethodInvoker](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/annotations/MethodInvoker.java). Registration and proxy invocation: [[declarative-configuration]].
+- Metadata-sensitive annotated resources propagate private cache isolation through resource registry entries into modern response mapping; see [[declarative-configuration]] and [[feature-registries]].
 
 - [DefaultTachyonServer](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java) = state + registries + `methodHandlers` map + pending server→client requests + session manager + event store + extensions; implements [ServerEngine](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/internal/ServerEngine.java) **and** [ExtensionContext](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/extensions/ExtensionContext.java) [DefaultTachyonServer](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java).
 - [McpDispatcher](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java) = per-request flow, one per [McpChannelInitializer](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpChannelInitializer.java) (i.e. per server start) `McpChannelInitializer.java` ctor.

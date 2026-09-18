@@ -3,7 +3,7 @@ title: Feature registries
 tags: [concept, tools, resources, prompts, completions]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/handlers/, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java]
 updated: 2026-09-18
-commit: 847c8d6a
+commit: 1c15ddda
 ---
 
 # 🧰 Feature registries
@@ -65,6 +65,7 @@ Mode `OFF` ⇒ registration silently skipped (debug log) in every registry.
 ## 📚 Resources specifics
 
 - `resources/read`: invalid URI (blank, >8192, `URISyntaxException`) ⇒ invalid params; exact URI match first, then **most specific template** (longest literal after stripping `{…}`, tie → name) `DefaultResourceRegistry#isValidResourceUri`, `DefaultResourceRegistry#matchTemplate`; not found ⇒ `RESOURCE_NOT_FOUND` with `{uri}` data.
+- Registry entries carry private-cache isolation from metadata-sensitive annotated handlers into response mapping; ordinary handlers keep the public default ([DefaultResourceRegistry#privateCaching](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/resources/DefaultResourceRegistry.java), [ResourceMethodHandlers#readResult](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/resources/ResourceMethodHandlers.java)).
 - Template parsing: RFC 6570-ish `UriTemplate` (`UriTemplate#create`) → `Map<String, UriTemplateValue>`.
 - `resources/subscribe|unsubscribe` need session; `notifyResourceUpdated(uri)` → subscribed sessions + `subscriptions/listen` streams; dead session ids pruned lazily `DefaultResourceRegistry`.
 - MIME guessing from bundled `mime-types.csv` (`ext,mime,isText`) `MimeTypes`.

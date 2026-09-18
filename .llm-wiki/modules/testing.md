@@ -3,7 +3,7 @@ title: Testing
 tags: [module, testing, e2e, conformance]
 sources: [e2e/src/test/, conformance/, Makefile, tachyon-core/src/test/, .github/workflows/build.yml]
 updated: 2026-09-18
-commit: f2adbaed
+commit: 1c15ddda
 ---
 
 # ✅ Testing
@@ -67,5 +67,7 @@ See module pages: [[tachyon-core]], [[tachyon-api]], [[tachyon-kotlin]], [[tachy
 Related: [[tachyon-testkit]].
 
 Parameter names, whole-object binding alongside metadata, nullable/missing metadata, and metadata across feature kinds have wire coverage ([DeclarativeParameterMetadataTest](../../e2e/src/test/java/dev/tachyonmcp/e2e/mcp/DeclarativeParameterMetadataTest.java)).
+
+The same declarative metadata suite proves 2026-07-28 resource cache isolation for both static and templated `@Meta` handlers, plus the public-cache default for a metadata-free annotated resource ([DeclarativeParameterMetadataTest#injectsMetadataAcrossPromptsResourcesAndCompletionShapes](../../e2e/src/test/java/dev/tachyonmcp/e2e/mcp/DeclarativeParameterMetadataTest.java)).
 
 Explicit-name fixtures use Java parameter `arg0` with a different `@McpParam` name in schema and wire tests. This verifies name precedence, not absent reflection parameter metadata ([TachyonAnnotationProviderTest#mcpParamRenamesAndDescribesToolArguments](../../tachyon-core/src/test/java/dev/tachyonmcp/core/server/annotations/TachyonAnnotationProviderTest.java), [DeclarativeParameterMetadataTest#bindsWholeAndNamedObjectsWithSeparateMetadata](../../e2e/src/test/java/dev/tachyonmcp/e2e/mcp/DeclarativeParameterMetadataTest.java)).

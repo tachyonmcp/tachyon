@@ -108,6 +108,10 @@ is decoded normally. In protocol 2026-07-28, required protocol envelope fields
 mean metadata is present even when no application metadata was sent; missing record
 fields then follow the configured deserializer's behavior.
 
+On protocol 2026-07-28, a resource method declaring `@Meta` emits
+`cacheScope: "private"`, even when `ttlMs` is zero. Resource methods without
+`@Meta` retain public caching.
+
 Only one `@Meta` parameter is allowed. Scalar metadata, other map declarations, and
 combining `@Meta` with `@McpParam` fail registration. Neither annotation may decorate
 injected `InteractionContext` or `CompletionRequest` parameters.

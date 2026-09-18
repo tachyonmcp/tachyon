@@ -2,8 +2,8 @@
 title: Protocol versions
 tags: [concept, protocol, mcp]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/http/McpHeaderMatchHandler.java, tachyon-core/src/main/resources/META-INF/services/dev.tachyonmcp.core.protocol.Protocol, tachyon-core/ts2java.py, tachyon-core/protocol/, tachyon-core/pom.xml]
-updated: 2026-09-17
-commit: e5c536ea
+updated: 2026-09-18
+commit: 1c15ddda
 ---
 
 # 🔀 Protocol versions
@@ -32,7 +32,7 @@ Registry `Protocols` static ServiceLoader, fails if empty `Protocols#PROTOCOLS`;
 | Resource updates | `resources/subscribe` + GET SSE | `subscriptions/listen` stream (SEP-2575) |
 | Tasks | legacy `tasks/list`, `tasks/result`, task-augmented `tools/call` | `tasks/get|cancel|update` gated on tasks extension (SEP-2663) |
 | Error codes | JSON-RPC std + -32001..-32004, HTTP 200 | -32020/-32021/-32022, HTTP 400/404 — [[errors]] |
-| Result envelope | plain | `resultType: complete|input_required|task` |
+| Result envelope | plain | `resultType: complete|input_required|task`; complete resource reads include cache hints, with private scope for metadata-sensitive annotated resources ([McpResponseMapper#readResourceResult](../../tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/mcp/v2026_07_28/codecs/McpResponseMapper.java)) |
 
 Request mappers: shared logic in `AbstractMcpRequestMapper` `AbstractMcpRequestMapper` (all mapping methods + `_meta` helpers). Each version is `final` and only supplies `convert(ObjectNode, Class)` with its generated `CodecRegistry`:
 - 2025-11-25: own codec, else `invalid_params("Unsupported params type …")` `McpRequestMapper.java`.

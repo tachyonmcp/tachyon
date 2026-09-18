@@ -53,6 +53,11 @@ class DeclarativeParameterMetadataTest {
             return String.valueOf(meta.get("tenant"));
         }
 
+        @McpResource(uri = "city://public", mimeType = "text/plain")
+        String publicResource() {
+            return "public";
+        }
+
         @McpCompletion(prompt = "prompt")
         List<String> complete(@Meta Tenant meta, @McpParam(name = "city") String value) {
             return List.of(value + ":" + meta.tenant());
@@ -142,13 +147,20 @@ class DeclarativeParameterMetadataTest {
                       "uri":"city://Riga","_meta":{"tenant":"acme"}}}
                     """)).isSuccess().hasResult("""
                     {"contents":[{"uri":"city://Riga","mimeType":"text/plain","text":"Riga:acme"}],
-                     "cacheScope":"public","ttlMs":0,"resultType":"complete"}
+                     "cacheScope":"private","ttlMs":0,"resultType":"complete"}
                     """);
             assertThat(client.post("""
                     {"jsonrpc":"2.0","id":3,"method":"resources/read","params":{
                       "uri":"city://static","_meta":{"tenant":"acme"}}}
                     """)).isSuccess().hasResult("""
                     {"contents":[{"uri":"city://static","mimeType":"text/plain","text":"acme"}],
+                     "cacheScope":"private","ttlMs":0,"resultType":"complete"}
+                    """);
+            assertThat(client.post("""
+                    {"jsonrpc":"2.0","id":4,"method":"resources/read","params":{
+                      "uri":"city://public","_meta":{"tenant":"acme"}}}
+                    """)).isSuccess().hasResult("""
+                    {"contents":[{"uri":"city://public","mimeType":"text/plain","text":"public"}],
                      "cacheScope":"public","ttlMs":0,"resultType":"complete"}
                     """);
             for (var ref : List.of("""
@@ -157,7 +169,7 @@ class DeclarativeParameterMetadataTest {
                     {"type":"ref/resource","uri":"city://{city}"}
                     """)) {
                 assertThat(client.post("""
-                        {"jsonrpc":"2.0","id":4,"method":"completion/complete","params":{
+                        {"jsonrpc":"2.0","id":5,"method":"completion/complete","params":{
                           "ref":%s,"argument":{"name":"city","value":"Ri"},"_meta":{"tenant":"acme"}}}
                         """.formatted(ref))).isSuccess().hasResult("""
                         {"completion":{"values":["Ri:acme"]},"resultType":"complete"}

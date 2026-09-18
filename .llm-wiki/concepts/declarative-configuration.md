@@ -3,7 +3,7 @@ title: Declarative configuration
 tags: [concept, configuration, annotations]
 sources: [tachyon-api/src/main/java/dev/tachyonmcp/api/annotations/, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/annotations/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/annotations/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/AnnotationContext.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultServerBuilder.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/json/JavaTypeSchemas.java]
 updated: 2026-09-18
-commit: f2adbaed
+commit: 1c15ddda
 ---
 
 # 🏷️ Declarative configuration
@@ -70,6 +70,8 @@ String user(String id) {
 No URI variables ⇒ static resource, no named arguments. URI variables ⇒ resource template; the template variable set must exactly equal the non-context parameter-name set; missing or extra names fail registration. Blank URI fails registration ([TachyonAnnotationProvider#registerResource](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/annotations/TachyonAnnotationProvider.java)).
 
 For mapped contents, nonblank `mimeType` wins. Otherwise an object-classified declared return type selects `application/json`; other types leave MIME unset. Explicit `ResourceContents` retains its own fields ([TachyonAnnotationProvider#mimeTypeOf](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/annotations/TachyonAnnotationProvider.java), [ResultMappers#resourceContents](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/annotations/ResultMappers.java)).
+
+On the 2026-07-28 wire, resources whose method declares `@Meta` use private response caching; metadata-free annotated resources remain public ([TachyonAnnotationProvider#privateCachingIfNeeded](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/annotations/TachyonAnnotationProvider.java), [McpResponseMapper#readResourceResult](../../tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/mcp/v2026_07_28/codecs/McpResponseMapper.java)).
 
 ## 💬 Prompts — @McpPrompt
 
