@@ -1,0 +1,28 @@
+schemaVersion: "1"
+name: tachyon-${{ env.args.agent }}
+agent: ${{ env.args.agent }}
+
+args:
+  agent:
+    default: claude
+    enum: [claude, codex]
+  m2:
+    default: "~/.m2"
+    description: Host Maven home to mount
+
+workspace: .
+kits:
+  - ./.sbx/maven-kit
+
+additionalWorkspaces:
+  - path: ${{ env.args.m2 }}
+  - path: ../tachyonmcp.dev
+
+env:
+  MAVEN_USER_HOME: ${{ env.args.m2 }}
+  MAVEN_OPTS: -Dmaven.repo.local=${{ env.args.m2 }}/repository
+
+mcp:
+  servers:
+    - name: javadocs
+      url: https://www.javadocs.dev/mcp
