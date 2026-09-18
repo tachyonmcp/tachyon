@@ -41,7 +41,7 @@ public record SessionConfig(
 
     /** Rejection message for session options supplied while sessions are disabled. */
     public static final String SESSION_OPTIONS_REQUIRE_ENABLED =
-            "Session options require sessions to be enabled — call enabled(true)";
+            "Session options require sessions to be enabled — call enabled()";
 
     public static final SessionConfig STATELESS = new SessionConfig(false, null, null, null, null, null);
 
