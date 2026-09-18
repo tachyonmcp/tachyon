@@ -16,6 +16,7 @@ import dev.tachyonmcp.core.server.json.JavaTypeSchemas;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
+import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -25,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
 
 /** Binds MCP argument values to an annotated method's parameters and invokes it. */
@@ -40,7 +42,8 @@ final class MethodInvoker {
 
     private record WholeBinding(Parameter parameter) implements Binding {}
 
-    private record NamedBinding(Parameter parameter, String name, boolean required) implements Binding {}
+    private record NamedBinding(
+            Parameter parameter, String name, @Nullable String description, boolean required) implements Binding {}
 
     private final Object instance;
     private final Method method;
@@ -73,18 +76,9 @@ final class MethodInvoker {
     static MethodInvoker forTool(Object instance, Method method, AnnotationRegistrationContext context) {
         var parameters = valueParameters(method);
         if (parameters.size() == 1
-                && parameters.stream().noneMatch(p -> p.isAnnotationPresent(McpParam.class))
+                && !parameters.getFirst().isAnnotationPresent(McpParam.class)
                 && JavaTypeSchemas.isObjectType(parameters.getFirst().getType())) {
-            var bindings = new ArrayList<Binding>();
-            for (Parameter parameter : method.getParameters()) {
-                bindings.add(
-                        isContext(parameter)
-                                ? new ContextBinding()
-                                : parameter.isAnnotationPresent(Meta.class)
-                                        ? new MetaBinding(parameter)
-                                        : new WholeBinding(parameter));
-            }
-            return new MethodInvoker(instance, method, bindings, context);
+            return new MethodInvoker(instance, method, bindings(method, WholeBinding::new), context);
         }
         return new MethodInvoker(instance, method, namedBindings(method, false), context);
     }
@@ -97,18 +91,10 @@ final class MethodInvoker {
     static MethodInvoker forCompletion(Object instance, Method method, AnnotationRegistrationContext context) {
         final var parameters = valueParameters(method);
         if (parameters.size() == 1 && parameters.getFirst().getType() == CompletionRequest.class) {
-            final var bindings = new ArrayList<Binding>();
-            for (final var parameter : method.getParameters()) {
-                bindings.add(
-                        isContext(parameter)
-                                ? new ContextBinding()
-                                : parameter.isAnnotationPresent(Meta.class)
-                                        ? new MetaBinding(parameter)
-                                        : new CompletionBinding());
-            }
-            return new MethodInvoker(instance, method, bindings, context);
+            return new MethodInvoker(instance, method, bindings(method, ignored -> new CompletionBinding()), context);
         }
         if (parameters.isEmpty() || parameters.getFirst().getType() != String.class) {
+            validateParameters(method);
             throw new IllegalStateException(
                     "@McpCompletion requires CompletionRequest or a first String argument: " + method);
         }
@@ -134,12 +120,11 @@ final class MethodInvoker {
         var properties = new LinkedHashMap<String, Object>();
         var required = new ArrayList<String>();
         for (Binding binding : bindings) {
-            if (binding instanceof NamedBinding(Parameter parameter, String name, boolean required1)) {
-                final var schema = new LinkedHashMap<>(JavaTypeSchemas.schemaFor(parameter.getParameterizedType()));
-                final var description = description(parameter);
-                if (description != null) schema.put("description", description);
-                properties.put(name, schema);
-                if (required1) required.add(name);
+            if (binding instanceof NamedBinding named) {
+                final var schema = JavaTypeSchemas.schemaFor(named.parameter().getParameterizedType());
+                if (named.description() != null) schema.put("description", named.description());
+                properties.put(named.name(), schema);
+                if (named.required()) required.add(named.name());
             }
         }
         return AnnotationInvocationSupport.inputSchema(properties, required);
@@ -148,11 +133,11 @@ final class MethodInvoker {
     List<PromptArgument> promptArguments() {
         var arguments = new ArrayList<PromptArgument>();
         for (Binding binding : bindings) {
-            if (binding instanceof NamedBinding(Parameter parameter, String name, boolean required)) {
+            if (binding instanceof NamedBinding named) {
                 arguments.add(PromptArgument.builder()
-                        .name(name)
-                        .description(description(parameter))
-                        .required(required)
+                        .name(named.name())
+                        .description(named.description())
+                        .required(named.required())
                         .build());
             }
         }
@@ -216,11 +201,6 @@ final class MethodInvoker {
         return coerce("_meta", meta, parameter.getParameterizedType());
     }
 
-    private static @Nullable String description(Parameter parameter) {
-        final var annotation = parameter.getAnnotation(McpParam.class);
-        return annotation == null || annotation.description().isBlank() ? null : annotation.description();
-    }
-
     private @Nullable Object bindNamed(NamedBinding named, Map<String, ? extends @Nullable Object> values) {
         var raw = values.get(named.name());
         if (raw == null && named.required()) {
@@ -266,18 +246,8 @@ final class MethodInvoker {
     }
 
     private static List<Binding> namedBindings(Method method, boolean scalarsOnly) {
-        validateParameters(method);
         var names = new HashSet<String>();
-        var bindings = new ArrayList<Binding>();
-        for (Parameter parameter : method.getParameters()) {
-            if (isContext(parameter)) {
-                bindings.add(new ContextBinding());
-                continue;
-            }
-            if (parameter.isAnnotationPresent(Meta.class)) {
-                bindings.add(new MetaBinding(parameter));
-                continue;
-            }
+        return bindings(method, parameter -> {
             final var annotation = parameter.getAnnotation(McpParam.class);
             final var explicitName = annotation == null ? "" : annotation.name();
             if (explicitName.isBlank() && !parameter.isNamePresent()) {
@@ -288,14 +258,25 @@ final class MethodInvoker {
             }
             final var name = explicitName.isBlank() ? parameter.getName() : explicitName;
             if (!names.add(name)) throw new IllegalStateException("Duplicate argument name '" + name + "': " + method);
-            var required = !JavaTypeSchemas.isOptional(parameter.getAnnotatedType());
-            bindings.add(new NamedBinding(parameter, name, required));
+            final var description =
+                    annotation == null || annotation.description().isBlank() ? null : annotation.description();
+            final var required = !JavaTypeSchemas.isOptional(parameter.getAnnotatedType());
+            return new NamedBinding(parameter, name, description, required);
+        });
+    }
+
+    private static List<Binding> bindings(Method method, Function<Parameter, Binding> valueBinding) {
+        validateParameters(method);
+        final var bindings = new ArrayList<Binding>();
+        for (final var parameter : method.getParameters()) {
+            if (isContext(parameter)) bindings.add(new ContextBinding());
+            else if (parameter.isAnnotationPresent(Meta.class)) bindings.add(new MetaBinding(parameter));
+            else bindings.add(valueBinding.apply(parameter));
         }
         return bindings;
     }
 
     private static List<Parameter> valueParameters(Method method) {
-        validateParameters(method);
         var parameters = new ArrayList<Parameter>();
         for (Parameter parameter : method.getParameters()) {
             if (!isContext(parameter) && !parameter.isAnnotationPresent(Meta.class)) parameters.add(parameter);
@@ -318,11 +299,7 @@ final class MethodInvoker {
                 if (!JavaTypeSchemas.isObjectType(parameter.getType())) {
                     throw new IllegalStateException("@Meta requires a Map, record or POJO: " + method);
                 }
-                if (Map.class.isAssignableFrom(parameter.getType())
-                        && !parameter
-                                .getParameterizedType()
-                                .getTypeName()
-                                .equals("java.util.Map<java.lang.String, java.lang.Object>")) {
+                if (Map.class.isAssignableFrom(parameter.getType()) && !isRawMetaMap(parameter)) {
                     throw new IllegalStateException("@Meta requires Map<String, Object>: " + method);
                 }
             }
@@ -331,5 +308,13 @@ final class MethodInvoker {
 
     private static boolean isContext(Parameter parameter) {
         return InteractionContext.class.isAssignableFrom(parameter.getType());
+    }
+
+    private static boolean isRawMetaMap(Parameter parameter) {
+        if (!(parameter.getParameterizedType() instanceof ParameterizedType type) || type.getRawType() != Map.class) {
+            return false;
+        }
+        final var arguments = type.getActualTypeArguments();
+        return arguments.length == 2 && arguments[0] == String.class && arguments[1] == Object.class;
     }
 }
