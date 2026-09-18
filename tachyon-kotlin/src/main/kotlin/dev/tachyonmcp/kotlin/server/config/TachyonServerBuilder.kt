@@ -36,13 +36,10 @@ import dev.tachyonmcp.core.server.TachyonServer as CoreTachyonServer
 
 @TachyonDsl
 public class TachyonServerBuilder
-    @PublishedApi
     internal constructor() {
-        @PublishedApi
-        internal val delegate: ServerBuilder = CoreTachyonServer.builder()
+        private val delegate: ServerBuilder = CoreTachyonServer.builder()
 
-        @PublishedApi
-        internal var networkPortExplicitlySet: Boolean = false
+        private var networkPortExplicitlySet: Boolean = false
 
         private val coroutineRuntime: CoroutineRuntime =
             CoroutineRuntime().also { delegate.withExtensions(it) }
@@ -51,8 +48,8 @@ public class TachyonServerBuilder
             KotlinFeatureRegistrar(delegate, coroutineRuntime)
 
         @OptIn(ExperimentalContracts::class)
-        public inline fun info(
-            crossinline configure: (@TachyonDsl ServerInfoScope).() -> Unit,
+        public fun info(
+            configure: (@TachyonDsl ServerInfoScope).() -> Unit,
         ): TachyonServerBuilder {
             contract { callsInPlace(configure, InvocationKind.EXACTLY_ONCE) }
             val scope = ServerInfoScope()
@@ -62,8 +59,8 @@ public class TachyonServerBuilder
         }
 
         @OptIn(ExperimentalContracts::class)
-        public inline fun capabilities(
-            crossinline configure: (@TachyonDsl CapabilitiesScope).() -> Unit,
+        public fun capabilities(
+            configure: (@TachyonDsl CapabilitiesScope).() -> Unit,
         ): TachyonServerBuilder {
             contract { callsInPlace(configure, InvocationKind.EXACTLY_ONCE) }
             val scope = CapabilitiesScope()
@@ -73,8 +70,8 @@ public class TachyonServerBuilder
         }
 
         @OptIn(ExperimentalContracts::class)
-        public inline fun network(
-            crossinline configure: (@TachyonDsl NetworkScope).() -> Unit,
+        public fun network(
+            configure: (@TachyonDsl NetworkScope).() -> Unit,
         ): TachyonServerBuilder {
             contract { callsInPlace(configure, InvocationKind.EXACTLY_ONCE) }
             val scope = NetworkScope()
@@ -87,8 +84,8 @@ public class TachyonServerBuilder
         }
 
         @OptIn(ExperimentalContracts::class)
-        public inline fun session(
-            crossinline configure: (@TachyonDsl SessionScope).() -> Unit,
+        public fun session(
+            configure: (@TachyonDsl SessionScope).() -> Unit,
         ): TachyonServerBuilder {
             contract { callsInPlace(configure, InvocationKind.EXACTLY_ONCE) }
             val scope = SessionScope()
@@ -98,8 +95,8 @@ public class TachyonServerBuilder
         }
 
         @OptIn(ExperimentalContracts::class)
-        public inline fun runtime(
-            crossinline configure: (@TachyonDsl RuntimeScope).() -> Unit,
+        public fun runtime(
+            configure: (@TachyonDsl RuntimeScope).() -> Unit,
         ): TachyonServerBuilder {
             contract { callsInPlace(configure, InvocationKind.EXACTLY_ONCE) }
             val scope = RuntimeScope()
@@ -113,8 +110,8 @@ public class TachyonServerBuilder
          */
         @OptIn(ExperimentalContracts::class)
         @ExperimentalApi
-        public inline fun observability(
-            crossinline configure: (@TachyonDsl ObservabilityScope).() -> Unit,
+        public fun observability(
+            configure: (@TachyonDsl ObservabilityScope).() -> Unit,
         ): TachyonServerBuilder {
             contract { callsInPlace(configure, InvocationKind.EXACTLY_ONCE) }
             val scope = ObservabilityScope()
@@ -513,9 +510,7 @@ public class TachyonServerBuilder
 
         /** Configures the JSON payload boundary: serde, schema factory, and validators. */
         @OptIn(ExperimentalContracts::class)
-        public inline fun json(
-            crossinline configure: (@TachyonDsl JsonScope).() -> Unit,
-        ): TachyonServerBuilder {
+        public fun json(configure: (@TachyonDsl JsonScope).() -> Unit): TachyonServerBuilder {
             contract { callsInPlace(configure, InvocationKind.EXACTLY_ONCE) }
             JsonScope().apply(configure).applyTo(delegate)
             return this
@@ -526,7 +521,6 @@ public class TachyonServerBuilder
             customizer: (@TachyonDsl ChannelPipeline).() -> Unit,
         ): TachyonServerBuilder = this.also { delegate.pipelineCustomizer { it.customizer() } }
 
-        @PublishedApi
         internal fun applyPort(port: Int?): TachyonServerBuilder =
             this.also {
                 if (port != null) {
@@ -536,10 +530,8 @@ public class TachyonServerBuilder
                 }
             }
 
-        @PublishedApi
         internal fun start(): TachyonServer = build().also { it.start() }
 
-        @PublishedApi
         internal fun build(): TachyonServer =
             DefaultKotlinTachyonServer(delegate.build(), coroutineRuntime)
     }

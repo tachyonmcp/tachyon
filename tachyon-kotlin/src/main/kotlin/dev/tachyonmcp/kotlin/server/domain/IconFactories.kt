@@ -14,7 +14,7 @@ import kotlin.contracts.contract
 
 /** Builds an [Icon] with a receiver DSL. */
 @OptIn(ExperimentalContracts::class)
-public inline fun Icon(block: IconBuilder.() -> Unit): Icon {
+public fun Icon(block: IconBuilder.() -> Unit): Icon {
     contract { callsInPlace(block, InvocationKind.EXACTLY_ONCE) }
     return IconBuilder().apply(block).build()
 }

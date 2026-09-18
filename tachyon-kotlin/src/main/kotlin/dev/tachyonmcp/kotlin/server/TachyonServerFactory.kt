@@ -20,7 +20,7 @@ import kotlin.contracts.contract
 @Suppress("FunctionName")
 @OptIn(ExperimentalContracts::class)
 @JvmSynthetic
-public inline fun TachyonServer(
+public fun TachyonServer(
     port: Int? = null,
     configure: (@TachyonDsl TachyonServerBuilder).() -> Unit = {},
 ): TachyonServer {
@@ -40,7 +40,7 @@ public inline fun TachyonServer(
  */
 @OptIn(ExperimentalContracts::class)
 @JvmSynthetic
-public inline fun buildServer(
+public fun buildServer(
     configure: (@TachyonDsl TachyonServerBuilder).() -> Unit = {},
 ): TachyonServer {
     contract { callsInPlace(configure, InvocationKind.EXACTLY_ONCE) }

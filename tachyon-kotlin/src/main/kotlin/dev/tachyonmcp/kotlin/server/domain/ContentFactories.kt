@@ -35,14 +35,14 @@ public fun TextContent(
 
 /** Builds [ImageContent] with a receiver DSL. */
 @OptIn(ExperimentalContracts::class)
-public inline fun ImageContent(block: ImageContentBuilder.() -> Unit): ImageContent {
+public fun ImageContent(block: ImageContentBuilder.() -> Unit): ImageContent {
     contract { callsInPlace(block, InvocationKind.EXACTLY_ONCE) }
     return ImageContentBuilder().apply(block).build()
 }
 
 /** Builds [AudioContent] with a receiver DSL. */
 @OptIn(ExperimentalContracts::class)
-public inline fun AudioContent(block: AudioContentBuilder.() -> Unit): AudioContent {
+public fun AudioContent(block: AudioContentBuilder.() -> Unit): AudioContent {
     contract { callsInPlace(block, InvocationKind.EXACTLY_ONCE) }
     return AudioContentBuilder().apply(block).build()
 }

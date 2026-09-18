@@ -10,7 +10,6 @@ import kotlin.time.toJavaDuration
 
 @TachyonDsl
 public class NetworkScope
-    @PublishedApi
     internal constructor() {
         /** Network interface to bind to. */
         public var host: String? = null
@@ -58,7 +57,6 @@ public class NetworkScope
          */
         public val allowedHosts: MutableList<String> = mutableListOf()
 
-        @PublishedApi
         internal fun applyTo(builder: NetworkConfig.Builder) {
             val addr = address
             if (addr != null) {

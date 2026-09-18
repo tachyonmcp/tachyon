@@ -9,7 +9,6 @@ import kotlin.time.toJavaDuration
 
 @TachyonDsl
 public class RuntimeScope
-    @PublishedApi
     internal constructor() {
         /** Grace period for graceful shutdown. */
         public var shutdownGracePeriod: Duration? = null
@@ -23,7 +22,6 @@ public class RuntimeScope
          */
         public var clock: Clock? = null
 
-        @PublishedApi
         internal fun applyTo(builder: RuntimeConfig.Builder) {
             shutdownGracePeriod?.let { builder.shutdownGracePeriod(it.toJavaDuration()) }
             requestTimeout?.let { builder.requestTimeout(it.toJavaDuration()) }
