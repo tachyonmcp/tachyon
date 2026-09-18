@@ -3,8 +3,8 @@ package dev.tachyonmcp.kotlin.server
 
 import dev.tachyonmcp.kotlin.server.domain.Icon
 import dev.tachyonmcp.kotlin.server.features.resources.resourceDescriptor
+import io.kotest.matchers.optional.shouldBePresent
 import io.kotest.matchers.shouldBe
-import io.kotest.matchers.shouldNotBe
 import org.junit.jupiter.api.Test
 
 /**
@@ -30,14 +30,14 @@ internal class ResourceDescriptorAttributesTest {
             ) { TextResourceContents { text = "hi" } }
         }.use { server ->
             // then
-            val descriptor = server.resources().find("greeting").orElseThrow()
-            descriptor.title() shouldBe "Title"
-            descriptor.description() shouldBe "desc"
-            descriptor.mimeType() shouldBe "text/plain"
-            descriptor.size() shouldBe 42L
-            descriptor.icons() shouldBe listOf(icon)
-            descriptor.meta() shouldBe mapOf("k" to "v")
-            descriptor shouldNotBe null
+            server.resources().find("greeting") shouldBePresent {
+                title() shouldBe "Title"
+                description() shouldBe "desc"
+                mimeType() shouldBe "text/plain"
+                size() shouldBe 42L
+                icons() shouldBe listOf(icon)
+                meta() shouldBe mapOf("k" to "v")
+            }
         }
     }
 

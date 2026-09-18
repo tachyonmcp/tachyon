@@ -2,7 +2,7 @@
 title: tachyon-kotlin
 tags: [module, kotlin, dsl]
 sources: [tachyon-kotlin/src/main/kotlin/dev/tachyonmcp/kotlin/server/, tachyon-kotlin/src/main/resources/META-INF/services/, tachyon-kotlin-kt-schema/src/main/kotlin/dev/tachyonmcp/kotlin/server/json/ktschema/]
-updated: 2026-09-15
+updated: 2026-09-18
 commit: 9eec1092
 ---
 
@@ -42,4 +42,4 @@ Verdict: thin adapter. DSL builder wraps Java `ServerBuilder`; `suspend` handler
 
 ## 🧪 Tests
 
-`mvn test -pl tachyon-kotlin -am`. Kotest + JUnit: `TachyonServerTest`, `KotlinApiTest`, `*DescriptorAttributesTest`, `ToolFnFactoryTest`, `JsonInteropTest`, `KxSerializationTest`, `McpProbe.kt` helper. Kotlin e2e in `e2e/src/test/kotlin/dev/tachyonmcp/e2e/` → [[testing]].
+`mvn test -pl tachyon-kotlin -am`. Kotest + JUnit: `StatefulServerTest`, `StatelessServerTest`, `KotlinApiTest`, `*DescriptorAttributesTest`, `ToolFnFactoryTest`, `JsonInteropTest`, `KxSerializationTest`, `McpProbe.kt` helper. Kotlin e2e in `e2e/src/test/kotlin/dev/tachyonmcp/e2e/` → [[testing]].

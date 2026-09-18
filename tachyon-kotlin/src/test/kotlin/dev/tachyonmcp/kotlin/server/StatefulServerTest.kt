@@ -4,9 +4,6 @@ package dev.tachyonmcp.kotlin.server
 import dev.tachyonmcp.api.json.JsonSchema
 import dev.tachyonmcp.api.server.config.Mode
 import dev.tachyonmcp.api.server.domain.Role
-import dev.tachyonmcp.api.server.extensions.AdvertiseMode
-import dev.tachyonmcp.api.server.extensions.ExtensionContext
-import dev.tachyonmcp.api.server.extensions.ServerExtension
 import dev.tachyonmcp.api.server.features.PaginatedResult
 import dev.tachyonmcp.api.server.features.tasks.TaskConnector
 import dev.tachyonmcp.api.server.features.tools.ToolResult
@@ -22,23 +19,21 @@ import dev.tachyonmcp.kotlin.server.domain.TextContent
 import dev.tachyonmcp.kotlin.server.domain.TextResourceContents
 import dev.tachyonmcp.kotlin.server.features.prompts.PromptDescriptor
 import dev.tachyonmcp.kotlin.server.features.resources.ResourceDescriptor
-import dev.tachyonmcp.kotlin.server.features.resources.ResourceTemplateDescriptor
 import dev.tachyonmcp.kotlin.server.features.tools.ToolDescriptor
-import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
 import kotlinx.coroutines.delay
 import org.junit.jupiter.api.Test
-import java.time.Clock
-import java.time.Instant
-import java.time.ZoneOffset
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.toJavaDuration
 
-@Suppress("LongMethod")
-internal class TachyonServerTest {
+/**
+ * Stateful servers: `session { … }` turns session state on, and the DSL binds a Netty transport
+ * that real MCP clients drive over HTTP.
+ */
+internal class StatefulServerTest {
     @Suppress("DEPRECATION")
     private val taskConnector: TaskConnector =
         TaskConnector
@@ -54,47 +49,25 @@ internal class TachyonServerTest {
         val message: String,
     )
 
-    private class TypedInput
-
-    private class TypedOutput
-
     @Test
-    fun `typed tool resolves schemas through the JsonSchemaFactory chain`() {
+    fun `enabled alone makes the server stateful with defaults`() {
         buildServer {
-            typedTool<TypedInput, TypedOutput>("typed") { ToolResult.text("unused") }
-        }.use { server ->
-            val descriptor = server.tools().find("typed").orElseThrow()
-            descriptor.inputSchema()?.json() shouldBe """{"type":"object","title":"TypedInput"}"""
-            descriptor.outputSchema()?.json() shouldBe """{"type":"object","title":"TypedOutput"}"""
-        }
-    }
-
-    @Test
-    fun `post-build typed tool resolves schemas and adapts the handler`() {
-        buildServer {}.use { server ->
-            server.registerTool<TypedInput, TypedOutput>("typed-post-build", "Post-build") {
-                TypedOutput()
-            }
-
-            val descriptor = server.tools().find("typed-post-build").orElseThrow()
-            descriptor.description() shouldBe "Post-build"
-            descriptor.inputSchema()?.json() shouldBe """{"type":"object","title":"TypedInput"}"""
-            descriptor.outputSchema()?.json() shouldBe """{"type":"object","title":"TypedOutput"}"""
-        }
-    }
-
-    @Test
-    fun `Kotlin DSL retains Jackson serde by default`() {
-        TachyonServer(port = 0) {
-            name("jackson-default-test")
+            name("kotlin-session-defaults")
             session { enabled = true }
-            tool("jackson-default") { success(JacksonPayload("ok")) }
         }.use { server ->
-            McpProbe(server.port()).use { probe ->
-                probe.initialize()
-                probe.callTool("jackson-default").body() shouldContain
-                    """"structuredContent":{"message":"ok"}"""
-            }
+            server.config().session.enabled shouldBe true
+            server.config().session.sessionTtl shouldBe SessionConfig.DEFAULT_SESSION_TTL
+        }
+    }
+
+    @Test
+    fun `session option alone makes the server stateful`() {
+        buildServer {
+            name("kotlin-session-implied")
+            session { sessionTtl = 15.seconds }
+        }.use { server ->
+            server.config().session.enabled shouldBe true
+            server.config().session.sessionTtl shouldBe 15.seconds.toJavaDuration()
         }
     }
 
@@ -110,82 +83,81 @@ internal class TachyonServerTest {
             }
         TachyonServer(
             port = 0,
-            {
-                info {
-                    name = appName
-                    title = "My Test MCP Server"
-                    icons += expectedIcon
-                    websiteUrl = "https://example.com/mcp"
-                    version = "2.0.0"
-                    description = "e2e test server"
-                    instructions = "ignore me"
+        ) {
+            info {
+                name = appName
+                title = "My Test MCP Server"
+                icons += expectedIcon
+                websiteUrl = "https://example.com/mcp"
+                version = "2.0.0"
+                description = "e2e test server"
+                instructions = "ignore me"
+            }
+            capabilities {
+                tools {
+                    mode = Mode.ON
+                    listChanged = true
+                    pageSize = 20
                 }
-                capabilities {
-                    tools {
-                        mode = Mode.ON
-                        listChanged = true
-                        pageSize = 20
-                    }
-                    resources {
-                        mode = Mode.ON
-                        subscribe = true
-                        listChanged = true
-                        pageSize = 21
-                    }
-                    prompts {
-                        mode = Mode.ON
-                        listChanged = true
-                        pageSize = 22
-                    }
-                    tasks(taskConnector) {
-                        pageSize = 23
-                        pollInterval = 250.milliseconds
-                    }
-                    completionsMode = Mode.ON
-                    logging = true
+                resources {
+                    mode = Mode.ON
+                    subscribe = true
+                    listChanged = true
+                    pageSize = 21
                 }
-                network {
-                    host = "127.0.0.1"
-                    port = 0
-                    endpointPath = "/mcp"
-                    allowedOrigins.add("*")
-                    allowedHosts.add("host.docker.internal:8096")
-                    allowNullOrigin = true
-                    allowPrivateNetworks = true
-                    readerIdleTimeout = 124.seconds
-                    writerIdleTimeout = 60.seconds
-                    maxContentLength = 1_000_000
+                prompts {
+                    mode = Mode.ON
+                    listChanged = true
+                    pageSize = 22
                 }
-                session {
-                    enabled = true
-                    sessionTtl = 15.seconds
-                    sessionStore = InMemorySessionStore()
-                    sessionEventStore = InMemorySessionEventStore()
-                    sessionIdGenerator { _, req -> req?.headers()?.get("X-Tenant-Id") ?: "anon" }
+                tasks(taskConnector) {
+                    pageSize = 23
+                    pollInterval = 250.milliseconds
                 }
-                observability {
-                    slowRequestLogging(threshold = 15.seconds)
-                }
-                pipelineCustomizer { }
-                tool("ping", "Health check") { ToolResult.text("pong") }
-                resource(
-                    "config",
-                    "file:///config.yaml",
-                    description = "App config",
-                    mimeType = "text/yaml",
-                ) {
-                    TextResourceContents(uri = uri, mimeType = "text/yaml", text = "key: value")
-                }
-                prompt("greet", "Say hello") {
-                    listOf(
-                        PromptMessage(
-                            role = Role.USER,
-                            TextContent("Hello, ${arguments.stringOr("name", "world")}!"),
-                        ),
-                    )
-                }
-            },
-        ).use { handle ->
+                completionsMode = Mode.ON
+                logging = true
+            }
+            network {
+                host = "127.0.0.1"
+                port = 0
+                endpointPath = "/mcp"
+                allowedOrigins.add("*")
+                allowedHosts.add("host.docker.internal:8096")
+                allowNullOrigin = true
+                allowPrivateNetworks = true
+                readerIdleTimeout = 124.seconds
+                writerIdleTimeout = 60.seconds
+                maxContentLength = 1_000_000
+            }
+            session {
+                enabled = true
+                sessionTtl = 15.seconds
+                sessionStore = InMemorySessionStore()
+                sessionEventStore = InMemorySessionEventStore()
+                sessionIdGenerator { _, req -> req?.headers()?.get("X-Tenant-Id") ?: "anon" }
+            }
+            observability {
+                slowRequestLogging(threshold = 15.seconds)
+            }
+            pipelineCustomizer { }
+            tool("ping", "Health check") { ToolResult.text("pong") }
+            resource(
+                "config",
+                "file:///config.yaml",
+                description = "App config",
+                mimeType = "text/yaml",
+            ) {
+                TextResourceContents(uri = uri, mimeType = "text/yaml", text = "key: value")
+            }
+            prompt("greet", "Say hello") {
+                listOf(
+                    PromptMessage(
+                        role = Role.USER,
+                        TextContent("Hello, ${arguments.stringOr("name", "world")}!"),
+                    ),
+                )
+            }
+        }.use { handle ->
             (handle.port() > 0) shouldBe true
             handle.host() shouldBe "127.0.0.1"
             val config = handle.config()
@@ -199,7 +171,6 @@ internal class TachyonServerTest {
                 instructions() shouldBe "ignore me"
                 websiteUrl() shouldBe "https://example.com/mcp"
                 icons() shouldBe listOf(expectedIcon)
-                websiteUrl() shouldBe "https://example.com/mcp"
             }
 
             // capabilities
@@ -259,149 +230,6 @@ internal class TachyonServerTest {
     }
 
     @Test
-    fun `extension is registered and bootstrapped`() {
-        var bootstrapped = false
-        val extension =
-            object : ServerExtension {
-                override fun extensionId(): String = "test.extension"
-
-                override fun advertiseMode(): AdvertiseMode = AdvertiseMode.ALWAYS
-
-                override fun bootstrap(context: ExtensionContext) {
-                    bootstrapped = true
-                }
-            }
-
-        buildServer {
-            name("extension-test")
-            extensions(extension)
-        }.use {
-            bootstrapped shouldBe true
-        }
-    }
-
-    @Test
-    fun `multiple extensions are all registered via a single vararg call`() {
-        val bootstrapped = mutableSetOf<String>()
-
-        fun extensionNamed(id: String) =
-            object : ServerExtension {
-                override fun extensionId(): String = id
-
-                override fun advertiseMode(): AdvertiseMode = AdvertiseMode.ALWAYS
-
-                override fun bootstrap(context: ExtensionContext) {
-                    bootstrapped += id
-                }
-            }
-
-        buildServer {
-            name("multi-extension-test")
-            extensions(
-                extensionNamed("one"),
-                extensionNamed("two"),
-            )
-        }.use {
-            bootstrapped shouldBe setOf("one", "two")
-        }
-    }
-
-    @Test
-    fun `duplicate extension IDs are rejected`() {
-        fun extensionNamed(id: String) =
-            object : ServerExtension {
-                override fun extensionId(): String = id
-
-                override fun advertiseMode(): AdvertiseMode = AdvertiseMode.ALWAYS
-            }
-
-        shouldThrow<IllegalArgumentException> {
-            buildServer {
-                name("duplicate-extension-test")
-                extensions(
-                    extensionNamed("duplicate"),
-                    extensionNamed("duplicate"),
-                )
-            }
-        }.message shouldContain "Duplicate extension ID: duplicate"
-    }
-
-    @Test
-    fun `buildServer without binding`() {
-        val server: TachyonServer =
-            buildServer {
-                name("kotlin-build")
-                capabilities {
-                    tools { mode = Mode.AUTO }
-                }
-                tool("build", "Build test") { ToolResult.text("built") }
-            }
-        server.tools().find("build").orElse(null) shouldNotBe null
-        server.close()
-    }
-
-    @Test
-    fun `session option alone makes the server stateful`() {
-        buildServer {
-            name("kotlin-session-implied")
-            session { sessionTtl = 15.seconds }
-        }.use { server ->
-            server.config().session.enabled shouldBe true
-            server.config().session.sessionTtl shouldBe 15.seconds.toJavaDuration()
-        }
-    }
-
-    @Test
-    fun `stateless is the default and can be stated explicitly`() {
-        buildServer {
-            name("kotlin-stateless-explicit")
-            stateless()
-        }.use { server ->
-            server.config().session.enabled shouldBe false
-        }
-        buildServer { name("kotlin-stateless-default") }.use { server ->
-            server.config().session.enabled shouldBe false
-        }
-    }
-
-    @Test
-    fun `enabled alone makes the server stateful with defaults`() {
-        buildServer {
-            name("kotlin-session-defaults")
-            session { enabled = true }
-        }.use { server ->
-            server.config().session.enabled shouldBe true
-            server.config().session.sessionTtl shouldBe SessionConfig.DEFAULT_SESSION_TTL
-        }
-    }
-
-    @Test
-    fun `session option on an explicitly stateless server is rejected`() {
-        shouldThrow<IllegalStateException> {
-            buildServer {
-                name("kotlin-session-contradiction")
-                session {
-                    enabled = false
-                    sessionTtl = 15.seconds
-                }
-            }
-        }.message shouldBe SessionConfig.SESSION_OPTIONS_REQUIRE_ENABLED
-    }
-
-    @Test
-    fun `runtime clock is wired through to the runtime config`() {
-        val fixedClock = Clock.fixed(Instant.parse("2025-01-01T00:00:00Z"), ZoneOffset.UTC)
-        buildServer {
-            name("runtime-clock-test")
-            runtime {
-                clock = fixedClock
-            }
-        }.use { server ->
-            server.config().runtime.clock() shouldBe fixedClock
-        }
-    }
-
-    @Test
     fun `network port set via DSL without factory port parameter`() {
         TachyonServer(
             configure = {
@@ -415,20 +243,31 @@ internal class TachyonServerTest {
     }
 
     @Test
+    fun `Kotlin DSL retains Jackson serde by default`() {
+        TachyonServer(port = 0) {
+            name("jackson-default-test")
+            session { enabled = true }
+            tool("jackson-default") { success(JacksonPayload("ok")) }
+        }.use { server ->
+            McpProbe(server.port()).use { probe ->
+                probe.initialize()
+                probe.callTool("jackson-default").body() shouldContain
+                    """"structuredContent":{"message":"ok"}"""
+            }
+        }
+    }
+
+    @Test
     fun `name-based suspend resourceTemplate registers and lists template`() {
-        val schema = """{"type":"object"}"""
         val icon =
             Icon {
                 src = "https://example.com/user.svg"
                 mimeType = "image/svg+xml"
             }
         val annotations = Annotations { priority = 0.7 }
-        TachyonServer(
-            port = 0,
-        ) {
+        TachyonServer(port = 0) {
             name("template-test")
             session { enabled = true }
-            tool("check", inputSchema = JsonSchema.unchecked(schema)) { ToolResult.text("ok") }
             resourceTemplate(
                 name = "user-profile",
                 uriTemplate = "user://{userId}/profile",
@@ -478,9 +317,7 @@ internal class TachyonServerTest {
                 size = 2
                 icons = listOf(icon)
             }
-        TachyonServer(
-            port = 0,
-        ) {
+        TachyonServer(port = 0) {
             name("contextual-resource-contents-test")
             session { enabled = true }
             resource(
@@ -535,28 +372,6 @@ internal class TachyonServerTest {
     }
 
     @Test
-    fun `resourceTemplate accepts a prebuilt descriptor`() {
-        val descriptor =
-            ResourceTemplateDescriptor {
-                name = "descriptor-template"
-                uriTemplate = "descriptor://{id}"
-                description = "Prebuilt descriptor"
-                mimeType = "text/plain"
-                title = "Descriptor title"
-            }
-
-        buildServer {
-            resourceTemplate(descriptor) {
-                TextResourceContents {
-                    text = param("id")
-                }
-            }
-        }.use { server ->
-            server.resources().findTemplate("descriptor-template").orElseThrow() shouldBe descriptor
-        }
-    }
-
-    @Test
     fun `tool accepts a prebuilt descriptor`() {
         val descriptor =
             ToolDescriptor {
@@ -598,9 +413,7 @@ internal class TachyonServerTest {
                     )
             }
 
-        TachyonServer(
-            port = 0,
-        ) {
+        TachyonServer(port = 0) {
             name("descriptor-prompt-test")
             session { enabled = true }
             prompt(descriptor) {
@@ -627,9 +440,7 @@ internal class TachyonServerTest {
 
     @Test
     fun `suspend tool with delay returns correct result`() {
-        TachyonServer(
-            port = 0,
-        ) {
+        TachyonServer(port = 0) {
             name("delay-test")
             session { enabled = true }
             tool("slow", "Delayed") {
@@ -650,17 +461,14 @@ internal class TachyonServerTest {
 
     @Test
     fun `tool with outputSchema appears in tools list`() {
-        val schema = """{"type":"object"}"""
         val outputSchema = """{"type":"object","properties":{"result":{"type":"string"}}}"""
-        TachyonServer(
-            port = 0,
-        ) {
+        TachyonServer(port = 0) {
             name("output-test")
             session { enabled = true }
             tool(
                 "with-output",
                 "Has output schema",
-                inputSchema = JsonSchema.unchecked(schema),
+                inputSchema = JsonSchema.unchecked("""{"type":"object"}"""),
                 outputSchema = JsonSchema.unchecked(outputSchema),
             ) {
                 ToolResult.text("done")
@@ -676,44 +484,8 @@ internal class TachyonServerTest {
     }
 
     @Test
-    fun `tool with string overload schema`() {
-        val schema = """{"type":"object"}"""
-        TachyonServer(
-            port = 0,
-        ) {
-            name("string-schema-test")
-            session { enabled = true }
-            tool("string-schema", inputSchema = JsonSchema.unchecked(schema)) {
-                ToolResult.text("ok")
-            }
-        }.use { handle ->
-            handle.tools().find("string-schema").orElse(null) shouldNotBe null
-        }
-    }
-
-    @Test
-    fun `sync tool body compiles and works with suspend signature`() {
-        TachyonServer(
-            port = 0,
-        ) {
-            name("sync-test")
-            session { enabled = true }
-            tool("ping", "Health check") { ToolResult.text("pong") }
-        }.use { handle ->
-            McpProbe(handle.port()).use { probe ->
-                probe.initialize()
-                val response = probe.callTool("ping")
-                response.statusCode() shouldBe 200
-                response.body() shouldContain "pong"
-            }
-        }
-    }
-
-    @Test
     fun `notification sent during suspend tool arrives on the request stream`() {
-        TachyonServer(
-            port = 0,
-        ) {
+        TachyonServer(port = 0) {
             name("notify-test")
             capabilities { logging = true }
             session { enabled = true }
