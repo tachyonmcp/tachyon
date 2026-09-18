@@ -3,7 +3,7 @@ title: tachyon-kotlin
 tags: [module, kotlin, dsl]
 sources: [tachyon-kotlin/src/main/kotlin/dev/tachyonmcp/kotlin/server/, tachyon-kotlin/src/main/resources/META-INF/services/, tachyon-kotlin-kt-schema/src/main/kotlin/dev/tachyonmcp/kotlin/server/json/ktschema/]
 updated: 2026-09-18
-commit: 4c9c174c
+commit: 5a85c0fc
 ---
 
 # 🟣 tachyon-kotlin (+ kt-schema)
