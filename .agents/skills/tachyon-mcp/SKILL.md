@@ -242,8 +242,9 @@ handler's `InteractionContext` and needs no token.
 ### Session `session(cfg -> ...)`
 
 Stateless by default. **Setting any option below enables sessions** — no flag needed.
-`ServerBuilder.stateless()` writes the opt-out down; `.enabled(b)` is deprecated and is the only
-way to build the contradiction (off + option ⇒ `IllegalStateException`).
+`ServerBuilder.stateless()` writes the opt-out down; `.enabled(b)` is deprecated. An explicit
+opt-out, through either route, combined with a session option is the one contradiction
+(off + option ⇒ `IllegalStateException`).
 
 | Method | Default |
 |---|---|
