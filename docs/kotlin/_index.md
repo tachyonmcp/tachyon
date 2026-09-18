@@ -495,7 +495,7 @@ Available via `ToolScope.arguments` (or `PromptScope.arguments`):
 | `ServerInfoScope` | `info { }` | `name`, `version`, `description`, `title`, `instructions` |
 | `CapabilitiesScope` | `capabilities { }` | `tools()`, `resources()`, `prompts()`, `tasks(connector)`, `logging`, `completionsMode` |
 | `NetworkScope` | `network { }` | `host`, `port`, `endpointPath`, `allowedOrigins`, `allowedHeaders`, `allowedHosts`, `maxContentLength` |
-| `SessionScope` | `session { }` | `enabled`, `sessionTtl`, `sessionIdGenerator` |
+| `SessionScope` | `session { }` | `enable()`, `sessionTtl`, `sessionIdGenerator` |
 | `RuntimeScope` | `runtime { }` | `shutdownGracePeriod`, `requestTimeout`, `clock` |
 | `ToolScope` | tool lambda | `ctx`, `request`, `arguments`; `success(v)`, `text(t)`, `fail(msg)`, `content { }` |
 | `ResourceScope` | resource lambda | `ctx`, `uri`, `params`, `uriTemplate` |

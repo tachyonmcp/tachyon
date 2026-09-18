@@ -50,13 +50,24 @@ internal class StatefulServerTest {
     )
 
     @Test
-    fun `enabled alone makes the server stateful with defaults`() {
+    fun `enable alone makes the server stateful with defaults`() {
         buildServer {
             name("kotlin-session-defaults")
-            session { enabled = true }
+            session { enable() }
         }.use { server ->
             server.config().session.enabled shouldBe true
             server.config().session.sessionTtl shouldBe SessionConfig.DEFAULT_SESSION_TTL
+        }
+    }
+
+    @Test
+    fun `assigning the default id generator still opts in, as on the Java builder`() {
+        buildServer {
+            name("kotlin-session-default-generator")
+            session { sessionIdGenerator = SessionIdGenerator.DEFAULT }
+        }.use { server ->
+            server.config().session.enabled shouldBe true
+            server.config().session.sessionIdGenerator shouldBe SessionIdGenerator.DEFAULT
         }
     }
 
@@ -130,11 +141,11 @@ internal class StatefulServerTest {
                 maxContentLength = 1_000_000
             }
             session {
-                enabled = true
+                enable()
                 sessionTtl = 15.seconds
                 sessionStore = InMemorySessionStore()
                 sessionEventStore = InMemorySessionEventStore()
-                sessionIdGenerator { _, req -> req?.headers()?.get("X-Tenant-Id") ?: "anon" }
+                sessionIdGenerator { _, req -> req.headers().get("X-Tenant-Id") ?: "anon" }
             }
             observability {
                 slowRequestLogging(threshold = 15.seconds)
@@ -234,7 +245,7 @@ internal class StatefulServerTest {
         TachyonServer(
             configure = {
                 name("dsl-port-test")
-                session { enabled = true }
+                session { enable() }
                 network { port = 0 }
             },
         ).use { handle ->
@@ -246,7 +257,7 @@ internal class StatefulServerTest {
     fun `Kotlin DSL retains Jackson serde by default`() {
         TachyonServer(port = 0) {
             name("jackson-default-test")
-            session { enabled = true }
+            session { enable() }
             tool("jackson-default") { success(JacksonPayload("ok")) }
         }.use { server ->
             McpProbe(server.port()).use { probe ->
@@ -267,7 +278,7 @@ internal class StatefulServerTest {
         val annotations = Annotations { priority = 0.7 }
         TachyonServer(port = 0) {
             name("template-test")
-            session { enabled = true }
+            session { enable() }
             resourceTemplate(
                 name = "user-profile",
                 uriTemplate = "user://{userId}/profile",
@@ -319,7 +330,7 @@ internal class StatefulServerTest {
             }
         TachyonServer(port = 0) {
             name("contextual-resource-contents-test")
-            session { enabled = true }
+            session { enable() }
             resource(
                 name = "text",
                 uri = "test://text",
@@ -382,7 +393,7 @@ internal class StatefulServerTest {
 
         TachyonServer(port = 0) {
             name("descriptor-tool-test")
-            session { enabled = true }
+            session { enable() }
             tool(descriptor) { ToolResult.text("descriptor-ok") }
         }.use { handle ->
             handle.tools().find("descriptor-tool").orElseThrow() shouldBe descriptor
@@ -415,7 +426,7 @@ internal class StatefulServerTest {
 
         TachyonServer(port = 0) {
             name("descriptor-prompt-test")
-            session { enabled = true }
+            session { enable() }
             prompt(descriptor) {
                 listOf(
                     PromptMessage(
@@ -442,7 +453,7 @@ internal class StatefulServerTest {
     fun `suspend tool with delay returns correct result`() {
         TachyonServer(port = 0) {
             name("delay-test")
-            session { enabled = true }
+            session { enable() }
             tool("slow", "Delayed") {
                 delay(10.milliseconds)
                 ToolResult.text("delayed-ok")
@@ -464,7 +475,7 @@ internal class StatefulServerTest {
         val outputSchema = """{"type":"object","properties":{"result":{"type":"string"}}}"""
         TachyonServer(port = 0) {
             name("output-test")
-            session { enabled = true }
+            session { enable() }
             tool(
                 "with-output",
                 "Has output schema",
@@ -488,7 +499,7 @@ internal class StatefulServerTest {
         TachyonServer(port = 0) {
             name("notify-test")
             capabilities { logging = true }
-            session { enabled = true }
+            session { enable() }
             tool("notify", "Notifies mid-run") {
                 delay(10.milliseconds)
                 ctx.notifications().info("notify-test", "mid-run-note")

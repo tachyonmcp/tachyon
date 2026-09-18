@@ -135,7 +135,7 @@ internal class KotlinApiTest {
     ) {
         TachyonServer(port = 0) {
             name("null-accessors-test")
-            session { enabled = true }
+            session { enable() }
             tool("null-accessors") {
                 val args = request.arguments()
                 val fields =
@@ -164,7 +164,9 @@ internal class KotlinApiTest {
             McpProbe(server.port()).use { probe ->
                 probe.initialize()
                 val response = probe.callTool("null-accessors", argumentsJson)
-                response.statusCode() shouldBe 200
+                withClue(scenario) {
+                    response.statusCode() shouldBe 200
+                }
                 response.body() shouldEqualJson
                     """
                     {

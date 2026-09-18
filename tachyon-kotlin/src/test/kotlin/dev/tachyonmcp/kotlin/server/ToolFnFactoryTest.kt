@@ -180,7 +180,7 @@ internal class ToolFnFactoryTest {
 
         TachyonServer(port = 0) {
             name("cancellable-tool-test")
-            session { enabled = true }
+            session { enable() }
             capabilities {
                 tasks(connector)
             }
@@ -214,7 +214,7 @@ internal class ToolFnFactoryTest {
     fun `post-build tool uses server coroutine runtime`() {
         TachyonServer(port = 0) {
             name("dynamic-tool-test")
-            session { enabled = true }
+            session { enable() }
         }.use { server ->
             server.registerTool("dynamic") {
                 delay(10.milliseconds)

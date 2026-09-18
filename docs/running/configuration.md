@@ -305,7 +305,7 @@ no session state: `SessionStore.noop()` and `SessionEventStore.noop()` persist n
 
 ```kotlin
 session { sessionTtl = 5.minutes }   // sessions on, custom TTL
-session { enabled = true }           // sessions on, all defaults
+session { enable() }                 // sessions on, all defaults
 stateless()                          // explicitly stateless (the default)
 ```
 
@@ -314,7 +314,7 @@ accepts, and it fails fast: `IllegalStateException` at build time.
 
 | Option | Default | Description |
 |---|---|---|
-| `enabled` | `false` | Server-side sessions are off by default (stateless server). Configuring any option below enables them; `enabled()` (Java) or `enabled = true` (Kotlin) enables them with defaults; `stateless()` on the server builder is the explicit opt-out. The boolean `SessionConfig.Builder.enabled(boolean)` overload is deprecated |
+| `enabled` | `false` | Server-side sessions are off by default (stateless server). Configuring any option below enables them; `enabled()` (Java) or `enable()` (Kotlin) enables them with defaults; `stateless()` on the server builder is the explicit opt-out. The boolean `SessionConfig.Builder.enabled(boolean)` overload and the Kotlin `enabled` property are deprecated |
 | `sessionTtl` | `30s` | Idle sessions are evicted after this duration |
 | `janitorInterval` | `5s` | Janitor sweep interval; controls how often expired sessions are checked |
 | `sessionEventStore` | in-memory when enabled, no-op when off | Experimental custom session event store |

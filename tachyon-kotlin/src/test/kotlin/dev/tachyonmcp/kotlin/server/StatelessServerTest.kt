@@ -20,8 +20,8 @@ import java.time.ZoneOffset
 import kotlin.time.Duration.Companion.seconds
 
 /**
- * Stateless servers: no session state, and `buildServer` wires the registries without binding a
- * transport.
+ * Stateless servers: no session state, and `buildServer` wires the registries
+ * without binding transport.
  */
 internal class StatelessServerTest {
     private class TypedInput
@@ -57,10 +57,28 @@ internal class StatelessServerTest {
     }
 
     @Test
-    fun `session option on an explicitly stateless server is rejected`() {
+    fun `a session option combined with stateless is rejected`() {
         shouldThrow<IllegalStateException> {
             buildServer {
                 name("kotlin-session-contradiction")
+                stateless()
+                session { sessionTtl = 15.seconds }
+            }
+        }.message shouldBe SessionConfig.SESSION_OPTIONS_REQUIRE_ENABLED
+    }
+
+    @Test
+    @Suppress("DEPRECATION")
+    fun `the deprecated enabled flag still states the opt-out and its contradiction`() {
+        buildServer {
+            name("kotlin-session-deprecated-off")
+            session { enabled = false }
+        }.use { server ->
+            server.config().session.enabled shouldBe false
+        }
+        shouldThrow<IllegalStateException> {
+            buildServer {
+                name("kotlin-session-deprecated-contradiction")
                 session {
                     enabled = false
                     sessionTtl = 15.seconds

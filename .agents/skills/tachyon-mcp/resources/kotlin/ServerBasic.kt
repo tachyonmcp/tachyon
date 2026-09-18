@@ -64,7 +64,7 @@ fun assembleServer(port: Int = NetworkConfig.UNSET_PORT): TachyonServer =
             sessionTtl = 5.minutes
             janitorInterval = 5.seconds
             // lambda DSL
-            sessionIdGenerator { _, request -> request?.headers()?.get("X-Tenant-Id") ?: "anon" }
+            sessionIdGenerator { _, request -> request.headers().get("X-Tenant-Id") ?: "anon" }
             // or direct assignment, request-independent:
             // sessionIdGenerator = SessionIdGenerator { _, _ -> "sid_" + Uuid.random().toHexString() }
         }

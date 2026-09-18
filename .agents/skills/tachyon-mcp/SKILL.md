@@ -253,6 +253,10 @@ way to build the contradiction (off + option ⇒ `IllegalStateException`).
 | `.sessionIdGenerator(g)` | `sess_<uuid8>` (derives id from initialize `HttpRequest`) |
 | `.sessionEventStore(r)` / `.sessionStore(s)` | in-memory (experimental persistence SPIs) |
 
+Kotlin DSL: `session { enable() }` is `.enabled()`, `stateless()` is the opt-out; the `enabled`
+property is deprecated. Assigning `sessionIdGenerator` opts in even when the value is
+`SessionIdGenerator.DEFAULT`.
+
 ### Runtime `runtime(cfg -> ...)`
 
 | Method | Default |
