@@ -39,7 +39,7 @@ class CustomSessionIdGeneratorTest {
     @BeforeAll
     void beforeAll() {
         server = TachyonServer.builder()
-                .session(s -> s.enabled(true)
+                .session(s -> s.enabled()
                         .sessionIdGenerator((channelContext, request) ->
                                 "tenant-" + request.headers().get(TENANT_HEADER)))
                 .network(n -> n.host("localhost").port(0))
@@ -131,7 +131,7 @@ class CustomSessionIdGeneratorTest {
 
     private TachyonServer startServerWith(SessionIdGenerator<Object> generator) {
         var handle = TachyonServer.builder()
-                .session(s -> s.enabled(true).sessionIdGenerator(generator))
+                .session(s -> s.enabled().sessionIdGenerator(generator))
                 .network(n -> n.host("localhost").port(0))
                 .build();
         handle.start();

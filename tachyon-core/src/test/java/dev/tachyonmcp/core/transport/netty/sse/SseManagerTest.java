@@ -7,6 +7,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import dev.tachyonmcp.api.server.domain.RequestId;
 import dev.tachyonmcp.core.runtime.SseConnection;
 import dev.tachyonmcp.core.runtime.SseEvent;
+import dev.tachyonmcp.core.server.config.SessionConfig;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
 import dev.tachyonmcp.core.server.session.SessionEvent;
 import java.util.ArrayList;
@@ -16,7 +17,7 @@ class SseManagerTest {
 
     @Test
     void replayWithLastEventIdReturnsOnlyNewerEvents() {
-        try (ServerEngine server = newEngine(b -> {})) {
+        try (ServerEngine server = newEngine(b -> b.session(SessionConfig.Builder::enabled))) {
             var conn = new TrackingConnection();
             var session = server.createSession("sess_replay");
             session.connection(conn);
@@ -36,7 +37,7 @@ class SseManagerTest {
 
     @Test
     void replayWithInvalidLastEventIdSkipsReplay() {
-        try (ServerEngine server = newEngine(b -> {})) {
+        try (ServerEngine server = newEngine(b -> b.session(SessionConfig.Builder::enabled))) {
             var conn = new TrackingConnection();
             var session = server.createSession("sess_bad");
             session.connection(conn);
@@ -51,7 +52,7 @@ class SseManagerTest {
 
     @Test
     void replayWithFutureLastEventIdSkipsAll() {
-        try (ServerEngine server = newEngine(b -> {})) {
+        try (ServerEngine server = newEngine(b -> b.session(SessionConfig.Builder::enabled))) {
             var conn = new TrackingConnection();
             var session = server.createSession("sess_future");
             session.connection(conn);
@@ -69,7 +70,7 @@ class SseManagerTest {
 
     @Test
     void replayWithZeroLastEventIdReturnsAllSseEvents() {
-        try (ServerEngine server = newEngine(b -> {})) {
+        try (ServerEngine server = newEngine(b -> b.session(SessionConfig.Builder::enabled))) {
             var conn = new TrackingConnection();
             var session = server.createSession("sess_zero");
             session.connection(conn);
@@ -90,7 +91,7 @@ class SseManagerTest {
 
     @Test
     void replayMixedEventTypesSkipsNonSseEvents() {
-        try (ServerEngine server = newEngine(b -> {})) {
+        try (ServerEngine server = newEngine(b -> b.session(SessionConfig.Builder::enabled))) {
             var conn = new TrackingConnection();
             var session = server.createSession("sess_mixed");
             session.connection(conn);

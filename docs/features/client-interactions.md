@@ -54,7 +54,7 @@ class CityTools {
 }
 
 var server = TachyonServer.builder()
-        .session(session -> session.enabled(true))
+        .session(session -> session.enabled())
         .annotations(annotations -> annotations.register(new CityTools()))
         .port(8080)
         .build();

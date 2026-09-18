@@ -69,7 +69,7 @@ val server = TachyonServer(port = mcpPort) {
         host = "127.0.0.1"
         allowedOrigins.add("https://your-client.example.com")
     }
-    session { enabled = true; sessionTtl = 10.minutes }
+    session { sessionTtl = 10.minutes }
 }
 
 server.tools()    // register tools through feature registries or Kotlin extensions

@@ -59,8 +59,8 @@ fun assembleServer(port: Int = NetworkConfig.UNSET_PORT): TachyonServer =
         }
 
         // ── session — stateful or stateless ───────────────────────
+        // stateless by default; any option below enables sessions
         session {
-            enabled = true
             sessionTtl = 5.minutes
             janitorInterval = 5.seconds
             // lambda DSL

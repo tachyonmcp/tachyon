@@ -24,7 +24,7 @@ final class SharedE2eServer {
             var server = McpTestServers.startSafely(
                     TachyonServer.builder()
                             .capabilities(c -> c.tools().logging())
-                            .session(s -> s.enabled(true))
+                            .session(s -> s.enabled())
                             .network(n -> n.port(0)),
                     s -> s.tools().registerAsync(EchoToolHandler.DESCRIPTOR, EchoToolHandler.FN));
             Runtime.getRuntime().addShutdownHook(new Thread(server::close, "shared-e2e-server-close"));

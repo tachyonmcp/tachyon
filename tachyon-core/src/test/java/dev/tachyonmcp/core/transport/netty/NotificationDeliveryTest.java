@@ -58,7 +58,7 @@ class NotificationDeliveryTest {
     @BeforeEach
     void setUp() {
         server = newEngine(
-                b -> b.capabilities(CapabilitiesConfig.Builder::logging).session(s -> s.enabled(true)),
+                b -> b.capabilities(CapabilitiesConfig.Builder::logging).session(s -> s.enabled()),
                 s -> s.tools()
                         .register(TOOL_DESCRIPTOR, PROGRESS_AND_LOG_TOOL)
                         .register(builder -> builder.name("filtered_log"), FILTERED_LOG_TOOL));
@@ -192,7 +192,7 @@ class NotificationDeliveryTest {
     @Test
     void shouldRejectSetLevelWhenLoggingCapabilityIsDisabled() {
         try (var disabledServer = newEngine(
-                b -> b.session(s -> s.enabled(true)),
+                b -> b.session(s -> s.enabled()),
                 s -> s.tools().register(builder -> builder.name("filtered_log"), FILTERED_LOG_TOOL))) {
             var disabledConnection = new CollectingConnection();
             var disabledSession = disabledServer.createSession("sess_disabled");
@@ -391,7 +391,7 @@ class NotificationDeliveryTest {
 
     @Test
     void shouldNotBroadcastServerLogWhenLoggingCapabilityDisabled() {
-        try (var noLog = newEngine(b -> b.session(s -> s.enabled(true)))) {
+        try (var noLog = newEngine(b -> b.session(s -> s.enabled()))) {
             var conn = new CollectingConnection();
             var session = noLog.createSession("s1");
             session.connection(conn);

@@ -30,8 +30,8 @@ class McpInitializationHandlerTest {
 
     @BeforeEach
     void setUp() {
-        server = (ServerEngine)
-                TachyonServer.builder().session(s -> s.enabled(true)).build();
+        server =
+                (ServerEngine) TachyonServer.builder().session(s -> s.enabled()).build();
         McpDispatcher dispatcher = new McpDispatcher(server, Runnable::run);
         channel = new EmbeddedChannel(new ProtocolVersionHandler("/mcp"), new InteractionHandler());
         channel.pipeline()

@@ -81,7 +81,7 @@ class McpOperationHandlerRequestTest {
     @BeforeEach
     void setUp() {
         server = newEngine(
-                b -> b.session(s -> s.enabled(true)),
+                b -> b.session(s -> s.enabled()),
                 s -> s.tools().registerAsync(PROGRESS_TOOL.descriptor(), PROGRESS_TOOL::handleAsync));
         var dispatcher = new McpDispatcher(server, Runnable::run);
         channel = new EmbeddedChannel(
@@ -308,7 +308,7 @@ class McpOperationHandlerRequestTest {
     // channel already in the operation phase (keep-alive reuse) — not only via the init handler.
     @Test
     void initializeOnOperationChannelUsesCustomSessionIdGenerator() {
-        var customServer = newEngine(b -> b.session(s -> s.enabled(true)
+        var customServer = newEngine(b -> b.session(s -> s.enabled()
                 .sessionIdGenerator(
                         (channelContext, req) -> "tenant-" + req.headers().get("X-Tenant-Id"))));
         var ch = new EmbeddedChannel(

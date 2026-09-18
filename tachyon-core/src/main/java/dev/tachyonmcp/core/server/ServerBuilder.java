@@ -29,8 +29,25 @@ public interface ServerBuilder {
     /** Configures advertised MCP capabilities. */
     ServerBuilder capabilities(Consumer<CapabilitiesConfig.Builder> configurer);
 
-    /** Configures session lifecycle and persistence. */
+    /**
+     * Configures session lifecycle and persistence. Configuring any session option enables sessions;
+     * an untouched session configuration leaves the server stateless.
+     */
     ServerBuilder session(Consumer<SessionConfig.Builder> configurer);
+
+    /**
+     * Declares the server stateless: no session is created and no session state is retained. This is
+     * the default; call it to write the choice down.
+     *
+     * <p>Combining it with a session option is a contradiction and fails at {@link #buildConfig()}
+     * with {@link SessionConfig#SESSION_OPTIONS_REQUIRE_ENABLED}.
+     *
+     * @return this builder
+     */
+    @SuppressWarnings("removal")
+    default ServerBuilder stateless() {
+        return session(session -> session.enabled(false));
+    }
 
     /** Configures the network transport. */
     ServerBuilder network(Consumer<NetworkConfig.Builder> configurer);

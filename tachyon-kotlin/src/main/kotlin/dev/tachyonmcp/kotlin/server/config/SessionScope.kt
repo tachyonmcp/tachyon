@@ -16,8 +16,17 @@ import kotlin.time.toJavaDuration
 public class SessionScope
     @PublishedApi
     internal constructor() {
-        /** Whether session management is enabled. */
+        /**
+         * Whether session management is enabled. Redundant when any other option is set — that
+         * already enables sessions. Set it to `false` to state the stateless default explicitly.
+         */
         public var enabled: Boolean = false
+            set(value) {
+                field = value
+                enabledExplicitlySet = true
+            }
+
+        private var enabledExplicitlySet: Boolean = false
 
         /** Session time-to-live duration. */
         public var sessionTtl: Duration? = null
@@ -57,11 +66,20 @@ public class SessionScope
 
         @PublishedApi
         internal fun applyTo(builder: SessionConfig.Builder) {
-            builder.enabled(enabled)
+            // Configuring an option enables sessions in Java, so options go on the builder as-is;
+            // the Java builder owns the "disabled with options" rejection and its message.
+            if (enabled) {
+                builder.enabled()
+            } else if (enabledExplicitlySet) {
+                @Suppress("DEPRECATION")
+                builder.enabled(false)
+            }
             sessionTtl?.let { builder.sessionTtl(it.toJavaDuration()) }
             janitorInterval?.let { builder.janitorInterval(it.toJavaDuration()) }
             sessionStore?.let(builder::sessionStore)
             sessionEventStore?.let(builder::sessionEventStore)
-            if (enabled) builder.sessionIdGenerator(sessionIdGenerator)
+            if (sessionIdGenerator !== SessionIdGenerator.DEFAULT) {
+                builder.sessionIdGenerator(sessionIdGenerator)
+            }
         }
     }

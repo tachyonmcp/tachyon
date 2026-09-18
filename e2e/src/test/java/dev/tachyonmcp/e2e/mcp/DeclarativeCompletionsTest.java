@@ -70,9 +70,7 @@ class DeclarativeCompletionsTest {
     @BeforeAll
     static void start() {
         server = McpTestServers.start(
-                builder -> builder.session(session -> session.enabled(false))
-                        .annotations(annotations -> annotations.register(new Service())),
-                ignored -> {});
+                builder -> builder.annotations(annotations -> annotations.register(new Service())), ignored -> {});
     }
 
     @AfterAll

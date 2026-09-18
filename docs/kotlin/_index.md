@@ -81,7 +81,6 @@ val server = TachyonServer(port = 8080) {
         prompts { listChanged = true }
     }
     session {
-        enabled = true
         sessionTtl = 5.minutes
         sessionIdGenerator = SessionIdGenerator { _, _ -> "sess_" + Uuid.random().toHexString() }
     }

@@ -497,6 +497,13 @@ public class TachyonServerBuilder
 
         public fun name(name: String): TachyonServerBuilder = this.also { delegate.name(name) }
 
+        /**
+         * Declares the server stateless: no session is created and no session state is retained.
+         * This is the default; call it to write the choice down. Configuring any option inside
+         * [session] enables sessions on its own.
+         */
+        public fun stateless(): TachyonServerBuilder = this.also { delegate.stateless() }
+
         /** Registers one or more [ServerExtension]s, e.g. from `tachyon-extensions`. */
         public fun extensions(vararg extensions: ServerExtension): TachyonServerBuilder =
             this.also { delegate.withExtensions(*extensions) }

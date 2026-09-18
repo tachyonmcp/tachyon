@@ -37,7 +37,7 @@ class SessionJanitorOutboundActivityTest {
     @BeforeAll
     void beforeAll() {
         serverHandle = TachyonServer.builder()
-                .session(s -> s.enabled(true).sessionTtl(TTL).janitorInterval(JANITOR_INTERVAL))
+                .session(s -> s.enabled().sessionTtl(TTL).janitorInterval(JANITOR_INTERVAL))
                 .network(n -> n.host("localhost").port(0).heartbeatInterval(HEARTBEAT_INTERVAL))
                 .build();
         serverHandle.start();
@@ -77,7 +77,7 @@ class SessionJanitorOutboundActivityTest {
     @Test
     void silentStreamReapedWhenHeartbeatsDisabled() throws Exception {
         var noHbServer = TachyonServer.builder()
-                .session(s -> s.enabled(true).sessionTtl(TTL).janitorInterval(JANITOR_INTERVAL))
+                .session(s -> s.enabled().sessionTtl(TTL).janitorInterval(JANITOR_INTERVAL))
                 .network(n -> n.host("localhost").port(0).heartbeatInterval(Duration.ZERO))
                 .build();
         noHbServer.start();

@@ -241,9 +241,13 @@ handler's `InteractionContext` and needs no token.
 
 ### Session `session(cfg -> ...)`
 
+Stateless by default. **Setting any option below enables sessions** — no flag needed.
+`ServerBuilder.stateless()` writes the opt-out down; `.enabled(b)` is deprecated and is the only
+way to build the contradiction (off + option ⇒ `IllegalStateException`).
+
 | Method | Default |
 |---|---|
-| `.enabled(b)` | false (stateless) |
+| `.enabled()` | sessions on, all defaults |
 | `.sessionTtl(d)` | 30s |
 | `.janitorInterval(d)` | 5s |
 | `.sessionIdGenerator(g)` | `sess_<uuid8>` (derives id from initialize `HttpRequest`) |

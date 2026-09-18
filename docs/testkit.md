@@ -27,7 +27,7 @@ transport if anything fails, so a broken test never leaks a listener:
 
 ```java
 var server = McpTestServers.start(
-    b -> b.session(c -> c.enabled(true)),
+    b -> b.session(c -> c.enabled()),
     s -> s.tools().register(descriptor, handler));
 var port = server.port();
 ```

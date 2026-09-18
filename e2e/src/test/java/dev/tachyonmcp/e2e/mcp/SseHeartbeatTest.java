@@ -33,7 +33,7 @@ class SseHeartbeatTest {
     @BeforeAll
     void startServer() {
         server = (ServerEngine) TachyonServer.builder()
-                .session(s -> s.enabled(true))
+                .session(s -> s.enabled())
                 .network(n -> n.heartbeatInterval(HEARTBEAT_INTERVAL)
                         // Keep reader-idle longer than the test window so idle never fires
                         .readerIdleTimeout(Duration.ofMinutes(5)))

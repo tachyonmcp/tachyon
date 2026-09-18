@@ -286,10 +286,10 @@ final class DefaultServerBuilder implements ServerBuilder {
      */
     @Override
     public TachyonServer build() {
-        var sessionConfig = sessionBuilder.build();
+        var serverConfig = buildConfig();
+        var sessionConfig = serverConfig.session();
         var sessionEventStore = sessionConfig.sessionEventStoreOrDefault();
         var sessionStore = sessionConfig.sessionStoreOrDefault();
-        var serverConfig = buildConfig();
         if (serverConfig.capabilities().tasks().enabled() && !extensionIds.contains(TasksExtension.ID)) {
             addExtension(TasksExtension.instance());
         }

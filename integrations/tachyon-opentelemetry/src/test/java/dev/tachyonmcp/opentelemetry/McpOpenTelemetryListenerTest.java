@@ -707,7 +707,7 @@ class McpOpenTelemetryListenerTest {
 
     private TachyonServer startServer(Consumer<ObservabilityConfig.Builder> observabilityConfig) {
         return McpTestServers.start(
-                builder -> builder.session(session -> session.enabled(true))
+                builder -> builder.session(session -> session.enabled())
                         .capabilities(capabilities -> capabilities
                                 .tools(true)
                                 .logging()

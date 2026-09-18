@@ -11,6 +11,7 @@ import dev.tachyonmcp.api.server.features.PaginatedResult
 import dev.tachyonmcp.api.server.features.tasks.TaskConnector
 import dev.tachyonmcp.api.server.features.tools.ToolResult
 import dev.tachyonmcp.api.server.session.SessionIdGenerator
+import dev.tachyonmcp.core.server.config.SessionConfig
 import dev.tachyonmcp.core.server.session.InMemorySessionEventStore
 import dev.tachyonmcp.core.server.session.InMemorySessionStore
 import dev.tachyonmcp.kotlin.server.domain.Annotations
@@ -337,6 +338,54 @@ internal class TachyonServerTest {
             }
         server.tools().find("build").orElse(null) shouldNotBe null
         server.close()
+    }
+
+    @Test
+    fun `session option alone makes the server stateful`() {
+        buildServer {
+            name("kotlin-session-implied")
+            session { sessionTtl = 15.seconds }
+        }.use { server ->
+            server.config().session.enabled shouldBe true
+            server.config().session.sessionTtl shouldBe 15.seconds.toJavaDuration()
+        }
+    }
+
+    @Test
+    fun `stateless is the default and can be stated explicitly`() {
+        buildServer {
+            name("kotlin-stateless-explicit")
+            stateless()
+        }.use { server ->
+            server.config().session.enabled shouldBe false
+        }
+        buildServer { name("kotlin-stateless-default") }.use { server ->
+            server.config().session.enabled shouldBe false
+        }
+    }
+
+    @Test
+    fun `enabled alone makes the server stateful with defaults`() {
+        buildServer {
+            name("kotlin-session-defaults")
+            session { enabled = true }
+        }.use { server ->
+            server.config().session.enabled shouldBe true
+            server.config().session.sessionTtl shouldBe SessionConfig.DEFAULT_SESSION_TTL
+        }
+    }
+
+    @Test
+    fun `session option on an explicitly stateless server is rejected`() {
+        shouldThrow<IllegalStateException> {
+            buildServer {
+                name("kotlin-session-contradiction")
+                session {
+                    enabled = false
+                    sessionTtl = 15.seconds
+                }
+            }
+        }.message shouldBe SessionConfig.SESSION_OPTIONS_REQUIRE_ENABLED
     }
 
     @Test

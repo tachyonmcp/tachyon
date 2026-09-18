@@ -10,7 +10,7 @@ import org.jspecify.annotations.Nullable;
  * request. Lets operators base the id on request headers (tenant id, auth subject, a
  * client-supplied id, …) or the request URI.
  *
- * <p>Only consulted when sessions are enabled ({@code session(s -> s.enabled(true))});
+ * <p>Only consulted when sessions are enabled ({@code session(s -> s.enabled())});
  * stateless servers never create a session and never call this.
  *
  * <p>{@code T} is the transport-specific request type handed to {@link #generate}. The HTTP
@@ -26,7 +26,7 @@ import org.jspecify.annotations.Nullable;
  *     return tenant != null ? "sess_" + tenant + "_" + UUID.randomUUID() : SessionIdGenerator.DEFAULT.generate(ctx, request);
  * };
  *
- * server.session(s -> s.enabled(true).sessionIdGenerator(byTenant));
+ * server.session(s -> s.enabled().sessionIdGenerator(byTenant));
  * }</pre>
  *
  * <p><b>A session id is not a credential.</b> It identifies protocol state, not the caller. An

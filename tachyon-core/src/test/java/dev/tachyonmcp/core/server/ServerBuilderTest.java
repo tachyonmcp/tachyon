@@ -7,6 +7,7 @@ import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.tachyonmcp.api.server.domain.PromptMessage;
+import dev.tachyonmcp.api.server.domain.RequestId;
 import dev.tachyonmcp.api.server.domain.TextResourceContents;
 import dev.tachyonmcp.api.server.domain.UriTemplateValue;
 import dev.tachyonmcp.api.server.extensions.AdvertiseMode;
@@ -17,9 +18,13 @@ import dev.tachyonmcp.api.server.features.completions.CompletionResult;
 import dev.tachyonmcp.api.server.features.prompts.PromptResult;
 import dev.tachyonmcp.api.server.features.tasks.TaskSupport;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
+import dev.tachyonmcp.core.runtime.SessionState;
+import dev.tachyonmcp.core.server.config.SessionConfig;
+import dev.tachyonmcp.core.server.session.InMemorySessionStore;
 import dev.tachyonmcp.core.server.session.SessionEvent;
 import dev.tachyonmcp.core.server.session.SessionEventStore;
 import java.lang.reflect.Method;
+import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Predicate;
@@ -234,7 +239,7 @@ class ServerBuilderTest {
         var failure = new RuntimeException("boom");
 
         assertThatThrownBy(() -> TachyonServer.builder()
-                        .session(s -> s.enabled(true).sessionEventStore(eventStore))
+                        .session(s -> s.enabled().sessionEventStore(eventStore))
                         .withTools(tools -> {
                             throw failure;
                         })
@@ -250,7 +255,7 @@ class ServerBuilderTest {
         var failure = new RuntimeException("boom");
 
         assertThatThrownBy(() -> TachyonServer.builder()
-                        .session(s -> s.enabled(true).sessionEventStore(eventStore))
+                        .session(s -> s.enabled().sessionEventStore(eventStore))
                         .annotations(a -> a.withProvider((instance, context) -> {
                                     throw failure;
                                 })
@@ -259,6 +264,83 @@ class ServerBuilderTest {
                 .isSameAs(failure);
 
         assertThat(eventStore.closed).isTrue();
+    }
+
+    @Test
+    void publishesTheSameDefaultSessionStoresTheServerActuallyUses() {
+        try (DefaultTachyonServer server = (DefaultTachyonServer)
+                TachyonServer.builder().session(s -> s.enabled()).build()) {
+            var store = server.config().session().sessionStore();
+            var eventStore = server.config().session().sessionEventStore();
+            assertThat(store).isNotNull();
+            assertThat(eventStore).isNotNull();
+
+            server.createSession("session-1");
+
+            assertThat(store.find("session-1"))
+                    .as("config() must expose the stores the server writes to, not a second set")
+                    .isPresent();
+            server.appendEvent(new SessionEvent.ResponseEvent("session-1", RequestId.of(1), "{}", 1L, -1, null));
+            assertThat(eventStore.replay("session-1", -1)).hasSize(1);
+        }
+    }
+
+    @Test
+    void statelessIsTheDefaultAndCanBeStatedExplicitly() {
+        assertThat(TachyonServer.builder().buildConfig().session()).isSameAs(SessionConfig.STATELESS);
+        assertThat(TachyonServer.builder().stateless().buildConfig().session()).isSameAs(SessionConfig.STATELESS);
+    }
+
+    @Test
+    void enabledAloneMakesTheServerStatefulWithDefaults() {
+        var config =
+                TachyonServer.builder().session(s -> s.enabled()).buildConfig().session();
+
+        assertThat(config.enabled()).isTrue();
+        assertThat(config.sessionTtl()).isEqualTo(SessionConfig.DEFAULT_SESSION_TTL);
+        assertThat(config.janitorInterval()).isEqualTo(SessionConfig.DEFAULT_JANITOR_INTERVAL);
+        assertThat(config.sessionStore()).isInstanceOf(InMemorySessionStore.class);
+    }
+
+    @Test
+    void sessionOptionAloneMakesTheServerStateful() {
+        var config = TachyonServer.builder()
+                .session(s -> s.sessionTtl(Duration.ofMinutes(5)))
+                .buildConfig()
+                .session();
+
+        assertThat(config.enabled()).isTrue();
+        assertThat(config.sessionTtl()).isEqualTo(Duration.ofMinutes(5));
+    }
+
+    @Test
+    void statelessWithASessionOptionFailsFast() {
+        assertThatIllegalStateException()
+                .isThrownBy(() -> TachyonServer.builder()
+                        .session(s -> s.sessionTtl(Duration.ofMinutes(5)))
+                        .stateless()
+                        .buildConfig())
+                .withMessage(SessionConfig.SESSION_OPTIONS_REQUIRE_ENABLED);
+    }
+
+    @Test
+    void statelessServerKeepsNoSessionState() {
+        try (DefaultTachyonServer server =
+                (DefaultTachyonServer) TachyonServer.builder().build()) {
+            assertThat(server.isStateless()).isTrue();
+            assertThat(server.config().session().sessionStore()).isNull();
+            assertThat(server.config().session().sessionEventStore()).isNull();
+
+            var session = server.createSession("ghost");
+            session.activate();
+
+            assertThat(server.getLocalSession("ghost"))
+                    .as("the process-local runtime survives: a no-op store must not look like lost ownership")
+                    .isPresent();
+            assertThat(session.state()).isEqualTo(SessionState.ACTIVE);
+            server.appendEvent(new SessionEvent.ResponseEvent("ghost", RequestId.of(1), "{}", 1L, -1, null));
+            assertThat(server.replay("ghost", -1)).isEmpty();
+        }
     }
 
     private static final class TrackingSessionEventStore implements SessionEventStore {

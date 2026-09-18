@@ -36,7 +36,7 @@ class McpTestKitSmokeTest {
 
     @BeforeAll
     static void startEchoServer() {
-        server = McpTestServers.start(b -> b.session(c -> c.enabled(true)), s -> {
+        server = McpTestServers.start(b -> b.session(c -> c.enabled()), s -> {
             s.tools()
                     .register(
                             d -> d.name("echo")

@@ -76,8 +76,8 @@ class McpDispatcherTest {
 
     @Test
     void shouldRejectNonInitializeRequestBeforeSessionIsActive() {
-        try (ServerEngine server = (ServerEngine)
-                TachyonServer.builder().session(s -> s.enabled(true)).build()) {
+        try (ServerEngine server =
+                (ServerEngine) TachyonServer.builder().session(s -> s.enabled()).build()) {
             server.createSession("sess_init");
             var dispatcher = new McpDispatcher(server, server.executor());
 
@@ -123,7 +123,7 @@ class McpDispatcherTest {
     @ParameterizedTest
     @MethodSource("jsonNodeParams")
     void requestEventRetainsJsonNodeParams(String paramsJson) {
-        try (ServerEngine server = newEngine(b -> b.session(s -> s.enabled(true)))) {
+        try (ServerEngine server = newEngine(b -> b.session(s -> s.enabled()))) {
             var session = server.createSession("sess_params");
             session.activate();
             var dispatcher = new McpDispatcher(server, server.executor());
@@ -144,7 +144,7 @@ class McpDispatcherTest {
     @ParameterizedTest
     @MethodSource("nonObjectParams")
     void nonObjectParamsAreRejectedAsInvalidParams(String paramsJson) {
-        try (ServerEngine server = newEngine(b -> b.session(s -> s.enabled(true)))) {
+        try (ServerEngine server = newEngine(b -> b.session(s -> s.enabled()))) {
             var session = server.createSession("sess_bad_params");
             session.activate();
             var dispatcher = new McpDispatcher(server, server.executor());
@@ -161,8 +161,8 @@ class McpDispatcherTest {
 
     @Test
     void cancellationFromAnotherSessionDoesNotFailPendingRequest() {
-        try (ServerEngine server = (ServerEngine)
-                TachyonServer.builder().session(s -> s.enabled(true)).build()) {
+        try (ServerEngine server =
+                (ServerEngine) TachyonServer.builder().session(s -> s.enabled()).build()) {
             var owner = server.createSession("sess_cancel-owner");
             owner.activate();
             var other = server.createSession("sess_cancel-other");
@@ -247,8 +247,8 @@ class McpDispatcherTest {
 
     @Test
     void shouldRejectRequestAfterSessionIsClosed() {
-        try (ServerEngine server = (ServerEngine)
-                TachyonServer.builder().session(s -> s.enabled(true)).build()) {
+        try (ServerEngine server =
+                (ServerEngine) TachyonServer.builder().session(s -> s.enabled()).build()) {
             var session = server.createSession("sess_closed");
             session.activate();
             session.close();

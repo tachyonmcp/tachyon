@@ -47,7 +47,7 @@ class DeclarativeElicitationTest {
     void annotatedToolCompletesClientElicitationRoundTrip(McpSchema.ElicitResult.Action action) {
         final var requests = new ConcurrentLinkedQueue<McpSchema.ElicitRequest>();
         try (final var server = McpTestServers.start(
-                builder -> builder.session(session -> session.enabled(true))
+                builder -> builder.session(session -> session.enabled())
                         .annotations(annotations -> annotations.register(new CityTools())),
                 ignored -> {})) {
             final var transport = HttpClientStreamableHttpTransport.builder("http://localhost:" + server.port())

@@ -105,7 +105,7 @@ public final class McpOpenTelemetryProbe {
 
     private static TachyonServer startServer(OpenTelemetry otel) {
         return McpTestServers.start(
-                builder -> builder.session(session -> session.enabled(true))
+                builder -> builder.session(session -> session.enabled())
                         .capabilities(capabilities -> capabilities.tools(true).logging())
                         .observability(o -> o.listener(McpOpenTelemetryListener.create(otel))),
                 server -> {

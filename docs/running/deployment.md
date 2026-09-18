@@ -101,7 +101,7 @@ most MCP clients.
 ## More than one instance
 
 Sessions are off by default, and a stateless server scales horizontally with no
-sticky routing. A server that sets `session.enabled(true)` keeps live sessions
+sticky routing. A stateful server keeps live sessions
 in-process, so more than one instance needs sticky routing while a session is
 active.
 
