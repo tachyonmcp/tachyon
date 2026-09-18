@@ -15,7 +15,6 @@ import kotlin.contracts.contract
 
 @TachyonDsl
 public class ResourceDescriptorScope
-    @PublishedApi
     internal constructor() {
         public var name: String? = null
         public var uri: String? = null
@@ -33,7 +32,6 @@ public class ResourceDescriptorScope
         public var extensionId: String? = null
         public var meta: Map<String, Any>? = null
 
-        @PublishedApi
         internal fun build(): ResourceDescriptor {
             val n = requireNotNull(name) { "ResourceDescriptor.name is required" }
             val u = requireNotNull(uri) { "ResourceDescriptor.uri is required" }
@@ -54,7 +52,7 @@ public class ResourceDescriptorScope
     }
 
 @OptIn(ExperimentalContracts::class)
-public inline fun resourceDescriptor(
+public fun resourceDescriptor(
     name: String,
     uri: String,
     configure: ResourceDescriptorScope.() -> Unit = {},
@@ -70,9 +68,7 @@ public inline fun resourceDescriptor(
 
 /** Builds a [ResourceDescriptor] with a receiver DSL. */
 @OptIn(ExperimentalContracts::class)
-public inline fun ResourceDescriptor(
-    block: ResourceDescriptorScope.() -> Unit,
-): ResourceDescriptor {
+public fun ResourceDescriptor(block: ResourceDescriptorScope.() -> Unit): ResourceDescriptor {
     contract { callsInPlace(block, InvocationKind.EXACTLY_ONCE) }
     return ResourceDescriptorScope().apply(block).build()
 }

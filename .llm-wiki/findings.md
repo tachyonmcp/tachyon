@@ -18,7 +18,7 @@ Spotted while reading code. Not verified by tests. Fixed in code ⇒ 🗑️ rem
 
 - 🪶 `SessionConfig` is a sum modelled as a product: `boolean enabled` × 5 `@Nullable` options, guarded in the compact ctor **and** `Builder#build`. Stateless is a *server* property — no session config ⇒ no sessions. shape: drop `enabled`, make every component non-null, `@Nullable SessionConfig ServerConfig#session()` with `stateless()` derived from `== null`, delete `SessionConfig#sessionStoreOrDefault`/`#sessionEventStoreOrDefault` and `Builder#enabled`/`#enabled(boolean)`. Then the impossible state is unrepresentable in the value, not just the builder.
 
-- 🪶 Every `TachyonServerBuilder` scope entry (`info`, `capabilities`, `network`, `session`, `runtime`, `observability`) declares its lambda `crossinline`, but each is invoked directly in the inline body — `crossinline` buys nothing there and needlessly bans non-local `return` from the block. `TachyonServerBuilder#session`
+- 🪶 `MonitoringScope` (`tachyon-kotlin/.../config/MonitoringScope.kt`) has no caller anywhere in `src/main` — dead scope, or a wiring gap against `ObservabilityConfig.Builder`. `MonitoringScope#applyTo`
 
 ## ❓ Open questions
 

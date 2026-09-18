@@ -44,7 +44,7 @@ public open class ResourceScope
          * defaults.
          */
         @OptIn(ExperimentalContracts::class)
-        public inline fun TextResourceContents(
+        public fun TextResourceContents(
             block: (@TachyonDsl TextResourceContentsBuilder).() -> Unit,
         ): TextResourceContents {
             contract { callsInPlace(block, InvocationKind.EXACTLY_ONCE) }
@@ -56,7 +56,7 @@ public open class ResourceScope
          * defaults.
          */
         @OptIn(ExperimentalContracts::class)
-        public inline fun BlobResourceContents(
+        public fun BlobResourceContents(
             block: (@TachyonDsl BlobResourceContentsBuilder).() -> Unit,
         ): BlobResourceContents {
             contract { callsInPlace(block, InvocationKind.EXACTLY_ONCE) }

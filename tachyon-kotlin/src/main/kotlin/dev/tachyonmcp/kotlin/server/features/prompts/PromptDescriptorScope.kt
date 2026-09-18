@@ -19,7 +19,6 @@ import kotlin.contracts.contract
 
 @TachyonDsl
 public class PromptDescriptorScope
-    @PublishedApi
     internal constructor() {
         public var name: String? = null
         public var description: String? = null
@@ -45,12 +44,11 @@ public class PromptDescriptorScope
 
         /** Builds and adds a prompt argument. */
         @OptIn(ExperimentalContracts::class)
-        public inline fun argument(block: PromptArgumentBuilder.() -> Unit) {
+        public fun argument(block: PromptArgumentBuilder.() -> Unit) {
             contract { callsInPlace(block, InvocationKind.EXACTLY_ONCE) }
             argument(PromptArgument(block))
         }
 
-        @PublishedApi
         internal fun build(): PromptDescriptor {
             val n = requireNotNull(name) { "PromptDescriptor.name is required" }
             return PromptDescriptor
@@ -69,7 +67,7 @@ public class PromptDescriptorScope
 
 /** Builds a [PromptDescriptor] with a receiver DSL. */
 @OptIn(ExperimentalContracts::class)
-public inline fun PromptDescriptor(block: PromptDescriptorScope.() -> Unit): PromptDescriptor {
+public fun PromptDescriptor(block: PromptDescriptorScope.() -> Unit): PromptDescriptor {
     contract { callsInPlace(block, InvocationKind.EXACTLY_ONCE) }
     return PromptDescriptorScope().apply(block).build()
 }

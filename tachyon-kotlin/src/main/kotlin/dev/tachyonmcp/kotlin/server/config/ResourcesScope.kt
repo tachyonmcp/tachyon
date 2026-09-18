@@ -8,7 +8,6 @@ import dev.tachyonmcp.kotlin.server.TachyonDsl
 
 @TachyonDsl
 public class ResourcesScope
-    @PublishedApi
     internal constructor() {
         /** Enablement mode: `ON`, `OFF`, or `AUTO`. */
         public var mode: Mode = Mode.AUTO
@@ -22,7 +21,6 @@ public class ResourcesScope
         /** Whether resource subscriptions (`resources/subscribe`) are supported. */
         public var subscribe: Boolean = false
 
-        @PublishedApi
         internal fun toConfig(): ResourcesConfig =
             ResourcesConfig
                 .builder()

@@ -14,7 +14,6 @@ import dev.tachyonmcp.kotlin.server.config.TemplateScope
  */
 @TachyonDsl
 public class TextResourceContentsBuilder
-    @PublishedApi
     internal constructor(
         private val scope: ResourceScope? = null,
     ) {
@@ -50,7 +49,6 @@ public class TextResourceContentsBuilder
                 scope as? TemplateScope,
             ) { "URI-template parameters require a TemplateScope" }.sequence(name)
 
-        @PublishedApi
         internal fun build(): TextResourceContents =
             TextResourceContents.of(
                 requireNotNull(uri) {

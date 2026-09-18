@@ -19,7 +19,6 @@ import dev.tachyonmcp.kotlin.server.TachyonDsl
  */
 @TachyonDsl
 public class JsonScope
-    @PublishedApi
     internal constructor() {
         /**
          * Payload serializer/deserializer for structured values and arguments.
@@ -48,7 +47,6 @@ public class JsonScope
          */
         public var schemaFactory: JsonSchemaFactory<*>? = null
 
-        @PublishedApi
         internal fun applyTo(builder: ServerBuilder) {
             builder.json { config ->
                 serde?.let { config.serde(it) }

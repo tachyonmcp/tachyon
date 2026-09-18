@@ -7,7 +7,6 @@ import dev.tachyonmcp.kotlin.server.TachyonDsl
 
 @TachyonDsl
 public class ServerInfoScope
-    @PublishedApi
     internal constructor() {
         /** Server name advertised to clients. */
         public var name: String? = null
@@ -30,7 +29,6 @@ public class ServerInfoScope
         /** Server website URL. */
         public var websiteUrl: String? = null
 
-        @PublishedApi
         internal fun applyTo(builder: ServerIdentity.Builder) {
             name?.let(builder::name)
             version?.let(builder::version)

@@ -25,7 +25,6 @@ import kotlin.time.toJavaDuration
  */
 @TachyonDsl
 public class SessionScope
-    @PublishedApi
     internal constructor() {
         private var explicitlyEnabled: Boolean? = null
 
@@ -96,7 +95,6 @@ public class SessionScope
                 }
         }
 
-        @PublishedApi
         internal fun applyTo(builder: SessionConfig.Builder) {
             // Configuring an option enables sessions in Java, so options go on the builder as-is;
             // the Java builder owns the "disabled with options" rejection and its message.

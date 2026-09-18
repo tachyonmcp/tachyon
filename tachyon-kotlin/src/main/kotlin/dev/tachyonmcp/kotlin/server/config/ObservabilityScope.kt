@@ -15,7 +15,6 @@ import kotlin.time.toJavaDuration
 @TachyonDsl
 @ExperimentalApi
 public class ObservabilityScope
-    @PublishedApi
     internal constructor() {
         private var slowRequestLogging: Boolean? = null
         private var slowRequestThreshold: Duration? = null
@@ -51,7 +50,6 @@ public class ObservabilityScope
             payloadCapture = PayloadCaptureScope().apply(configure)
         }
 
-        @PublishedApi
         internal fun applyTo(builder: ObservabilityConfig.Builder) {
             slowRequestLogging?.let(builder::slowRequestLogging)
             slowRequestThreshold?.let(builder::slowRequestThreshold)

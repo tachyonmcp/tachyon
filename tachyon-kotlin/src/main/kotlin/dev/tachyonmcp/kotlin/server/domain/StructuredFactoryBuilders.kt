@@ -19,7 +19,6 @@ import java.util.Base64
 /** Builds [dev.tachyonmcp.api.server.domain.Annotations]. */
 @TachyonDsl
 public class AnnotationsBuilder
-    @PublishedApi
     internal constructor() {
         /** Intended roles, or `null` when unrestricted. */
         public var audience: List<Role>? = null
@@ -30,7 +29,6 @@ public class AnnotationsBuilder
         /** RFC-3339 modification timestamp, or `null` when unknown. */
         public var lastModified: String? = null
 
-        @PublishedApi
         internal fun build(): Annotations =
             Annotations.of(
                 audience.orEmpty(),
@@ -42,7 +40,6 @@ public class AnnotationsBuilder
 /** Builds an [dev.tachyonmcp.api.server.domain.Icon]. */
 @TachyonDsl
 public class IconBuilder
-    @PublishedApi
     internal constructor() {
         /** Image URL or data URI. */
         public var src: String? = null
@@ -56,7 +53,6 @@ public class IconBuilder
         /** Theme variant. */
         public var theme: String? = null
 
-        @PublishedApi
         internal fun build(): Icon =
             Icon.of(
                 requireNotNull(src) { "Icon.src is required" },
@@ -69,7 +65,6 @@ public class IconBuilder
 /** Builds a [dev.tachyonmcp.api.server.domain.PromptArgument]. */
 @TachyonDsl
 public class PromptArgumentBuilder
-    @PublishedApi
     internal constructor() {
         /** Argument name. */
         public var name: String? = null
@@ -83,7 +78,6 @@ public class PromptArgumentBuilder
         /** Whether the argument is required. */
         public var required: Boolean? = null
 
-        @PublishedApi
         internal fun build(): PromptArgument =
             PromptArgument.of(
                 requireNotNull(name) { "PromptArgument.name is required" },
@@ -96,7 +90,6 @@ public class PromptArgumentBuilder
 /** Builds [dev.tachyonmcp.api.server.domain.ToolAnnotations]. */
 @TachyonDsl
 public class ToolAnnotationsBuilder
-    @PublishedApi
     internal constructor() {
         /** Human-readable tool title. */
         public var title: String? = null
@@ -113,7 +106,6 @@ public class ToolAnnotationsBuilder
         /** Whether the tool may interact with external systems. */
         public var openWorldHint: Boolean? = null
 
-        @PublishedApi
         internal fun build(): ToolAnnotations =
             ToolAnnotations.of(
                 title,
@@ -127,7 +119,6 @@ public class ToolAnnotationsBuilder
 /** Builds [dev.tachyonmcp.api.server.domain.ImageContent]. */
 @TachyonDsl
 public class ImageContentBuilder
-    @PublishedApi
     internal constructor() {
         /** Raw image bytes. */
         public var data: ByteArray? = null
@@ -151,7 +142,6 @@ public class ImageContentBuilder
         /** Optional content metadata. */
         public var meta: Map<String, Any>? = null
 
-        @PublishedApi
         internal fun build(): ImageContent =
             ImageContent.of(
                 requireNotNull(data) { "ImageContent.data is required" },
@@ -164,7 +154,6 @@ public class ImageContentBuilder
 /** Builds [dev.tachyonmcp.api.server.domain.AudioContent]. */
 @TachyonDsl
 public class AudioContentBuilder
-    @PublishedApi
     internal constructor() {
         /** Raw audio bytes. */
         public var data: ByteArray? = null
@@ -188,7 +177,6 @@ public class AudioContentBuilder
         /** Optional content metadata. */
         public var meta: Map<String, Any>? = null
 
-        @PublishedApi
         internal fun build(): AudioContent =
             AudioContent.of(
                 requireNotNull(data) { "AudioContent.data is required" },
@@ -201,7 +189,6 @@ public class AudioContentBuilder
 /** Builds [dev.tachyonmcp.api.server.domain.BlobResourceContents]. */
 @TachyonDsl
 public class BlobResourceContentsBuilder
-    @PublishedApi
     internal constructor(
         scope: ResourceScope? = null,
     ) {
@@ -231,7 +218,6 @@ public class BlobResourceContentsBuilder
         /** Optional resource metadata. */
         public var meta: Map<String, Any> = emptyMap()
 
-        @PublishedApi
         internal fun build(): BlobResourceContents =
             BlobResourceContents.of(
                 requireNotNull(uri) {

@@ -19,7 +19,6 @@ import kotlin.contracts.contract
 
 @TachyonDsl
 public class ToolDescriptorScope
-    @PublishedApi
     internal constructor() {
         public var name: String? = null
         public var title: String? = null
@@ -65,7 +64,6 @@ public class ToolDescriptorScope
             outputSchema = json.toJsonSchema()
         }
 
-        @PublishedApi
         internal fun build(): ToolDescriptor {
             val n = requireNotNull(name) { "ToolDescriptor.name is required" }
             val builder =
@@ -88,7 +86,7 @@ public class ToolDescriptorScope
     }
 
 @OptIn(ExperimentalContracts::class)
-public inline fun toolDescriptor(
+public fun toolDescriptor(
     name: String,
     configure: ToolDescriptorScope.() -> Unit = {},
 ): ToolDescriptor {
@@ -102,7 +100,7 @@ public inline fun toolDescriptor(
 
 /** Builds a [ToolDescriptor] with a receiver DSL. */
 @OptIn(ExperimentalContracts::class)
-public inline fun ToolDescriptor(block: ToolDescriptorScope.() -> Unit): ToolDescriptor {
+public fun ToolDescriptor(block: ToolDescriptorScope.() -> Unit): ToolDescriptor {
     contract { callsInPlace(block, InvocationKind.EXACTLY_ONCE) }
     return ToolDescriptorScope().apply(block).build()
 }

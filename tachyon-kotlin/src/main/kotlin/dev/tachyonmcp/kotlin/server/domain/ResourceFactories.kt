@@ -16,7 +16,7 @@ import kotlin.contracts.contract
 
 /** Builds [TextResourceContents] with a receiver DSL. */
 @OptIn(ExperimentalContracts::class)
-public inline fun TextResourceContents(
+public fun TextResourceContents(
     block: TextResourceContentsBuilder.() -> Unit,
 ): TextResourceContents {
     contract { callsInPlace(block, InvocationKind.EXACTLY_ONCE) }
@@ -25,7 +25,7 @@ public inline fun TextResourceContents(
 
 /** Builds [BlobResourceContents] with a receiver DSL. */
 @OptIn(ExperimentalContracts::class)
-public inline fun BlobResourceContents(
+public fun BlobResourceContents(
     block: BlobResourceContentsBuilder.() -> Unit,
 ): BlobResourceContents {
     contract { callsInPlace(block, InvocationKind.EXACTLY_ONCE) }

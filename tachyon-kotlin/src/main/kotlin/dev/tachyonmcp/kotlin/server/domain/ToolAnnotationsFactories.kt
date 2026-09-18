@@ -13,7 +13,7 @@ import kotlin.contracts.contract
 
 /** Builds [ToolAnnotations] with a receiver DSL. */
 @OptIn(ExperimentalContracts::class)
-public inline fun ToolAnnotations(block: ToolAnnotationsBuilder.() -> Unit): ToolAnnotations {
+public fun ToolAnnotations(block: ToolAnnotationsBuilder.() -> Unit): ToolAnnotations {
     contract { callsInPlace(block, InvocationKind.EXACTLY_ONCE) }
     return ToolAnnotationsBuilder().apply(block).build()
 }

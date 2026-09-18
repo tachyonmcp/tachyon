@@ -25,6 +25,7 @@ Verdict: thin adapter. DSL builder wraps Java `ServerBuilder`; `suspend` handler
 - Registration funnels through `KotlinFeatureRegistrar` `KotlinFeatureRegistrar`.
 - Post-build registration on server: `registerTool/Resource/ResourceTemplate/Prompt/PromptCompletion/ResourceCompletion` extensions + reified typed `registerTool<In, Out>` `TachyonServer`, `TachyonServer`; impl `DefaultKotlinTachyonServer` `DefaultKotlinTachyonServer`.
 - Domain factories `domain/*Factories.kt` (content, icons, annotations, resources, requests, structured builders).
+- 🪶 No `inline` in the DSL except `reified` generics — `typedTool<In, Out>` `TachyonServerBuilder#typedTool`, `registerTool<In, Out>` `TachyonServer#registerTool`, `Args#decode`, `JsonArray#valuesAs`, `ToolRequest#arguments`. Scope entries and type-named factories are plain `fun` with an `EXACTLY_ONCE` `callsInPlace` contract, so their builders' ctor/`build`/`applyTo`/`toConfig` stay plain `internal` (mangled `$tachyon_kotlin`, not published). One `@PublishedApi` survives: `toolDescriptorOf` `ToolDescriptorScope`, reached from the two reified registrars. See [`docs/architecture/guidance.md`](../../docs/architecture/guidance.md) *Kotlin adapter shape*.
 
 ## 🌀 Coroutines
 
