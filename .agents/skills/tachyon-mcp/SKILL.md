@@ -2,7 +2,7 @@
 name: tachyon-mcp
 description: Build MCP (Model Context Protocol) servers using the [Tachyon MCP](https://github.com/tachyonmcp/tachyon).
 compatibility: Designed for Claude Code on JDK 21+ projects
-version: 1.0.0-beta.28
+version: 1.0.0-beta.29
 metadata:
     author: Konstantin Pavlov
 ---
@@ -65,7 +65,6 @@ server.start();
 | `.session(cfg)` | enabled (off by default = stateless), sessionTtl, SessionIdGenerator, experimental persistence stores |
 | `.network(cfg)` | host, port, endpointPath, timeouts, CORS, maxContentLength, ioEngine |
 | `.runtime(cfg)` | shutdownGracePeriod, requestTimeout, clock |
-| `.monitoring(cfg)` | slow-request diagnostics (off by default) |
 | `.name(s)` `.port(p)` | shorthands |
 | `.withTools(registrar)` | bootstrap through `Tools.register/registerAsync` |
 | `.withResources(registrar)` | bootstrap resources/templates through their façade |

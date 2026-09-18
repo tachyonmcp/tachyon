@@ -18,8 +18,6 @@ Spotted while reading code. Not verified by tests. Fixed in code ⇒ 🗑️ rem
 
 - 🪶 `SessionConfig` is a sum modelled as a product: `boolean enabled` × 5 `@Nullable` options, guarded in the compact ctor **and** `Builder#build`. Stateless is a *server* property — no session config ⇒ no sessions. shape: drop `enabled`, make every component non-null, `@Nullable SessionConfig ServerConfig#session()` with `stateless()` derived from `== null`, delete `SessionConfig#sessionStoreOrDefault`/`#sessionEventStoreOrDefault` and `Builder#enabled`/`#enabled(boolean)`. Then the impossible state is unrepresentable in the value, not just the builder.
 
-- 🪶 `MonitoringScope` (`tachyon-kotlin/.../config/MonitoringScope.kt`) has no caller anywhere in `src/main` — dead scope, or a wiring gap against `ObservabilityConfig.Builder`. `MonitoringScope#applyTo`
-
 ## ❓ Open questions
 
 - Multi-node: event log store (`SessionEventStore`) replay across nodes? Only `SessionStore` has CAS/generation fencing; in-memory event log is per process.
