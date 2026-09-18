@@ -94,7 +94,7 @@ class ProgressKeepAliveTest {
 
     private static ServerEngine createServer() {
         var server = TachyonServer.builder()
-                .session(s -> s.enabled(true))
+                .session(s -> s.enabled())
                 .network(n -> n.heartbeatInterval(HEARTBEAT))
                 .build();
         var warmup = new ProgressHandler("warmup", 0);

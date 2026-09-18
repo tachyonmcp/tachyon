@@ -185,7 +185,7 @@ import org.springframework.context.annotation.Configuration;
 public class McpConfiguration {
     @Bean
     TachyonServerCustomizer mcpSessions() {
-        return builder -> builder.session(session -> session.enabled(true));
+        return builder -> builder.session(session -> session.enabled());
     }
 }
 ```

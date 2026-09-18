@@ -77,9 +77,7 @@ class DeclarativeResultsTest {
         final var logo =
                 Files.write(directory.resolve("logo.png"), Base64.getDecoder().decode(LOGO));
         server = McpTestServers.start(
-                builder -> builder.session(session -> session.enabled(false))
-                        .annotations(annotations -> annotations.register(new Service(logo))),
-                ignored -> {});
+                builder -> builder.annotations(annotations -> annotations.register(new Service(logo))), ignored -> {});
     }
 
     @AfterEach

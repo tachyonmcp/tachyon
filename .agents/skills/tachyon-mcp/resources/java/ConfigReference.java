@@ -103,7 +103,7 @@ final class ConfigReference {
      */
     static SessionConfig session() {
         return SessionConfig.builder()
-            .enabled(true) // stateless by default; enable server-side sessions explicitly
+            // stateless by default; configuring any option below enables sessions
             .sessionIdGenerator(SessionIdGenerator.DEFAULT)
             .sessionTtl(Duration.ofMinutes(10))
             .janitorInterval(Duration.ofSeconds(5))

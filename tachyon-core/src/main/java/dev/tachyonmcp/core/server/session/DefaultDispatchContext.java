@@ -54,7 +54,7 @@ public class DefaultDispatchContext implements DispatchContext {
     }
 
     public static DispatchContext stateless(ServerEngine server) {
-        return new DefaultDispatchContext(Protocols.list().getFirst().createInteractionContext(), server);
+        return new DefaultDispatchContext(Protocols.baseline().createInteractionContext(), server);
     }
 
     public static DispatchContext noop() {

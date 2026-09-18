@@ -24,10 +24,8 @@ import dev.tachyonmcp.api.server.features.tasks.TaskSupport;
 import dev.tachyonmcp.api.server.features.tasks.Tasks;
 import dev.tachyonmcp.api.server.features.tools.Tools;
 import dev.tachyonmcp.api.server.session.SessionIdGenerator;
-import dev.tachyonmcp.core.protocol.Protocol;
 import dev.tachyonmcp.core.protocol.ProtocolResponseMapper;
 import dev.tachyonmcp.core.protocol.Protocols;
-import dev.tachyonmcp.core.protocol.mcp.v2025_11_25.McpProtocol;
 import dev.tachyonmcp.core.runtime.Backpressure;
 import dev.tachyonmcp.core.runtime.Session;
 import dev.tachyonmcp.core.runtime.SessionState;
@@ -70,7 +68,6 @@ import io.netty.channel.ChannelPipeline;
 import io.netty.handler.codec.http.HttpRequest;
 import java.io.Closeable;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -145,22 +142,9 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
     @Nullable
     private volatile Closeable transport;
 
-    private static final List<ProtocolResponseMapper> RESPONSE_MAPPERS;
-
-    static {
-        var mappers = new ArrayList<ProtocolResponseMapper>();
-        Protocols.list().stream().map(Protocol::responseMapper).forEach(mappers::add);
-        RESPONSE_MAPPERS = List.copyOf(mappers);
-    }
-
     @Override
     public ProtocolResponseMapper responseMapper() {
-        for (var mapper : RESPONSE_MAPPERS) {
-            if (mapper.supports("mcp", McpProtocol.VERSION)) {
-                return mapper;
-            }
-        }
-        throw new IllegalStateException("No protocol response mapper found");
+        return Protocols.baseline().responseMapper();
     }
 
     @Override
@@ -735,7 +719,7 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
         if (!config.capabilities().logging()) {
             return;
         }
-        var mapper = Protocols.list().getFirst().responseMapper();
+        var mapper = Protocols.baseline().responseMapper();
         var paramsStr = mapper.encode(mapper.loggingMessageParams(level, logger, data));
         var notificationJson = JsonRpcCodec.serializeNotificationAsString(NotificationLogSupport.LOG_METHOD, paramsStr);
         for (var session : sessionManager.allSessions()) {

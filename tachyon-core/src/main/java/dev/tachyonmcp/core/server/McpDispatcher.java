@@ -54,9 +54,9 @@ import tools.jackson.databind.JsonNode;
  * requests, and encodes responses. Collaborator of {@link DefaultTachyonServer} — server holds state/registries,
  * this drives one request at a time.
  *
- * <p>MCP- and spec-version-specific: it special-cases {@code initialize}/task-status and binds the
- * {@code v2025_11_25} models/codecs. The version-specific call-sites (marked below) move behind an
- * {@code McpDialect} when a second spec version is wired.
+ * <p>MCP-specific but version-agnostic: it special-cases {@code initialize}/task-status and reaches
+ * for models/codecs through the negotiated {@link dev.tachyonmcp.core.protocol.Protocol}, falling back
+ * to {@link Protocols#baseline()} when no version was negotiated.
  */
 @InternalApi
 public class McpDispatcher {
@@ -105,9 +105,8 @@ public class McpDispatcher {
     }
 
     private DefaultDispatchContext dispatchContext(@Nullable ChannelContext channelContext, @Nullable RequestId id) {
-        var channel = channelContext != null
-                ? channelContext
-                : Protocols.list().getFirst().createInteractionContext();
+        var channel =
+                channelContext != null ? channelContext : Protocols.baseline().createInteractionContext();
         return new DefaultDispatchContext(channel, server, id);
     }
 

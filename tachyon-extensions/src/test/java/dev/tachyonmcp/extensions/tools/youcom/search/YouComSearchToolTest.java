@@ -25,7 +25,6 @@ public class YouComSearchToolTest {
                 .build());
         var server = TachyonServer.builder()
                 .info(it -> it.name("you-search-server").version("1.0"))
-                .session(s -> s.enabled(false))
                 .withTools(tools -> tools.register(tool.descriptor(), tool::handle))
                 .port(8080)
                 .build();

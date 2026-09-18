@@ -7,6 +7,7 @@ import dev.tachyonmcp.api.server.domain.Args;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
 import dev.tachyonmcp.core.server.TachyonServer;
 import dev.tachyonmcp.core.server.config.CapabilitiesConfig;
+import dev.tachyonmcp.core.server.config.SessionConfig;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
 import dev.tachyonmcp.core.transport.jsonrpc.JsonRpcCodec;
 import java.util.LinkedHashMap;
@@ -19,11 +20,13 @@ class DefaultConformanceServer extends AbstractConformanceServer {
 
     @Override
     protected ServerEngine createServer(boolean isStateful) {
-        return (ServerEngine) TachyonServer.builder()
+        final var builder = TachyonServer.builder()
                 .capabilities(CapabilitiesConfig.Builder::logging)
-                .session(s -> s.enabled(isStateful))
-                .network(n -> n.host("localhost"))
-                .build();
+                .network(n -> n.host("localhost"));
+        if (isStateful) {
+            builder.session(SessionConfig.Builder::enabled);
+        }
+        return (ServerEngine) builder.build();
     }
 
     /**

@@ -75,8 +75,8 @@ class McpDispatcherProtocolContextTest {
 
     @Test
     void dispatchWrapsChannelContext() throws Exception {
-        try (ServerEngine server = (ServerEngine)
-                TachyonServer.builder().session(s -> s.enabled(true)).build()) {
+        try (ServerEngine server =
+                (ServerEngine) TachyonServer.builder().session(s -> s.enabled()).build()) {
             var protocol = new RecordingProtocol();
             var session = server.createSession("sess_p1");
             session.activate();

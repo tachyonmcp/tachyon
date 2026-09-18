@@ -163,7 +163,7 @@ both before calling `notifyResourceUpdated`:
 
 ```java
 var server = TachyonServer.builder()
-        .session(session -> session.enabled(true))
+        .session(session -> session.enabled())
         .capabilities(capabilities -> capabilities.resources(true, true))
         .annotations(annotations -> annotations.register(new AppResources()))
         .port(8080)

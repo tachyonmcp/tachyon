@@ -3,7 +3,7 @@ title: Netty pipeline
 tags: [concept, transport, netty]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/http/]
 updated: 2026-09-17
-commit: d831e9b1
+commit: e5c536ea
 ---
 
 # 🧪 Netty pipeline
@@ -25,7 +25,7 @@ Verdict: one static-order pipeline per channel. Every registered `Protocol`'s ha
 | # | Name | Handler | Rejects / does |
 |---|---|---|---|
 | 1 | `flush` | `FlushConsolidationHandler` | batch flushes |
-| – | `logger` | `LoggingHandler` | only if logger `me.kpavlov.tachyon.transport.netty.channel` DEBUG (`McpChannelInitializer#CHANNEL_LOGGER_NAME`) |
+| – | `logger` | `LoggingHandler` | only if logger `dev.tachyonmcp.transport.netty.channel` DEBUG (`McpChannelInitializer#CHANNEL_LOGGER_NAME`) |
 | 2 | `http` | `HttpServerCodec` | |
 | – | `session-touch` | `SessionTouchHandler` | added lazily after `http` when session bound; every outbound write `touch()`es session `SessionTouchHandler#install` |
 | 3 | `http-keep-alive` | `HttpServerKeepAliveHandler` | honors `Connection`; responses set keep-alive intent |

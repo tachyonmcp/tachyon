@@ -28,4 +28,35 @@ public interface SessionEventStore extends Closeable {
         });
         return List.copyOf(out);
     }
+
+    /**
+     * Returns the log used when sessions are disabled: it retains nothing, so nothing can be replayed.
+     *
+     * @return the shared no-op log, never {@code null}
+     */
+    static SessionEventStore noop() {
+        return NoopSessionEventStore.INSTANCE;
+    }
+}
+
+/**
+ * Event log for a stateless server. A stateless server never opens a resumable stream, so there is
+ * nothing to replay and appended events are discarded.
+ */
+final class NoopSessionEventStore implements SessionEventStore {
+
+    static final SessionEventStore INSTANCE = new NoopSessionEventStore();
+
+    private NoopSessionEventStore() {}
+
+    @Override
+    public void append(SessionEvent event) {}
+
+    @Override
+    public long drain(String sessionId, long cursor, Predicate<SessionEvent> processor) {
+        return cursor;
+    }
+
+    @Override
+    public void close() {}
 }

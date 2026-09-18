@@ -8,6 +8,7 @@ import dev.tachyonmcp.api.server.features.prompts.PromptResult;
 import dev.tachyonmcp.api.server.features.tools.ToolDescriptor;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
 import dev.tachyonmcp.core.server.TachyonServer;
+import dev.tachyonmcp.core.server.config.SessionConfig;
 import dev.tachyonmcp.core.server.domain.MissingRequiredClientCapabilityException;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
 import java.util.List;
@@ -17,9 +18,11 @@ class EdgeConformanceServer extends AbstractConformanceServer {
 
     @Override
     protected ServerEngine createServer(boolean isStateful) {
-        return (ServerEngine) TachyonServer.builder()
-                .session(s -> s.enabled(isStateful))
-                .withTools(tools -> tools.register(
+        final var builder = TachyonServer.builder();
+        if (isStateful) {
+            builder.session(SessionConfig.Builder::enabled);
+        }
+        return (ServerEngine) builder.withTools(tools -> tools.register(
                                 ToolDescriptor.builder()
                                         .name("test_missing_capability")
                                         .description("SEP-2575 requires an explicitly declared capability")

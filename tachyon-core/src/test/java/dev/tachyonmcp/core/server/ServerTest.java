@@ -18,19 +18,19 @@ import dev.tachyonmcp.core.runtime.SseConnection;
 import dev.tachyonmcp.core.runtime.SseEvent;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
 import dev.tachyonmcp.core.server.session.SessionEvent;
-import dev.tachyonmcp.core.transport.netty.sse.PostSseStream;
-import io.netty.channel.embedded.EmbeddedChannel;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Pattern;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -39,8 +39,8 @@ class ServerTest {
 
     @Test
     void createAndRemoveSession() {
-        try (DefaultTachyonServer server =
-                (DefaultTachyonServer) TachyonServer.builder().build()) {
+        try (DefaultTachyonServer server = (DefaultTachyonServer)
+                TachyonServer.builder().session(s -> s.enabled()).build()) {
             var conn = new TestConnection();
             var session = server.createSession("sess_1");
             session.connection(conn);
@@ -56,8 +56,8 @@ class ServerTest {
 
     @Test
     void appendResponsePersistsToDurableStore() {
-        try (DefaultTachyonServer server =
-                (DefaultTachyonServer) TachyonServer.builder().build()) {
+        try (DefaultTachyonServer server = (DefaultTachyonServer)
+                TachyonServer.builder().session(s -> s.enabled()).build()) {
             var session = server.createSession("sess_1");
 
             var response = new SessionEvent.ResponseEvent("sess_1", RequestId.of(1), "{\"ok\":true}", 1000L, -1, null);
@@ -73,8 +73,8 @@ class ServerTest {
 
     @Test
     void replayAfterReconnect() {
-        try (DefaultTachyonServer server =
-                (DefaultTachyonServer) TachyonServer.builder().build()) {
+        try (DefaultTachyonServer server = (DefaultTachyonServer)
+                TachyonServer.builder().session(s -> s.enabled()).build()) {
             server.createSession("sess_1");
 
             server.appendEvent(new SessionEvent.ResponseEvent("sess_1", RequestId.of(1), "{\"a\":1}", 100L, -1, null));
@@ -88,8 +88,8 @@ class ServerTest {
 
     @Test
     void backpressureReflectsConnectionState() {
-        try (DefaultTachyonServer server =
-                (DefaultTachyonServer) TachyonServer.builder().build()) {
+        try (DefaultTachyonServer server = (DefaultTachyonServer)
+                TachyonServer.builder().session(s -> s.enabled()).build()) {
             var conn = new TestConnection();
             var session = server.createSession("sess_1");
             session.connection(conn);
@@ -104,8 +104,8 @@ class ServerTest {
 
     @Test
     void drainEvents() {
-        try (DefaultTachyonServer server =
-                (DefaultTachyonServer) TachyonServer.builder().build()) {
+        try (DefaultTachyonServer server = (DefaultTachyonServer)
+                TachyonServer.builder().session(s -> s.enabled()).build()) {
             var conn = new TestConnection();
             var session = server.createSession("sess_1");
             session.connection(conn);
@@ -122,8 +122,8 @@ class ServerTest {
 
     @Test
     void replaceExistingSession() {
-        try (DefaultTachyonServer server =
-                (DefaultTachyonServer) TachyonServer.builder().build()) {
+        try (DefaultTachyonServer server = (DefaultTachyonServer)
+                TachyonServer.builder().session(s -> s.enabled()).build()) {
             var session1 = server.createSession("sess_1");
             var session2 = server.createSession("sess_1");
 
@@ -134,8 +134,8 @@ class ServerTest {
 
     @Test
     void sendRequestPersistsOutboundRequestEventForReplay() {
-        try (DefaultTachyonServer server =
-                (DefaultTachyonServer) TachyonServer.builder().build()) {
+        try (DefaultTachyonServer server = (DefaultTachyonServer)
+                TachyonServer.builder().session(s -> s.enabled()).build()) {
             var session = server.createSession("sess_out");
             session.activate();
 
@@ -154,30 +154,26 @@ class ServerTest {
 
     @Test
     void statelessPendingRequestIsBoundToOutboundChannel() {
+        // A stateless server keeps no event log, so the request id is read off the wire frame the
+        // stream received rather than replayed from the store.
         try (DefaultTachyonServer server =
                 (DefaultTachyonServer) TachyonServer.builder().build()) {
-            var channel = new EmbeddedChannel();
-            try {
-                var session = server.createSession("stateless-request");
-                session.activate();
-                var stream = new PostSseStream(channel, null, server::nextEventId, Duration.ofSeconds(30));
-                var pending = server.sendRequest(session, "sampling/createMessage", Map.of(), stream);
-                var requestId = server.replay(session.id(), -1).stream()
-                        .filter(SessionEvent.OutboundRequestEvent.class::isInstance)
-                        .map(SessionEvent.OutboundRequestEvent.class::cast)
-                        .map(SessionEvent.OutboundRequestEvent::requestId)
-                        .findFirst()
-                        .orElseThrow();
+            var session = server.createSession("stateless-request");
+            session.activate();
+            var stream = new RecordingStream("owning-channel");
 
-                assertThat(server.failPendingRequest(requestId, null, "other-channel", "Rejected"))
-                        .isFalse();
-                assertThat(pending).isNotDone();
-                assertThat(server.completePendingRequest(requestId, null, stream.channelId(), "{}"))
-                        .isTrue();
-                assertThat(pending).isCompletedWithValue("{}");
-            } finally {
-                channel.finishAndReleaseAll();
-            }
+            var pending = server.sendRequest(session, "sampling/createMessage", Map.of(), stream);
+            var requestId = stream.requestId();
+
+            assertThat(server.replay(session.id(), -1))
+                    .as("a stateless server retains no session events")
+                    .isEmpty();
+            assertThat(server.failPendingRequest(requestId, null, "other-channel", "Rejected"))
+                    .isFalse();
+            assertThat(pending).isNotDone();
+            assertThat(server.completePendingRequest(requestId, null, stream.channelId(), "{}"))
+                    .isTrue();
+            assertThat(pending).isCompletedWithValue("{}");
         }
     }
 
@@ -185,7 +181,9 @@ class ServerTest {
     @ValueSource(booleans = {false, true})
     void pendingRequestRejectsMissingOwner(boolean sessionsEnabled) {
         try (DefaultTachyonServer server = (DefaultTachyonServer) TachyonServer.builder()
-                .session(session -> session.enabled(sessionsEnabled))
+                .session(session -> {
+                    if (sessionsEnabled) session.enabled();
+                })
                 .build()) {
             var requestId = RequestId.of("missing-owner");
             var pending = new CompletableFuture<String>();
@@ -218,7 +216,7 @@ class ServerTest {
     @Test
     void completionDoesNotRemoveReplacementPendingRequest() {
         try (final var server = (DefaultTachyonServer)
-                TachyonServer.builder().session(s -> s.enabled(true)).build()) {
+                TachyonServer.builder().session(s -> s.enabled()).build()) {
             final var id = RequestId.of("reused");
             final var old = new CompletableFuture<String>();
             final var replacement = new CompletableFuture<String>();
@@ -277,8 +275,8 @@ class ServerTest {
     @Test
     void replayReturnsMixedEventsButToSseEventFiltersNonSse() {
         // Verifies the replay path doesn't NPE on RequestEvent/CancelEvent in the log
-        try (DefaultTachyonServer server =
-                (DefaultTachyonServer) TachyonServer.builder().build()) {
+        try (DefaultTachyonServer server = (DefaultTachyonServer)
+                TachyonServer.builder().session(s -> s.enabled()).build()) {
             server.createSession("sess_replay");
 
             server.appendEvent(new SessionEvent.RequestEvent("sess_replay", RequestId.of(1), "ping", "{}", 100L));
@@ -300,8 +298,8 @@ class ServerTest {
 
     @Test
     void multipleSessions() {
-        try (DefaultTachyonServer server =
-                (DefaultTachyonServer) TachyonServer.builder().build()) {
+        try (DefaultTachyonServer server = (DefaultTachyonServer)
+                TachyonServer.builder().session(s -> s.enabled()).build()) {
             for (int i = 0; i < 10; i++) {
                 server.createSession("sess_" + i);
             }
@@ -316,6 +314,7 @@ class ServerTest {
     void registerToolSendsListChangedToActiveSession() {
         try (DefaultTachyonServer server = (DefaultTachyonServer) TachyonServer.builder()
                 .capabilities(c -> c.toolsListChanged(true))
+                .session(s -> s.enabled())
                 .build()) {
             var conn = new TestConnection();
             var session = server.createSession("sess_test");
@@ -341,6 +340,7 @@ class ServerTest {
     void addResourceSendsListChangedToActiveSession() {
         try (DefaultTachyonServer server = (DefaultTachyonServer) TachyonServer.builder()
                 .capabilities(c -> c.resourcesListChanged(true))
+                .session(s -> s.enabled())
                 .build()) {
             var conn = new TestConnection();
             var session = server.createSession("sess_test");
@@ -363,6 +363,7 @@ class ServerTest {
     void addPromptSendsListChangedToActiveSession() {
         try (DefaultTachyonServer server = (DefaultTachyonServer) TachyonServer.builder()
                 .capabilities(c -> c.promptsListChanged(true))
+                .session(s -> s.enabled())
                 .build()) {
             var conn = new TestConnection();
             var session = server.createSession("sess_test");
@@ -382,6 +383,7 @@ class ServerTest {
     void listChangedNotSentToNonActiveSession() {
         try (DefaultTachyonServer server = (DefaultTachyonServer) TachyonServer.builder()
                 .capabilities(c -> c.toolsListChanged(true))
+                .session(s -> s.enabled())
                 .build()) {
             var conn = new TestConnection();
             var session = server.createSession("sess_init");
@@ -399,8 +401,8 @@ class ServerTest {
 
     @Test
     void broadcastsTaskStatusWithEachSessionProtocol() {
-        try (DefaultTachyonServer server =
-                (DefaultTachyonServer) TachyonServer.builder().build()) {
+        try (DefaultTachyonServer server = (DefaultTachyonServer)
+                TachyonServer.builder().session(s -> s.enabled()).build()) {
             var legacyConnection = new TestConnection();
             var legacy = server.createSession("legacy");
             legacy.protocol(Protocols.list().stream()
@@ -475,8 +477,8 @@ class ServerTest {
             }
         };
 
-        try (DefaultTachyonServer server =
-                (DefaultTachyonServer) TachyonServer.builder().build()) {
+        try (DefaultTachyonServer server = (DefaultTachyonServer)
+                TachyonServer.builder().session(s -> s.enabled()).build()) {
             var session = server.createSession("sess_e12");
             session.connection(conn);
             session.activate();
@@ -499,6 +501,52 @@ class ServerTest {
             assertThat(closedConnSendCount.get())
                     .as("notification must not reach a connection that is being closed")
                     .isZero();
+        }
+    }
+
+    /** Outbound stream that records what was written and reports a stable channel identity. */
+    private static final class RecordingStream implements OutboundSseStream {
+
+        private static final Pattern REQUEST_ID = Pattern.compile("\"id\":\"([^\"]+)\"");
+
+        private final String channelId;
+        private final List<SseEvent> events = new ArrayList<>();
+        private boolean started;
+
+        private RecordingStream(String channelId) {
+            this.channelId = channelId;
+        }
+
+        @Override
+        public String channelId() {
+            return channelId;
+        }
+
+        @Override
+        public CompletionStage<Void> start() {
+            started = true;
+            return CompletableFuture.completedFuture(null);
+        }
+
+        @Override
+        public boolean started() {
+            return started;
+        }
+
+        @Override
+        public void writeEvent(@Nullable SseEvent event) {
+            if (event != null) events.add(event);
+        }
+
+        @Override
+        public void close() {}
+
+        RequestId requestId() {
+            var matcher = REQUEST_ID.matcher(events.getFirst().data());
+            assertThat(matcher.find())
+                    .as("outbound request carries a JSON-RPC id")
+                    .isTrue();
+            return RequestId.of(matcher.group(1));
         }
     }
 

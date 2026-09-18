@@ -190,7 +190,7 @@ class ObservationDispatchTest {
     void rejectionBeforeHandlerReportsRejectedOutcome() {
         var listener = new RecordingListener();
         try (ServerEngine server = (ServerEngine) TachyonServer.builder()
-                .session(s -> s.enabled(true))
+                .session(s -> s.enabled())
                 .observability(o -> o.listener(listener))
                 .build()) {
             server.createSession("sess-reject").activate();
@@ -210,7 +210,7 @@ class ObservationDispatchTest {
     void missingSessionHeaderReportsRejectedOutcomeWithoutServerError() {
         var listener = new RecordingListener();
         try (ServerEngine server = (ServerEngine) TachyonServer.builder()
-                .session(s -> s.enabled(true))
+                .session(s -> s.enabled())
                 .observability(o -> o.listener(listener))
                 .build()) {
             var dispatcher = new McpDispatcher(server, server.executor());
@@ -231,7 +231,7 @@ class ObservationDispatchTest {
     void notificationsInitializedReportsAcceptedAndUnknownReportsIgnored() {
         var listener = new RecordingListener();
         try (ServerEngine server = (ServerEngine) TachyonServer.builder()
-                .session(s -> s.enabled(true))
+                .session(s -> s.enabled())
                 .observability(o -> o.listener(listener))
                 .build()) {
             server.createSession("sess-notif");
@@ -250,7 +250,7 @@ class ObservationDispatchTest {
     void notificationPropagatesTraceparentIntoOperationInfo() {
         var listener = new RecordingListener();
         try (ServerEngine server = (ServerEngine) TachyonServer.builder()
-                .session(s -> s.enabled(true))
+                .session(s -> s.enabled())
                 .observability(o -> o.listener(listener))
                 .build()) {
             server.createSession("sess-notif-trace");
@@ -268,8 +268,7 @@ class ObservationDispatchTest {
     @Test
     void statelessNotificationStillReportsIgnoredBeforeAnyEarlyReturn() {
         var listener = new RecordingListener();
-        try (ServerEngine server =
-                newEngine(b -> b.session(s -> s.enabled(false)).observability(o -> o.listener(listener)))) {
+        try (ServerEngine server = newEngine(b -> b.observability(o -> o.listener(listener)))) {
             var dispatcher = new McpDispatcher(server, server.executor());
 
             dispatcher.dispatchNotification("notifications/initialized", null, null);

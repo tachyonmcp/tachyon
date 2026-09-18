@@ -2,8 +2,8 @@
 title: tachyon-kotlin
 tags: [module, kotlin, dsl]
 sources: [tachyon-kotlin/src/main/kotlin/dev/tachyonmcp/kotlin/server/, tachyon-kotlin/src/main/resources/META-INF/services/, tachyon-kotlin-kt-schema/src/main/kotlin/dev/tachyonmcp/kotlin/server/json/ktschema/]
-updated: 2026-09-15
-commit: 9eec1092
+updated: 2026-09-18
+commit: 4c9c174c
 ---
 
 # 🟣 tachyon-kotlin (+ kt-schema)
@@ -20,6 +20,7 @@ Verdict: thin adapter. DSL builder wraps Java `ServerBuilder`; `suspend` handler
 
 - `TachyonServerBuilder` receiver `TachyonServerBuilder`; `tool(...)` overloads `TachyonServerBuilder`, `TachyonServerBuilder#tool`, `resource` `TachyonServerBuilder#resource`, `prompt` `TachyonServerBuilder#prompt`, `resourceTemplate` `TachyonServerBuilder#resourceTemplate`, `promptCompletion` `TachyonServerBuilder#promptCompletion`, `resourceCompletion` `TachyonServerBuilder#resourceCompletion`, [TachyonServerBuilder#name](../../tachyon-kotlin/src/main/kotlin/dev/tachyonmcp/kotlin/server/config/TachyonServerBuilder.kt), `extensions`, [TachyonServerBuilder#pipelineCustomizer](../../tachyon-kotlin/src/main/kotlin/dev/tachyonmcp/kotlin/server/config/TachyonServerBuilder.kt).
 - One scope per file `config/*Scope.kt`: `CapabilitiesScope`, `NetworkScope`, `SessionScope`, `RuntimeScope`, `ServerInfoScope`, `JsonScope`, `ObservabilityScope`, `PayloadCaptureScope`, `MonitoringScope`, `TasksScope`, `ToolScope`, `ResourceScope`, `ResourcesScope`, `PromptScope`, `TemplateScope`, `CompletionScope`, `ContentScope`, `FeatureScope`. `@TachyonDsl` marker `TachyonDsl.kt`.
+- `SessionScope`: options are the opt-in — `SessionScope#enable` turns sessions on with defaults, `TachyonServerBuilder#stateless` is the opt-out, `SessionScope#enabled` is deprecated. `SessionScope#sessionIdGenerator` exists as a nullable property **and** a lambda overload whose request is non-null (`McpDispatcher` substitutes an empty request).
 - `ToolScope` result helpers: `success`, `text`, `raw`, `empty`, `fail(msg|{content})`, `inputRequired`, `content { }` `ToolScope`.
 - Registration funnels through `KotlinFeatureRegistrar` `KotlinFeatureRegistrar`.
 - Post-build registration on server: `registerTool/Resource/ResourceTemplate/Prompt/PromptCompletion/ResourceCompletion` extensions + reified typed `registerTool<In, Out>` `TachyonServer`, `TachyonServer`; impl `DefaultKotlinTachyonServer` `DefaultKotlinTachyonServer`.
@@ -42,4 +43,4 @@ Verdict: thin adapter. DSL builder wraps Java `ServerBuilder`; `suspend` handler
 
 ## 🧪 Tests
 
-`mvn test -pl tachyon-kotlin -am`. Kotest + JUnit: `TachyonServerTest`, `KotlinApiTest`, `*DescriptorAttributesTest`, `ToolFnFactoryTest`, `JsonInteropTest`, `KxSerializationTest`, `McpProbe.kt` helper. Kotlin e2e in `e2e/src/test/kotlin/dev/tachyonmcp/e2e/` → [[testing]].
+`mvn test -pl tachyon-kotlin -am`. Kotest + JUnit: `StatefulServerTest`, `StatelessServerTest`, `KotlinApiTest`, `*DescriptorAttributesTest`, `ToolFnFactoryTest`, `JsonInteropTest`, `KxSerializationTest`, `McpProbe.kt` helper. Kotlin e2e in `e2e/src/test/kotlin/dev/tachyonmcp/e2e/` → [[testing]].

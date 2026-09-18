@@ -2,8 +2,8 @@
 title: Configuration
 tags: [concept, config, builder]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/server/ServerBuilder.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultServerBuilder.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/, tachyon-api/src/main/java/dev/tachyonmcp/api/server/config/]
-updated: 2026-09-15
-commit: 9eec1092
+updated: 2026-09-18
+commit: 6a895703
 ---
 
 # 🎛️ Configuration
@@ -18,7 +18,7 @@ Verdict: `ServerBuilder` exposes grouped `Consumer<X.Builder>` configurers + sho
 |---|---|---|
 | `info` | [ServerIdentity.Builder](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/config/ServerIdentity.java) (api, Immutables) | name `tachyon-mcp`, version `0.1`, title, description, websiteUrl, instructions, icons [ServerIdentity](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/config/ServerIdentity.java) |
 | `capabilities` | [CapabilitiesConfig.Builder](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/CapabilitiesConfig.java) | per-feature mode/listChanged/pageSize, completions, logging, tasks |
-| `session` | [SessionConfig.Builder](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/SessionConfig.java) | enabled, ttl, janitor, stores, id generator |
+| `session` | [SessionConfig.Builder](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/SessionConfig.java) | flat: ttl, janitor, stores, id generator — **any option enables sessions**; `enabled()` = defaults-on; opt-out is `ServerBuilder#stateless` `SessionConfig.Builder#build` |
 | `network` | [NetworkConfig.Builder](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/NetworkConfig.java) | host/port/address, endpoint, idle, body size, CORS, allowedHosts, ioEngine, heartbeat |
 | `runtime` | [RuntimeConfig.Builder](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/config/RuntimeConfig.java) (api) | shutdown grace, request timeout, clock |
 | `observability` | [ObservabilityConfig.Builder](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/ObservabilityConfig.java) | slow-request log, listeners, payload capture |
@@ -56,7 +56,8 @@ Verdict: `ServerBuilder` exposes grouped `Consumer<X.Builder>` configurers + sho
 
 - Builder annotation configurers (see [[declarative-configuration]]) compose into one `server.annotations(...)` call, using the constructed server's codecs (`DefaultServerBuilder#applyAnnotationRegistrations`). Spring defers discovered bean registration until singleton initialization; see [[spring-boot]].
 
-- `SessionConfig`: any session option while disabled ⇒ ISE "Session options require sessions to be enabled" `SessionConfig#STATELESS`, `Builder#build`.
+- `SessionConfig`: configuring an option *is* the opt-in — `build()` returns `STATELESS` only when nothing was set `SessionConfig.Builder#build`. `enabled` is tri-state inside the builder (unset / on / off); only the `@Deprecated(forRemoval)` `Builder#enabled(boolean)`, reached through [ServerBuilder#stateless](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/ServerBuilder.java), pins it off — so off + option ⇒ ISE `SessionConfig#SESSION_OPTIONS_REQUIRE_ENABLED` is the one representable contradiction. The record's compact ctor holds the same invariant for direct construction. Binary-compatible with beta.28: identical `Builder` signatures, `enabled()` added, no revapi waivers.
+- `build()` takes its session stores from the `ServerConfig` it publishes, so `TachyonServer#config` and the running server share one `SessionConfig` `DefaultServerBuilder#build`. Stateless ⇒ no stores at all → [[sessions]].
 - `NetworkConfig.Builder`: `address()` XOR `host()/port()` ⇒ ISE `Builder#Builder`.
 - `CapabilitiesConfig`: tasks enabled w/o connector ⇒ ISE `Builder#validateTaskConnector`.
 - page sizes must be > 0; `maxContentLength` > 0; `pollInterval` > 0.

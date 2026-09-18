@@ -9,7 +9,6 @@ import dev.tachyonmcp.api.server.domain.InvalidArgumentException
 import dev.tachyonmcp.api.server.domain.Role
 import dev.tachyonmcp.api.server.domain.TextContent
 import dev.tachyonmcp.api.server.features.prompts.PromptRequest
-import dev.tachyonmcp.api.server.features.tasks.TaskSupport
 import dev.tachyonmcp.api.server.features.tools.ToolRequest
 import dev.tachyonmcp.api.server.features.tools.ToolResult
 import dev.tachyonmcp.kotlin.server.config.PromptScope
@@ -35,9 +34,10 @@ import dev.tachyonmcp.kotlin.server.json.KxSerializationSerde
 import io.kotest.assertions.assertSoftly
 import io.kotest.assertions.json.shouldEqualJson
 import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.assertions.withClue
 import io.kotest.matchers.collections.shouldHaveSize
+import io.kotest.matchers.optional.shouldBePresent
 import io.kotest.matchers.shouldBe
-import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlinx.serialization.Serializable
@@ -51,69 +51,49 @@ import org.junit.jupiter.params.provider.MethodSource
 import tools.jackson.databind.ObjectMapper
 import java.math.BigDecimal
 import java.util.stream.Stream
-import dev.tachyonmcp.api.json.JsonSchema as JavaJsonSchema
 
 internal class KotlinApiTest {
-    // region: Overload resolution — all shapes compile
-    // These tests verify overloads compile for all schema types
+    // region: schema overloads
 
     @Test
-    fun `JsonSchema overload registers a tool with input and output schema`() {
-        val schema = JavaJsonSchema.objectSchema()
-        TachyonServer(
-            port = 0,
-            {
-                name("test")
-                tool("t1", inputSchema = schema, outputSchema = schema) {
-                    ToolResult.text("ok")
-                }
-            },
-        ).use { handle ->
-            handle.tools().find("t1").orElse(null) shouldNotBe null
-        }
-    }
+    fun `every tool schema overload reaches the descriptor`() {
+        val objectSchema = """{"type":"object"}"""
 
-    @Test
-    fun `String overload registers a tool with input and output schema`() {
-        TachyonServer(
-            port = 0,
-            {
-                name("test")
-                tool(
-                    "t2",
-                    inputSchema = JsonSchema.objectSchema(),
-                    outputSchema = JsonSchema.objectSchema(),
-                ) {
-                    ToolResult.text("ok")
+        buildServer {
+            tool(
+                "java-schema",
+                inputSchema = JsonSchema.objectSchema(),
+                outputSchema = JsonSchema.objectSchema(),
+            ) { text("ok") }
+            @Suppress("DEPRECATION")
+            tool(
+                "string-schema",
+                inputSchema = objectSchema,
+                outputSchema = objectSchema,
+            ) { text("ok") }
+            tool(
+                "json-object-schema",
+                inputSchema = buildJsonObject { put("type", "object") },
+                outputSchema = buildJsonObject { put("type", "object") },
+            ) { text("ok") }
+        }.use { server ->
+            listOf("java-schema", "string-schema", "json-object-schema").forEach { name ->
+                withClue(name) {
+                    server.tools().find(name) shouldBePresent {
+                        checkNotNull(inputSchema()).json() shouldEqualJson objectSchema
+                        checkNotNull(outputSchema()).json() shouldEqualJson objectSchema
+                    }
                 }
-            },
-        ).use { handle ->
-            handle.tools().find("t2").orElse(null) shouldNotBe null
-        }
-    }
-
-    @Test
-    fun `JsonObject overload registers a tool with input and output schema`() {
-        val schema = buildJsonObject { put("type", "object") }
-        TachyonServer(
-            port = 0,
-            {
-                name("test")
-                tool("t3", inputSchema = schema, outputSchema = schema) {
-                    ToolResult.text("ok")
-                }
-            },
-        ).use { handle ->
-            handle.tools().find("t3").orElse(null) shouldNotBe null
+            }
         }
     }
 
     // endregion
 
-    // region: Args orNull sugar
+    // region: Args accessors
 
     @Test
-    fun `orNull accessors return the value when the key is present`() {
+    fun `orNull and default accessors return the value when the key is present`() {
         val args =
             Args.of(
                 mapOf(
@@ -138,18 +118,24 @@ internal class KotlinApiTest {
             args.decimalOrNull("decimal") shouldBe BigDecimal("1.25")
             args.objectOrNull("obj")?.stringValue("k") shouldBe "v"
             args.arrayOrNull("arr")?.valuesAs<String>() shouldBe listOf("x", "y")
+
+            args.string("str", "def") shouldBe "v"
+            args.boolean("bool", false) shouldBe true
+            args.int("int", 0) shouldBe 42
+            args.long("long", 0L) shouldBe Long.MAX_VALUE
+            args.double("double", 0.0) shouldBe 3.14
         }
     }
 
     @ParameterizedTest(name = "[{index}] {0}")
     @MethodSource("missingOrJsonNullArguments")
     fun `orNull and default accessors and decode fold missing and JSON-null arguments the same way`(
-        @Suppress("UnusedParameter") scenario: String,
+        scenario: String,
         argumentsJson: String,
     ) {
         TachyonServer(port = 0) {
             name("null-accessors-test")
-            session { enabled = true }
+            session { enable() }
             tool("null-accessors") {
                 val args = request.arguments()
                 val fields =
@@ -178,7 +164,9 @@ internal class KotlinApiTest {
             McpProbe(server.port()).use { probe ->
                 probe.initialize()
                 val response = probe.callTool("null-accessors", argumentsJson)
-                response.statusCode() shouldBe 200
+                withClue(scenario) {
+                    response.statusCode() shouldBe 200
+                }
                 response.body() shouldEqualJson
                     """
                     {
@@ -227,29 +215,6 @@ internal class KotlinApiTest {
             )
     }
 
-    @Test
-    fun `accessors with default return the value when the key is present`() {
-        val args =
-            Args.of(
-                mapOf(
-                    "str" to "v",
-                    "bool" to true,
-                    "int" to 42,
-                    "long" to Long.MAX_VALUE,
-                    "double" to 3.14,
-                ),
-                null,
-            )
-
-        assertSoftly {
-            args.string("str", "def") shouldBe "v"
-            args.boolean("bool", false) shouldBe true
-            args.int("int", 0) shouldBe 42
-            args.long("long", 0L) shouldBe Long.MAX_VALUE
-            args.double("double", 0.0) shouldBe 3.14
-        }
-    }
-
     @Serializable
     data class NullableArgs(
         val str: String? = null,
@@ -264,26 +229,7 @@ internal class KotlinApiTest {
     // region: decode — typed via configured serde
 
     @Test
-    fun `decode round-trip via configured serde`() {
-        val raw =
-            mapOf(
-                "name" to "Alice",
-                "age" to 30,
-            )
-        val args = Args.of(raw, KxSerializationSerde.Default)
-        val decoded = args.decode(GreetingArgs::class.java)
-        decoded shouldBe GreetingArgs("Alice", 30)
-    }
-
-    @Test
-    fun `reified decode round-trip via configured serde`() {
-        val args = Args.of(mapOf("name" to "Alice", "age" to 30), KxSerializationSerde.Default)
-
-        args.decode<GreetingArgs>() shouldBe GreetingArgs("Alice", 30)
-    }
-
-    @Test
-    fun `ToolRequest arguments reified shorthand decodes via configured serde`() {
+    fun `decode reads typed arguments through every entry point`() {
         val args = Args.of(mapOf("name" to "Alice", "age" to 30), KxSerializationSerde.Default)
         val request =
             ToolRequest
@@ -292,27 +238,22 @@ internal class KotlinApiTest {
                 .arguments(args)
                 .build()
 
-        request.arguments<GreetingArgs>() shouldBe GreetingArgs("Alice", 30)
+        assertSoftly {
+            args.decode(GreetingArgs::class.java) shouldBe GreetingArgs("Alice", 30)
+            args.decode<GreetingArgs>() shouldBe GreetingArgs("Alice", 30)
+            request.arguments<GreetingArgs>() shouldBe GreetingArgs("Alice", 30)
+        }
     }
 
     @Test
-    fun `decode uses default values`() {
-        val raw = mapOf("name" to "Bob")
-        val args = Args.of(raw, KxSerializationSerde.Default)
-        val decoded = args.decode(GreetingArgs::class.java)
-        decoded shouldBe GreetingArgs("Bob", 0)
-    }
-
-    @Test
-    fun `decode ignores unknown keys with default serde`() {
-        val raw =
-            mapOf(
-                "name" to "Eve",
-                "unexpected" to "extra",
+    fun `decode ignores unknown keys and applies declared defaults`() {
+        val args =
+            Args.of(
+                mapOf("name" to "Eve", "unexpected" to "extra"),
+                KxSerializationSerde.Default,
             )
-        val args = Args.of(raw, KxSerializationSerde.Default)
-        val decoded = args.decode(GreetingArgs::class.java)
-        decoded shouldBe GreetingArgs("Eve", 0)
+
+        args.decode(GreetingArgs::class.java) shouldBe GreetingArgs("Eve", 0)
     }
 
     @Test
@@ -334,8 +275,7 @@ internal class KotlinApiTest {
 
     @Test
     fun `decode throws when no deserializer configured`() {
-        val raw = mapOf("name" to "Bob")
-        val args = Args.of(raw, null)
+        val args = Args.of(mapOf("name" to "Bob"), null)
         shouldThrow<IllegalStateException> {
             args.decode(GreetingArgs::class.java)
         }.message shouldContain "PayloadDeserializer is not configured"
@@ -343,261 +283,116 @@ internal class KotlinApiTest {
 
     // endregion
 
-    // region: success — typed result via configured serde
+    // region: ToolScope results
 
     @Test
-    fun `success returns ToolResult with raw value`() {
+    fun `success carries the structured value with an optional text block`() {
         val value = GreetingArgs("Charlie", 25)
-        withStatelessContext { ctx ->
-            val args = Args.of(null, null)
-            val request =
-                ToolRequest
-                    .builder()
-                    .name("greet")
-                    .arguments(args)
-                    .build()
-            val scope = ToolScope(ctx, request = request)
-            val result = scope.success(value)
-            result.shouldBeInstanceOf<ToolResult.Success>()
-            result.structured().get() shouldBe value
-        }
-    }
 
-    @Test
-    fun `success with text sets content text`() {
-        val value = GreetingArgs("Dave", 50)
-        withStatelessContext { ctx ->
-            val args = Args.of(null, null)
-            val request =
-                ToolRequest
-                    .builder()
-                    .name("greet")
-                    .arguments(args)
-                    .build()
-            val scope = ToolScope(ctx, request = request)
-            val result = scope.success(value, "custom text")
-            result.shouldBeInstanceOf<ToolResult.Success>()
-            result.structured().get() shouldBe value
-            (result.content().first() as TextContent).text() shouldBe "custom text"
+        withToolScope {
+            val plain = success(value)
+            val annotated = success(value, "custom text")
+
+            plain.shouldBeInstanceOf<ToolResult.Success>()
+            annotated.shouldBeInstanceOf<ToolResult.Success>()
+            assertSoftly {
+                plain.structured().get() shouldBe value
+                annotated.structured().get() shouldBe value
+                (annotated.content().first() as TextContent).text() shouldBe "custom text"
+            }
         }
     }
 
     @Test
     @Suppress("DEPRECATION")
-    fun `content DSL collects text and image blocks into a ToolResult`() {
-        withStatelessContext { ctx ->
-            val request =
-                ToolRequest
-                    .builder()
-                    .name("render")
-                    .arguments(Args.of(null, null))
-                    .build()
-            val scope = ToolScope(ctx, request = request)
-            val result =
-                scope.content {
+    fun `content DSL collects base64 and raw binary blocks`() {
+        withToolScope {
+            val encoded =
+                content {
                     text("Answer")
                     image("aGVsbG8=", "image/png")
                 }
-            result.shouldBeInstanceOf<ToolResult.Success>()
-            assertSoftly {
-                result.content() shouldHaveSize 2
-                (result.content()[0] as TextContent).text() shouldBe "Answer"
-                (result.content()[1] as ImageContent).mimeType() shouldBe "image/png"
-            }
-        }
-    }
-
-    @Test
-    fun `content DSL accepts raw byte array image and audio blocks`() {
-        withStatelessContext { ctx ->
-            val request =
-                ToolRequest
-                    .builder()
-                    .name("render")
-                    .arguments(Args.of(null, null))
-                    .build()
-            val scope = ToolScope(ctx, request = request)
-            val result =
-                scope.content {
+            val binary =
+                content {
                     image(byteArrayOf(1, 2, 3), "image/png")
                     audio(byteArrayOf(4, 5, 6), "audio/wav")
                 }
-            result.shouldBeInstanceOf<ToolResult.Success>()
+
+            encoded.shouldBeInstanceOf<ToolResult.Success>()
+            binary.shouldBeInstanceOf<ToolResult.Success>()
             assertSoftly {
-                result.content() shouldHaveSize 2
-                (result.content()[0] as ImageContent).data().toList() shouldBe listOf<Byte>(1, 2, 3)
-                (result.content()[1] as AudioContent).data().toList() shouldBe listOf<Byte>(4, 5, 6)
+                encoded.content() shouldHaveSize 2
+                (encoded.content()[0] as TextContent).text() shouldBe "Answer"
+                (encoded.content()[1] as ImageContent).mimeType() shouldBe "image/png"
+                binary.content() shouldHaveSize 2
+                (binary.content()[0] as ImageContent).data().toList() shouldBe listOf<Byte>(1, 2, 3)
+                (binary.content()[1] as AudioContent).data().toList() shouldBe listOf<Byte>(4, 5, 6)
             }
         }
     }
 
     @Test
-    fun `text DSL returns a single-block ToolResult`() {
-        withStatelessContext { ctx ->
-            val request =
-                ToolRequest
-                    .builder()
-                    .name("say")
-                    .arguments(Args.of(null, null))
-                    .build()
-            val scope = ToolScope(ctx, request = request)
-            val result = scope.text("hi")
-            result.shouldBeInstanceOf<ToolResult.Success>()
-            (result.content().single() as TextContent).text() shouldBe "hi"
-        }
-    }
+    fun `text, raw and empty build single-purpose success results`() {
+        withToolScope {
+            val plain = text("hi").shouldBeInstanceOf<ToolResult.Success>()
+            val preSerialized =
+                raw("""{"k":"v"}""", "raw text").shouldBeInstanceOf<ToolResult.Success>()
+            val nothing = empty().shouldBeInstanceOf<ToolResult.Success>()
 
-    // endregion
-
-    // region: ToolScope convenience accessors
-
-    @Test
-    fun `ToolScope arguments delegates to request arguments`() {
-        withStatelessContext { ctx ->
-            val args = Args.of(mapOf("k" to "v"), null)
-            val request =
-                ToolRequest
-                    .builder()
-                    .name("t")
-                    .arguments(args)
-                    .build()
-            val scope = ToolScope(ctx, request = request)
-            scope.arguments shouldBe args
+            assertSoftly {
+                (plain.content().single() as TextContent).text() shouldBe "hi"
+                (preSerialized.content().single() as TextContent).text() shouldBe "raw text"
+                nothing.structured().isPresent shouldBe false
+                nothing.content() shouldHaveSize 0
+            }
         }
     }
 
     @Test
-    fun `ToolScope fail returns a failed ToolResult with the message`() {
-        withStatelessContext { ctx ->
-            val request =
-                ToolRequest
-                    .builder()
-                    .name("t")
-                    .arguments(Args.of(null, null))
-                    .build()
-            val scope = ToolScope(ctx, request = request)
-            val result = scope.fail("boom")
-            result.shouldBeInstanceOf<ToolResult.Error>()
-            (result.content().single() as TextContent).text() shouldBe "boom"
-        }
-    }
-
-    @Test
-    fun `ToolScope fail with content DSL builds a multi-block error ToolResult`() {
-        withStatelessContext { ctx ->
-            val request =
-                ToolRequest
-                    .builder()
-                    .name("t")
-                    .arguments(Args.of(null, null))
-                    .build()
-            val scope = ToolScope(ctx, request = request)
-            val result =
-                scope.fail {
+    fun `fail builds an error result from a message or a content DSL`() {
+        withToolScope {
+            val single = fail("boom")
+            val multi =
+                fail {
                     text("Validation failed")
                     text("field 'email' is required")
                 }
-            result.shouldBeInstanceOf<ToolResult.Error>()
+
+            single.shouldBeInstanceOf<ToolResult.Error>()
+            multi.shouldBeInstanceOf<ToolResult.Error>()
             assertSoftly {
-                result.content() shouldHaveSize 2
-                (result.content()[0] as TextContent).text() shouldBe "Validation failed"
-                (result.content()[1] as TextContent).text() shouldBe "field 'email' is required"
+                (single.content().single() as TextContent).text() shouldBe "boom"
+                multi.content() shouldHaveSize 2
+                (multi.content()[0] as TextContent).text() shouldBe "Validation failed"
+                (multi.content()[1] as TextContent).text() shouldBe "field 'email' is required"
             }
         }
     }
 
     @Test
-    fun `ToolScope raw returns a structured ToolResult with the pre-serialized JSON and text`() {
-        withStatelessContext { ctx ->
-            val request =
-                ToolRequest
-                    .builder()
-                    .name("t")
-                    .arguments(Args.of(null, null))
-                    .build()
-            val scope = ToolScope(ctx, request = request)
-            val result = scope.raw("""{"k":"v"}""", "raw text")
-            result.shouldBeInstanceOf<ToolResult.Success>()
-            (result.content().single() as TextContent).text() shouldBe "raw text"
-        }
-    }
+    fun `inputRequired accepts a request map or vararg pairs`() {
+        val ask = RpcMethodRequest("elicitation/create")
 
-    @Test
-    fun `ToolScope empty returns a ToolResult with no structured value and no content`() {
-        withStatelessContext { ctx ->
-            val request =
-                ToolRequest
-                    .builder()
-                    .name("t")
-                    .arguments(Args.of(null, null))
-                    .build()
-            val scope = ToolScope(ctx, request = request)
-            val result = scope.empty()
-            result.shouldBeInstanceOf<ToolResult.Success>()
+        withToolScope {
+            val fromMap = inputRequired(mapOf("confirm" to ask), state = "opaque")
+            val fromPairs = inputRequired("confirm" to ask)
+
+            fromMap.shouldBeInstanceOf<ToolResult.InputRequired>()
+            fromPairs.shouldBeInstanceOf<ToolResult.InputRequired>()
             assertSoftly {
-                result.structured().isPresent shouldBe false
-                result.content() shouldHaveSize 0
+                fromMap.inputRequests() shouldBe mapOf("confirm" to ask)
+                fromMap.requestState() shouldBe "opaque"
+                fromPairs.inputRequests() shouldBe mapOf("confirm" to ask)
+                fromPairs.requestState() shouldBe null
             }
         }
     }
 
     @Test
-    fun `ToolScope inputRequired with a map returns an InputRequired ToolResult`() {
-        withStatelessContext { ctx ->
-            val request =
-                ToolRequest
-                    .builder()
-                    .name("t")
-                    .arguments(Args.of(null, null))
-                    .build()
-            val scope = ToolScope(ctx, request = request)
-            val ask = RpcMethodRequest("elicitation/create")
-            val result = scope.inputRequired(mapOf("confirm" to ask), state = "opaque")
-            result.shouldBeInstanceOf<ToolResult.InputRequired>()
-            assertSoftly {
-                result.inputRequests() shouldBe mapOf("confirm" to ask)
-                result.requestState() shouldBe "opaque"
-            }
-        }
-    }
+    fun `ToolScope arguments delegates to request arguments`() {
+        val args = Args.of(mapOf("k" to "v"), null)
 
-    @Test
-    fun `ToolScope inputRequired with vararg pairs returns an InputRequired ToolResult`() {
-        withStatelessContext { ctx ->
-            val request =
-                ToolRequest
-                    .builder()
-                    .name("t")
-                    .arguments(Args.of(null, null))
-                    .build()
-            val scope = ToolScope(ctx, request = request)
-            val ask = RpcMethodRequest("elicitation/create")
-            val result = scope.inputRequired("confirm" to ask)
-            result.shouldBeInstanceOf<ToolResult.InputRequired>()
-            assertSoftly {
-                result.inputRequests() shouldBe mapOf("confirm" to ask)
-                result.requestState() shouldBe null
-            }
-        }
-    }
-
-    @Test
-    fun `tool builder sets taskSupport on the registered descriptor`() {
-        TachyonServer(port = 0) {
-            name("task-support-test")
-            capabilities {
-                tasks(DescriptorTaskConnector)
-            }
-            tool("t-task", taskSupport = TaskSupport.OPTIONAL) {
-                ToolResult.text("ok")
-            }
-        }.use { handle ->
-            handle
-                .tools()
-                .find("t-task")
-                .orElse(null)
-                ?.taskSupport() shouldBe TaskSupport.OPTIONAL
-        }
+        withToolScope(args) { arguments shouldBe args }
     }
 
     // endregion
@@ -622,5 +417,17 @@ internal class KotlinApiTest {
         }
     }
 
-    // endregion
+    private fun <T> withToolScope(
+        arguments: Args = Args.of(null, null),
+        block: ToolScope.() -> T,
+    ): T =
+        withStatelessContext { ctx ->
+            val request =
+                ToolRequest
+                    .builder()
+                    .name("t")
+                    .arguments(arguments)
+                    .build()
+            ToolScope(ctx, request = request).block()
+        }
 }

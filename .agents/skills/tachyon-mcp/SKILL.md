@@ -241,13 +241,22 @@ handler's `InteractionContext` and needs no token.
 
 ### Session `session(cfg -> ...)`
 
+Stateless by default. **Setting any option below enables sessions** — no flag needed.
+`ServerBuilder.stateless()` writes the opt-out down; `.enabled(b)` is deprecated. An explicit
+opt-out, through either route, combined with a session option is the one contradiction
+(off + option ⇒ `IllegalStateException`).
+
 | Method | Default |
 |---|---|
-| `.enabled(b)` | false (stateless) |
+| `.enabled()` | sessions on, all defaults |
 | `.sessionTtl(d)` | 30s |
 | `.janitorInterval(d)` | 5s |
 | `.sessionIdGenerator(g)` | `sess_<uuid8>` (derives id from initialize `HttpRequest`) |
 | `.sessionEventStore(r)` / `.sessionStore(s)` | in-memory (experimental persistence SPIs) |
+
+Kotlin DSL: `session { enable() }` is `.enabled()`, `stateless()` is the opt-out; the `enabled`
+property is deprecated. Assigning `sessionIdGenerator` opts in even when the value is
+`SessionIdGenerator.DEFAULT`.
 
 ### Runtime `runtime(cfg -> ...)`
 

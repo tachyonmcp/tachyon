@@ -47,8 +47,8 @@ class McpOperationHandlerTest {
 
     @BeforeEach
     void setUp() {
-        server = (ServerEngine)
-                TachyonServer.builder().session(s -> s.enabled(true)).build();
+        server =
+                (ServerEngine) TachyonServer.builder().session(s -> s.enabled()).build();
         channel = new EmbeddedChannel(
                 new McpOperationHandler(server, new McpDispatcher(server, Runnable::run), Runnable::run));
     }
@@ -187,7 +187,7 @@ class McpOperationHandlerTest {
 
         try (final var store = new ThreadRecordingSessionStore(lookupThread, lookupFinished);
                 final var testServer = (ServerEngine) TachyonServer.builder()
-                        .session(config -> config.enabled(true).sessionStore(store))
+                        .session(config -> config.enabled().sessionStore(store))
                         .build()) {
             try (final var lookupExecutor = Executors.newSingleThreadExecutor()) {
                 final var testChannel = new EmbeddedChannel(new McpOperationHandler(
@@ -221,7 +221,7 @@ class McpOperationHandlerTest {
         final var store = mock(SessionStore.class);
         when(store.find("unavailable")).thenThrow(new IllegalStateException("Store unavailable"));
         final var testServer = (ServerEngine) TachyonServer.builder()
-                .session(config -> config.enabled(true).sessionStore(store))
+                .session(config -> config.enabled().sessionStore(store))
                 .build();
         final var testChannel = new EmbeddedChannel(
                 new InteractionHandler(),

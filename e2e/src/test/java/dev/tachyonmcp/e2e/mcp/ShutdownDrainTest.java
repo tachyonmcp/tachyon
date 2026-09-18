@@ -27,7 +27,7 @@ class ShutdownDrainTest {
         final var result = new CompletableFuture<ToolResult>();
         final var server = (ServerEngine) TachyonServer.builder()
                 .network(n -> n.port(0))
-                .session(s -> s.enabled(true))
+                .session(s -> s.enabled())
                 .runtime(r -> r.shutdownGracePeriod(Duration.ofSeconds(5)))
                 .build();
         server.tools().registerAsync(b -> b.name("drain"), (context, request) -> {
@@ -74,7 +74,7 @@ class ShutdownDrainTest {
         final var eventLoopBlocked = new CountDownLatch(1);
         final var server = (ServerEngine) TachyonServer.builder()
                 .network(n -> n.port(0))
-                .session(s -> s.enabled(true))
+                .session(s -> s.enabled())
                 .runtime(r -> r.shutdownGracePeriod(Duration.ofSeconds(5)))
                 .pipelineCustomizer(p -> channel.set(p.channel()))
                 .build();

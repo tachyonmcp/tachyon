@@ -3,6 +3,7 @@ package dev.tachyonmcp.e2e.mcp;
 
 import dev.tachyonmcp.core.server.ServerBuilder;
 import dev.tachyonmcp.core.server.TachyonServer;
+import dev.tachyonmcp.core.server.config.SessionConfig;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
 import dev.tachyonmcp.testkit.Mcp20260728Client;
 import dev.tachyonmcp.testkit.McpClient;
@@ -85,7 +86,11 @@ public abstract class AbstractMcpE2eTest<C extends McpClient> {
         closeCustomServerIfRunning();
         var builder = TachyonServer.builder().port(0);
         configurer.accept(builder);
-        builder.session(s -> s.enabled(sessionMode() == SessionMode.STATEFUL));
+        if (sessionMode() == SessionMode.STATEFUL) {
+            builder.session(SessionConfig.Builder::enabled);
+        } else {
+            builder.stateless();
+        }
         var started = McpTestServers.startSafely(builder, registrar);
         this.server = started;
         this.port = started.port();

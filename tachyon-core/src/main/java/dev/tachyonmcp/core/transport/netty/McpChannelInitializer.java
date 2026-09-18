@@ -50,7 +50,7 @@ public class McpChannelInitializer extends ChannelInitializer<SocketChannel> {
     /** Default max aggregated request body. 64 KB was too small for schemas + tool results. */
     public static final int DEFAULT_MAX_CONTENT_LENGTH = 1024 * 1024; // 1 MB
 
-    private static final String CHANNEL_LOGGER_NAME = "me.kpavlov.tachyon.transport.netty.channel";
+    private static final String CHANNEL_LOGGER_NAME = "dev.tachyonmcp.transport.netty.channel";
     private static final LoggingHandler CHANNEL_LOGGER = new LoggingHandler(CHANNEL_LOGGER_NAME, LogLevel.DEBUG);
     private static final boolean CHANNEL_LOGGING_ENABLED =
             org.slf4j.LoggerFactory.getLogger(CHANNEL_LOGGER_NAME).isDebugEnabled();

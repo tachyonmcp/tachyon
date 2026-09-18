@@ -192,14 +192,17 @@ class ExtensionNegotiationPolicyTest extends AbstractStatelessMcpE2eTest<McpClie
             assertThat(call(client, 1, "required/unknown", NO_EXTENSIONS_MAP))
                     .isJsonRpcError()
                     .hasId(1)
+                    .hasHttpStatusCode(404)
                     .isMethodNotFound();
             assertThat(call(client, 2, "optional/unknown", NO_EXTENSIONS_MAP))
                     .isJsonRpcError()
                     .hasId(2)
+                    .hasHttpStatusCode(404)
                     .isMethodNotFound();
             assertThat(call(client, 3, "skills/list", NO_EXTENSIONS_MAP))
                     .isJsonRpcError()
                     .hasId(3)
+                    .hasHttpStatusCode(404)
                     .isMethodNotFound();
         }
     }

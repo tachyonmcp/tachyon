@@ -18,7 +18,7 @@ class McpTestClientBuilderTest {
 
     @BeforeAll
     static void startServer() {
-        server = McpTestServers.start(b -> b.session(c -> c.enabled(true)), s -> {});
+        server = McpTestServers.start(b -> b.session(c -> c.enabled()), s -> {});
         port = server.port();
     }
 

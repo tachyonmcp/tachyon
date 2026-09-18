@@ -1,14 +1,14 @@
 ---
 title: Sessions
 tags: [concept, session, state]
-sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/runtime/Session.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/session/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/SessionConfig.java, tachyon-api/src/main/java/dev/tachyonmcp/api/server/session/SessionIdGenerator.java]
-updated: 2026-09-17
-commit: 81a68505
+sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/runtime/Session.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/session/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/SessionConfig.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultServerBuilder.java, tachyon-api/src/main/java/dev/tachyonmcp/api/server/session/SessionIdGenerator.java]
+updated: 2026-09-18
+commit: 6a895703
 ---
 
 # 🪪 Sessions
 
-Verdict: **stateless by default** (`SessionConfig.enabled=false`). Sessions exist only for 2025-11-25 clients on a server with `session { enabled(true) }`. Split: process-local `Session` runtime (connection, cursor, throttle) + immutable `SessionSnapshot` persisted in pluggable `SessionStore` with revision CAS → multi-node friendly.
+Verdict: **stateless by default** (`SessionConfig.enabled=false`) — a stateless server keeps **no** session state at all (`SessionStore.noop()`, `SessionEventStore.noop()`). Stateless is a **server** property, not a session one — no session config ⇒ no sessions. Sessions exist only for 2025-11-25 clients on a stateful server; any `session(...)` option enables them on its own, `Builder#enabled` turns them on with defaults, `ServerBuilder#stateless` writes the opt-out down `SessionConfig.Builder#build`. Split: process-local `Session` runtime (connection, cursor, throttle) + immutable `SessionSnapshot` persisted in pluggable `SessionStore` with revision CAS → multi-node friendly.
 
 ## 🧬 Types
 
@@ -18,8 +18,8 @@ Verdict: **stateless by default** (`SessionConfig.enabled=false`). Sessions exis
 | `SessionState` | `INITIALIZING → ACTIVE → (DRAINING) → CLOSED` | `SessionState` |
 | `SessionKey(sessionId, generationId)` | generation fences stale work; UUID generation per create | `SessionKey`, `SessionManager#withLifecycleLock` |
 | `SessionSnapshot` | transport-free state + `expiresAt` + `revision` | `SessionSnapshot` |
-| `SessionStore` | `create/find/compareAndSet/touch/terminate`, sync, may do I/O, never on event loop | `SessionStore` |
-| `SessionEventStore` | `append/drain/replay` event log for SSE resume | `SessionEventStore` |
+| `SessionStore` | `create/find/compareAndSet/touch/terminate`, sync, may do I/O, never on event loop; `noop()` when sessions off | `SessionStore`, `NoopSessionStore` |
+| `SessionEventStore` | `append/drain/replay` event log for SSE resume; `noop()` when sessions off | `SessionEventStore`, `NoopSessionEventStore` |
 | `SessionManager` | glue: local map + store + per-id lifecycle lock + janitor | `SessionManager` |
 | `SessionIdGenerator<T>` | `DEFAULT` = `sess_<uuid-no-dashes>`, `readsRequest()=false` | `SessionIdGenerator` |
 
@@ -40,9 +40,13 @@ Verdict: **stateless by default** (`SessionConfig.enabled=false`). Sessions exis
 - `getSession` → local map, else **hydrate** from store (skip + terminate if CLOSED or expired; incompatible protocol version ⇒ empty) `SessionManager`. `getLocalSession` never hits store (used on hot paths: GET SSE, redelivery).
 - Mutations (`activate`, `protocol`, `enableExtension`, `loggingLevel`, `close`) call `onChange` → `persist` → `store.compareAndSet(expected, revision+1)`; lost CAS ⇒ **evict local** (another node owns it) `SessionManager#persist`.
 - `touch()` → `onTouch` → async expiry refresh only when within `ttl/2` of `expiresAt`, deduped per key, on persistence executor `SessionManager`.
+- Store choice is resolved once per `build()` from the published `ServerConfig`, so `TachyonServer#config` exposes the very stores the server writes to `DefaultServerBuilder#build`, `SessionConfig#sessionStoreOrDefault`.
+- ⚠️ Stateless ⇒ `NoopSessionStore`: `create` mints a snapshot it never keeps, `find` is always empty, and `compareAndSet`/`touch`/`terminate` answer **`true`** — "accepted, nothing to persist". A `false` would read as lost ownership and evict the local session on its first state change `SessionManager#persist`.
 - In-memory store `InMemorySessionStore` — `ConcurrentHashMap` keyed by session id. CAS requires same key + higher revision `InMemorySessionStore#compareAndSet`. `touch`/`terminate` are lock-free `get` → `replace`/`remove` loops: replacement snapshot built outside the map's bin monitor, lost race re-reads and retries `InMemorySessionStore#touch`, `InMemorySessionStore#terminate`. JMH: `tachyon-core/src/test/java/dev/tachyonmcp/core/server/session/InMemorySessionStoreBenchmark.java` (`make jmh`).
 
 ## 📚 Event log
+
+Stateless ⇒ `NoopSessionEventStore`: `append` discards, `drain` returns the cursor, so `replay` is always empty `SessionEventStore#noop`.
 
 `InMemorySessionEventStore` `tachyon-core/src/main/java/dev/tachyonmcp/core/server/session/InMemorySessionEventStore.java`: caps **10 000 total / 512 per session** (`InMemorySessionEventStore#DEFAULT_MAX_EVENTS`), per-session FIFO, global oldest eviction via `TreeMap headIndex` O(log n), `ReentrantLock` (VT-safe), snapshot-then-process so slow consumer never blocks append.
 

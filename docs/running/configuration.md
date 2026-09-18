@@ -136,7 +136,7 @@ a tool:
   after the stream closed, including when your handler closes its own stream before producing
   a result.
 
-Neither needs configuration beyond `session.enabled(true)`, which
+Neither needs configuration beyond enabling sessions, which
 [Session](#session) covers. Replay reads from the session event store, so a custom
 `SessionEventStore` participates in it.
 
@@ -290,17 +290,35 @@ network { ioEngine = NettyIoEngine.EPOLL }
 
 ## Session
 
-Configured via `session { }` / `SessionConfig.Builder`. Sessions are off by default
-(stateless server). All other session options require `enabled = true` — configuring
-them on a stateless server fails at construction.
+Configured via `session { }` / `SessionConfig.Builder`. Stateless is a property of the **server**,
+not of a session — a stateless server simply keeps no sessions, and that is the default.
+**Configuring a session option is the opt-in**: setting `sessionTtl`, `janitorInterval`,
+`sessionStore`, `sessionEventStore` or `sessionIdGenerator` turns sessions on by itself. `enabled()`
+turns them on with the defaults, and `stateless()` writes the opt-out down. A stateless server keeps
+no session state: `SessionStore.noop()` and `SessionEventStore.noop()` persist nothing.
+
+```java
+.session(s -> s.sessionTtl(Duration.ofMinutes(5)))   // sessions on, custom TTL
+.session(s -> s.enabled())                           // sessions on, all defaults
+.stateless()                                         // explicitly stateless (the default)
+```
+
+```kotlin
+session { sessionTtl = 5.minutes }   // sessions on, custom TTL
+session { enable() }                 // sessions on, all defaults
+stateless()                          // explicitly stateless (the default)
+```
+
+Turning sessions off while a session option is configured is the one contradiction the API still
+accepts, and it fails fast: `IllegalStateException` at build time.
 
 | Option | Default | Description |
 |---|---|---|
-| `enabled` | `false` | Server-side sessions are off by default (stateless). Set `true` to create sessions with TTL tracking |
+| `enabled` | `false` | Server-side sessions are off by default (stateless server). Configuring any option below enables them; `enabled()` (Java) or `enable()` (Kotlin) enables them with defaults; `stateless()` on the server builder is the explicit opt-out. The boolean `SessionConfig.Builder.enabled(boolean)` overload and the Kotlin `enabled` property are deprecated |
 | `sessionTtl` | `30s` | Idle sessions are evicted after this duration |
 | `janitorInterval` | `5s` | Janitor sweep interval; controls how often expired sessions are checked |
-| `sessionEventStore` | in-memory | Experimental custom session event store |
-| `sessionStore` | in-memory | Experimental immutable session snapshot store |
+| `sessionEventStore` | in-memory when enabled, no-op when off | Experimental custom session event store |
+| `sessionStore` | in-memory when enabled, no-op when off | Experimental immutable session snapshot store |
 | `sessionIdGenerator` | `sess_<uuid>` | Custom hook for deriving session ids from the initialize `HttpRequest` (headers/URI) |
 
 Live `Session` objects remain internal and process-local. `SessionStore` persists immutable,

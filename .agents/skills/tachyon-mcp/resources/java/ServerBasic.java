@@ -33,7 +33,6 @@ public final class ServerBasic {
             .info(it -> it.name("demo-server").version("1.0").description("Demo MCP server"))
             .capabilities(c -> c.tools(true).resources(true, true).prompts(true))
             .session(s -> s
-                .enabled(true)
                 .sessionTtl(ofMinutes(5))
                 .janitorInterval(ofSeconds(5))
                 .sessionIdGenerator((channelContext, req) -> "sid_" + UUID.randomUUID())
