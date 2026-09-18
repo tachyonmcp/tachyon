@@ -2,8 +2,8 @@
 title: Feature registries
 tags: [concept, tools, resources, prompts, completions]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/handlers/, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java]
-updated: 2026-09-17
-commit: 92b7a28d
+updated: 2026-09-18
+commit: 847c8d6a
 ---
 
 # 🧰 Feature registries
@@ -73,7 +73,7 @@ Mode `OFF` ⇒ registration silently skipped (debug log) in every registry.
 
 - `prompts/get`: prompt `inputSchema` (derived from arguments) validated with input validator `PromptsGetHandler#handleAsync`; result `PromptResult.Messages | InputRequired`.
 - `completion/complete`: no handler ⇒ empty result (not error); >100 values truncated + `hasMore=true` `CompletionCompleteHandler#MAX_VALUES`, `CompletionCompleteHandler#handleAsync`.
-- Completion registration is last-write-wins per target (`DefaultCompletionRegistry#registerForPromptAsync`). Derived handlers (enum auto-completion) instead go through internal `CompletionRegistry#registerForPromptIfAbsent` / `#registerForResourceIfAbsent`, so an explicit handler is never clobbered — see [[declarative-configuration]].
+- Completion registration is last-write-wins per target (`DefaultCompletionRegistry#registerForPromptAsync`). Derived handlers (enum auto-completion) instead go through the `@InternalApi` `CompletionRegistry#registerForPromptIfAbsent` / `#registerForResourceIfAbsent`, so an explicit handler is never clobbered. Public `Completions` deliberately has no if-absent method — a registration context carrying a caller's own `Completions` cannot take a derived handler and fails fast — see [[declarative-configuration]].
 
 ## 📡 subscriptions/listen (2026-07-28)
 

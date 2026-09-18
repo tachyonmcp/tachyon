@@ -13,7 +13,6 @@ import dev.tachyonmcp.api.server.features.annotations.AnnotationProvider;
 import dev.tachyonmcp.api.server.features.annotations.AnnotationRegistrationContext;
 import dev.tachyonmcp.api.server.features.completions.CompletionFn;
 import dev.tachyonmcp.api.server.features.completions.CompletionResult;
-import dev.tachyonmcp.api.server.features.completions.Completions;
 import dev.tachyonmcp.api.server.features.resources.ResourceTemplateDescriptor;
 import dev.tachyonmcp.core.server.features.completions.CompletionRegistry;
 import dev.tachyonmcp.core.server.json.JavaTypeSchemas;
@@ -47,13 +46,18 @@ import org.jspecify.annotations.Nullable;
  * whose argument is not declared by its known prompt or resource template also fails.
  *
  * <p>Enum-typed prompt and resource template arguments complete automatically from constant names
- * (case-insensitive prefix) unless the same instance declares an {@code @McpCompletion} for that
- * target.
+ * (case-insensitive prefix). That handler is derived, so it is registered only when the target has
+ * no completion handler yet: an explicit {@code @McpCompletion} — declared by any service,
+ * registered before or after — always wins. Turn the derived handlers off with
+ * {@link #withEnumCompletions(boolean) withEnumCompletions(false)}; registering one needs the
+ * server's own completion registry, so a foreign {@code AnnotationRegistrationContext} either
+ * supplies that registry, declares the completion explicitly, or switches the derived handlers off.
  */
 @ExperimentalApi
 public final class TachyonAnnotationProvider implements AnnotationProvider {
 
-    private static final TachyonAnnotationProvider INSTANCE = new TachyonAnnotationProvider();
+    private static final TachyonAnnotationProvider INSTANCE = new TachyonAnnotationProvider(true);
+    private static final TachyonAnnotationProvider WITHOUT_ENUM_COMPLETIONS = new TachyonAnnotationProvider(false);
     private static final List<Class<? extends Annotation>> FEATURES =
             List.of(McpTool.class, McpResource.class, McpPrompt.class, McpCompletion.class);
     private static final Pattern TEMPLATE_EXPRESSION = Pattern.compile("\\{[+#./;?&]?([^}]*)}");
@@ -61,15 +65,39 @@ public final class TachyonAnnotationProvider implements AnnotationProvider {
     private static final String PROMPT = "prompt:";
     private static final String RESOURCE = "resource:";
 
-    private TachyonAnnotationProvider() {}
+    private final boolean enumCompletions;
+
+    private TachyonAnnotationProvider(boolean enumCompletions) {
+        this.enumCompletions = enumCompletions;
+    }
 
     /**
-     * Returns the shared stateless provider.
+     * Returns the shared stateless provider, with automatic enum completion enabled.
      *
      * @return the provider
      */
     public static TachyonAnnotationProvider instance() {
         return INSTANCE;
+    }
+
+    /**
+     * Returns the shared stateless provider with automatic enum completion enabled or disabled.
+     * Disabled, enum-typed prompt and resource-template arguments get no derived completion
+     * handler — only an explicit {@link McpCompletion @McpCompletion} completes them.
+     *
+     * <pre>{@code
+     * TachyonServer.builder()
+     *     .annotations(a -> a
+     *         .withProvider(TachyonAnnotationProvider.withEnumCompletions(false))
+     *         .register(new WeatherService()))
+     *     .build();
+     * }</pre>
+     *
+     * @param enabled whether enum-typed arguments derive a completion handler
+     * @return the provider; {@code withEnumCompletions(true)} is {@link #instance()}
+     */
+    public static TachyonAnnotationProvider withEnumCompletions(boolean enabled) {
+        return enabled ? INSTANCE : WITHOUT_ENUM_COMPLETIONS;
     }
 
     /**
@@ -157,7 +185,7 @@ public final class TachyonAnnotationProvider implements AnnotationProvider {
                                 invoker.invoke(ctx, request.arguments().asMap()), serializer));
     }
 
-    private static void registerResource(
+    private void registerResource(
             Object instance,
             Method method,
             McpResource resource,
@@ -208,10 +236,14 @@ public final class TachyonAnnotationProvider implements AnnotationProvider {
                         });
         declared.put(RESOURCE + uri, List.copyOf(variables));
         registerEnumCompletion(
-                invoker, RESOURCE + uri, completed, fn -> registerFallbackForResource(context.completions(), uri, fn));
+                invoker,
+                RESOURCE + uri,
+                completed,
+                fn -> requireCompletionRegistry(context, "resource '" + uri + "'", method)
+                        .registerForResourceIfAbsent(uri, fn));
     }
 
-    private static void registerPrompt(
+    private void registerPrompt(
             Object instance,
             Method method,
             McpPrompt prompt,
@@ -234,21 +266,27 @@ public final class TachyonAnnotationProvider implements AnnotationProvider {
                                 serializer));
         declared.put(PROMPT + name, invoker.argumentNames());
         registerEnumCompletion(
-                invoker, PROMPT + name, completed, fn -> registerFallbackForPrompt(context.completions(), name, fn));
+                invoker,
+                PROMPT + name,
+                completed,
+                fn -> requireCompletionRegistry(context, "prompt '" + name + "'", method)
+                        .registerForPromptIfAbsent(name, fn));
     }
 
-    private static void registerFallbackForPrompt(Completions completions, String promptName, CompletionFn fn) {
-        if (completions instanceof CompletionRegistry registry) registry.registerForPromptIfAbsent(promptName, fn);
-        else completions.registerForPrompt(promptName, fn);
+    private static CompletionRegistry requireCompletionRegistry(
+            AnnotationRegistrationContext context, String target, Method method) {
+        final var completions = context.completions();
+        if (completions instanceof CompletionRegistry registry) return registry;
+        throw new IllegalStateException("Automatic enum completion for " + target
+                + " needs the server's completion registry, but the registration context supplies "
+                + completions.getClass().getName()
+                + "; declare an @McpCompletion for that target, or register with "
+                + "TachyonAnnotationProvider.withEnumCompletions(false): " + method);
     }
 
-    private static void registerFallbackForResource(Completions completions, String uriOrTemplate, CompletionFn fn) {
-        if (completions instanceof CompletionRegistry registry) registry.registerForResourceIfAbsent(uriOrTemplate, fn);
-        else completions.registerForResource(uriOrTemplate, fn);
-    }
-
-    private static void registerEnumCompletion(
+    private void registerEnumCompletion(
             MethodInvoker invoker, String target, Set<String> completed, Consumer<CompletionFn> register) {
+        if (!enumCompletions) return;
         final var constants = invoker.enumArguments();
         if (constants.isEmpty() || completed.contains(target)) return;
         register.accept((ctx, request) -> {

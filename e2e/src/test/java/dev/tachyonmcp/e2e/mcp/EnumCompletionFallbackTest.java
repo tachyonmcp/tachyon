@@ -7,6 +7,7 @@ import dev.tachyonmcp.api.annotations.McpCompletion;
 import dev.tachyonmcp.api.annotations.McpPrompt;
 import dev.tachyonmcp.api.annotations.McpResource;
 import dev.tachyonmcp.core.server.AnnotationContext;
+import dev.tachyonmcp.core.server.annotations.TachyonAnnotationProvider;
 import dev.tachyonmcp.testkit.McpTestClients;
 import dev.tachyonmcp.testkit.McpTestServers;
 import java.util.List;
@@ -15,7 +16,8 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Enum-derived completion is a fallback: an explicit {@code @McpCompletion} wins, whichever
- * service declares it and whichever order the services are registered in.
+ * service declares it and whichever order the services are registered in. It is also optional —
+ * {@code TachyonAnnotationProvider.withEnumCompletions(false)} derives nothing.
  */
 class EnumCompletionFallbackTest {
 
@@ -84,6 +86,32 @@ class EnumCompletionFallbackTest {
                      "argument":{"name":"season","value":"su"}}}
                     """)).isSuccess().hasId(4).hasResult("""
                     {"completion":{"values":["SUMMER"]},"resultType":"complete"}
+                    """);
+        }
+    }
+
+    @Test
+    void enumFallbackIsAbsentWhenTheProviderHasEnumCompletionsOff() throws Exception {
+        try (var server = McpTestServers.start(
+                        builder -> builder.annotations(annotations -> annotations
+                                .withProvider(TachyonAnnotationProvider.withEnumCompletions(false))
+                                .register(new SeasonService())),
+                        ignored -> {});
+                var client = McpTestClients.latest(server.port())) {
+            // language=json
+            assertThat(client.post("""
+                    {"jsonrpc":"2.0","id":5,"method":"completion/complete","params":{
+                     "ref":{"type":"ref/prompt","name":"packing"},"argument":{"name":"season","value":"w"}}}
+                    """)).isSuccess().hasId(5).hasResult("""
+                    {"completion":{"values":[],"hasMore":false},"resultType":"complete"}
+                    """);
+            // language=json
+            assertThat(client.post("""
+                    {"jsonrpc":"2.0","id":6,"method":"completion/complete","params":{
+                     "ref":{"type":"ref/resource","uri":"weather://seasons/{season}"},
+                     "argument":{"name":"season","value":"su"}}}
+                    """)).isSuccess().hasId(6).hasResult("""
+                    {"completion":{"values":[],"hasMore":false},"resultType":"complete"}
                     """);
         }
     }

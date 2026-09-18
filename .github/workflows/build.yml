@@ -31,7 +31,7 @@ jobs:
             codecov: true
           - version: 25
             distribution: temurin
-            command: "clean build jmh"
+            command: "clean build"
             codecov: false
           - version: 27
             distribution: zulu

@@ -2,8 +2,8 @@
 title: Declarative configuration
 tags: [concept, configuration, annotations]
 sources: [tachyon-api/src/main/java/dev/tachyonmcp/api/annotations/, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/annotations/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/annotations/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/AnnotationContext.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultServerBuilder.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/json/JavaTypeSchemas.java]
-updated: 2026-09-17
-commit: 92b7a28d
+updated: 2026-09-18
+commit: 847c8d6a
 ---
 
 # 🏷️ Declarative configuration
@@ -103,9 +103,9 @@ Registration order per service: all tools/resources/prompts first, then completi
 
 ### 🔤 Enum auto-completion
 
-Prompt or resource-template enum arguments (incl. `Optional<Enum>`) get a completion handler for free: case-insensitive prefix over constant `name()`s; other arguments ⇒ empty. Skipped when the same service declares `@McpCompletion` for that target ([TachyonAnnotationProvider#registerEnumCompletion](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/annotations/TachyonAnnotationProvider.java), [MethodInvoker#enumArguments](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/annotations/MethodInvoker.java)).
+Prompt or resource-template enum arguments (incl. `Optional<Enum>`) get a completion handler for free: case-insensitive prefix over constant `name()`s; other arguments ⇒ empty. Skipped when the same service declares `@McpCompletion` for that target, or when the provider has enum completions off ([TachyonAnnotationProvider#registerEnumCompletion](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/annotations/TachyonAnnotationProvider.java), [MethodInvoker#enumArguments](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/annotations/MethodInvoker.java)).
 
-Derived, never overriding: it registers if-absent, so an explicit `@McpCompletion` from **any** service wins whichever order the services register in — registered earlier it survives, registered later it replaces the fallback ([TachyonAnnotationProvider#registerFallbackForPrompt](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/annotations/TachyonAnnotationProvider.java), [TachyonAnnotationProvider#registerFallbackForResource](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/annotations/TachyonAnnotationProvider.java), [DefaultCompletionRegistry#registerForPromptIfAbsent](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/completions/DefaultCompletionRegistry.java)). See [[feature-registries]].
+Derived, never overriding: the fallback is registered only through the internal if-absent API, so an explicit `@McpCompletion` from **any** service wins whichever order the services register in — registered earlier it survives, registered later it replaces the fallback ([TachyonAnnotationProvider#registerEnumCompletion](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/annotations/TachyonAnnotationProvider.java), [CompletionRegistry#registerForPromptIfAbsent](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/completions/CompletionRegistry.java), [DefaultCompletionRegistry#registerForPromptIfAbsent](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/completions/DefaultCompletionRegistry.java)). Public `Completions` has no if-absent method — derived handlers need `CompletionRegistry`, so a context whose `completions()` is a caller's own implementation fails fast instead of clobbering ([TachyonAnnotationProvider#requireCompletionRegistry](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/annotations/TachyonAnnotationProvider.java)). Optional per provider: [TachyonAnnotationProvider#withEnumCompletions](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/annotations/TachyonAnnotationProvider.java) (`false` ⇒ no derived handlers at all; `true` ⇒ `instance()`). See [[feature-registries]].
 
 ## 🎁 Result mapping
 

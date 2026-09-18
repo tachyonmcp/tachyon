@@ -178,6 +178,9 @@ var server = TachyonServer.builder()
   annotated method sharing a name with a bootstrap registration therefore replaces it.
 - Before any `withProvider(...)`, `register(...)` uses `TachyonAnnotationProvider` (`@McpTool`
   and friends).
+- `TachyonAnnotationProvider.withEnumCompletions(false)` is the same provider with automatic enum
+  completion off; `withEnumCompletions(true)` is `instance()`. See
+  [completions](features/completions.md#complete-enum-values-automatically).
 
 ## Third-party providers
 

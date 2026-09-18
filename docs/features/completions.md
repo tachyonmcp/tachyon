@@ -114,8 +114,24 @@ public String reviewByConcern(Concern concern) {
 ```
 
 The same applies to enum resource-template variables and optional enum arguments. Completion uses a
-case-insensitive prefix; actual argument values use exact constant names. An explicit
-`@McpCompletion` for the same target in the same service replaces automatic enum completion.
+case-insensitive prefix; actual argument values use exact constant names. Automatic enum completion
+is a fallback: an explicit `@McpCompletion` for the same target always wins, whichever service
+declares it and whichever order the services register in.
+
+Turn it off per provider:
+
+```java
+TachyonServer.builder()
+    .annotations(a -> a
+        .withProvider(TachyonAnnotationProvider.withEnumCompletions(false))
+        .register(new ReviewService()))
+    .build();
+```
+
+Deriving a handler needs the server's own completion registry. A custom
+`AnnotationRegistrationContext` that supplies its own `Completions` therefore fails registration
+with an `IllegalStateException` when an enum argument would derive one — declare the
+`@McpCompletion` explicitly, or pass `withEnumCompletions(false)`.
 
 ## Programmatic registration
 
