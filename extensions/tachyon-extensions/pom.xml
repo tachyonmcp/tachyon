@@ -8,7 +8,7 @@
 
     <parent>
         <groupId>dev.tachyonmcp</groupId>
-        <artifactId>root</artifactId>
+        <artifactId>tachyon-extensions-modules</artifactId>
         <version>1.0.0-SNAPSHOT</version>
     </parent>
 

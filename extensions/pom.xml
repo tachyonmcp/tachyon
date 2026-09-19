@@ -17,9 +17,10 @@
     <packaging>pom</packaging>
 
     <name>Tachyon MCP Extension Modules</name>
-    <description>Standalone extension modules split out of tachyon-extensions</description>
+    <description>Extension modules: sample tools and standalone extensions</description>
 
     <modules>
+        <module>tachyon-extensions</module>
         <module>tachyon-extensions-skills</module>
     </modules>
 </project>

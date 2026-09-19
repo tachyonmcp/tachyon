@@ -138,7 +138,7 @@
                             <classDirs>
                                 <dir>${project.basedir}/../tachyon-api/target/classes</dir>
                                 <dir>${project.basedir}/../tachyon-core/target/classes</dir>
-                                <dir>${project.basedir}/../tachyon-extensions/target/classes</dir>
+                                <dir>${project.basedir}/../extensions/tachyon-extensions/target/classes</dir>
                                 <dir>${project.basedir}/../extensions/tachyon-extensions-skills/target/classes</dir>
                                 <dir>${project.basedir}/../tachyon-kotlin-kt-schema/target/classes</dir>
                                 <dir>${project.basedir}/../tachyon-kotlin/target/classes</dir>

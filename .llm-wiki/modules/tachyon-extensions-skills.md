@@ -2,8 +2,8 @@
 title: tachyon-extensions-skills
 tags: [module, extensions, skills]
 sources: [extensions/tachyon-extensions-skills/src/main/java/dev/tachyonmcp/extensions/skills/, extensions/tachyon-extensions-skills/src/main/resources/]
-updated: 2026-09-18
-commit: f2adbaed
+updated: 2026-09-19
+commit: 2dad742b
 ---
 
 # 🎓 tachyon-extensions-skills
@@ -43,6 +43,6 @@ Validation `SkillsScanner.buildSkill`: `SKILL.md` required, YAML frontmatter (Sn
 
 ## 🪶 Backward compat
 
-Split out of `tachyon-extensions` (`[[tachyon-extensions]]`); no revapi baseline yet for this artifact (skipped, same as `integrations/*` modules until first release). `tachyon-extensions/revapi.json` waives the resulting `java.class.removed` diffs for the moved public types.
+Split out of `tachyon-extensions` (`[[tachyon-extensions]]`); no revapi baseline yet for this artifact (skipped, same as `integrations/*` modules until first release). `extensions/tachyon-extensions/revapi.json` waives the resulting `java.class.removed` diffs for the moved public types.
 
 Related: [[tachyon-extensions]], [[extensions]].

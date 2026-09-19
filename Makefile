@@ -30,7 +30,7 @@ test: ## Run unit + e2e tests
 
 revapi: ## Check API compatibility against baseline (oldVersion) + write report
 	@echo " 🔄  Checking API compatibility..."
-	@./mvnw revapi:check revapi:report -pl tachyon-api,tachyon-core,tachyon-extensions,tachyon-testkit -DskipTests --no-transfer-progress
+	@./mvnw revapi:check revapi:report -pl tachyon-api,tachyon-core,extensions/tachyon-extensions,extensions/tachyon-extensions-skills,tachyon-testkit -DskipTests --no-transfer-progress
 	@echo " ✅  Done!"
 
 jmh: ## Run JMH benchmarks (perf regression check)
@@ -51,7 +51,7 @@ apidocs:
 	@echo "📚  Building API Docs..."
 	@rm -rf target/reports/apidocs
 	@./mvnw compile javadoc:aggregate \
-		-pl tachyon-api,tachyon-core,tachyon-extensions,extensions/tachyon-extensions-skills,tachyon-testkit -am \
+		-pl tachyon-api,tachyon-core,extensions/tachyon-extensions,extensions/tachyon-extensions-skills,tachyon-testkit -am \
 		--no-transfer-progress
 	@echo " ✅  Done!"
 
