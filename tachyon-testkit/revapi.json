@@ -115,6 +115,17 @@
           "attachments": {
             "since": "1.0.0-beta.27"
           }
+        },
+        {
+          "ignore": true,
+          "code": "java.method.exception.checkedRemoved",
+          "old": "method void dev.tachyonmcp.testkit.McpClient::configureRequest(java.net.http.HttpRequest.Builder, java.lang.String) throws java.lang.Exception",
+          "new": "method void dev.tachyonmcp.testkit.McpClient::configureRequest(java.net.http.HttpRequest.Builder, java.lang.String)",
+          "exception": "java.lang.Exception",
+          "justification": "Remove unused checked exception",
+          "attachments": {
+            "since": "1.0.0-beta.29"
+          }
         }
       ]
     }

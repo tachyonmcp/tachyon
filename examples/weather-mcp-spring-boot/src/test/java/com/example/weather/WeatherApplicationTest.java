@@ -138,7 +138,7 @@ class WeatherApplicationTest {
                      "params":{"name":"get-weather","arguments":{"city":"Tallinn"}}}
                     """)).isSuccess().hasStructuredContent("""
                 {"city":"Tallinn","condition":"Clear sky","temperature":20.0,"unit":"CELSIUS","humidity":60,"windSpeed":10.0}
-                    """);
+                """);
         });
     }
 

@@ -158,7 +158,7 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
     }
 
     @Override
-    public SessionIdGenerator<? super HttpRequest> sessionIdGenerator() {
+    public @Nullable SessionIdGenerator<? super HttpRequest> sessionIdGenerator() {
         return config.session().sessionIdGenerator();
     }
 
@@ -539,8 +539,7 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
 
     @Override
     public void registerHandler(RpcMethodHandler<?, ?> handler) {
-        methodHandlers.put(handler.method(), handler);
-        logger.debug("Handler registered: {}", handler.method());
+        registerHandler(handler.method(), handler);
     }
 
     @Override

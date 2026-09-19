@@ -41,6 +41,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
+import org.mcpjava.server.prompts.Prompt;
+import org.mcpjava.server.prompts.PromptArg;
+import org.mcpjava.server.resources.Resource;
+import org.mcpjava.server.resources.ResourceTemplate;
+import org.mcpjava.server.resources.ResourceTemplateArg;
+import org.mcpjava.server.tools.Tool;
+import org.mcpjava.server.tools.ToolArg;
+import org.mcpjava.server.tools.ToolResponse;
 
 /**
  * {@link AnnotationProvider} that discovers mcp-java annotations
@@ -70,11 +78,7 @@ public class McpJavaAnnotationProvider implements AnnotationProvider {
         PayloadSerializer serializer = context.payloadSerializer();
         PayloadDeserializer deserializer = context.payloadDeserializer();
         List<Method> methods = AnnotationInvocationSupport.discoverMethods(
-                clazz,
-                org.mcpjava.server.tools.Tool.class,
-                org.mcpjava.server.resources.Resource.class,
-                org.mcpjava.server.resources.ResourceTemplate.class,
-                org.mcpjava.server.prompts.Prompt.class);
+                clazz, Tool.class, Resource.class, ResourceTemplate.class, Prompt.class);
         for (Method method : methods) {
             registerTools(instance, method, context, serializer, deserializer);
             registerResources(instance, method, context, serializer, deserializer);
@@ -89,7 +93,7 @@ public class McpJavaAnnotationProvider implements AnnotationProvider {
             AnnotationRegistrationContext context,
             PayloadSerializer serializer,
             PayloadDeserializer deserializer) {
-        org.mcpjava.server.tools.Tool annotation = method.getAnnotation(org.mcpjava.server.tools.Tool.class);
+        Tool annotation = method.getAnnotation(Tool.class);
         if (annotation == null) return;
 
         String name = resolveName(annotation.name(), method);
@@ -97,7 +101,7 @@ public class McpJavaAnnotationProvider implements AnnotationProvider {
         String title = annotation.title().isEmpty() ? null : annotation.title();
 
         ToolAnnotations toolAnnotations = mapToolAnnotations(annotation.annotations());
-        JsonSchema inputSchema = buildInputSchema(method, org.mcpjava.server.tools.ToolArg.class);
+        JsonSchema inputSchema = buildInputSchema(method, ToolArg.class);
 
         ToolDescriptor descriptor = ToolDescriptor.builder()
                 .name(name)
@@ -111,7 +115,7 @@ public class McpJavaAnnotationProvider implements AnnotationProvider {
         context.tools().register(descriptor, fn);
     }
 
-    private ToolAnnotations mapToolAnnotations(org.mcpjava.server.tools.Tool.Annotations ann) {
+    private ToolAnnotations mapToolAnnotations(Tool.Annotations ann) {
         return ToolAnnotations.builder()
                 .readOnlyHint(ann.readOnlyHint())
                 .destructiveHint(ann.destructiveHint())
@@ -128,8 +132,7 @@ public class McpJavaAnnotationProvider implements AnnotationProvider {
             PayloadSerializer serializer,
             PayloadDeserializer deserializer)
             throws Exception {
-        Object[] args = resolveArgs(
-                method, ctx, req.arguments().asMap(), org.mcpjava.server.tools.ToolArg.class, serializer, deserializer);
+        Object[] args = resolveArgs(method, ctx, req.arguments().asMap(), ToolArg.class, serializer, deserializer);
         Object result = invoke(method, instance, args);
         return convertToolResult(result, serializer);
     }
@@ -198,7 +201,7 @@ public class McpJavaAnnotationProvider implements AnnotationProvider {
             case ToolResult tr -> {
                 return tr;
             }
-            case org.mcpjava.server.tools.ToolResponse tr -> {
+            case ToolResponse tr -> {
                 return convertMcpJavaToolResponse(tr);
             }
             case String s -> {
@@ -238,11 +241,11 @@ public class McpJavaAnnotationProvider implements AnnotationProvider {
     }
 
     /**
-     * Translates mcp-java's native {@link org.mcpjava.server.tools.ToolResponse}, preserving its
+     * Translates mcp-java's native {@link ToolResponse}, preserving its
      * content blocks, structured content, and error status rather than falling back to {@code
      * toString()}.
      */
-    private ToolResult convertMcpJavaToolResponse(org.mcpjava.server.tools.ToolResponse response) {
+    private ToolResult convertMcpJavaToolResponse(ToolResponse response) {
         List<ContentBlock> blocks = response.content().stream()
                 .map(this::convertMcpJavaContentBlock)
                 .toList();
@@ -256,32 +259,29 @@ public class McpJavaAnnotationProvider implements AnnotationProvider {
     }
 
     private ContentBlock convertMcpJavaContentBlock(org.mcpjava.server.content.ContentBlock block) {
-        if (block instanceof org.mcpjava.server.content.TextContent tc) {
-            return TextContent.of(tc.text());
-        }
-        if (block instanceof org.mcpjava.server.content.ImageContent ic) {
-            return dev.tachyonmcp.api.server.domain.ImageContent.of(
-                    ic.data(), ic.mimeType(), convertMcpJavaAnnotations(ic.annotations()));
-        }
-        if (block instanceof org.mcpjava.server.content.AudioContent ac) {
-            return dev.tachyonmcp.api.server.domain.AudioContent.of(
-                    ac.data(), ac.mimeType(), convertMcpJavaAnnotations(ac.annotations()));
-        }
-        if (block instanceof org.mcpjava.server.content.ResourceLink rl) {
-            return dev.tachyonmcp.api.server.domain.ResourceLink.builder(rl.uri(), rl.name())
-                    .title(rl.title())
-                    .description(rl.description().orElse(null))
-                    .mimeType(rl.mimeType().orElse(null))
-                    .annotations(convertMcpJavaAnnotations(rl.annotations()))
-                    .size(rl.size().isPresent() ? rl.size().getAsLong() : null)
-                    .build();
-        }
-        if (block instanceof org.mcpjava.server.content.EmbeddedResource er) {
-            return dev.tachyonmcp.api.server.domain.EmbeddedResource.of(
-                    convertMcpJavaResourceContents(er.resource()), convertMcpJavaAnnotations(er.annotations()));
-        }
-        // Escape hatch for a future mcp-java ContentBlock subtype this mapping doesn't know about yet.
-        return TextContent.of(block.toString());
+        return switch (block) {
+            case org.mcpjava.server.content.TextContent tc -> TextContent.of(tc.text());
+            case org.mcpjava.server.content.ImageContent ic ->
+                dev.tachyonmcp.api.server.domain.ImageContent.of(
+                        ic.data(), ic.mimeType(), convertMcpJavaAnnotations(ic.annotations()));
+            case org.mcpjava.server.content.AudioContent ac ->
+                dev.tachyonmcp.api.server.domain.AudioContent.of(
+                        ac.data(), ac.mimeType(), convertMcpJavaAnnotations(ac.annotations()));
+            case org.mcpjava.server.content.ResourceLink rl ->
+                dev.tachyonmcp.api.server.domain.ResourceLink.builder(rl.uri(), rl.name())
+                        .title(rl.title())
+                        .description(rl.description().orElse(null))
+                        .mimeType(rl.mimeType().orElse(null))
+                        .annotations(convertMcpJavaAnnotations(rl.annotations()))
+                        .size(rl.size().isPresent() ? rl.size().getAsLong() : null)
+                        .build();
+            case org.mcpjava.server.content.EmbeddedResource er ->
+                dev.tachyonmcp.api.server.domain.EmbeddedResource.of(
+                        convertMcpJavaResourceContents(er.resource()), convertMcpJavaAnnotations(er.annotations()));
+            default ->
+                // Escape hatch for a future mcp-java ContentBlock subtype this mapping doesn't know about yet.
+                TextContent.of(block.toString());
+        };
     }
 
     private static ResourceContents convertMcpJavaResourceContents(org.mcpjava.server.resources.ResourceContents rc) {
@@ -312,8 +312,7 @@ public class McpJavaAnnotationProvider implements AnnotationProvider {
             AnnotationRegistrationContext context,
             PayloadSerializer serializer,
             PayloadDeserializer deserializer) {
-        org.mcpjava.server.resources.Resource annotation =
-                method.getAnnotation(org.mcpjava.server.resources.Resource.class);
+        Resource annotation = method.getAnnotation(Resource.class);
         if (annotation == null) return;
 
         for (Parameter param : method.getParameters()) {
@@ -349,13 +348,7 @@ public class McpJavaAnnotationProvider implements AnnotationProvider {
             PayloadDeserializer deserializer,
             @Nullable String mimeType)
             throws Exception {
-        Object[] args = resolveArgs(
-                method,
-                ctx,
-                Map.of(),
-                org.mcpjava.server.resources.ResourceTemplateArg.class,
-                serializer,
-                deserializer);
+        Object[] args = resolveArgs(method, ctx, Map.of(), ResourceTemplateArg.class, serializer, deserializer);
         Object result = invoke(method, instance, args);
         return convertResourceContents(result, req.uri(), mimeType, serializer);
     }
@@ -381,8 +374,7 @@ public class McpJavaAnnotationProvider implements AnnotationProvider {
             AnnotationRegistrationContext context,
             PayloadSerializer serializer,
             PayloadDeserializer deserializer) {
-        org.mcpjava.server.resources.ResourceTemplate annotation =
-                method.getAnnotation(org.mcpjava.server.resources.ResourceTemplate.class);
+        ResourceTemplate annotation = method.getAnnotation(ResourceTemplate.class);
         if (annotation == null) return;
 
         for (Parameter param : method.getParameters()) {
@@ -419,8 +411,7 @@ public class McpJavaAnnotationProvider implements AnnotationProvider {
             throws Exception {
         Map<String, Object> values = new LinkedHashMap<>();
         req.params().forEach((name, value) -> values.put(name, value.scalarValue()));
-        Object[] args = resolveArgs(
-                method, ctx, values, org.mcpjava.server.resources.ResourceTemplateArg.class, serializer, deserializer);
+        Object[] args = resolveArgs(method, ctx, values, ResourceTemplateArg.class, serializer, deserializer);
         Object result = invoke(method, instance, args);
         return convertResourceContents(result, req.uri(), mimeType, serializer);
     }
@@ -431,7 +422,7 @@ public class McpJavaAnnotationProvider implements AnnotationProvider {
             AnnotationRegistrationContext context,
             PayloadSerializer serializer,
             PayloadDeserializer deserializer) {
-        org.mcpjava.server.prompts.Prompt annotation = method.getAnnotation(org.mcpjava.server.prompts.Prompt.class);
+        Prompt annotation = method.getAnnotation(Prompt.class);
         if (annotation == null) return;
 
         List<PromptArgument> arguments = buildPromptArguments(method);
@@ -457,8 +448,8 @@ public class McpJavaAnnotationProvider implements AnnotationProvider {
             if (InteractionContext.class.isAssignableFrom(param.getType())) continue;
             AnnotationInvocationSupport.requireBindable(param, method);
 
-            org.mcpjava.server.prompts.PromptArg ann = param.getAnnotation(org.mcpjava.server.prompts.PromptArg.class);
-            String paramName = resolveParamName(param, org.mcpjava.server.prompts.PromptArg.class);
+            PromptArg ann = param.getAnnotation(PromptArg.class);
+            String paramName = resolveParamName(param, PromptArg.class);
             String desc = (ann != null && !ann.description().isEmpty()) ? ann.description() : null;
             String paramTitle = (ann != null && !ann.title().isEmpty()) ? ann.title() : null;
             Boolean required = (ann != null) ? ann.required() : true;
@@ -480,13 +471,7 @@ public class McpJavaAnnotationProvider implements AnnotationProvider {
             PayloadSerializer serializer,
             PayloadDeserializer deserializer)
             throws Exception {
-        Object[] args = resolveArgs(
-                method,
-                ctx,
-                req.arguments().asMap(),
-                org.mcpjava.server.prompts.PromptArg.class,
-                serializer,
-                deserializer);
+        Object[] args = resolveArgs(method, ctx, req.arguments().asMap(), PromptArg.class, serializer, deserializer);
         Object result = invoke(method, instance, args);
         return convertPromptResult(result, serializer);
     }

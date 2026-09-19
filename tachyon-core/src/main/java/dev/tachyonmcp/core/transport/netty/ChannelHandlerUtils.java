@@ -267,7 +267,7 @@ public final class ChannelHandlerUtils {
      */
     public static ChannelFuture sendPlainTextAndClose(
             ChannelHandlerContext ctx, HttpResponseStatus status, String message, @Nullable String origin) {
-        return sendResponse(ctx, status, "text/plain", ByteBufUtil.writeUtf8(ctx.alloc(), message), true, origin);
+        return sendResponse(ctx, status, "text/plain", ByteBufUtil.writeUtf8(ctx.alloc(), message), origin);
     }
 
     /**
@@ -280,7 +280,7 @@ public final class ChannelHandlerUtils {
             String contentType,
             ByteBuf body,
             @Nullable String origin) {
-        return sendResponse(ctx, status, contentType, body, true, origin);
+        return sendResponse(ctx, status, contentType, body, origin);
     }
 
     /** Zero-copy overload for GC-managed bodies: wraps the byte[] at send time on the event loop. */
@@ -290,7 +290,7 @@ public final class ChannelHandlerUtils {
             String contentType,
             byte[] body,
             @Nullable String origin) {
-        return sendResponse(ctx, status, contentType, Unpooled.wrappedBuffer(body), true, origin);
+        return sendResponse(ctx, status, contentType, Unpooled.wrappedBuffer(body), origin);
     }
 
     private static ChannelFuture sendResponse(
@@ -298,7 +298,6 @@ public final class ChannelHandlerUtils {
             HttpResponseStatus status,
             String contentType,
             ByteBuf body,
-            boolean close,
             @Nullable String origin) {
         var response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, status, body);
         response.headers().set(HttpHeaderNames.CONTENT_TYPE, contentType);
@@ -308,7 +307,7 @@ public final class ChannelHandlerUtils {
         }
         // Mark the keep-alive intent; HttpServerKeepAliveHandler adds `Connection: close`
         // and closes the channel after this response when keep-alive is disabled.
-        HttpUtil.setKeepAlive(response, !close);
+        HttpUtil.setKeepAlive(response, false);
         return ctx.writeAndFlush(response);
     }
 }

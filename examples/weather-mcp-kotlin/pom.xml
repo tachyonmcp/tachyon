@@ -24,7 +24,7 @@
         <kotest.version>6.2.1</kotest.version>
         <jackson.version>3.2.0</jackson.version>
         <slf4j.version>2.0.18</slf4j.version>
-        <netty.version>4.2.15.Final</netty.version>
+        <netty.version>4.2.18.Final</netty.version>
         <mcp-sdk.version>2.0.0</mcp-sdk.version>
         <awaitility.version>4.3.0</awaitility.version>
         <kotlinx-serialization-json.version>1.11.0</kotlinx-serialization-json.version>
@@ -139,7 +139,7 @@
         <dependency>
             <groupId>org.awaitility</groupId>
             <artifactId>awaitility-kotlin</artifactId>
-            <version>4.3.0</version>
+            <version>${awaitility.version}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

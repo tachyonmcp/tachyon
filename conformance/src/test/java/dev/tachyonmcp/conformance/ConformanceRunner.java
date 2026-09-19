@@ -57,6 +57,10 @@ class ConformanceRunner {
                 .filter(l -> l.startsWith("  - "))
                 .toList();
 
+        return createScenarios(protocolVersion, serverLines);
+    }
+
+    static ArrayList<String> createScenarios(String protocolVersion, List<String> serverLines) {
         var scenarios = new ArrayList<String>();
         for (var line : serverLines) {
             var bracket = line.indexOf('[');
