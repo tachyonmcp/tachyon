@@ -8,8 +8,8 @@ import org.springframework.context.annotation.Configuration;
 
 /**
  * An application configuration that hides an annotated implementation behind an interface — the
- * shape AOT cannot inspect. It lives outside {@code dev.tachyonmcp} on purpose: the processor treats
- * its own and Spring's configuration classes as infrastructure and never warns about them.
+ * shape AOT cannot inspect. The processor skips only Spring's and the starter's own configuration
+ * classes as infrastructure, so this one is reported.
  */
 @Configuration(proxyBeanMethods = false)
 public class InterfaceBeanConfig {

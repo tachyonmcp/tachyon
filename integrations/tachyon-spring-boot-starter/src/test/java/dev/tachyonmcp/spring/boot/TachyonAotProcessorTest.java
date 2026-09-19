@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.tachyonmcp.api.annotations.McpTool;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
+import dev.tachyonmcp.example.aot.NamespacedBeanConfig;
+import dev.tachyonmcp.example.aot.NamespacedBeanConfig.Farewell;
 import example.aot.InterfaceBeanConfig;
 import example.aot.InterfaceBeanConfig.Greeter;
 import java.util.Map;
@@ -118,6 +120,20 @@ class TachyonAotProcessorTest {
     void doesNotReportItsOwnOrSpringsInfrastructureBeans() {
         assertThat(uninspectableBeans(TachyonAutoConfiguration.class, InterfaceBeanConfig.class))
                 .containsOnlyKeys("greeter");
+    }
+
+    /**
+     * Infrastructure is the starter's own auto-configuration, not the {@code dev.tachyonmcp}
+     * namespace. An application shipping configuration under that namespace still earns the warning
+     * its interface-typed bean deserves — silencing it would hide a silently featureless native image.
+     */
+    @Test
+    void reportsApplicationBeansDeclaredUnderTheTachyonNamespace() {
+        final var reported = uninspectableBeans(TachyonAutoConfiguration.class, NamespacedBeanConfig.class);
+
+        assertThat(reported).containsOnlyKeys("farewell");
+        assertThat(reported.get("farewell").interfaceType()).isEqualTo(Farewell.class.getName());
+        assertThat(reported.get("farewell").declaringType()).isEqualTo(NamespacedBeanConfig.class.getName());
     }
 
     /**

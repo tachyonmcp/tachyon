@@ -2,11 +2,6 @@
 package dev.tachyonmcp.spring.boot;
 
 import dev.tachyonmcp.core.server.annotations.TachyonAnnotationProvider;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,6 +14,11 @@ import org.springframework.beans.factory.aot.BeanFactoryInitializationCode;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.util.ClassUtils;
+
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * Registers reflection hints for beans whose methods carry Tachyon feature annotations.
@@ -41,8 +41,15 @@ final class TachyonAotProcessor implements BeanFactoryInitializationAotProcessor
 
     private static final Logger logger = LoggerFactory.getLogger(TachyonAotProcessor.class);
 
-    /** Configuration classes never declaring features; without this every build warns on {@code tachyonServer}. */
-    private static final List<String> INFRASTRUCTURE_PACKAGES = List.of("org.springframework.", "dev.tachyonmcp.");
+    private static final String SPRING_PACKAGE = "org.springframework.";
+
+    /**
+     * The starter's own configuration, whose {@code @Bean} methods never build feature beans; without
+     * this every build warns on {@code tachyonServer}. Only this class and its nested configurations
+     * count — an application is free to ship its own configuration under {@code dev.tachyonmcp.*}, and
+     * that configuration must be scanned like any other.
+     */
+    private static final String STARTER_CONFIGURATION = TachyonAutoConfiguration.class.getName();
 
     @Override
     public @Nullable BeanFactoryInitializationAotContribution processAheadOfTime(
@@ -123,7 +130,9 @@ final class TachyonAotProcessor implements BeanFactoryInitializationAotProcessor
     }
 
     private static boolean isInfrastructure(String className) {
-        return INFRASTRUCTURE_PACKAGES.stream().anyMatch(className::startsWith);
+        return className.startsWith(SPRING_PACKAGE)
+            || className.equals(STARTER_CONFIGURATION)
+            || className.startsWith(STARTER_CONFIGURATION + "$");
     }
 
     private record FeatureReflectionContribution(Set<Class<?>> featureTypes)
