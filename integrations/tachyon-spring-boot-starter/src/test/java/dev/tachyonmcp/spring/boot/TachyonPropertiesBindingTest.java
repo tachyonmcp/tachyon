@@ -2,6 +2,7 @@
 package dev.tachyonmcp.spring.boot;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.InstanceOfAssertFactories.throwable;
 
 import dev.tachyonmcp.core.server.TachyonServer;
 import dev.tachyonmcp.core.server.config.NetworkConfig;
@@ -9,8 +10,15 @@ import dev.tachyonmcp.core.server.config.SessionConfig;
 import dev.tachyonmcp.core.transport.netty.McpChannelInitializer;
 import dev.tachyonmcp.core.transport.netty.NettyIoEngine;
 import java.time.Duration;
+import java.util.List;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.boot.context.properties.source.InvalidConfigurationPropertyValueException;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -112,6 +120,75 @@ class TachyonPropertiesBindingTest {
                 .run(context -> assertThat(
                                 context.getBean(TachyonServer.class).config().session())
                         .isEqualTo(SessionConfig.STATELESS));
+    }
+
+    /**
+     * A stateless server has no session, so a TTL set beside {@code enabled: false} is a
+     * contradiction. Honouring one key and dropping the other silently is the failure mode worth
+     * guarding: the combination must fail, and the failure must name the keys the application wrote
+     * rather than the core's {@code call enabled()}, which no one editing YAML can act on.
+     */
+    @ParameterizedTest
+    @MethodSource("contradictorySessionOptions")
+    void sessionOptionsOnADisabledSessionAreRejectedByName(List<String> properties, List<String> expectedKeys) {
+        runner.withPropertyValues(properties.toArray(String[]::new)).run(context -> {
+            assertThat(context).hasFailed();
+            assertThat(context.getStartupFailure())
+                    .rootCause()
+                    .isInstanceOf(InvalidConfigurationPropertyValueException.class)
+                    .asInstanceOf(throwable(InvalidConfigurationPropertyValueException.class))
+                    .satisfies(failure -> {
+                        assertThat(failure.getName()).isEqualTo("tachyon.session.enabled");
+                        assertThat(failure.getValue()).isEqualTo(false);
+                        assertThat(failure.getReason())
+                                .contains(expectedKeys)
+                                .contains("Remove them, or set tachyon.session.enabled to true");
+                    });
+        });
+    }
+
+    static Stream<Arguments> contradictorySessionOptions() {
+        return Stream.of(
+                Arguments.of(
+                        List.of("tachyon.session.enabled=false", "tachyon.session.session-ttl=90s"),
+                        List.of("tachyon.session.session-ttl")),
+                Arguments.of(
+                        List.of("tachyon.session.enabled=false", "tachyon.session.janitor-interval=7s"),
+                        List.of("tachyon.session.janitor-interval")),
+                Arguments.of(
+                        List.of(
+                                "tachyon.session.enabled=false",
+                                "tachyon.session.session-ttl=90s",
+                                "tachyon.session.janitor-interval=7s"),
+                        List.of("tachyon.session.session-ttl", "tachyon.session.janitor-interval")));
+    }
+
+    /**
+     * The core takes the body limit as a positive {@code int}, so both edges have to be refused
+     * before narrowing — otherwise an oversized value dies as an {@code ArithmeticException} that
+     * names no property.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"3GB", "0", "-1B"})
+    void unrepresentableMaxContentLengthIsRejectedByName(String value) {
+        runner.withPropertyValues("tachyon.network.max-content-length=" + value).run(context -> {
+            assertThat(context).hasFailed();
+            assertThat(context.getStartupFailure())
+                    .rootCause()
+                    .isInstanceOf(InvalidConfigurationPropertyValueException.class)
+                    .asInstanceOf(throwable(InvalidConfigurationPropertyValueException.class))
+                    .satisfies(
+                            failure -> assertThat(failure.getName()).isEqualTo("tachyon.network.max-content-length"));
+        });
+    }
+
+    @Test
+    void theLargestRepresentableMaxContentLengthStillBinds() {
+        runner.withPropertyValues("tachyon.network.max-content-length=2047MB").run(context -> {
+            assertThat(context).hasNotFailed();
+            assertThat(context.getBean(TachyonServer.class).config().network().maxContentLength())
+                    .isEqualTo(2047 * 1024 * 1024);
+        });
     }
 
     @Test

@@ -14,14 +14,12 @@ import org.springframework.util.unit.DataSize;
  * {@code tachyon.*} configuration properties. Anything beyond these — stores, generators, clocks,
  * serializers and other wiring — goes through a {@link TachyonServerCustomizer} bean.
  *
- * <p>Every component except {@code enabled} and {@code port} is nullable, and the starter only
- * pushes a non-null one into the builder, so Tachyon's own configuration records stay the single
- * source of truth for defaults. The documented default values live in {@code
- * META-INF/additional-spring-configuration-metadata.json} and are pinned to those records by
+ * <p>Nullable components are applied only when set, so Tachyon's configuration records stay the
+ * single source of truth for defaults. Documented defaults live in {@code
+ * META-INF/additional-spring-configuration-metadata.json}, pinned to those records by
  * {@code TachyonConfigurationMetadataTest}.
  *
- * <p>The javadoc below is what the configuration processor turns into IDE completion text, so each
- * {@code @param} reads as a standalone plain-text sentence — no markup, and no default values.
+ * <p>Each {@code @param} below becomes IDE completion text: plain sentences, no markup, no defaults.
  *
  * @param enabled Whether to create and start the MCP server.
  * @param name    Server name reported to clients.
@@ -85,9 +83,8 @@ public record TachyonProperties(
             @Nullable NettyIoEngine ioEngine) {}
 
     /**
-     * {@code tachyon.session.*} settings, applied to Tachyon's session configuration. Setting any
-     * option here enables sessions, mirroring the core builder; {@code enabled} only has to be set to
-     * turn sessions on with their defaults, or to false to state the stateless choice explicitly.
+     * {@code tachyon.session.*} settings. Setting any option enables sessions, mirroring the core
+     * builder; {@code enabled} turns them on with defaults, or false states the stateless choice.
      *
      * @param enabled         Whether to keep server-side sessions. Setting any other option under
      *                        this group enables them too.

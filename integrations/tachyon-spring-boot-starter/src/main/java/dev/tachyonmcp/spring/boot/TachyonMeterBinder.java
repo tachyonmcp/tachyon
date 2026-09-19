@@ -4,19 +4,31 @@ package dev.tachyonmcp.spring.boot;
 import dev.tachyonmcp.core.server.TachyonServer;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.binder.MeterBinder;
+import org.springframework.beans.factory.SmartInitializingSingleton;
 
-/** Gauges registered MCP features of a {@link TachyonServer}. */
-final class TachyonMeterBinder implements MeterBinder {
+/**
+ * Gauges registered MCP features of a {@link TachyonServer}.
+ *
+ * <p>Not a {@code MeterBinder}: Boot binds those from the optional
+ * {@code spring-boot-micrometer-metrics} module, and binding during {@code MeterRegistry} creation
+ * would cycle back through {@code tachyonMetricsCustomizer}, which the server depends on.
+ */
+final class TachyonMeterBinder implements SmartInitializingSingleton {
 
     private final TachyonServer server;
+    private final MeterRegistry registry;
 
-    TachyonMeterBinder(TachyonServer server) {
+    TachyonMeterBinder(TachyonServer server, MeterRegistry registry) {
         this.server = server;
+        this.registry = registry;
     }
 
     @Override
-    public void bindTo(MeterRegistry registry) {
+    public void afterSingletonsInstantiated() {
+        bindTo(registry);
+    }
+
+    void bindTo(MeterRegistry registry) {
         Gauge.builder("mcp.server.tools", server, s -> s.tools().descriptors().size())
                 .description("Registered MCP tools")
                 .register(registry);

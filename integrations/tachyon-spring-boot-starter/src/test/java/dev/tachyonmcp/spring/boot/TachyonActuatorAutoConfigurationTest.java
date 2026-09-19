@@ -3,6 +3,7 @@ package dev.tachyonmcp.spring.boot;
 
 import static dev.tachyonmcp.testkit.JsonRpcResponseAssert.assertThat;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.entry;
 import static org.awaitility.Awaitility.await;
 
 import dev.tachyonmcp.api.annotations.McpTool;
@@ -45,8 +46,28 @@ class TachyonActuatorAutoConfigurationTest {
             context.getBean(TachyonServerLifecycle.class).stop();
             final var down = indicator.health();
             assertThat(down.getStatus()).isEqualTo(Status.DOWN);
-            assertThat(down.getDetails()).isEmpty();
+            assertThat(down.getDetails())
+                    .as("a bare DOWN cannot be acted on; shut down and still starting differ")
+                    .containsExactly(entry("state", "stopped"));
         });
+    }
+
+    @Test
+    void healthDistinguishesAServerThatNeverStartedFromOneThatStopped() {
+        try (var server = TachyonServer.builder().port(0).build()) {
+            final var lifecycle = new TachyonServerLifecycle(server);
+            final var indicator = new TachyonHealthIndicator(server, lifecycle);
+
+            final var beforeStart = indicator.health();
+            assertThat(beforeStart.getStatus()).isEqualTo(Status.DOWN);
+            assertThat(beforeStart.getDetails()).containsExactly(entry("state", "not-started"));
+
+            lifecycle.start();
+            assertThat(indicator.health().getStatus()).isEqualTo(Status.UP);
+
+            lifecycle.stop();
+            assertThat(indicator.health().getDetails()).containsExactly(entry("state", "stopped"));
+        }
     }
 
     @Test
@@ -101,6 +122,94 @@ class TachyonActuatorAutoConfigurationTest {
                     assertThat(registry.get("mcp.server.resources").gauge().value())
                             .isZero();
                 });
+    }
+
+    /**
+     * The dispatcher builds its {@code OperationInfo} from the raw wire method before resolving a
+     * handler, so tagging it verbatim would let a client mint a meter per bogus method name and grow
+     * the registry without bound.
+     */
+    @Test
+    void unknownMethodsShareOneTagInsteadOfMintingAMeterEach() {
+        runner.withConfiguration(AutoConfigurations.of(MetricsAutoConfiguration.class))
+                .withBean(SimpleMeterRegistry.class, SimpleMeterRegistry::new)
+                .withBean(Greeter.class)
+                .run(context -> {
+                    final var registry = context.getBean(SimpleMeterRegistry.class);
+                    final var server = context.getBean(TachyonServer.class);
+                    try (var client = McpTestClients.latest(server.port())) {
+                        for (var i = 0; i < 5; i++) {
+                            // language=json
+                            client.post("""
+                                    {"jsonrpc":"2.0","id":%d,"method":"attack/%d"}
+                                    """.formatted(i, i));
+                        }
+                    }
+
+                    await().untilAsserted(() -> assertThat(registry.find(TachyonMetricsListener.OPERATIONS)
+                                    .tag("mcp.method.name", TachyonMetricsListener.UNKNOWN_METHOD)
+                                    .timer())
+                            .isNotNull()
+                            .satisfies(timer -> assertThat(timer.count()).isEqualTo(5)));
+                    assertThat(registry.find(TachyonMetricsListener.OPERATIONS).timers())
+                            .as("five bogus methods must not become five meters")
+                            .hasSize(1);
+                });
+    }
+
+    /**
+     * {@code TachyonServerCustomizer} is a plural SPI, so the metrics customizer must back off by
+     * bean name. A type-based condition would let any unrelated customizer in the application switch
+     * MCP metrics off — silently, since customizers are collected, not replaced.
+     */
+    @Test
+    void anUnrelatedCustomizerDoesNotDisableMetrics() {
+        runner.withConfiguration(AutoConfigurations.of(MetricsAutoConfiguration.class))
+                .withBean(SimpleMeterRegistry.class, SimpleMeterRegistry::new)
+                .withBean(Greeter.class)
+                .withBean("applicationCustomizer", TachyonServerCustomizer.class, () -> builder -> builder.version("9"))
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context.getBeansOfType(TachyonServerCustomizer.class))
+                            .containsKeys("applicationCustomizer", "tachyonMetricsCustomizer");
+
+                    final var registry = context.getBean(SimpleMeterRegistry.class);
+                    final var server = context.getBean(TachyonServer.class);
+                    try (var client = McpTestClients.latest(server.port())) {
+                        // language=json
+                        assertThat(client.post("""
+                                {"jsonrpc":"2.0","id":1,"method":"tools/call",
+                                 "params":{"name":"greet","arguments":{"name":"Ada"}}}
+                                """)).isSuccess().hasId(1);
+                    }
+                    await().untilAsserted(() -> assertThat(registry.find(TachyonMetricsListener.OPERATIONS)
+                                    .timer())
+                            .isNotNull());
+                    assertThat(server.config().identity().version()).isEqualTo("9");
+                });
+    }
+
+    /**
+     * The gauges bean is declared by its own type, not as a bare {@code SmartInitializingSingleton},
+     * so it can be conditioned on and replaced — and so it cannot be confused with
+     * {@code TachyonBeanRegistrar}, which implements the same callback interface.
+     */
+    @Test
+    void theGaugesBeanCarriesItsOwnTypeAndBacksOff() {
+        final var replacement = new TachyonMeterBinder(
+                dev.tachyonmcp.core.server.TachyonServer.builder().port(0).build(), new SimpleMeterRegistry());
+
+        runner.withConfiguration(AutoConfigurations.of(MetricsAutoConfiguration.class))
+                .withBean(SimpleMeterRegistry.class, SimpleMeterRegistry::new)
+                .run(context -> assertThat(context).hasNotFailed().hasSingleBean(TachyonMeterBinder.class));
+
+        runner.withConfiguration(AutoConfigurations.of(MetricsAutoConfiguration.class))
+                .withBean(SimpleMeterRegistry.class, SimpleMeterRegistry::new)
+                .withBean("myGauges", TachyonMeterBinder.class, () -> replacement)
+                .run(context -> assertThat(context)
+                        .hasNotFailed()
+                        .hasSingleBean(TachyonMeterBinder.class)
+                        .doesNotHaveBean("tachyonMeterBinder"));
     }
 
     @Test

@@ -8,7 +8,8 @@ import org.springframework.boot.health.contributor.HealthIndicator;
 
 /**
  * Actuator health for the Tachyon transport: {@code UP} with bound host and port while
- * {@link TachyonServerLifecycle} is running, {@code DOWN} otherwise.
+ * {@link TachyonServerLifecycle} is running, {@code DOWN} with {@code state} of {@code not-started}
+ * or {@code stopped} otherwise. Reports the lifecycle's state, not the transport's.
  */
 @ExperimentalApi
 public final class TachyonHealthIndicator implements HealthIndicator {
@@ -29,7 +30,12 @@ public final class TachyonHealthIndicator implements HealthIndicator {
 
     @Override
     public Health health() {
-        if (!lifecycle.isRunning()) return Health.down().build();
+        // host()/port() throw until the transport is bound, so they belong to the UP branch only.
+        if (!lifecycle.isRunning()) {
+            return Health.down()
+                    .withDetail("state", lifecycle.hasStarted() ? "stopped" : "not-started")
+                    .build();
+        }
         return Health.up()
                 .withDetail("host", server.host())
                 .withDetail("port", server.port())

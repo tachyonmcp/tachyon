@@ -195,6 +195,10 @@ Setting `session-ttl` or `janitor-interval` enables sessions on its own, matchin
 `tachyon.session.enabled: true` turns them on with the defaults, and `false` states the stateless
 choice explicitly.
 
+A stateless server has no session, so `enabled: false` together with `session-ttl` or
+`janitor-interval` is rejected at startup rather than silently ignored. The failure names the keys
+you set and the file they came from.
+
 ### Handler execution
 
 | Property | Default | Purpose |

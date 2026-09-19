@@ -6,7 +6,6 @@ import dev.tachyonmcp.api.server.extensions.ServerExtension;
 import dev.tachyonmcp.core.server.TachyonServer;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -110,14 +109,18 @@ public class TachyonAutoConfiguration {
         @ConditionalOnBean(MeterRegistry.class)
         static class RegistryMetricsConfiguration {
 
+            /** By name, never by type: {@link TachyonServerCustomizer} is plural, so a type condition
+             * would let any application customizer switch MCP metrics off. */
             @Bean
+            @ConditionalOnMissingBean(name = "tachyonMetricsCustomizer")
             TachyonServerCustomizer tachyonMetricsCustomizer(MeterRegistry registry) {
                 return builder -> builder.observability(o -> o.listener(new TachyonMetricsListener(registry)));
             }
 
             @Bean
-            SmartInitializingSingleton tachyonMeterBinder(TachyonServer server, MeterRegistry registry) {
-                return () -> new TachyonMeterBinder(server).bindTo(registry);
+            @ConditionalOnMissingBean
+            TachyonMeterBinder tachyonMeterBinder(TachyonServer server, MeterRegistry registry) {
+                return new TachyonMeterBinder(server, registry);
             }
         }
     }
