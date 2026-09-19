@@ -1,0 +1,29 @@
+[
+  {
+    "extension": "revapi.differences",
+    "configuration": {
+      "ignore": true,
+      "differences": [
+        {
+          "ignore": true,
+          "code": "java.class.removed",
+          "old": "class dev.tachyonmcp.extensions.skills.PathSkillsRegistry",
+          "justification": "PathSkillsRegistry was replaced by FilesystemSkillsRegistry",
+          "attachments": {
+            "since": "1.0.0-beta.22"
+          }
+        },
+        {
+          "ignore": true,
+          "code": "java.method.numberOfParametersChanged",
+          "old": "method void dev.tachyonmcp.extensions.skills.SkillsRegistry.SkillFile::<init>(java.lang.String, java.lang.String, java.lang.String, java.lang.String)",
+          "new": "method void dev.tachyonmcp.extensions.skills.SkillsRegistry.SkillFile::<init>(java.lang.String, java.lang.String, java.lang.String, java.lang.String, long)",
+          "justification": "SkillFile now carries the scanned resource size required by the skills/list and skills/get payloads.",
+          "attachments": {
+            "since": "1.0.0-beta.22"
+          }
+        }
+      ]
+    }
+  }
+]

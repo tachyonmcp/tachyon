@@ -55,6 +55,7 @@
         <module>tachyon-extensions</module>
         <module>tachyon-testkit</module>
         <module>integrations</module>
+        <module>extensions</module>
         <module>tachyon-bom</module>
     </modules>
 
@@ -186,6 +187,11 @@
             <dependency>
                 <groupId>dev.tachyonmcp</groupId>
                 <artifactId>tachyon-extensions</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>dev.tachyonmcp</groupId>
+                <artifactId>tachyon-extensions-skills</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
@@ -447,6 +453,7 @@
                         <markdown>
                             <includes>
                                 <include>**/*.md</include>
+                                <include>.llm-wiki/**/*.md</include>
                             </includes>
                         </markdown>
                         <kotlin>

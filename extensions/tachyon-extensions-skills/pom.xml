@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  ~ Copyright (c) 2026 Konstantin Pavlov and contributors.
+  ~ Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors.
   -->
 
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
@@ -8,14 +8,14 @@
 
     <parent>
         <groupId>dev.tachyonmcp</groupId>
-        <artifactId>root</artifactId>
+        <artifactId>tachyon-extensions-modules</artifactId>
         <version>1.0.0-SNAPSHOT</version>
     </parent>
 
-    <artifactId>tachyon-extensions</artifactId>
+    <artifactId>tachyon-extensions-skills</artifactId>
 
-    <name>Tachyon MCP Extensions</name>
-    <description>Pre-built tool handlers and extensions for MCP servers</description>
+    <name>Tachyon MCP Extensions - Skills</name>
+    <description>Agent Skills extension (skill:// resources) for MCP servers</description>
 
     <dependencies>
         <dependency>
@@ -23,18 +23,9 @@
             <artifactId>tachyon-core</artifactId>
         </dependency>
 
-        <!-- Skills extension moved to tachyon-extensions-skills; kept here as a
-             transitive dependency so existing tachyon-extensions consumers keep
-             resolving dev.tachyonmcp.extensions.skills.* without changes. -->
         <dependency>
-            <groupId>dev.tachyonmcp</groupId>
-            <artifactId>tachyon-extensions-skills</artifactId>
-        </dependency>
-
-        <dependency>
-            <groupId>org.immutables</groupId>
-            <artifactId>value-annotations</artifactId>
-            <scope>provided</scope>
+            <groupId>org.yaml</groupId>
+            <artifactId>snakeyaml</artifactId>
         </dependency>
 
         <!-- Test -->
@@ -46,11 +37,6 @@
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-simple</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.junit-pioneer</groupId>
-            <artifactId>junit-pioneer</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -67,19 +53,6 @@
 
     <build>
         <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-compiler-plugin</artifactId>
-                <configuration>
-                    <annotationProcessorPaths>
-                        <path>
-                            <groupId>org.immutables</groupId>
-                            <artifactId>value</artifactId>
-                            <version>${immutables.version}</version>
-                        </path>
-                    </annotationProcessorPaths>
-                </configuration>
-            </plugin>
             <plugin>
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
@@ -120,12 +93,6 @@
                     </execution>
                 </executions>
             </plugin>
-
-        <plugin>
-                <groupId>org.revapi</groupId>
-                <artifactId>revapi-maven-plugin</artifactId>
-            </plugin>
-
         </plugins>
     </build>
 </project>

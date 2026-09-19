@@ -51,7 +51,7 @@ apidocs:
 	@echo "📚  Building API Docs..."
 	@rm -rf target/reports/apidocs
 	@./mvnw compile javadoc:aggregate \
-		-pl tachyon-api,tachyon-core,tachyon-extensions,tachyon-testkit -am \
+		-pl tachyon-api,tachyon-core,tachyon-extensions,extensions/tachyon-extensions-skills,tachyon-testkit -am \
 		--no-transfer-progress
 	@echo " ✅  Done!"
 
