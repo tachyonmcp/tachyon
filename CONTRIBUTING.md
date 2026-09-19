@@ -21,6 +21,12 @@ make ci      # what CI runs: clean + lint + build + revapi + jmh
 make all     # everything: clean + format + lint + full install + examples
 ```
 
+`make deploy` runs the release build (`-P release,lint`, revapi, GPG signing, aggregate SBOM).
+It only uploads to Maven Central with `PUBLISH=true`; otherwise it passes `-DskipPublishing=true`,
+which is also how `release.yml`'s `dry_run` input rehearses a release. CI (`CI=true`) caps
+`-Dsurefire.forkCount=1` and `-Dio.netty.eventLoopThreads=2` for every target -- runners run out of
+threads otherwise.
+
 `e2e`, `conformance` and `reports` are built by the default-active `tests` profile; pass `-DskipTestModules` to leave them out.
 
 `lint`/`format` are Maven profiles (`-Plint`/`-Pformat`) kept out of the default
