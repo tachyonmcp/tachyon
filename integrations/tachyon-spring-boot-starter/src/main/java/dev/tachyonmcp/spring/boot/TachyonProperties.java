@@ -10,11 +10,16 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * {@code tachyon.*} configuration properties. Anything beyond these goes through a {@link
  * TachyonServerCustomizer} bean.
  *
- * @param enabled whether to create and start the server
- * @param name    server name reported to clients, or {@code null} for the Tachyon default
- * @param version server version reported to clients, or {@code null} for the Tachyon default
- * @param host    bind host, or {@code null} for the Tachyon default
- * @param port    listen port; {@code 0} picks an ephemeral port
+ * <p>The javadoc below is what the configuration processor turns into IDE completion text, so each
+ * {@code @param} reads as a standalone sentence.
+ *
+ * @param enabled Whether to create and start the MCP server.
+ * @param name    Server name reported to clients. Defaults to the Tachyon default when not set.
+ * @param version Server version reported to clients. Defaults to the Tachyon default when not set.
+ * @param host    Bind address for the MCP transport. Defaults to the Tachyon default when not set.
+ * @param port    Port the MCP transport listens on; 0 picks an ephemeral port. Tachyon binds its own
+ *                Netty transport, so this is independent of `server.port` — leaving both at 8080 in a
+ *                Spring web application makes one of them fail to bind.
  */
 @ExperimentalApi
 @ConfigurationProperties("tachyon")

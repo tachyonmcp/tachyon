@@ -108,6 +108,34 @@ jobs:
             **/spotbugsXml.xml
             **/target/revapi-report.txt
 
+  # The starter compiles against whatever spring-boot.version resolves; run its tests
+  # against the oldest supported Boot line too, so a 4.1-only API cannot slip in.
+  spring-boot-compat:
+    name: spring-boot (${{ matrix.spring-boot }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        spring-boot:
+          - '4.0.8'
+          - '4.1.1'
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v6
+        with:
+          java-version: 21
+          distribution: temurin
+          cache: maven
+
+      - name: Test starter against Spring Boot ${{ matrix.spring-boot }}
+        run: >
+          ./mvnw test -pl integrations/tachyon-spring-boot-starter -am
+          -Dspring-boot.version=${{ matrix.spring-boot }}
+          -Dspotbugs.skip -Dspotless.skip -Djacoco.skip=true
+
   # Build the SNAPSHOT artifacts once and share them, instead of running a full
   # `make package` inside each example job.
   snapshot-artifacts:
