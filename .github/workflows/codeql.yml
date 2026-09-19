@@ -30,23 +30,24 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Timeouts allow for the security-extended suite in .github/codeql-config.yml.
         include:
           # The only language here that needs compiling.
           - language: java-kotlin
             build-mode: manual
-            timeout: 20
+            timeout: 30
           # tachyon-core/protocol/*.ts — the MCP spec declarations ts2java.py generates from.
           - language: javascript-typescript
             build-mode: none
-            timeout: 10
+            timeout: 15
           # Build and wiki tooling: ts2java.py, check-poms.py, .llm-wiki/tools/.
           - language: python
             build-mode: none
-            timeout: 10
+            timeout: 15
           # Workflow files themselves: injection sinks, unpinned actions, token scope.
           - language: actions
             build-mode: none
-            timeout: 10
+            timeout: 15
 
     steps:
       - uses: actions/checkout@v7

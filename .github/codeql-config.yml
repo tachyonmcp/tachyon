@@ -1,11 +1,19 @@
 # Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors.
 #
-# Shared by every language in .github/workflows/codeql.yml.
+# Shared by every language in .github/workflows/codeql.yml: java-kotlin, javascript-typescript,
+# python and actions. Keep analysis policy here, not in the workflow.
 
 name: Tachyon MCP
 
+# Tachyon terminates untrusted HTTP on its own Netty pipeline and parses attacker-controlled JSON,
+# so the default suite is too narrow. security-extended adds the deeper taint-tracking queries.
+# SpotBugs + findsecbugs still run in the build, but only at the High threshold and only on Java.
+queries:
+  - uses: security-extended
+
 paths-ignore:
-  # Fixtures, not shipped code: skill scripts and sample payloads exist to be loaded, not run.
+  # Fixtures, not shipped code: a skill's script exists to be loaded by a test, not run.
   - '**/src/test/resources/**'
-  # Generated from tachyon-core/protocol/*.ts at build time; fix the generator, not the output.
-  - '**/target/generated-sources/**'
+  # Build output. For java-kotlin CodeQL analyses what the build compiles, but the other three
+  # languages walk the working tree, where a stale target/ would be scanned as if it were source.
+  - '**/target/**'
