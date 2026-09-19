@@ -1,0 +1,53 @@
+# Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors.
+
+name: CodeQL
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    - cron: '0 5 * * 2'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: analyze (java-kotlin)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      security-events: write
+      packages: read
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v6
+        with:
+          java-version: 21
+          distribution: temurin
+          cache: maven
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: java-kotlin
+          build-mode: manual
+
+      # Compile only: CodeQL needs the classes, not the reports.
+      - name: Build
+        run: ./mvnw clean test-compile -DskipTests -Dspotbugs.skip -Dspotless.skip -Djacoco.skip=true
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:java-kotlin

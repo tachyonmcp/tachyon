@@ -113,6 +113,7 @@
         <maven-surefire-plugin.version>3.6.0</maven-surefire-plugin.version>
         <versions-maven-plugin.version>2.22.0</versions-maven-plugin.version>
         <palantir-java-format.version>2.98.0</palantir-java-format.version>
+        <cyclonedx-maven-plugin.version>2.9.3</cyclonedx-maven-plugin.version>
         <spotless-maven-plugin.version>3.10.2</spotless-maven-plugin.version>
         <spotbugs-maven-plugin.version>4.10.4.1</spotbugs-maven-plugin.version>
         <detekt.version>2.0.0-alpha.6</detekt.version>
@@ -922,6 +923,26 @@
                             <publishingServerId>central</publishingServerId>
                             <autoPublish>true</autoPublish>
                             <waitUntil>validated</waitUntil>
+                        </configuration>
+                    </plugin>
+                    <plugin>
+                        <!-- Aggregate SBOM for the release; consumers and scanners read target/bom.json -->
+                        <groupId>org.cyclonedx</groupId>
+                        <artifactId>cyclonedx-maven-plugin</artifactId>
+                        <version>${cyclonedx-maven-plugin.version}</version>
+                        <inherited>false</inherited>
+                        <executions>
+                            <execution>
+                                <id>aggregate-sbom</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>makeAggregateBom</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                        <configuration>
+                            <outputName>bom</outputName>
+                            <skipNotDeployed>false</skipNotDeployed>
                         </configuration>
                     </plugin>
                     <plugin>
