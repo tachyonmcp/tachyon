@@ -440,22 +440,27 @@ public final class UriTemplate {
 
         var values = new ArrayList<String>(rawItems.length);
         for (String rawItem : rawItems) {
-            String encodedValue = rawItem;
-            if (capture.operator().named()) {
-                String name = capture.variable().name();
-                if (rawItem.equals(name) && capture.operator() == Operator.MATRIX) {
-                    encodedValue = "";
-                } else {
-                    String prefix = name + "=";
-                    if (!rawItem.startsWith(prefix)) {
-                        throw noMatch(rawUri);
-                    }
-                    encodedValue = rawItem.substring(prefix.length());
-                }
-            }
+            var encodedValue = getEncodedValue(capture, rawUri, rawItem);
             values.add(decode(encodedValue).orElseThrow(() -> noMatch(rawUri)));
         }
         return new UriTemplateValue.Sequence(values);
+    }
+
+    private static String getEncodedValue(Capture capture, String rawUri, String rawItem) {
+        String encodedValue = rawItem;
+        if (capture.operator().named()) {
+            String name = capture.variable().name();
+            if (rawItem.equals(name) && capture.operator() == Operator.MATRIX) {
+                encodedValue = "";
+            } else {
+                String prefix = name + "=";
+                if (!rawItem.startsWith(prefix)) {
+                    throw noMatch(rawUri);
+                }
+                encodedValue = rawItem.substring(prefix.length());
+            }
+        }
+        return encodedValue;
     }
 
     /**

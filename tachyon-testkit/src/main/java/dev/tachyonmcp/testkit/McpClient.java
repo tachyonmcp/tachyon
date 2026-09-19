@@ -633,9 +633,8 @@ public abstract class McpClient implements Closeable {
      *
      * @param builder the request builder to configure
      * @param body    the request body
-     * @throws Exception if configuration fails
      */
-    protected void configureRequest(HttpRequest.Builder builder, String body) throws Exception {}
+    protected void configureRequest(HttpRequest.Builder builder, String body) {}
 
     /**
      * Parses {@code "id":<n>} or {@code "id":"<s>"} out of a JSON-RPC request body.

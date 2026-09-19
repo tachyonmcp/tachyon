@@ -34,7 +34,7 @@ class ToolCapabilitiesContractTest extends AbstractToolCapabilitiesContractTest<
     }
 
     @ParameterizedTest(name = "[{index}] {0}")
-    @MethodSource
+    @MethodSource("taskSupportWithoutExecutionField")
     protected void shouldIncludeExecutionTaskSupport(String toolName, boolean hasExecution, ToolDescriptor descriptor)
             throws Exception {
         startServerWith(s -> s.tools().register(descriptor, OK));
@@ -51,7 +51,7 @@ class ToolCapabilitiesContractTest extends AbstractToolCapabilitiesContractTest<
         }
     }
 
-    static Stream<Arguments> shouldIncludeExecutionTaskSupport() {
+    static Stream<Arguments> taskSupportWithoutExecutionField() {
         return Stream.of(
                 Arguments.of("task-aware-tool", false, taskAwareToolDescriptor(TaskSupport.OPTIONAL)),
                 Arguments.of("simple", false, simpleToolDescriptor("simple", "A simple tool")));

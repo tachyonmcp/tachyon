@@ -12,7 +12,6 @@ Spotted while reading code. Not verified by tests. Fixed in code ⇒ 🗑️ rem
 
 - ⚠️ Notifications route onto the POST-SSE stream only from the dispatching thread (ThreadLocal). A handler continuing on another thread ⇒ event goes to the GET stream, or is dropped when there is none (stateful) — surprising for async tools. `OutboundSseStreamMessageRouter#currentSessionId`, `McpDispatcher#invokeHandlerAsync`
 - ⚠️ `UnsupportedProtocolVersionHandler` encodes the rejection with `ProtocolVersionHandler#LATEST_PROTOCOL` (not `Protocols#baseline`) + HTTP 400, even for legacy-looking clients. Intentional per SEP-2575? `UnsupportedProtocolVersionHandler#channelRead`
-- 🐛 Root `pom.xml` imports `org.immutables:bom` (l.161) before `junit-bom` (l.262). Immutables parent pom imports `junit-bom` 5.9.1 → first import wins → JUnit 5.9.1 managed for root **and** every `tachyon-bom` consumer, beating their own `junit.version` 6.x (seen: `examples/*` `dependency:tree` → `junit-jupiter-api:5.9.1`, beta.28). Fix: import `junit-bom` above `org.immutables:bom`, or drop the BOM and pin `value-annotations` only. `pom.xml`, `tachyon-bom/pom.xml`
 - 🪶 `HandlerFutures` is `@InternalApi` but lives in public `tachyon-api`, is statically imported by user-facing `AbstractToolHandler`, and is shown to users in `RpcMethodHandler`'s javadoc example. `HandlerFutures`, `RpcMethodHandler`
 
 ## 🪶 Polish

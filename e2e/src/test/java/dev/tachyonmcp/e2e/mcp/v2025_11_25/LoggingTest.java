@@ -72,7 +72,7 @@ class LoggingTest extends AbstractStatefulMcpE2eTest {
      * it rides that stream. Returns each SSE frame's {@code data:} payload as a stream, waiting for
      * the broadcast to arrive.
      */
-    private Stream<String> readListenStreamWhileBroadcasting(String sessionId) throws Exception {
+    private Stream<String> readListenStreamWhileBroadcasting(String sessionId) {
         try (var client = createTestClient();
                 var subscriber = client.openGetStream(sessionId, null)) {
             subscriber.awaitFirstEventId(ofSeconds(5));

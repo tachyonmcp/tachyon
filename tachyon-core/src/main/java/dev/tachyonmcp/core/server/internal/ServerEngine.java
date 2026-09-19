@@ -45,6 +45,7 @@ public interface ServerEngine extends TachyonServer {
     boolean isStateless();
 
     /** Returns the configured session id generator. */
+    @Nullable
     SessionIdGenerator<? super HttpRequest> sessionIdGenerator();
 
     /** Sets the logging level for a session. */

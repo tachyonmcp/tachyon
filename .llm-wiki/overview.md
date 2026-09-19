@@ -3,7 +3,7 @@ title: Overview
 tags: [concept, architecture]
 sources: [pom.xml, tachyon-core/pom.xml, integrations/pom.xml, extensions/pom.xml, tachyon-core/src/main/java/dev/tachyonmcp/core/server/TachyonServer.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/ServerBuilder.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultServerBuilder.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java]
 updated: 2026-09-19
-commit: 2dad742b
+commit: c98d62cf
 ---
 
 # 🛰️ Overview
@@ -18,7 +18,7 @@ Root `pom.xml` version `1.0.0-SNAPSHOT`. Java `21` (`pom.xml`), Kotlin `2.2.21` 
 graph TD
   api[tachyon-api] --> core[tachyon-core]
   core --> kotlin[tachyon-kotlin]
-  kotlin --> ktschema[tachyon-kotlin-kt-schema]
+  api --> ktschema[tachyon-kotlin-kt-schema]
   core --> ext[extensions/tachyon-extensions]
   core --> testkit[tachyon-testkit]
   core --> integ[integrations/*]

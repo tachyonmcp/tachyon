@@ -72,9 +72,6 @@ public interface ToolRequest extends ServerFeature.Request {
     @Nullable
     ProgressToken progressToken();
 
-    //    @Nullable
-    //    Cancellation cancellation();
-
     /**
      * Returns the input response map from interactive tool calls, or {@code null}.
      *
