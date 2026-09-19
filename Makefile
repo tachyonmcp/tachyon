@@ -1,4 +1,4 @@
-.PHONY: all ci ci-lite build test lint package install-server conformance apidocs e2e clean format help mcp-inspector examples examples-snapshot jmh
+.PHONY: all ci ci-lite build test lint package install-server conformance apidocs e2e clean format help mcp-inspector examples examples-snapshot jmh deploy
 
 .DEFAULT_GOAL := help
 
@@ -11,6 +11,14 @@ NETTY_ARGS :=
 endif
 
 MAVEN_TEST_ARGS := -Dsurefire.forkCount=$(SUREFIRE_FORK_COUNT) $(NETTY_ARGS)
+
+# Publishing to Maven Central is opt-in: without PUBLISH=true `make deploy` builds, tests
+# and signs, but stages nothing. Keeps a stray local `make deploy` harmless.
+ifeq ($(PUBLISH),true)
+PUBLISH_ARGS :=
+else
+PUBLISH_ARGS := -DskipPublishing=true
+endif
 
 # Plugins that only produce reports or publishable artifacts: pure overhead when the
 # build is neither the gated one nor a release.
@@ -60,6 +68,12 @@ package: ## Install artifacts to local Maven repo (skip tests)
 	@echo "📦 Packaging and installing to local repository..."
 	@rm -rf ~/.m2/repository/dev/tachyonmcp/*/*-SNAPSHOT
 	@./mvnw install -DskipTests $(SKIP_REPORT_ARGS) --no-transfer-progress
+
+deploy: ## Build, test and sign release artifacts; publishes to Maven Central only with PUBLISH=true
+	@echo " 🚀  Deploying (publish to Central: $(if $(PUBLISH_ARGS),NO — dry run,YES))..."
+	@./mvnw -P release,lint clean deploy -Drevapi.skip=false \
+		$(MAVEN_TEST_ARGS) $(PUBLISH_ARGS) $(MAVEN_DEPLOY_ARGS) --no-transfer-progress
+	@echo " ✅  Done!"
 
 apidocs:
 	@echo "📚  Building API Docs..."

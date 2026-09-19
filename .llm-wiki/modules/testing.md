@@ -1,9 +1,9 @@
 ---
 title: Testing
 tags: [module, testing, e2e, conformance]
-sources: [e2e/src/test/, conformance/, Makefile, reports/pom.xml, tachyon-core/src/test/, .github/workflows/build.yml]
+sources: [e2e/src/test/, conformance/, Makefile, reports/pom.xml, tachyon-core/src/test/, .github/workflows/build.yml, .github/workflows/release.yml]
 updated: 2026-09-19
-commit: 43ee83a1
+commit: 95dbd763
 ---
 
 # ✅ Testing
@@ -22,6 +22,9 @@ Verdict: E2E-first (AGENTS.md). Real server on port 0, clients = official MCP Ja
 | conformance | `make conformance` |
 | JMH perf gate | `make jmh` → `-Pjmh` profile runs `BenchmarkGate` (`tachyon-core/src/test/java/dev/tachyonmcp/core/BenchmarkGate.java`): every `*Benchmark` via JMH, fails below per-benchmark ops/sec floors; accepts JMH CLI (`-prof gc`, `-t`, regex) via `-Dexec.args` |
 | format/lint | `make format` / `make lint` (Spotless + Detekt; SpotBugs in build) |
+| release build | `make deploy` — `clean deploy -P release,lint -Drevapi.skip=false`; uploads to Maven Central only with `PUBLISH=true`, otherwise `-DskipPublishing=true` (dry run) |
+
+🔴 Every target routes through `MAVEN_TEST_ARGS` (`Makefile`): with `CI=true` it caps `-Dsurefire.forkCount=1` (pom default is `1C`) and `-Dio.netty.eventLoopThreads=2`. Without the caps a runner forks one JVM per CPU, each sizing its Netty groups at `availableProcessors * 2`, and the build dies with `failed to create a child event loop`. Bare `./mvnw` in a workflow bypasses this — call `make`.
 
 `e2e`, `conformance`, `reports` are profile modules in root `pom.xml` — not in the default module list. The `tests` profile that adds them is activated by the absence of `skipTestModules`, so a `-P` flag no longer drops them.
 

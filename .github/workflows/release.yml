@@ -10,6 +10,11 @@ on:
         description: Release version to publish, for example `0.4.2`
         required: true
         type: string
+      dry_run:
+        description: Build, test and sign the release without publishing to Maven Central
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -19,7 +24,9 @@ env:
 
 jobs:
   publish:
+    name: publish${{ inputs.dry_run && ' (dry run)' || '' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
     environment:
@@ -57,7 +64,9 @@ jobs:
             echo "release_version=${release_version}"
           } >> "${GITHUB_OUTPUT}"
 
+      # A dry run builds whatever ref was dispatched, so the tag need not exist yet.
       - name: Check out release tag
+        if: ${{ !inputs.dry_run }}
         env:
           TAG_NAME: ${{ steps.release.outputs.tag_name }}
         run: |
@@ -87,25 +96,48 @@ jobs:
           -DprocessAllModules=true
           -DgenerateBackupPoms=false
 
-      - name: Publish release to Maven Central
+      # `make deploy` so the release reuses the same surefire/Netty thread caps as
+      # `make ci` in build.yml -- a bare ./mvnw forks per CPU and exhausts the
+      # runner's threads ("failed to create a child event loop").
+      - name: Build and publish
         env:
           MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
           MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
           TAG_NAME: ${{ steps.release.outputs.tag_name }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          # A `release` event has no inputs, so this is always true there.
+          PUBLISH: ${{ !inputs.dry_run }}
         run: |
           set -euo pipefail
-          # Reproducible jars: stamp with the tag's own commit time.
-          source_date="$(git log -1 --format=%cI "refs/tags/${TAG_NAME}")"
-          ./mvnw -P release,lint clean deploy \
-            -Drevapi.skip=false \
-            -Dproject.build.outputTimestamp="${source_date}"
+          # Reproducible jars: stamp with the released commit's own time.
+          if [ "${DRY_RUN}" = "true" ]; then
+            source_date="$(git log -1 --format=%cI HEAD)"
+          else
+            source_date="$(git log -1 --format=%cI "refs/tags/${TAG_NAME}")"
+          fi
+          make deploy \
+            PUBLISH="${PUBLISH}" \
+            MAVEN_DEPLOY_ARGS="-Dproject.build.outputTimestamp=${source_date}"
 
       - name: Upload SBOM and reports
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         if: always()
         with:
-          name: release-${{ steps.release.outputs.release_version }}
+          name: release-${{ steps.release.outputs.release_version }}${{ inputs.dry_run && '-dry-run' || '' }}
           path: |
             target/bom.*
             **/target/revapi-report.txt
+
+      - name: Summarise outcome
+        if: always()
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+          RELEASE_VERSION: ${{ steps.release.outputs.release_version }}
+        run: |
+          set -euo pipefail
+          if [ "${DRY_RUN}" = "true" ]; then
+            echo "🧪 Dry run of \`${RELEASE_VERSION}\` — built, tested and signed, nothing published to Maven Central." >> "${GITHUB_STEP_SUMMARY}"
+          else
+            echo "🚀 Published \`${RELEASE_VERSION}\` to Maven Central." >> "${GITHUB_STEP_SUMMARY}"
+          fi
