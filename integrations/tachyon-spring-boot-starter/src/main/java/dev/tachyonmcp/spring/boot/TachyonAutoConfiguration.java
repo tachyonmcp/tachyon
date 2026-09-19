@@ -57,10 +57,7 @@ public class TachyonAutoConfiguration {
                 TachyonProperties properties,
                 ObjectProvider<ServerExtension> extensions,
                 ObjectProvider<TachyonServerCustomizer> customizers) {
-            var builder = TachyonServer.builder().port(properties.port());
-            if (properties.name() != null) builder.name(properties.name());
-            if (properties.version() != null) builder.version(properties.version());
-            if (properties.host() != null) builder.host(properties.host());
+            final var builder = TachyonServer.builder();
             TachyonPropertiesApplier.apply(properties, builder);
             builder.withExtensions(extensions.orderedStream().toArray(ServerExtension[]::new));
             customizers.orderedStream().forEach(customizer -> customizer.customize(builder));

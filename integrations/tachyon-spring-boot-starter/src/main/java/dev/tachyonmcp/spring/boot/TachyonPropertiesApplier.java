@@ -4,11 +4,13 @@ package dev.tachyonmcp.spring.boot;
 import dev.tachyonmcp.core.server.ServerBuilder;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
+import org.jspecify.annotations.Nullable;
 import org.springframework.boot.context.properties.source.InvalidConfigurationPropertyValueException;
 import org.springframework.util.unit.DataSize;
 
 /**
- * Pushes the nested {@code tachyon.network/session/runtime} groups onto a {@link ServerBuilder}.
+ * Pushes {@code tachyon.*} properties onto a {@link ServerBuilder}.
  *
  * <p>Only properties the application actually set are applied, so every unset property keeps the
  * default that Tachyon's own configuration record defines. Customizers run afterwards and therefore
@@ -28,6 +30,10 @@ final class TachyonPropertiesApplier {
     private TachyonPropertiesApplier() {}
 
     static void apply(TachyonProperties properties, ServerBuilder builder) {
+        builder.port(properties.port());
+        setIfPresent(properties.name(), builder::name);
+        setIfPresent(properties.version(), builder::version);
+        setIfPresent(properties.host(), builder::host);
         applyNetwork(properties.network(), builder);
         applySession(properties.session(), builder);
         applyRuntime(properties.runtime(), builder);
@@ -35,19 +41,19 @@ final class TachyonPropertiesApplier {
 
     private static void applyNetwork(TachyonProperties.Network network, ServerBuilder builder) {
         builder.network(config -> {
-            if (network.endpointPath() != null) config.endpointPath(network.endpointPath());
-            if (network.readerIdleTimeout() != null) config.readerIdleTimeout(network.readerIdleTimeout());
-            if (network.writerIdleTimeout() != null) config.writerIdleTimeout(network.writerIdleTimeout());
-            if (network.heartbeatInterval() != null) config.heartbeatInterval(network.heartbeatInterval());
-            if (network.maxContentLength() != null) {
-                config.maxContentLength(toPositiveIntBytes(network.maxContentLength()));
-            }
-            if (network.allowedOrigins() != null) config.allowedOrigins(toArray(network.allowedOrigins()));
-            if (network.allowedHeaders() != null) config.allowedHeaders(toArray(network.allowedHeaders()));
-            if (network.allowedHosts() != null) config.allowedHosts(toArray(network.allowedHosts()));
-            if (network.allowNullOrigin() != null) config.allowNullOrigin(network.allowNullOrigin());
-            if (network.allowPrivateNetworks() != null) config.allowPrivateNetworks(network.allowPrivateNetworks());
-            if (network.ioEngine() != null) config.ioEngine(network.ioEngine());
+            setIfPresent(network.endpointPath(), config::endpointPath);
+            setIfPresent(network.readerIdleTimeout(), config::readerIdleTimeout);
+            setIfPresent(network.writerIdleTimeout(), config::writerIdleTimeout);
+            setIfPresent(network.heartbeatInterval(), config::heartbeatInterval);
+            setIfPresent(
+                    network.maxContentLength(),
+                    maxContentLength -> config.maxContentLength(toPositiveIntBytes(maxContentLength)));
+            setIfPresent(network.allowedOrigins(), values -> config.allowedOrigins(toArray(values)));
+            setIfPresent(network.allowedHeaders(), values -> config.allowedHeaders(toArray(values)));
+            setIfPresent(network.allowedHosts(), values -> config.allowedHosts(toArray(values)));
+            setIfPresent(network.allowNullOrigin(), config::allowNullOrigin);
+            setIfPresent(network.allowPrivateNetworks(), config::allowPrivateNetworks);
+            setIfPresent(network.ioEngine(), config::ioEngine);
         });
     }
 
@@ -59,15 +65,15 @@ final class TachyonPropertiesApplier {
         }
         builder.session(config -> {
             if (Boolean.TRUE.equals(session.enabled())) config.enabled();
-            if (session.sessionTtl() != null) config.sessionTtl(session.sessionTtl());
-            if (session.janitorInterval() != null) config.janitorInterval(session.janitorInterval());
+            setIfPresent(session.sessionTtl(), config::sessionTtl);
+            setIfPresent(session.janitorInterval(), config::janitorInterval);
         });
     }
 
     private static void applyRuntime(TachyonProperties.Runtime runtime, ServerBuilder builder) {
         builder.runtime(config -> {
-            if (runtime.shutdownGracePeriod() != null) config.shutdownGracePeriod(runtime.shutdownGracePeriod());
-            if (runtime.requestTimeout() != null) config.requestTimeout(runtime.requestTimeout());
+            setIfPresent(runtime.shutdownGracePeriod(), config::shutdownGracePeriod);
+            setIfPresent(runtime.requestTimeout(), config::requestTimeout);
         });
     }
 
@@ -107,5 +113,9 @@ final class TachyonPropertiesApplier {
 
     private static String[] toArray(List<String> values) {
         return values.toArray(String[]::new);
+    }
+
+    private static <T> void setIfPresent(@Nullable T value, Consumer<T> setter) {
+        if (value != null) setter.accept(value);
     }
 }

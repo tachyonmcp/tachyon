@@ -8,6 +8,7 @@ import static org.awaitility.Awaitility.await;
 
 import dev.tachyonmcp.api.annotations.McpTool;
 import dev.tachyonmcp.core.server.TachyonServer;
+import dev.tachyonmcp.core.server.observability.OperationOutcome;
 import dev.tachyonmcp.testkit.McpTestClients;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -196,8 +197,8 @@ class TachyonActuatorAutoConfigurationTest {
      */
     @Test
     void theGaugesBeanCarriesItsOwnTypeAndBacksOff() {
-        final var replacement = new TachyonMeterBinder(
-                dev.tachyonmcp.core.server.TachyonServer.builder().port(0).build(), new SimpleMeterRegistry());
+        final var replacement =
+                new TachyonMeterBinder(TachyonServer.builder().port(0).build(), new SimpleMeterRegistry());
 
         runner.withConfiguration(AutoConfigurations.of(MetricsAutoConfiguration.class))
                 .withBean(SimpleMeterRegistry.class, SimpleMeterRegistry::new)
@@ -231,11 +232,9 @@ class TachyonActuatorAutoConfigurationTest {
 
     @Test
     void outcomeTagsUseSnakeCase() {
-        assertThat(TachyonMetricsListener.outcome(
-                        new dev.tachyonmcp.core.server.observability.OperationOutcome.Completed()))
+        assertThat(TachyonMetricsListener.outcome(new OperationOutcome.Completed()))
                 .isEqualTo("completed");
-        assertThat(TachyonMetricsListener.outcome(
-                        new dev.tachyonmcp.core.server.observability.OperationOutcome.NotificationAccepted()))
+        assertThat(TachyonMetricsListener.outcome(new OperationOutcome.NotificationAccepted()))
                 .isEqualTo("notification_accepted");
     }
 }

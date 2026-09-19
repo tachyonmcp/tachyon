@@ -65,14 +65,13 @@ final class TachyonMetricsListener implements ObservationListener {
      * the name is one the server serves.
      */
     static String method(OperationInfo info, OperationOutcome outcome) {
-        final var unknown =
-                switch (outcome) {
-                    case OperationOutcome.Rejected rejected ->
-                        rejected.error() != null && rejected.error().kind() == ServerError.Kind.METHOD_NOT_FOUND;
-                    case OperationOutcome.NotificationIgnored ignored -> true;
-                    default -> false;
-                };
-        return unknown ? UNKNOWN_METHOD : info.method();
+        return switch (outcome) {
+            case OperationOutcome.Rejected rejected
+            when rejected.error() != null && rejected.error().kind() == ServerError.Kind.METHOD_NOT_FOUND ->
+                UNKNOWN_METHOD;
+            case OperationOutcome.NotificationIgnored ignored -> UNKNOWN_METHOD;
+            default -> info.method();
+        };
     }
 
     static String outcome(OperationOutcome outcome) {
