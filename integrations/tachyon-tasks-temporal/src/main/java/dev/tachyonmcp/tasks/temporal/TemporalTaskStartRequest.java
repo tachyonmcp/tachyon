@@ -11,7 +11,7 @@ import org.jspecify.annotations.Nullable;
 /** Request to start a Temporal Workflow that will be exposed as an MCP task. */
 @ExperimentalApi
 @Value.Immutable
-@Value.Style(visibility = Value.Style.ImplementationVisibility.PACKAGE, typeImmutable = "Default*")
+@Value.Style(visibilityString = "PACKAGE", typeImmutable = "Default*")
 public interface TemporalTaskStartRequest extends HasMeta {
 
     /**

@@ -10,10 +10,7 @@ import org.immutables.value.Value;
  * construct a user-role message without specifying the role explicitly.
  */
 @Value.Immutable
-@Value.Style(
-        allParameters = true,
-        visibility = Value.Style.ImplementationVisibility.PACKAGE,
-        typeImmutable = "Default*")
+@Value.Style(allParameters = true, visibilityString = "PACKAGE", typeImmutable = "Default*")
 public interface PromptMessage {
 
     Role role();

@@ -15,7 +15,7 @@ import org.jspecify.annotations.Nullable;
  * values.
  */
 @Value.Immutable
-@Value.Style(visibility = Value.Style.ImplementationVisibility.PACKAGE, typeImmutable = "Default*")
+@Value.Style(visibilityString = "PACKAGE", typeImmutable = "Default*")
 public interface Annotations {
 
     /**

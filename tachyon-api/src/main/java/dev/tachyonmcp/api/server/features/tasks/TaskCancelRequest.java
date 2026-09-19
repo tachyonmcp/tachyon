@@ -10,7 +10,7 @@ import org.jspecify.annotations.Nullable;
 /** Request to signal cancellation intent for one task. */
 @ExperimentalApi
 @Value.Immutable
-@Value.Style(visibility = Value.Style.ImplementationVisibility.PACKAGE, typeImmutable = "Default*")
+@Value.Style(visibilityString = "PACKAGE", typeImmutable = "Default*")
 public interface TaskCancelRequest extends HasMeta {
 
     /** Returns the task identifier. */

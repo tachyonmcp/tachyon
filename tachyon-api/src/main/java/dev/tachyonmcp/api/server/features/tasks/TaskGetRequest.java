@@ -10,7 +10,7 @@ import org.jspecify.annotations.Nullable;
 /** Request to retrieve the authoritative state of one task. */
 @ExperimentalApi
 @Value.Immutable
-@Value.Style(visibility = Value.Style.ImplementationVisibility.PACKAGE, typeImmutable = "Default*")
+@Value.Style(visibilityString = "PACKAGE", typeImmutable = "Default*")
 public interface TaskGetRequest extends HasMeta {
 
     /** Returns the task identifier. */

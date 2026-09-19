@@ -51,7 +51,7 @@
         <dependency>
             <groupId>org.immutables</groupId>
             <artifactId>value-annotations</artifactId>
-            <scope>provided</scope> <!-- compile only -->
+            <scope>provided</scope><!-- compile only -->
         </dependency>
 
         <dependency>

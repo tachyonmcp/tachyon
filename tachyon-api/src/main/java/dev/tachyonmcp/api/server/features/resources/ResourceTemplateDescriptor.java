@@ -19,10 +19,7 @@ import org.jspecify.annotations.Nullable;
  * at request time via a {@link ResourceRequest}.
  */
 @Value.Immutable
-@Value.Style(
-        allParameters = true,
-        visibility = Value.Style.ImplementationVisibility.PACKAGE,
-        typeImmutable = "Default*")
+@Value.Style(allParameters = true, visibilityString = "PACKAGE", typeImmutable = "Default*")
 public interface ResourceTemplateDescriptor extends ServerFeature.Descriptor, HasMeta {
 
     /** The template name, unique within the server. */

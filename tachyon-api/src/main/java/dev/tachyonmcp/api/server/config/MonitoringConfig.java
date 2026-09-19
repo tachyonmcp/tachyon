@@ -9,10 +9,7 @@ import org.immutables.value.Value;
  * Monitoring configuration for the MCP server.
  */
 @Value.Immutable
-@Value.Style(
-        allParameters = true,
-        visibility = Value.Style.ImplementationVisibility.PACKAGE,
-        typeImmutable = "Default*")
+@Value.Style(allParameters = true, visibilityString = "PACKAGE", typeImmutable = "Default*")
 public interface MonitoringConfig {
 
     @Value.Default

@@ -15,10 +15,7 @@ import org.jspecify.annotations.Nullable;
  * is base64-encoded per the MCP protocol.
  */
 @Value.Immutable
-@Value.Style(
-        allParameters = true,
-        typeImmutable = "Default*",
-        visibility = Value.Style.ImplementationVisibility.PACKAGE)
+@Value.Style(allParameters = true, typeImmutable = "Default*", visibilityString = "PACKAGE")
 public non-sealed interface AudioContent extends ContentBlock, HasMeta {
 
     /**

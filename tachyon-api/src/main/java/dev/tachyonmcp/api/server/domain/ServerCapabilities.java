@@ -9,10 +9,7 @@ import org.jspecify.annotations.Nullable;
  * Capabilities the server advertises to the client during initialization.
  */
 @Value.Immutable
-@Value.Style(
-        allParameters = true,
-        visibility = Value.Style.ImplementationVisibility.PACKAGE,
-        typeImmutable = "Default*")
+@Value.Style(allParameters = true, visibilityString = "PACKAGE", typeImmutable = "Default*")
 public interface ServerCapabilities {
 
     /** Prompt capabilities ({@code null} = not supported). */

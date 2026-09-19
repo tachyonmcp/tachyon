@@ -48,11 +48,7 @@ public sealed interface ToolResult extends HasMeta
      * A successful invocation, carrying an optional structured value and its content blocks.
      */
     @Value.Immutable
-    @Value.Style(
-            visibility = Value.Style.ImplementationVisibility.PACKAGE,
-            typeImmutable = "Default*",
-            with = "",
-            from = "")
+    @Value.Style(visibilityString = "PACKAGE", typeImmutable = "Default*", with = "", from = "")
     non-sealed interface Success extends ToolResult {
 
         /**
@@ -160,11 +156,7 @@ public sealed interface ToolResult extends HasMeta
      * A failed invocation carrying the error's content blocks.
      */
     @Value.Immutable
-    @Value.Style(
-            visibility = Value.Style.ImplementationVisibility.PACKAGE,
-            typeImmutable = "Default*",
-            with = "",
-            from = "")
+    @Value.Style(visibilityString = "PACKAGE", typeImmutable = "Default*", with = "", from = "")
     non-sealed interface Error extends ToolResult {
 
         /**
@@ -246,11 +238,7 @@ public sealed interface ToolResult extends HasMeta
      * Signals that completing the tool call requires additional input from the caller.
      */
     @Value.Immutable
-    @Value.Style(
-            visibility = Value.Style.ImplementationVisibility.PACKAGE,
-            typeImmutable = "Default*",
-            with = "",
-            from = "")
+    @Value.Style(visibilityString = "PACKAGE", typeImmutable = "Default*", with = "", from = "")
     non-sealed interface InputRequired extends ToolResult, dev.tachyonmcp.api.server.domain.InputRequired {
 
         @Override
@@ -313,11 +301,7 @@ public sealed interface ToolResult extends HasMeta
 
     /** A task projection created by this tool invocation. */
     @Value.Immutable
-    @Value.Style(
-            visibility = Value.Style.ImplementationVisibility.PACKAGE,
-            typeImmutable = "Default*",
-            with = "",
-            from = "")
+    @Value.Style(visibilityString = "PACKAGE", typeImmutable = "Default*", with = "", from = "")
     @ExperimentalApi
     non-sealed interface Task extends ToolResult {
 

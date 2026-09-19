@@ -12,10 +12,7 @@ import org.jspecify.annotations.Nullable;
  * considered optional.
  */
 @Value.Immutable
-@Value.Style(
-        allParameters = true,
-        typeImmutable = "Default*",
-        visibility = Value.Style.ImplementationVisibility.PACKAGE)
+@Value.Style(allParameters = true, typeImmutable = "Default*", visibilityString = "PACKAGE")
 public interface PromptArgument {
 
     String name();

@@ -15,10 +15,7 @@ import org.jspecify.annotations.Nullable;
  * Descriptor for a server-provided prompt template.
  */
 @Value.Immutable
-@Value.Style(
-        allParameters = true,
-        visibility = Value.Style.ImplementationVisibility.PACKAGE,
-        typeImmutable = "Default*")
+@Value.Style(allParameters = true, visibilityString = "PACKAGE", typeImmutable = "Default*")
 public interface PromptDescriptor extends ServerFeature.Descriptor, HasMeta {
 
     /** The prompt name, unique within the server. */

@@ -12,10 +12,7 @@ import org.jspecify.annotations.Nullable;
  * previously-resolved sibling arguments supplied as context.
  */
 @Value.Immutable
-@Value.Style(
-        allParameters = true,
-        visibility = Value.Style.ImplementationVisibility.PACKAGE,
-        typeImmutable = "Default*")
+@Value.Style(allParameters = true, visibilityString = "PACKAGE", typeImmutable = "Default*")
 public interface CompletionRequest extends ServerFeature.Request {
 
     /**

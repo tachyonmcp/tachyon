@@ -14,10 +14,7 @@ import org.jspecify.annotations.Nullable;
  * signals that the tool may reach outside the MCP ecosystem.
  */
 @Value.Immutable
-@Value.Style(
-        allParameters = true,
-        visibility = Value.Style.ImplementationVisibility.PACKAGE,
-        typeImmutable = "Default*")
+@Value.Style(allParameters = true, visibilityString = "PACKAGE", typeImmutable = "Default*")
 public interface ToolAnnotations {
 
     @Nullable

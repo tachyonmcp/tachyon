@@ -5,7 +5,7 @@ import org.immutables.value.Value;
 import org.jspecify.annotations.Nullable;
 
 @Value.Builder
-@Value.Style(visibility = Value.Style.ImplementationVisibility.PACKAGE, typeImmutable = "Default*")
+@Value.Style(visibilityString = "PACKAGE", typeImmutable = "Default*")
 public record YouComSearchConfig(
         @Nullable String apiKey,
         @Nullable Boolean freeTier,
