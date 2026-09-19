@@ -18,6 +18,10 @@
     <name>Tachyon MCP — Temporal Tasks</name>
     <description>Maps MCP tasks to Temporal Workflow Executions</description>
 
+    <properties>
+        <automatic.module.name>dev.tachyonmcp.tasks.temporal</automatic.module.name>
+    </properties>
+
     <dependencyManagement>
         <dependencies>
             <dependency>

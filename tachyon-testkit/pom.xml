@@ -17,6 +17,10 @@
     <name>Tachyon MCP TestKit</name>
     <description>Test harness: MCP clients with protocol request shaping and in-process server helpers</description>
 
+    <properties>
+        <automatic.module.name>dev.tachyonmcp.testkit</automatic.module.name>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>dev.tachyonmcp</groupId>
@@ -81,53 +85,6 @@
 
     <build>
         <plugins>
-            <plugin>
-                <groupId>org.jacoco</groupId>
-                <artifactId>jacoco-maven-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <id>prepare-agent</id>
-                        <goals>
-                            <goal>prepare-agent</goal>
-                        </goals>
-                    </execution>
-                    <execution>
-                        <id>report</id>
-                        <phase>verify</phase>
-                        <goals>
-                            <goal>report</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <groupId>org.codehaus.mojo</groupId>
-                <artifactId>exec-maven-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <id>detekt</id>
-                        <goals>
-                            <goal>java</goal>
-                        </goals>
-                        <phase>none</phase>
-                        <configuration>
-                            <skip>true</skip>
-                            <mainClass>ignored</mainClass>
-                        </configuration>
-                    </execution>
-                    <execution>
-                        <id>detekt-format</id>
-                        <goals>
-                            <goal>java</goal>
-                        </goals>
-                        <phase>none</phase>
-                        <configuration>
-                            <skip>true</skip>
-                            <mainClass>ignored</mainClass>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
             <plugin>
                 <groupId>org.revapi</groupId>
                 <artifactId>revapi-maven-plugin</artifactId>

@@ -17,6 +17,11 @@
     <name>Tachyon MCP Core</name>
     <description>MCP server runtime</description>
 
+    <properties>
+        <automatic.module.name>dev.tachyonmcp.core</automatic.module.name>
+        <ts2java.skip>false</ts2java.skip>
+    </properties>
+
     <dependencies>
 
         <dependency>
@@ -136,7 +141,7 @@
                             <goal>exec</goal>
                         </goals>
                         <configuration>
-                            <skip>false</skip>
+                            <skip>${ts2java.skip}</skip>
                             <executable>python3</executable>
                             <arguments>
                                 <argument>${project.basedir}/ts2java.py</argument>
@@ -152,34 +157,13 @@
                         </configuration>
                     </execution>
                     <execution>
-                        <id>detekt</id>
-                        <goals>
-                            <goal>java</goal>
-                        </goals>
-                        <phase>none</phase>
-                        <configuration>
-                            <skip>true</skip>
-                            <mainClass>ignored</mainClass>
-                        </configuration>
-                    </execution>
-                    <execution>
-                        <id>detekt-format</id>
-                        <goals>
-                            <goal>java</goal>
-                        </goals>
-                        <phase>none</phase>
-                        <configuration>
-                            <skip>true</skip>
-                            <mainClass>ignored</mainClass>
-                        </configuration>
-                    </execution>
-                    <execution>
                         <id>generate-mcp-2026-07-28</id>
                         <phase>generate-sources</phase>
                         <goals>
                             <goal>exec</goal>
                         </goals>
                         <configuration>
+                            <skip>${ts2java.skip}</skip>
                             <executable>python3</executable>
                             <arguments>
                                 <argument>${project.basedir}/ts2java.py</argument>
@@ -245,37 +229,10 @@
                         <exclude>dev/tachyonmcp/core/server/session/*Benchmark*</exclude>
                     </excludes>
                 </configuration>
-                <executions>
-                    <execution>
-                        <id>prepare-agent</id>
-                        <goals>
-                            <goal>prepare-agent</goal>
-                        </goals>
-                    </execution>
-                    <execution>
-                        <id>report</id>
-                        <phase>verify</phase>
-                        <goals>
-                            <goal>report</goal>
-                        </goals>
-                    </execution>
-                </executions>
             </plugin>
             <plugin>
                 <groupId>org.revapi</groupId>
                 <artifactId>revapi-maven-plugin</artifactId>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-source-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <id>attach-sources</id>
-                        <goals>
-                            <goal>jar-no-fork</goal>
-                        </goals>
-                    </execution>
-                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

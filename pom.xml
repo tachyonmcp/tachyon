@@ -60,11 +60,17 @@
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <!-- Reproducible builds: fixed for dev builds, overridden with the tag commit time on release -->
+        <project.build.outputTimestamp>2026-09-19T00:00:00Z</project.build.outputTimestamp>
+        <!-- Published modules override this with their stable JPMS automatic module name -->
+        <automatic.module.name>dev.tachyonmcp.internal</automatic.module.name>
         <!-- Java -->
         <java.version>21</java.version>
         <kotlin.version>2.2.21</kotlin.version>
         <kotlin-language.version>2.2</kotlin-language.version>
         <api.oldVersion>1.0.0-beta.28</api.oldVersion>
+        <!-- Bound to verify in the modules that declare revapi; needs the baseline from Central, so opt in with -Drevapi.skip=false -->
+        <revapi.skip>true</revapi.skip>
 
         <!-- Dependencies -->
         <assertj.version>3.27.7</assertj.version>
@@ -96,11 +102,16 @@
         <jacoco-maven-plugin.version>0.8.15</jacoco-maven-plugin.version>
         <revapi.version>0.15.1</revapi.version>
         <revapi-java.version>0.28.4</revapi-java.version>
+        <maven-antrun-plugin.version>3.2.0</maven-antrun-plugin.version>
+        <maven-clean-plugin.version>3.5.0</maven-clean-plugin.version>
         <maven-compiler-plugin.version>3.16.0</maven-compiler-plugin.version>
         <maven-dependency-plugin.version>3.11.0</maven-dependency-plugin.version>
+        <maven-enforcer-plugin.version>3.6.3</maven-enforcer-plugin.version>
         <maven-javadoc-plugin.version>3.12.0</maven-javadoc-plugin.version>
+        <maven-resources-plugin.version>3.5.0</maven-resources-plugin.version>
         <maven-source-plugin.version>3.4.0</maven-source-plugin.version>
         <maven-surefire-plugin.version>3.6.0</maven-surefire-plugin.version>
+        <versions-maven-plugin.version>2.22.0</versions-maven-plugin.version>
         <palantir-java-format.version>2.98.0</palantir-java-format.version>
         <spotless-maven-plugin.version>3.10.2</spotless-maven-plugin.version>
         <spotbugs-maven-plugin.version>4.10.4.1</spotbugs-maven-plugin.version>
@@ -160,6 +171,22 @@
                 <groupId>org.jetbrains.kotlin</groupId>
                 <artifactId>kotlin-bom</artifactId>
                 <version>${kotlin.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <dependency>
+                <groupId>org.jetbrains.kotlinx</groupId>
+                <artifactId>kotlinx-coroutines-bom</artifactId>
+                <version>${kotlinx-coroutines.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <dependency>
+                <groupId>org.jetbrains.kotlinx</groupId>
+                <artifactId>kotlinx-serialization-bom</artifactId>
+                <version>${kotlinx-serialization-json.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -376,6 +403,69 @@
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-clean-plugin</artifactId>
+                    <version>${maven-clean-plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-resources-plugin</artifactId>
+                    <version>${maven-resources-plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-antrun-plugin</artifactId>
+                    <version>${maven-antrun-plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.codehaus.mojo</groupId>
+                    <artifactId>versions-maven-plugin</artifactId>
+                    <version>${versions-maven-plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-enforcer-plugin</artifactId>
+                    <version>${maven-enforcer-plugin.version}</version>
+                    <executions>
+                        <execution>
+                            <id>enforce-build-rules</id>
+                            <phase>validate</phase>
+                            <goals>
+                                <goal>enforce</goal>
+                            </goals>
+                            <configuration>
+                                <rules>
+                                    <requireMavenVersion>
+                                        <version>[3.9.0,)</version>
+                                    </requireMavenVersion>
+                                    <requireJavaVersion>
+                                        <version>[${java.version},)</version>
+                                    </requireJavaVersion>
+                                    <requirePluginVersions>
+                                        <banLatest>true</banLatest>
+                                        <banRelease>true</banRelease>
+                                        <banSnapshots>true</banSnapshots>
+                                    </requirePluginVersions>
+                                    <banDuplicatePomDependencyVersions/>
+                                </rules>
+                            </configuration>
+                        </execution>
+                    </executions>
+                </plugin>
+                <plugin>
+                    <groupId>org.jetbrains.kotlin</groupId>
+                    <artifactId>kotlin-maven-plugin</artifactId>
+                    <version>${kotlin.version}</version>
+                    <configuration>
+                        <javaParameters>true</javaParameters>
+                        <jvmTarget>${java.version}</jvmTarget>
+                        <languageVersion>${kotlin-language.version}</languageVersion>
+                        <args>
+                            <arg>-Xjsr305=strict</arg>
+                        </args>
+                    </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-site-plugin</artifactId>
                     <version>3.22.0</version>
                 </plugin>
@@ -383,15 +473,6 @@
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-deploy-plugin</artifactId>
                     <version>3.2.0</version>
-                </plugin>
-                <plugin>
-                    <groupId>org.apache.maven.plugins</groupId>
-                    <artifactId>maven-release-plugin</artifactId>
-                    <version>3.3.1</version>
-                    <configuration>
-                        <pushChanges>false</pushChanges>
-                        <tagNameFormat>v@{project.version}</tagNameFormat>
-                    </configuration>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
@@ -407,6 +488,9 @@
                             <manifest>
                                 <addDefaultImplementationEntries>true</addDefaultImplementationEntries>
                             </manifest>
+                            <manifestEntries>
+                                <Automatic-Module-Name>${automatic.module.name}</Automatic-Module-Name>
+                            </manifestEntries>
                         </archive>
                     </configuration>
                 </plugin>
@@ -421,9 +505,24 @@
                     <version>${jacoco-maven-plugin.version}</version>
                     <configuration>
                         <excludes>
-                            <exclude>dev/tachyonmcp/protocol/mcp/**/*</exclude>
+                            <exclude>dev/tachyonmcp/core/protocol/mcp/**/*</exclude>
                         </excludes>
                     </configuration>
+                    <executions>
+                        <execution>
+                            <id>prepare-agent</id>
+                            <goals>
+                                <goal>prepare-agent</goal>
+                            </goals>
+                        </execution>
+                        <execution>
+                            <id>report</id>
+                            <phase>verify</phase>
+                            <goals>
+                                <goal>report</goal>
+                            </goals>
+                        </execution>
+                    </executions>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
@@ -441,7 +540,6 @@
                             </palantirJavaFormat>
                             <excludes>
                                 <exclude>**/generated-sources/**</exclude>
-                                <exclude>**/me/tachyonmcp/tachyon/protocol/mcp/**</exclude>
                             </excludes>
                             <licenseHeader>
                                 <content>/* Copyright (c) $YEAR Konstantin Pavlov/IT Staff and contributors. */</content>
@@ -609,6 +707,14 @@
                     <groupId>org.revapi</groupId>
                     <artifactId>revapi-maven-plugin</artifactId>
                     <version>${revapi.version}</version>
+                    <executions>
+                        <execution>
+                            <id>revapi-check</id>
+                            <goals>
+                                <goal>check</goal>
+                            </goals>
+                        </execution>
+                    </executions>
                     <dependencies>
                         <dependency>
                             <groupId>org.revapi</groupId>
@@ -701,6 +807,14 @@
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
                     <forkCount>${surefire.forkCount}</forkCount>
@@ -728,6 +842,8 @@
                 <artifactId>maven-javadoc-plugin</artifactId>
                 <configuration>
                     <doclint>all</doclint>
+                    <!-- Automatic-Module-Name in the jar manifest would otherwise switch javadoc to module mode -->
+                    <legacyMode>true</legacyMode>
                 </configuration>
                 <executions>
                     <execution>
@@ -738,35 +854,6 @@
                     </execution>
                 </executions>
             </plugin>
-            <plugin>
-                <groupId>org.codehaus.mojo</groupId>
-                <artifactId>exec-maven-plugin</artifactId>
-                <inherited>false</inherited>
-                <executions>
-                    <execution>
-                        <id>detekt</id>
-                        <inherited>false</inherited>
-                        <goals>
-                            <goal>java</goal>
-                        </goals>
-                        <configuration>
-                            <skip>true</skip>
-                            <mainClass>skip</mainClass>
-                        </configuration>
-                    </execution>
-                    <execution>
-                        <id>detekt-format</id>
-                        <inherited>false</inherited>
-                        <goals>
-                            <goal>java</goal>
-                        </goals>
-                        <configuration>
-                            <skip>true</skip>
-                            <mainClass>skip</mainClass>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
         </plugins>
     </build>
 
@@ -774,7 +861,9 @@
         <profile>
             <id>tests</id>
             <activation>
-                <activeByDefault>true</activeByDefault>
+                <property>
+                    <name>!skipTestModules</name>
+                </property>
             </activation>
             <modules>
                 <module>e2e</module>
@@ -844,13 +933,24 @@
                     </plugin>
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-source-plugin</artifactId>
+                        <artifactId>maven-enforcer-plugin</artifactId>
                         <executions>
                             <execution>
-                                <id>attach-sources</id>
+                                <id>enforce-release-rules</id>
+                                <phase>validate</phase>
                                 <goals>
-                                    <goal>jar-no-fork</goal>
+                                    <goal>enforce</goal>
                                 </goals>
+                                <configuration>
+                                    <rules>
+                                        <requireReleaseDeps>
+                                            <message>Release must not depend on SNAPSHOT artifacts</message>
+                                        </requireReleaseDeps>
+                                        <requireReleaseVersion>
+                                            <message>Release must not be a SNAPSHOT version</message>
+                                        </requireReleaseVersion>
+                                    </rules>
+                                </configuration>
                             </execution>
                         </executions>
                     </plugin>
