@@ -74,4 +74,6 @@ Two-phase: `build()` constructs server + runs registrations, **no socket**; `sta
 
 `Makefile` targets: `build` (mvn verify), `test`, `lint`, `format`, `ci` = one reactor for clean + lint + build + revapi then the JMH gate, `ci-lite` (same without report plugins), `conformance`, `examples`, `mcp-inspector`. CI runs `make ci` on JDK 21 and `make ci-lite` on the compatibility JDKs (`.github/workflows/build.yml`). Details [[testing]].
 
+Release (`.github/workflows/release.yml`) sets the version with `versions:set -DprocessAllModules=true`, then `deploy -P release,lint -Drevapi.skip=false` — so API compatibility is enforced on the artifact that ships, the enforcer bans SNAPSHOT deps, and `cyclonedx-maven-plugin` attaches an aggregate SBOM (`target/bom.json`).
+
 `make lint` also runs `.github/scripts/check-poms.py`: the parentless `tachyon-bom` inherits nothing, so that script asserts it lists exactly the `dev.tachyonmcp` artifacts the root pom manages and pins the same plugin versions, and that every published module declares a unique `automatic.module.name` (written to `Automatic-Module-Name`). `maven-enforcer-plugin` covers Maven/Java version and plugin-version pinning. Python 3 is required at build time for `tachyon-core`'s `ts2java.py` generation (`-Dts2java.skip=true` opts out).

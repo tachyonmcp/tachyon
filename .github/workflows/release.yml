@@ -12,7 +12,7 @@ on:
         type: string
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   JAVA_VERSION: 21
@@ -20,40 +20,50 @@ env:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     environment:
       name: release
-    env:
-      MANUAL_RELEASE_VERSION: ${{ inputs.release_version }}
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
+      # Release names arrive as untrusted input: keep them out of the shell and
+      # accept only a semver-shaped tag.
       - name: Resolve release coordinates
         id: release
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          MANUAL_RELEASE_VERSION: ${{ inputs.release_version }}
         run: |
-          if [ "${{ github.event_name }}" = "release" ]; then
-            tag_name="${{ github.event.release.tag_name }}"
+          set -euo pipefail
+          if [ "${EVENT_NAME}" = "release" ]; then
+            tag_name="${RELEASE_TAG}"
           else
             tag_name="v${MANUAL_RELEASE_VERSION}"
           fi
 
+          if ! printf '%s' "${tag_name}" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.]+)?$'; then
+            echo "Refusing to release from unexpected tag: ${tag_name}" >&2
+            exit 1
+          fi
+
           release_version="${tag_name#v}"
 
-          echo "tag_name=${tag_name}" >> "${GITHUB_OUTPUT}"
-          echo "release_version=${release_version}" >> "${GITHUB_OUTPUT}"
+          {
+            echo "tag_name=${tag_name}"
+            echo "release_version=${release_version}"
+          } >> "${GITHUB_OUTPUT}"
 
       - name: Check out release tag
+        env:
+          TAG_NAME: ${{ steps.release.outputs.tag_name }}
         run: |
+          set -euo pipefail
           git fetch --force --tags origin
-          git checkout "${{ steps.release.outputs.tag_name }}"
-
-      - name: Set release version in workspace
-        run: >
-          mvn -B clean versions:set
-          -DnewVersion=${{ steps.release.outputs.release_version }}
-          -DprocessAllModules=true
-          -DgenerateBackupPoms=false --no-transfer-progress
+          git checkout "refs/tags/${TAG_NAME}"
 
       - name: Set up JDK ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v6
@@ -67,63 +77,35 @@ jobs:
           gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
           gpg-passphrase: GPG_PASSPHRASE
 
+      # processAllModules reaches tachyon-bom, which has no parent by design.
+      - name: Set release version in workspace
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.release_version }}
+        run: >
+          ./mvnw clean versions:set
+          -DnewVersion="${RELEASE_VERSION}"
+          -DprocessAllModules=true
+          -DgenerateBackupPoms=false
+
       - name: Publish release to Maven Central
         env:
           MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
           MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-        run: ./mvnw -B -P release,lint clean deploy --no-transfer-progress
+          TAG_NAME: ${{ steps.release.outputs.tag_name }}
+        run: |
+          set -euo pipefail
+          # Reproducible jars: stamp with the tag's own commit time.
+          source_date="$(git log -1 --format=%cI "refs/tags/${TAG_NAME}")"
+          ./mvnw -P release,lint clean deploy \
+            -Drevapi.skip=false \
+            -Dproject.build.outputTimestamp="${source_date}"
 
-  prepare-next-version:
-    needs:
-      - publish
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
+      - name: Upload SBOM and reports
+        uses: actions/upload-artifact@v7
+        if: always()
         with:
-          ref: main
-
-      - name: Resolve next development version
-        id: next-version
-        env:
-          MANUAL_RELEASE_VERSION: ${{ inputs.release_version }}
-        run: |
-          if [ "${{ github.event_name }}" = "release" ]; then
-            release_version="${{ github.event.release.tag_name }}"
-            release_version="${release_version#v}"
-          else
-            release_version="${MANUAL_RELEASE_VERSION}"
-          fi
-
-          base_version="${release_version%%-*}"
-          IFS='.' read -r major minor patch <<EOF
-          ${base_version}
-          EOF
-
-          next_patch=$((patch + 1))
-          next_version="${major}.${minor}.${next_patch}-SNAPSHOT"
-
-          echo "release_version=${release_version}" >> "${GITHUB_OUTPUT}"
-          echo "next_version=${next_version}" >> "${GITHUB_OUTPUT}"
-
-      - name: Set next development version
-        if: false # disable bump version today
-        run: >
-          ./mvnw -B versions:set
-          -DnewVersion=${{ steps.next-version.outputs.next_version }}
-          -DprocessAllModules=true
-          -DgenerateBackupPoms=false --no-transfer-progress
-
-      - name: Commit and push next development version
-        env:
-          NEXT_VERSION: ${{ steps.next-version.outputs.next_version }}
-        run: |
-          if git diff --quiet -- 'pom.xml' '**/pom.xml'; then
-            echo "main is already set to ${NEXT_VERSION}"
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]`@users.noreply.github.com`"
-          git add -- 'pom.xml' '**/pom.xml'
-          git commit -m "chore: prepare for next development iteration ${NEXT_VERSION}"
-          git push origin HEAD:main
+          name: release-${{ steps.release.outputs.release_version }}
+          path: |
+            target/bom.*
+            **/target/revapi-report.txt
