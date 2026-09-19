@@ -1,9 +1,9 @@
 ---
 title: Testing
 tags: [module, testing, e2e, conformance]
-sources: [e2e/src/test/, conformance/, Makefile, tachyon-core/src/test/, .github/workflows/build.yml]
-updated: 2026-09-18
-commit: f2adbaed
+sources: [e2e/src/test/, conformance/, Makefile, reports/pom.xml, tachyon-core/src/test/, .github/workflows/build.yml]
+updated: 2026-09-19
+commit: 43ee83a1
 ---
 
 # ✅ Testing
@@ -22,7 +22,13 @@ Verdict: E2E-first (AGENTS.md). Real server on port 0, clients = official MCP Ja
 | JMH perf gate | `make jmh` → `-Pjmh` profile runs `BenchmarkGate` (`tachyon-core/src/test/java/dev/tachyonmcp/core/BenchmarkGate.java`): every `*Benchmark` via JMH, fails below per-benchmark ops/sec floors; accepts JMH CLI (`-prof gc`, `-t`, regex) via `-Dexec.args` |
 | format/lint | `make format` / `make lint` (Spotless + Detekt; SpotBugs in build) |
 
-`e2e`, `conformance`, `reports` are profile modules in root `pom.xml` — not in default module list.
+`e2e`, `conformance`, `reports` are profile modules in root `pom.xml` — not in the default module list. The `tests` profile that adds them is activated by the absence of `skipTestModules`, so a `-P` flag no longer drops them.
+
+## 📊 Coverage gate
+
+JaCoCo `prepare-agent` + `report` are bound once in root `pom.xml` `<plugins>`, so every module writes `target/jacoco.exec`. `reports` merges them (`**/target/jacoco.exec`) and gates the bundle.
+
+`jacoco:check` has no `classDirs` parameter — it only analyses `${project.build.outputDirectory}` — so `reports` unpacks every published module's classes there with `dependency:unpack-dependencies` before the check. Floors live in `reports/pom.xml`; generated protocol classes are excluded in root `pom.xml`.
 
 ## 🗂️ e2e layout (`e2e/src/test/java/dev/tachyonmcp/e2e/mcp/`)
 
