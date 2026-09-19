@@ -5,10 +5,7 @@ import org.immutables.value.Value;
 
 /** Requests user input by opening a URL (e.g. for OAuth or form fill). */
 @Value.Immutable
-@Value.Style(
-        allParameters = true,
-        visibility = Value.Style.ImplementationVisibility.PACKAGE,
-        typeImmutable = "Default*")
+@Value.Style(allParameters = true, visibilityString = "PACKAGE", typeImmutable = "Default*")
 public non-sealed interface UrlInputRequest extends InputRequest {
 
     /** Prompt message shown to the user. */

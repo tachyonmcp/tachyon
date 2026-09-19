@@ -10,7 +10,7 @@ import org.jspecify.annotations.Nullable;
 /** Client input submitted to an externally executed task for {@code tasks/update}. */
 @ExperimentalApi
 @Value.Immutable
-@Value.Style(visibility = Value.Style.ImplementationVisibility.PACKAGE, typeImmutable = "Default*")
+@Value.Style(visibilityString = "PACKAGE", typeImmutable = "Default*")
 public interface TaskUpdateRequest extends HasMeta {
 
     /** Returns the task being updated. */

@@ -15,10 +15,7 @@ import org.jspecify.annotations.Nullable;
  * wire, {@code data} is base64-encoded per the MCP protocol.
  */
 @Value.Immutable
-@Value.Style(
-        allParameters = true,
-        visibility = Value.Style.ImplementationVisibility.PACKAGE,
-        typeImmutable = "Default*")
+@Value.Style(allParameters = true, visibilityString = "PACKAGE", typeImmutable = "Default*")
 public non-sealed interface ImageContent extends ContentBlock {
 
     /**

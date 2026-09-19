@@ -10,10 +10,7 @@ import org.jspecify.annotations.Nullable;
  * Server identity metadata sent to the client during initialization.
  */
 @Value.Immutable
-@Value.Style(
-        allParameters = true,
-        visibility = Value.Style.ImplementationVisibility.PACKAGE,
-        typeImmutable = "Default*")
+@Value.Style(allParameters = true, visibilityString = "PACKAGE", typeImmutable = "Default*")
 public interface ServerIdentity {
 
     @Value.Default

@@ -16,10 +16,7 @@ import org.jspecify.annotations.Nullable;
  * extracted during matching.
  */
 @Value.Immutable
-@Value.Style(
-        allParameters = true,
-        visibility = Value.Style.ImplementationVisibility.PACKAGE,
-        typeImmutable = "Default*")
+@Value.Style(allParameters = true, visibilityString = "PACKAGE", typeImmutable = "Default*")
 public interface ResourceRequest extends ServerFeature.Request {
 
     /**

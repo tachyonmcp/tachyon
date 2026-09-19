@@ -13,7 +13,7 @@ import org.jspecify.annotations.Nullable;
  * format (e.g. {@code application/json}, {@code text/markdown}).
  */
 @Value.Immutable
-@Value.Style(visibility = Value.Style.ImplementationVisibility.PACKAGE, typeImmutable = "Default*")
+@Value.Style(visibilityString = "PACKAGE", typeImmutable = "Default*")
 public non-sealed interface TextResourceContents extends ResourceContents {
 
     @Override

@@ -7,10 +7,7 @@ import org.immutables.value.Value;
 
 /** Requests user input via a form described by a JSON schema. */
 @Value.Immutable
-@Value.Style(
-        allParameters = true,
-        visibility = Value.Style.ImplementationVisibility.PACKAGE,
-        typeImmutable = "Default*")
+@Value.Style(allParameters = true, visibilityString = "PACKAGE", typeImmutable = "Default*")
 public non-sealed interface FormInputRequest extends InputRequest {
 
     /** Prompt message shown to the user. */

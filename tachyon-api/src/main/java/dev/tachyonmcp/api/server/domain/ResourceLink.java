@@ -13,10 +13,7 @@ import org.jspecify.annotations.Nullable;
  * metadata (URI, name, title, description, MIME type) without the actual content data.
  */
 @Value.Immutable
-@Value.Style(
-        allParameters = true,
-        typeImmutable = "Default*",
-        visibility = Value.Style.ImplementationVisibility.PACKAGE)
+@Value.Style(allParameters = true, typeImmutable = "Default*", visibilityString = "PACKAGE")
 public non-sealed interface ResourceLink extends ContentBlock {
 
     String name();

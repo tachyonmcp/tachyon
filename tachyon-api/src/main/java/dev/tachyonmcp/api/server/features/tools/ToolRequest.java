@@ -14,10 +14,7 @@ import org.jspecify.annotations.Nullable;
  * An incoming tool call request with the tool name, arguments, and metadata.
  */
 @Value.Immutable
-@Value.Style(
-        allParameters = true,
-        visibility = Value.Style.ImplementationVisibility.PACKAGE,
-        typeImmutable = "Default*")
+@Value.Style(allParameters = true, visibilityString = "PACKAGE", typeImmutable = "Default*")
 public interface ToolRequest extends ServerFeature.Request {
 
     /**

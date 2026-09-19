@@ -116,7 +116,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <configuration>
+                <configuration combine.self="append">
                     <annotationProcessorPaths>
                         <!-- Generates META-INF/spring-configuration-metadata.json for `tachyon.*` -->
                         <path>

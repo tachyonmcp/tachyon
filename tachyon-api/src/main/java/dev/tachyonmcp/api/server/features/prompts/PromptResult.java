@@ -45,11 +45,7 @@ public sealed interface PromptResult extends HasMeta permits PromptResult.Messag
      * A prompt result containing one or more prompt messages.
      */
     @Value.Immutable
-    @Value.Style(
-            visibility = Value.Style.ImplementationVisibility.PACKAGE,
-            typeImmutable = "Default*",
-            with = "",
-            from = "")
+    @Value.Style(visibilityString = "PACKAGE", typeImmutable = "Default*", with = "", from = "")
     non-sealed interface Messages extends PromptResult {
 
         /**
@@ -131,11 +127,7 @@ public sealed interface PromptResult extends HasMeta permits PromptResult.Messag
      * A prompt result that requests additional input from the client.
      */
     @Value.Immutable
-    @Value.Style(
-            visibility = Value.Style.ImplementationVisibility.PACKAGE,
-            typeImmutable = "Default*",
-            with = "",
-            from = "")
+    @Value.Style(visibilityString = "PACKAGE", typeImmutable = "Default*", with = "", from = "")
     non-sealed interface InputRequired extends PromptResult, dev.tachyonmcp.api.server.domain.InputRequired {
 
         @Override

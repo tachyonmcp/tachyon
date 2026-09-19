@@ -15,7 +15,7 @@ import org.jspecify.annotations.Nullable;
  * binary data. On the wire, {@code blob} is base64-encoded per the MCP protocol.
  */
 @Value.Immutable
-@Value.Style(visibility = Value.Style.ImplementationVisibility.PACKAGE, typeImmutable = "Default*")
+@Value.Style(visibilityString = "PACKAGE", typeImmutable = "Default*")
 public non-sealed interface BlobResourceContents extends ResourceContents {
 
     @Override

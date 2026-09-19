@@ -16,7 +16,7 @@ import org.jspecify.annotations.Nullable;
 /** Immutable MCP projection of externally executed work. */
 @ExperimentalApi
 @Value.Immutable
-@Value.Style(visibility = Value.Style.ImplementationVisibility.PACKAGE, typeImmutable = "Default*")
+@Value.Style(visibilityString = "PACKAGE", typeImmutable = "Default*")
 public interface TaskSnapshot extends HasMeta {
 
     /** Returns the stable task identifier. */

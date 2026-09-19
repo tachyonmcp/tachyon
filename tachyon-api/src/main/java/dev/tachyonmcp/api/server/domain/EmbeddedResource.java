@@ -13,10 +13,7 @@ import org.jspecify.annotations.Nullable;
  * server to attach resource data directly without requiring a separate read round-trip.
  */
 @Value.Immutable
-@Value.Style(
-        allParameters = true,
-        visibility = Value.Style.ImplementationVisibility.PACKAGE,
-        typeImmutable = "Default*")
+@Value.Style(allParameters = true, visibilityString = "PACKAGE", typeImmutable = "Default*")
 public non-sealed interface EmbeddedResource extends ContentBlock, HasMeta {
 
     ResourceContents resource();

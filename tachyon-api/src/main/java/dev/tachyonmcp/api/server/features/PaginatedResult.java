@@ -13,10 +13,7 @@ import org.jspecify.annotations.Nullable;
  */
 @InternalApi
 @Value.Immutable
-@Value.Style(
-        allParameters = true,
-        visibility = Value.Style.ImplementationVisibility.PACKAGE,
-        typeImmutable = "Default*")
+@Value.Style(allParameters = true, visibilityString = "PACKAGE", typeImmutable = "Default*")
 public interface PaginatedResult<R> {
 
     /**

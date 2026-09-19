@@ -11,10 +11,7 @@ import org.immutables.value.Value;
  * builder; this type holds only runtime <em>data</em>.
  */
 @Value.Immutable
-@Value.Style(
-        allParameters = true,
-        visibility = Value.Style.ImplementationVisibility.PACKAGE,
-        typeImmutable = "Default*")
+@Value.Style(allParameters = true, visibilityString = "PACKAGE", typeImmutable = "Default*")
 public interface RuntimeConfig {
 
     /**
@@ -46,7 +43,7 @@ public interface RuntimeConfig {
     }
 
     Duration DEFAULT_REQUEST_TIMEOUT = Duration.ofSeconds(60);
-    RuntimeConfig DEFAULT = DefaultRuntimeConfig.of(Duration.ofSeconds(5), Duration.ofSeconds(60), Clock.systemUTC());
+    RuntimeConfig DEFAULT = DefaultRuntimeConfig.of(Duration.ofSeconds(5), DEFAULT_REQUEST_TIMEOUT, Clock.systemUTC());
 
     static Builder builder() {
         return DefaultRuntimeConfig.builder();

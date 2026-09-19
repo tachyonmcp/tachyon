@@ -13,10 +13,7 @@ import org.jspecify.annotations.Nullable;
  * server to hint at audience, priority, or modification time.
  */
 @Value.Immutable
-@Value.Style(
-        allParameters = true,
-        visibility = Value.Style.ImplementationVisibility.PACKAGE,
-        typeImmutable = "Default*")
+@Value.Style(allParameters = true, visibilityString = "PACKAGE", typeImmutable = "Default*")
 public non-sealed interface TextContent extends ContentBlock {
 
     String text();

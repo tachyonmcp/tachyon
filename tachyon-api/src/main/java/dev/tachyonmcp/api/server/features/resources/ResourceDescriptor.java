@@ -17,10 +17,7 @@ import org.jspecify.annotations.Nullable;
  * response; it also carries a human-readable {@link #name()}.
  */
 @Value.Immutable
-@Value.Style(
-        allParameters = true,
-        visibility = Value.Style.ImplementationVisibility.PACKAGE,
-        typeImmutable = "Default*")
+@Value.Style(allParameters = true, visibilityString = "PACKAGE", typeImmutable = "Default*")
 public interface ResourceDescriptor extends ServerFeature.Descriptor, HasMeta {
 
     /** The URI that identifies this resource. */

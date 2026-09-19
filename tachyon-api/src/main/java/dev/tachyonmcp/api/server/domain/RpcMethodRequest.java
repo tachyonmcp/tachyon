@@ -6,10 +6,7 @@ import org.jspecify.annotations.Nullable;
 
 /** Requests user input by invoking another RPC method. */
 @Value.Immutable
-@Value.Style(
-        allParameters = true,
-        visibility = Value.Style.ImplementationVisibility.PACKAGE,
-        typeImmutable = "Default*")
+@Value.Style(allParameters = true, visibilityString = "PACKAGE", typeImmutable = "Default*")
 public non-sealed interface RpcMethodRequest extends InputRequest {
 
     /** The RPC method to invoke for input. */
