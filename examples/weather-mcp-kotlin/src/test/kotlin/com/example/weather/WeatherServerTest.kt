@@ -32,7 +32,9 @@ import io.modelcontextprotocol.spec.McpSchema.ResourceReference
 import io.modelcontextprotocol.spec.McpSchema.Role
 import io.modelcontextprotocol.spec.McpSchema.TextContent
 import io.modelcontextprotocol.spec.McpSchema.TextResourceContents
-import org.awaitility.Awaitility.await
+import org.awaitility.kotlin.atMost
+import org.awaitility.kotlin.await
+import org.awaitility.kotlin.untilAsserted
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
@@ -150,7 +152,7 @@ class WeatherServerTest {
             )
 
         result.isError shouldNotBe true
-        await().atMost(Duration.ofSeconds(5)).untilAsserted {
+        await atMost Duration.ofSeconds(5) untilAsserted {
             progressNotifications shouldHaveSize 2
         }
         progressNotifications.map { it.progressToken() to it.message() } shouldContainExactly
