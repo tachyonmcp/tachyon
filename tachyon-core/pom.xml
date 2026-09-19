@@ -23,6 +23,11 @@
             <groupId>dev.tachyonmcp</groupId>
             <artifactId>tachyon-api</artifactId>
         </dependency>
+        <dependency>
+            <groupId>org.immutables</groupId>
+            <artifactId>value-annotations</artifactId>
+            <scope>provided</scope> <!-- javadoc/compile only -->
+        </dependency>
 
         <dependency>
             <groupId>org.slf4j</groupId>

@@ -49,6 +49,11 @@
             </dependency>
             <dependency>
                 <groupId>dev.tachyonmcp</groupId>
+                <artifactId>tachyon-extensions-skills</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>dev.tachyonmcp</groupId>
                 <artifactId>tachyon-testkit</artifactId>
                 <version>${project.version}</version>
             </dependency>

@@ -47,6 +47,10 @@
         </dependency>
         <dependency>
             <groupId>dev.tachyonmcp</groupId>
+            <artifactId>tachyon-extensions-skills</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>dev.tachyonmcp</groupId>
             <artifactId>tachyon-testkit</artifactId>
         </dependency>
         <dependency>
@@ -135,6 +139,7 @@
                                 <dir>${project.basedir}/../tachyon-api/target/classes</dir>
                                 <dir>${project.basedir}/../tachyon-core/target/classes</dir>
                                 <dir>${project.basedir}/../tachyon-extensions/target/classes</dir>
+                                <dir>${project.basedir}/../extensions/tachyon-extensions-skills/target/classes</dir>
                                 <dir>${project.basedir}/../tachyon-kotlin-kt-schema/target/classes</dir>
                                 <dir>${project.basedir}/../tachyon-kotlin/target/classes</dir>
                                 <dir>${project.basedir}/../integrations/tachyon-annotations-langchain4j/target/classes</dir>

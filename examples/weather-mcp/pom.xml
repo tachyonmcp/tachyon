@@ -25,7 +25,7 @@
         <tachyon.version>1.0.0-beta.28</tachyon.version>
 <!--        <tachyon.version>1.0.0-SNAPSHOT</tachyon.version>-->
         <assertj.version>3.27.7</assertj.version>
-        <netty.version>4.2.15.Final</netty.version>
+        <netty.version>4.2.18.Final</netty.version>
         <slf4j.version>2.0.18</slf4j.version>
         <opentelemetry.version>1.65.0</opentelemetry.version>
     </properties>
@@ -93,12 +93,6 @@
 
         <dependency>
             <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-api</artifactId>
-            <version>${slf4j.version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>org.slf4j</groupId>
             <artifactId>slf4j-simple</artifactId>
             <version>${slf4j.version}</version>
             <scope>runtime</scope>
@@ -109,7 +103,7 @@
         <dependency>
             <groupId>io.modelcontextprotocol.sdk</groupId>
             <artifactId>mcp-json-jackson3</artifactId>
-            <version>2.0.0</version>
+            <version>2.0.1</version>
             <scope>test</scope>
         </dependency>
 
@@ -132,7 +126,7 @@
         <dependency>
             <groupId>net.javacrumbs.json-unit</groupId>
             <artifactId>json-unit-assertj</artifactId>
-            <version>5.1.2</version>
+            <version>6.2.0</version>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -155,7 +149,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.15.0</version>
+                <version>3.16.0</version>
                 <configuration>
                     <release>${maven.compiler.release}</release>
                     <parameters>true</parameters>
@@ -178,7 +172,7 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
-                <version>4.0.6</version>
+                <version>4.1.1</version>
                 <executions>
                     <execution>
                         <goals>
@@ -194,7 +188,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-jar-plugin</artifactId>
-                <version>3.5.0</version>
+                <version>3.5.1</version>
                 <configuration>
                     <archive>
                         <manifestEntries>
