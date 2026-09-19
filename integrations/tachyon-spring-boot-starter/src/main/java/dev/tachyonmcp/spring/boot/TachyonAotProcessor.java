@@ -2,6 +2,10 @@
 package dev.tachyonmcp.spring.boot;
 
 import dev.tachyonmcp.core.server.annotations.TachyonAnnotationProvider;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.Map;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,11 +18,6 @@ import org.springframework.beans.factory.aot.BeanFactoryInitializationCode;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.util.ClassUtils;
-
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.Map;
-import java.util.Set;
 
 /**
  * Registers reflection hints for beans whose methods carry Tachyon feature annotations.
@@ -131,8 +130,8 @@ final class TachyonAotProcessor implements BeanFactoryInitializationAotProcessor
 
     private static boolean isInfrastructure(String className) {
         return className.startsWith(SPRING_PACKAGE)
-            || className.equals(STARTER_CONFIGURATION)
-            || className.startsWith(STARTER_CONFIGURATION + "$");
+                || className.equals(STARTER_CONFIGURATION)
+                || className.startsWith(STARTER_CONFIGURATION + "$");
     }
 
     private record FeatureReflectionContribution(Set<Class<?>> featureTypes)
