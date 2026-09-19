@@ -1,0 +1,64 @@
+[
+  {
+    "extension": "revapi.differences",
+    "configuration": {
+      "ignore": true,
+      "differences": [
+        {
+          "ignore": true,
+          "code": "java.class.removed",
+          "old": "class dev.tachyonmcp.extensions.skills.BaseSkillsRegistry",
+          "justification": "Skills extension moved to the new dev.tachyonmcp:tachyon-extensions-skills module. tachyon-extensions keeps a transitive dependency on it, so dev.tachyonmcp.extensions.skills.* stays on the classpath of every existing tachyon-extensions consumer.",
+          "attachments": {
+            "since": "1.0.0-beta.29"
+          }
+        },
+        {
+          "ignore": true,
+          "code": "java.class.removed",
+          "old": "class dev.tachyonmcp.extensions.skills.ClasspathSkillsRegistry",
+          "justification": "Skills extension moved to the new dev.tachyonmcp:tachyon-extensions-skills module. tachyon-extensions keeps a transitive dependency on it, so dev.tachyonmcp.extensions.skills.* stays on the classpath of every existing tachyon-extensions consumer.",
+          "attachments": {
+            "since": "1.0.0-beta.29"
+          }
+        },
+        {
+          "ignore": true,
+          "code": "java.class.removed",
+          "old": "class dev.tachyonmcp.extensions.skills.CompositeSkillsRegistry",
+          "justification": "Skills extension moved to the new dev.tachyonmcp:tachyon-extensions-skills module. tachyon-extensions keeps a transitive dependency on it, so dev.tachyonmcp.extensions.skills.* stays on the classpath of every existing tachyon-extensions consumer.",
+          "attachments": {
+            "since": "1.0.0-beta.29"
+          }
+        },
+        {
+          "ignore": true,
+          "code": "java.class.removed",
+          "old": "class dev.tachyonmcp.extensions.skills.FilesystemSkillsRegistry",
+          "justification": "Skills extension moved to the new dev.tachyonmcp:tachyon-extensions-skills module. tachyon-extensions keeps a transitive dependency on it, so dev.tachyonmcp.extensions.skills.* stays on the classpath of every existing tachyon-extensions consumer.",
+          "attachments": {
+            "since": "1.0.0-beta.29"
+          }
+        },
+        {
+          "ignore": true,
+          "code": "java.class.removed",
+          "old": "class dev.tachyonmcp.extensions.skills.SkillsExtension",
+          "justification": "Skills extension moved to the new dev.tachyonmcp:tachyon-extensions-skills module. tachyon-extensions keeps a transitive dependency on it, so dev.tachyonmcp.extensions.skills.* stays on the classpath of every existing tachyon-extensions consumer.",
+          "attachments": {
+            "since": "1.0.0-beta.29"
+          }
+        },
+        {
+          "ignore": true,
+          "code": "java.class.removed",
+          "old": "interface dev.tachyonmcp.extensions.skills.SkillsRegistry",
+          "justification": "Skills extension moved to the new dev.tachyonmcp:tachyon-extensions-skills module. tachyon-extensions keeps a transitive dependency on it, so dev.tachyonmcp.extensions.skills.* stays on the classpath of every existing tachyon-extensions consumer.",
+          "attachments": {
+            "since": "1.0.0-beta.29"
+          }
+        }
+      ]
+    }
+  }
+]

@@ -8,7 +8,7 @@
 
     <parent>
         <groupId>dev.tachyonmcp</groupId>
-        <artifactId>root</artifactId>
+        <artifactId>tachyon-extensions-modules</artifactId>
         <version>1.0.0-SNAPSHOT</version>
     </parent>
 
@@ -23,10 +23,12 @@
             <artifactId>tachyon-core</artifactId>
         </dependency>
 
+        <!-- Skills extension moved to tachyon-extensions-skills; kept here as a
+             transitive dependency so existing tachyon-extensions consumers keep
+             resolving dev.tachyonmcp.extensions.skills.* without changes. -->
         <dependency>
-            <groupId>org.yaml</groupId>
-            <artifactId>snakeyaml</artifactId>
-            <optional>true</optional>
+            <groupId>dev.tachyonmcp</groupId>
+            <artifactId>tachyon-extensions-skills</artifactId>
         </dependency>
 
         <dependency>

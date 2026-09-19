@@ -62,7 +62,7 @@ Capability requirement inside a handler: throw `MissingRequiredClientCapabilityE
 | Id | Impl | Mode | Page |
 |---|---|---|---|
 | `io.modelcontextprotocol/tasks` | `TasksExtension` (core) | ALWAYS | [[tasks]] |
-| `io.modelcontextprotocol/skills` | `SkillsExtension` | ALWAYS, no meta, negotiation via builder (default **REQUIRED**, same as SPI default; `OPTIONAL` opt-in) | [[tachyon-extensions]] |
+| `io.modelcontextprotocol/skills` | `SkillsExtension` | ALWAYS, no meta, negotiation via builder (default **REQUIRED**, same as SPI default; `OPTIONAL` opt-in) | [[tachyon-extensions-skills]] |
 | `dev.tachyonmcp/kotlin-coroutines` | `CoroutineRuntime` (internal, lifecycle only) | NEVER | [[tachyon-kotlin]] |
 
 Related: [[feature-registries]], [[protocol-versions]].

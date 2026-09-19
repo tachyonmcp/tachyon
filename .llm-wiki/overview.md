@@ -1,9 +1,9 @@
 ---
 title: Overview
 tags: [concept, architecture]
-sources: [pom.xml, tachyon-core/pom.xml, integrations/pom.xml, tachyon-core/src/main/java/dev/tachyonmcp/core/server/TachyonServer.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/ServerBuilder.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultServerBuilder.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java]
-updated: 2026-09-18
-commit: 2472a0d8
+sources: [pom.xml, tachyon-core/pom.xml, integrations/pom.xml, extensions/pom.xml, tachyon-core/src/main/java/dev/tachyonmcp/core/server/TachyonServer.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/ServerBuilder.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultServerBuilder.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java]
+updated: 2026-09-19
+commit: 2dad742b
 ---
 
 # 🛰️ Overview
@@ -12,14 +12,14 @@ Tachyon = MCP **server** library. Netty Streamable-HTTP transport, JSON-RPC, vir
 
 ## 📦 Modules
 
-Root `pom.xml` version `1.0.0-SNAPSHOT`. Java `21` (`pom.xml`), Kotlin `2.2.21` (`pom.xml`), Jackson **3** `3.2.2` (`pom.xml`, package `tools.jackson.*`), Netty `4.2.18.Final` (`pom.xml`).
+Root `pom.xml` version `1.0.0-SNAPSHOT`. Java `21` (`pom.xml`), Kotlin `2.2.21` (`pom.xml`), Jackson **3** (`pom.xml`, package `tools.jackson.*`), Netty `4.2+` (`pom.xml`).
 
 ```mermaid
 graph TD
   api[tachyon-api] --> core[tachyon-core]
   core --> kotlin[tachyon-kotlin]
   kotlin --> ktschema[tachyon-kotlin-kt-schema]
-  core --> ext[tachyon-extensions]
+  core --> ext[extensions/tachyon-extensions]
   core --> testkit[tachyon-testkit]
   core --> integ[integrations/*]
   core --> e2e[e2e]
@@ -33,7 +33,8 @@ graph TD
 | `tachyon-core` | Everything runtime | [[tachyon-core]] |
 | `tachyon-kotlin` | DSL + coroutines | [[tachyon-kotlin]] |
 | `tachyon-kotlin-kt-schema` | Reflection JSON-schema factory for Kotlin classes | [[tachyon-kotlin]] |
-| `tachyon-extensions` | Skills extension, sample tools | [[tachyon-extensions]] |
+| `extensions/tachyon-extensions` | Sample tools; depends on skills for compat | [[tachyon-extensions]] |
+| `extensions/tachyon-extensions-skills` | Skills extension (`skill://`) | [[tachyon-extensions-skills]] |
 | `tachyon-testkit` | HTTP test clients/asserts | [[tachyon-testkit]] |
 | `integrations/*` | 6 modules (`pom.xml`) | [[integrations]] |
 | `tachyon-bom` | `dependencyManagement` only | — |

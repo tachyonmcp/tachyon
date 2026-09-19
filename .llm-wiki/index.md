@@ -1,8 +1,8 @@
 ---
 title: Index
 tags: [meta]
-updated: 2026-09-17
-commit: b9546c38
+updated: 2026-09-18
+commit: f2adbaed
 ---
 
 # 🗺️ Tachyon MCP — LLM Wiki index
@@ -46,7 +46,8 @@ Index into code, **not** a spec. Page vs code mismatch → code wins, fix the pa
 | [[tachyon-api]] | Public contracts: feature SAMs, descriptors, results, `InteractionContext`, JSON SPI |
 | [[tachyon-core]] | Server impl: builder, engine, dispatcher, Netty transport, protocol mappers |
 | [[tachyon-kotlin]] | Kotlin DSL, coroutine runtime extension, kotlinx JSON factories, kt-schema |
-| [[tachyon-extensions]] | Skills extension (`skill://`), echo + You.com tools |
+| [[tachyon-extensions]] | Echo + You.com sample tools; transitively depends on skills for compat |
+| [[tachyon-extensions-skills]] | Skills extension (`skill://`), split out of `tachyon-extensions` |
 | [[tachyon-testkit]] | Raw-HTTP MCP test clients + AssertJ asserts |
 | [[integrations]] | External library adapters: MCP Java SDK, LangChain4j, Spring AI, OpenTelemetry, Temporal |
 | [[spring-boot]] | Boot starter properties, deferred bean discovery, proxy advice, lifecycle and backoff |

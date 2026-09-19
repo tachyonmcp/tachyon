@@ -9,7 +9,7 @@ description: |-
 
 Agent Skills package a capability — instructions, scripts, reference material — as a directory with a `SKILL.md` manifest. Claude Code, Claude apps, and other MCP clients already load skills from the local filesystem; [SEP-2640][SEP-2640] standardizes how a server serves the same packages over MCP, so a client can discover and fetch them without a shared filesystem.
 
-Tachyon's `SkillsExtension` (`tachyon-extensions`) implements [SEP-2640][SEP-2640]: it scans skill directories, publishes each file as a `skill://` resource, and answers `skills/list`, `skills/get`, and `resources/directory/read`.
+Tachyon's `SkillsExtension` (`tachyon-extensions-skills`) implements [SEP-2640][SEP-2640]: it scans skill directories, publishes each file as a `skill://` resource, and answers `skills/list`, `skills/get`, and `resources/directory/read`. `tachyon-extensions` still pulls it in transitively, so existing `tachyon-extensions` dependents keep working unchanged.
 
 ## Enable the extension
 
@@ -66,7 +66,7 @@ Any other frontmatter field (`metadata`, `license`, ...) passes through verbatim
 
 ### Ignoring files
 
-Both built-in skill registries filter scanned files against `META-INF/dev/tachyonmcp/extensions/skills/.mcpignore`, a gitignore-style pattern file bundled with `tachyon-extensions`. It ships pre-loaded with OS junk (`.DS_Store`, `Thumbs.db`, `.Trash-*`, ...) so these never turn into skill resources.
+Both built-in skill registries filter scanned files against `META-INF/dev/tachyonmcp/extensions/skills/.mcpignore`, a gitignore-style pattern file bundled with `tachyon-extensions-skills`. It ships pre-loaded with OS junk (`.DS_Store`, `Thumbs.db`, `.Trash-*`, ...) so these never turn into skill resources.
 
 - Blank lines and `#` comments are skipped.
 - A pattern with no `/` (e.g. `*.tmp`) matches any path segment at any depth, excluding whole subdirectories.
@@ -217,6 +217,6 @@ base resource visibility.
 ## Caveats
 
 - **No `skills/list` pagination.** A `cursor` param returns `-32602 Invalid params`. Skill catalogs are expected to be small and bounded; add a server-side cursor if that stops holding.
-- **`@ExperimentalApi`.** The package (`dev.tachyonmcp.extensions.skills`) is marked experimental — the shape may still change before [SEP-2640][SEP-2640] itself stabilizes.
+- **`@ExperimentalApi`.** The package (`dev.tachyonmcp.extensions.skills`, module `tachyon-extensions-skills`) is marked experimental — the shape may still change before [SEP-2640][SEP-2640] itself stabilizes.
            
-[SEP-2640]: https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2640 "SEP-2640: Skills Extension"
+[SEP-2640]: https://modelcontextprotocol.io/seps/2640-skills-extension "SEP-2640: Skills Extension"
