@@ -4,6 +4,7 @@ package dev.tachyonmcp.spring.boot;
 import dev.tachyonmcp.core.server.TachyonServer;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.util.function.ToDoubleFunction;
 import org.springframework.beans.factory.SmartInitializingSingleton;
 
 /**
@@ -25,25 +26,22 @@ final class TachyonMeterBinder implements SmartInitializingSingleton {
 
     @Override
     public void afterSingletonsInstantiated() {
-        bindTo(registry);
+        bindGauge(
+                "mcp.server.tools",
+                "Registered MCP tools",
+                s -> s.tools().descriptors().size());
+        bindGauge(
+                "mcp.server.prompts",
+                "Registered MCP prompts",
+                s -> s.prompts().descriptors().size());
+        bindGauge(
+                "mcp.server.resources",
+                "Registered MCP resources and resource templates",
+                s -> s.resources().descriptors().size()
+                        + s.resources().templateDescriptors().size());
     }
 
-    void bindTo(MeterRegistry registry) {
-        Gauge.builder("mcp.server.tools", server, s -> s.tools().descriptors().size())
-                .description("Registered MCP tools")
-                .register(registry);
-        Gauge.builder(
-                        "mcp.server.prompts",
-                        server,
-                        s -> s.prompts().descriptors().size())
-                .description("Registered MCP prompts")
-                .register(registry);
-        Gauge.builder(
-                        "mcp.server.resources",
-                        server,
-                        s -> s.resources().descriptors().size()
-                                + s.resources().templateDescriptors().size())
-                .description("Registered MCP resources and resource templates")
-                .register(registry);
+    private void bindGauge(String name, String description, ToDoubleFunction<TachyonServer> value) {
+        Gauge.builder(name, server, value).description(description).register(registry);
     }
 }

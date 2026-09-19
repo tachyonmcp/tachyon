@@ -38,12 +38,8 @@ class TachyonAotProcessorTest {
         }
     }
 
-    private RuntimeHints process(Class<?>... beanTypes) {
-        final var beanFactory = new DefaultListableBeanFactory();
-        for (final var type : beanTypes) {
-            beanFactory.registerBeanDefinition(type.getSimpleName(), new RootBeanDefinition(type));
-        }
-        final var contribution = new TachyonAotProcessor().processAheadOfTime(beanFactory);
+    private static RuntimeHints process(Class<?>... beanTypes) {
+        final var contribution = new TachyonAotProcessor().processAheadOfTime(beanFactoryWith(beanTypes));
         final var generationContext = new TestGenerationContext();
         if (contribution != null) {
             contribution.applyTo(generationContext, new NoOpInitializationCode(generationContext));
@@ -175,9 +171,11 @@ class TachyonAotProcessorTest {
         public void addInitializer(MethodReference methodReference) {}
     }
 
-    private static DefaultListableBeanFactory beanFactoryWith(Class<?> type) {
+    private static DefaultListableBeanFactory beanFactoryWith(Class<?>... types) {
         final var beanFactory = new DefaultListableBeanFactory();
-        beanFactory.registerBeanDefinition(type.getSimpleName(), new RootBeanDefinition(type));
+        for (final var type : types) {
+            beanFactory.registerBeanDefinition(type.getSimpleName(), new RootBeanDefinition(type));
+        }
         return beanFactory;
     }
 }
