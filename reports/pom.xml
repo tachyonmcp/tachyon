@@ -75,6 +75,10 @@
         </dependency>
         <dependency>
             <groupId>dev.tachyonmcp</groupId>
+            <artifactId>tachyon-spring-boot-starter</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>dev.tachyonmcp</groupId>
             <artifactId>e2e</artifactId>
             <version>${project.version}</version>
         </dependency>
@@ -88,19 +92,26 @@
     <build>
         <plugins>
             <plugin>
+                <!--
+                  jacoco:check analyses ${project.build.outputDirectory} only (it has no classDirs
+                  parameter), so the gate needs every module's classes unpacked here.
+                -->
                 <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-antrun-plugin</artifactId>
+                <artifactId>maven-dependency-plugin</artifactId>
                 <executions>
                     <execution>
-                        <id>create-classes-dir</id>
-                        <phase>initialize</phase>
+                        <id>unpack-module-classes</id>
+                        <phase>process-classes</phase>
                         <goals>
-                            <goal>run</goal>
+                            <goal>unpack-dependencies</goal>
                         </goals>
                         <configuration>
-                            <target>
-                                <mkdir dir="${project.build.outputDirectory}"/>
-                            </target>
+                            <includeGroupIds>dev.tachyonmcp</includeGroupIds>
+                            <excludeArtifactIds>e2e,conformance,tachyon-testkit</excludeArtifactIds>
+                            <includes>**/*.class</includes>
+                            <outputDirectory>${project.build.outputDirectory}</outputDirectory>
+                            <overWriteReleases>true</overWriteReleases>
+                            <overWriteSnapshots>true</overWriteSnapshots>
                         </configuration>
                     </execution>
                 </executions>
@@ -120,8 +131,12 @@
                                 <fileSet>
                                     <directory>${project.basedir}/..</directory>
                                     <includes>
-                                        <include>*/target/jacoco.exec</include>
+                                        <include>**/target/jacoco.exec</include>
                                     </includes>
+                                    <excludes>
+                                        <exclude>examples/**</exclude>
+                                        <exclude>reports/**</exclude>
+                                    </excludes>
                                 </fileSet>
                             </fileSets>
                             <destFile>${project.build.directory}/jacoco-merged.exec</destFile>
@@ -135,19 +150,6 @@
                         </goals>
                         <configuration>
                             <dataFile>${project.build.directory}/jacoco-merged.exec</dataFile>
-                            <classDirs>
-                                <dir>${project.basedir}/../tachyon-api/target/classes</dir>
-                                <dir>${project.basedir}/../tachyon-core/target/classes</dir>
-                                <dir>${project.basedir}/../extensions/tachyon-extensions/target/classes</dir>
-                                <dir>${project.basedir}/../extensions/tachyon-extensions-skills/target/classes</dir>
-                                <dir>${project.basedir}/../tachyon-kotlin-kt-schema/target/classes</dir>
-                                <dir>${project.basedir}/../tachyon-kotlin/target/classes</dir>
-                                <dir>${project.basedir}/../integrations/tachyon-annotations-langchain4j/target/classes</dir>
-                                <dir>${project.basedir}/../integrations/tachyon-annotations-mcp-java/target/classes</dir>
-                                <dir>${project.basedir}/../integrations/tachyon-annotations-spring-ai/target/classes</dir>
-                                <dir>${project.basedir}/../integrations/tachyon-opentelemetry/target/classes</dir>
-                                <dir>${project.basedir}/../integrations/tachyon-tasks-temporal/target/classes</dir>
-                            </classDirs>
                             <rules>
                                 <rule>
                                     <element>BUNDLE</element>
@@ -155,17 +157,17 @@
                                         <limit>
                                             <counter>INSTRUCTION</counter>
                                             <value>COVEREDRATIO</value>
-                                            <minimum>0.60</minimum>
+                                            <minimum>0.82</minimum>
                                         </limit>
                                         <limit>
                                             <counter>BRANCH</counter>
                                             <value>COVEREDRATIO</value>
-                                            <minimum>0.45</minimum>
+                                            <minimum>0.73</minimum>
                                         </limit>
                                         <limit>
                                             <counter>CLASS</counter>
                                             <value>COVEREDRATIO</value>
-                                            <minimum>0.80</minimum>
+                                            <minimum>0.91</minimum>
                                         </limit>
                                     </limits>
                                 </rule>
