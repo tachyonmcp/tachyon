@@ -277,6 +277,26 @@ For traces, add Tachyon's OpenTelemetry listener through a customizer; see
 [observability](running/observability.md) and the
 [Spring Boot weather example](https://github.com/tachyonmcp/tachyon/tree/main/examples/weather-mcp-spring-boot).
 
+## GraalVM native image
+
+The starter discovers your tools by reflecting over Spring singletons, so a native image needs
+reflection metadata, or it starts a server with nothing registered — and reports no error. The
+starter's AOT processor (`TachyonAotProcessor`, registered in `META-INF/spring/aot.factories`)
+handles this for you: at AOT processing time it finds every bean type declaring Tachyon
+annotations and registers method-invocation hints for it.
+
+What it does **not** cover are the types you bind to, because nothing declares them as beans —
+tool input records, structured output types and their nested types. Register those yourself:
+
+```java
+@Configuration(proxyBeanMethods = false)
+@RegisterReflectionForBinding({GreetingRequest.class, GreetingResponse.class})
+class NativeHints {}
+```
+
+Native image support is experimental; verify with `./mvnw -Pnative native:compile` and call each
+tool once before shipping.
+
 ## Troubleshooting
 
 | Symptom | Check |
