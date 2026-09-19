@@ -14,7 +14,8 @@ Verdict: E2E-first (AGENTS.md). Real server on port 0, clients = official MCP Ja
 
 | Want | Command |
 |---|---|
-| all + lint + revapi + jmh (CI) | `make ci` (CI matrix runs this `.github/workflows/build.yml`) |
+| all + lint + revapi + jmh (CI) | `make ci` — one reactor (`clean verify -Plint -Drevapi.skip=false`) plus the JMH gate; primary JDK only |
+| compat JDKs | `make ci-lite` — same build with javadoc/sources/JaCoCo/SpotBugs/Spotless skipped (~3x faster) |
 | unit + e2e | `make test` |
 | one module | `mvn -q test -pl tachyon-core -am` |
 | Kotlin | `mvn test -pl tachyon-kotlin -am` |

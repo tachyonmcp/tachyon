@@ -1,4 +1,4 @@
-# Renovate (renovate.json) opens dependency PRs.
+# Renovate (renovate.json5) opens dependency PRs.
 # Dependabot keeps the dependency graph and alerts only: open-pull-requests-limit 0 blocks version-update PRs.
 # https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
 

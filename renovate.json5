@@ -2,13 +2,16 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:recommended",
-    ":rebaseStalePrs"
+    ":rebaseStalePrs",
+    "helpers:pinGitHubActionDigests"
   ],
   "labels": [
     "dependencies"
   ],
+  "osvVulnerabilityAlerts": true,
   "packageRules": [
     {
+      "description": "Tachyon's own artifacts are bumped by the release workflow",
       "matchPackageNames": [
         "dev.tachyonmcp"
       ],
@@ -22,6 +25,63 @@
       ],
       "automerge": true,
       "minimumReleaseAge": "3 days"
+    },
+    {
+      "description": "Kotlin toolchain moves together: compiler, stdlib, coroutines, serialization",
+      "groupName": "kotlin",
+      "matchPackageNames": [
+        "org.jetbrains.kotlin:**",
+        "org.jetbrains.kotlinx:**"
+      ]
+    },
+    {
+      "description": "Jackson 2 and 3 BOMs",
+      "groupName": "jackson",
+      "matchPackageNames": [
+        "com.fasterxml.jackson**",
+        "tools.jackson**"
+      ]
+    },
+    {
+      "description": "Netty core and the native transports share a version",
+      "groupName": "netty",
+      "matchPackageNames": [
+        "io.netty:**"
+      ]
+    },
+    {
+      "groupName": "junit",
+      "matchPackageNames": [
+        "org.junit**",
+        "org.junit-pioneer:**"
+      ]
+    },
+    {
+      "groupName": "spring-boot",
+      "matchPackageNames": [
+        "org.springframework.boot:**",
+        "io.micrometer:**"
+      ]
+    },
+    {
+      "groupName": "opentelemetry",
+      "matchPackageNames": [
+        "io.opentelemetry**"
+      ]
+    },
+    {
+      "description": "Build plugins churn often and are low risk together",
+      "groupName": "maven-plugins",
+      "matchPackageNames": [
+        "org.apache.maven.plugins:**",
+        "org.codehaus.mojo:**",
+        "com.diffplug.spotless:**",
+        "com.github.spotbugs:**",
+        "org.jacoco:**",
+        "org.revapi:**",
+        "org.jetbrains.dokka:**",
+        "dev.detekt:**"
+      ]
     }
   ]
 }

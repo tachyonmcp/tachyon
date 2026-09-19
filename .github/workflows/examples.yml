@@ -1,10 +1,20 @@
 name: Examples
 
+# Examples build against the *published* Tachyon release, so they only need to re-run when an
+# example changes — plus a weekly run to catch a release that broke them.
 on:
   push:
     branches: [ main ]
+    paths:
+      - 'examples/**'
+      - '.github/workflows/examples.yml'
   pull_request:
     branches: [ main ]
+    paths:
+      - 'examples/**'
+      - '.github/workflows/examples.yml'
+  schedule:
+    - cron: '0 6 * * 1'
   workflow_dispatch:
 
 concurrency:
@@ -12,13 +22,15 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  checks: write
-  pull-requests: write
   contents: read
 
 jobs:
   examples:
     name: examples (${{ matrix.example }})
+    permissions:
+      checks: write
+      pull-requests: write
+      contents: read
     strategy:
       fail-fast: false
       matrix:

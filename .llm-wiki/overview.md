@@ -72,6 +72,6 @@ Two-phase: `build()` constructs server + runs registrations, **no socket**; `sta
 
 ## 🔧 Build commands
 
-`Makefile` targets: `build` (mvn verify), `test`, `lint`, `format`, `ci` = clean lint build revapi, `conformance`, `examples`, `mcp-inspector`. CI runs `make ci` (`.github/workflows/build.yml`). Details [[testing]].
+`Makefile` targets: `build` (mvn verify), `test`, `lint`, `format`, `ci` = one reactor for clean + lint + build + revapi then the JMH gate, `ci-lite` (same without report plugins), `conformance`, `examples`, `mcp-inspector`. CI runs `make ci` on JDK 21 and `make ci-lite` on the compatibility JDKs (`.github/workflows/build.yml`). Details [[testing]].
 
 `make lint` also runs `.github/scripts/check-poms.py`: the parentless `tachyon-bom` inherits nothing, so that script asserts it lists exactly the `dev.tachyonmcp` artifacts the root pom manages and pins the same plugin versions, and that every published module declares a unique `automatic.module.name` (written to `Automatic-Module-Name`). `maven-enforcer-plugin` covers Maven/Java version and plugin-version pinning. Python 3 is required at build time for `tachyon-core`'s `ts2java.py` generation (`-Dts2java.skip=true` opts out).
