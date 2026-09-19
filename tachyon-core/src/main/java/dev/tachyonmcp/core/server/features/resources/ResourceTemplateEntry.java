@@ -6,7 +6,8 @@ import dev.tachyonmcp.api.server.domain.UriTemplate;
 import dev.tachyonmcp.api.server.features.resources.AsyncResourceFn;
 import dev.tachyonmcp.api.server.features.resources.ResourceTemplateDescriptor;
 
-record ResourceTemplateEntry(ResourceTemplateDescriptor descriptor, AsyncResourceFn fn, UriTemplate uriTemplate)
+record ResourceTemplateEntry(
+        ResourceTemplateDescriptor descriptor, AsyncResourceFn fn, UriTemplate uriTemplate, boolean privateCaching)
         implements ServerFeature<ResourceTemplateDescriptor> {
 
     /**
@@ -16,7 +17,8 @@ record ResourceTemplateEntry(ResourceTemplateDescriptor descriptor, AsyncResourc
      * @param fn         the resource function
      * @return the created resource template entry
      */
-    public static ResourceTemplateEntry of(ResourceTemplateDescriptor descriptor, AsyncResourceFn fn) {
-        return new ResourceTemplateEntry(descriptor, fn, UriTemplate.create(descriptor.uriTemplate()));
+    public static ResourceTemplateEntry of(
+            ResourceTemplateDescriptor descriptor, AsyncResourceFn fn, boolean privateCaching) {
+        return new ResourceTemplateEntry(descriptor, fn, UriTemplate.create(descriptor.uriTemplate()), privateCaching);
     }
 }

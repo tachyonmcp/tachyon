@@ -81,6 +81,7 @@ import tools.jackson.databind.JsonNode;
 public final class McpResponseMapper extends dev.tachyonmcp.core.protocol.mcp.v2025_11_25.codecs.McpResponseMapper {
 
     private static final String COMPLETE = "complete";
+    private static final String PRIVATE = "private";
     private static final String PUBLIC = "public";
     private static final String INPUT_REQUIRED = "input_required";
     private static final String SUBSCRIPTION_ID_META_KEY = "io.modelcontextprotocol/subscriptionId";
@@ -161,8 +162,8 @@ public final class McpResponseMapper extends dev.tachyonmcp.core.protocol.mcp.v2
                 additionalProperties);
     }
 
-    // Caching hints (SEP-2549): fixed ttlMs=0/cacheScope="public" policy, same defaults
-    // discoverResult already uses above — no per-primitive caching config surface yet.
+    // Caching hints (SEP-2549): fixed ttlMs=0/cacheScope="public" policy except for
+    // metadata-sensitive annotated resource reads, which require private caching.
 
     @Override
     public Object completeResult(CompletionResult result) {
@@ -194,10 +195,11 @@ public final class McpResponseMapper extends dev.tachyonmcp.core.protocol.mcp.v2
     }
 
     @Override
-    public Object readResourceResult(List<dev.tachyonmcp.api.server.domain.ResourceContents> contents) {
+    public Object readResourceResult(
+            List<dev.tachyonmcp.api.server.domain.ResourceContents> contents, boolean privateCaching) {
         var protocolContents =
                 contents.stream().map(McpResponseMapper::toResourceContents).toList();
-        return new ReadResourceResult(protocolContents, null, COMPLETE, 0, PUBLIC, null);
+        return new ReadResourceResult(protocolContents, null, COMPLETE, 0, privateCaching ? PRIVATE : PUBLIC, null);
     }
 
     @Override

@@ -17,11 +17,12 @@ import java.lang.annotation.Target;
  * }
  * }</pre>
  *
- * <p>In the named signature, the first non-context parameter must be a {@code String}; its
- * reflection name selects the argument being completed and its value is the current partial text.
+ * <p>In the named signature, the first non-injected parameter must be a {@code String}; its
+ * {@link McpParam#name()} or reflection name selects the argument being completed, and its value
+ * is the current partial text.
  * Other named scalar parameters bind from previously resolved sibling arguments. Missing siblings
  * are required unless {@code Optional}-typed or JSpecify {@code @Nullable}. Compile with
- * {@code -parameters}. Requests for a different argument return no candidates. When the target
+ * {@code -parameters} unless every named parameter has an explicit {@link McpParam#name()}. Requests for a different argument return no candidates. When the target
  * prompt or resource template is already known, a completed argument it does not declare fails
  * registration.
  *
@@ -30,7 +31,7 @@ import java.lang.annotation.Target;
  *
  * <p>Alternatively, take a single {@code CompletionRequest} to handle all arguments of the target
  * and read the partial value, resolved siblings, and request metadata directly. Either signature
- * may include an {@code InteractionContext} parameter. Do not mix {@code CompletionRequest} with
+ * may include an {@code InteractionContext} parameter and one {@link Meta} parameter. Do not mix {@code CompletionRequest} with
  * named argument parameters.
  *
  * <p>Return {@code CompletionResult} to preserve total, hasMore, and metadata, or {@code List<String>}

@@ -2,8 +2,8 @@
 title: tachyon-api
 tags: [module, api]
 sources: [tachyon-api/src/main/java/dev/tachyonmcp/api/]
-updated: 2026-09-15
-commit: b1aeff64
+updated: 2026-09-18
+commit: f2adbaed
 ---
 
 # 📜 tachyon-api
@@ -53,3 +53,5 @@ action are required (compact ctor `requireNonNull`), result content is nullable.
 ## 🧪 Tests
 
 `tachyon-api/src/test/java/dev/tachyonmcp/api/` — `JsonObjectTest`, `JsonSchemaTest`, `ArgsTest`, `UriTemplateTest`, `ToolResultTest`, `HandlerFnContractTest`, `HandlerFuturesTest`, descriptor tests.
+
+Native parameter annotations: [McpParam](../../tachyon-api/src/main/java/dev/tachyonmcp/api/annotations/McpParam.java), [Meta](../../tachyon-api/src/main/java/dev/tachyonmcp/api/annotations/Meta.java). Contracts live in [[declarative-configuration]].

@@ -114,7 +114,11 @@ public final class ResourceMethodHandlers {
                 if (extensionId != null && !context.isExtensionEnabled(extensionId)) {
                     return CompletableFuture.completedFuture(ServerErrors.resourceNotFound("Resource not found"));
                 }
-                return readResult(context, mapped.uri(), () -> entry.fn().apply(context, mapped));
+                return readResult(
+                        context,
+                        mapped.uri(),
+                        entry.privateCaching(),
+                        () -> entry.fn().apply(context, mapped));
             }
             var match = registry.matchTemplate(mapped.uri());
             if (match == null) {
@@ -129,11 +133,18 @@ public final class ResourceMethodHandlers {
                     .inputResponses(mapped.inputResponses())
                     .requestState(mapped.requestState())
                     .build();
-            return readResult(context, mapped.uri(), () -> match.entry().fn().apply(context, request));
+            return readResult(
+                    context,
+                    mapped.uri(),
+                    match.entry().privateCaching(),
+                    () -> match.entry().fn().apply(context, request));
         }
 
         private CompletionStage<Object> readResult(
-                DispatchContext context, String uri, Callable<CompletionStage<? extends ResourceContents>> invoker) {
+                DispatchContext context,
+                String uri,
+                boolean privateCaching,
+                Callable<CompletionStage<? extends ResourceContents>> invoker) {
             return HandlerFutures.invokeAndMap(
                     "Resource handler for '" + uri + "' returned a null CompletionStage",
                     invoker,
@@ -149,7 +160,7 @@ public final class ResourceMethodHandlers {
                             context.captureExceptionCause(cause);
                             return error;
                         }
-                        return context.responseMapper().readResourceResult(List.of(contents));
+                        return context.responseMapper().readResourceResult(List.of(contents), privateCaching);
                     });
         }
     }

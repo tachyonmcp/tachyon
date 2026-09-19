@@ -134,7 +134,7 @@ public class DefaultResourceRegistry implements Resources {
             logger.debug("Resource '{}' not registered: resources capability is OFF", descriptor.name());
             return this;
         }
-        var entry = new ResourceEntry(descriptor, fn);
+        var entry = new ResourceEntry(descriptor, fn, privateCaching(fn));
         writeLock.lock();
         try {
             var current = index;
@@ -298,7 +298,8 @@ public class DefaultResourceRegistry implements Resources {
             logger.debug("Resource template '{}' not registered: resources capability is OFF", descriptor.name());
             return this;
         }
-        final var prevEntry = templates.putIfAbsent(descriptor.name(), ResourceTemplateEntry.of(descriptor, fn));
+        final var prevEntry =
+                templates.putIfAbsent(descriptor.name(), ResourceTemplateEntry.of(descriptor, fn, privateCaching(fn)));
         if (prevEntry != null) {
             throw new IllegalArgumentException("Resource template '" + descriptor.name() + "' already exists");
         }
@@ -354,6 +355,10 @@ public class DefaultResourceRegistry implements Resources {
      */
     public boolean isEmpty() {
         return index.byUri().isEmpty();
+    }
+
+    private static boolean privateCaching(AsyncResourceFn fn) {
+        return fn instanceof SyncResourceFnAdapter(ResourceFn delegate) && delegate instanceof PrivateCachingResourceFn;
     }
 
     record TemplateMatch(ResourceTemplateEntry entry, Map<String, UriTemplateValue> params) {}

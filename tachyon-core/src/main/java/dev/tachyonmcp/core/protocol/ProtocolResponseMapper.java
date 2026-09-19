@@ -89,6 +89,14 @@ public interface ProtocolResponseMapper {
     /** Maps a resource contents list (from a read operation) into protocol-specific shape. */
     Object readResourceResult(List<ResourceContents> contents);
 
+    /**
+     * Maps resource contents with an optional private-cache requirement. Protocols without cache
+     * scope hints use the ordinary resource-result shape.
+     */
+    default Object readResourceResult(List<ResourceContents> contents, boolean privateCaching) {
+        return readResourceResult(contents);
+    }
+
     /** Maps a paginated list of prompt descriptors into protocol-specific shape. */
     Object listPromptsResult(List<PromptDescriptor> prompts, @Nullable String nextCursor);
 

@@ -13,8 +13,10 @@ import dev.tachyonmcp.api.server.features.annotations.AnnotationProvider;
 import dev.tachyonmcp.api.server.features.annotations.AnnotationRegistrationContext;
 import dev.tachyonmcp.api.server.features.completions.CompletionFn;
 import dev.tachyonmcp.api.server.features.completions.CompletionResult;
+import dev.tachyonmcp.api.server.features.resources.ResourceFn;
 import dev.tachyonmcp.api.server.features.resources.ResourceTemplateDescriptor;
 import dev.tachyonmcp.core.server.features.completions.CompletionRegistry;
+import dev.tachyonmcp.core.server.features.resources.PrivateCachingResourceFn;
 import dev.tachyonmcp.core.server.json.JavaTypeSchemas;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
@@ -182,7 +184,7 @@ public final class TachyonAnnotationProvider implements AnnotationProvider {
                                                 ? JsonSchema.generate(returnType)
                                                 : null),
                         (ctx, request) -> ResultMappers.toolResult(
-                                invoker.invoke(ctx, request.arguments().asMap()), serializer));
+                                invoker.invoke(ctx, request.arguments().asMap(), request.meta()), serializer));
     }
 
     private void registerResource(
@@ -206,20 +208,29 @@ public final class TachyonAnnotationProvider implements AnnotationProvider {
                 throw new IllegalStateException("Static @McpResource method must not declare arguments "
                         + invoker.argumentNames() + "; use a {variable} URI template: " + method);
             }
+            var resourceFn = privateCachingIfNeeded(
+                    invoker,
+                    (ctx, request) -> ResultMappers.resourceContents(
+                            invoker.invoke(ctx, Map.of(), request.meta()), request.uri(), mimeType, serializer));
             context.resources()
                     .register(
                             builder -> builder.uri(uri)
                                     .name(name)
                                     .description(emptyToNull(resource.description()))
                                     .mimeType(mimeType),
-                            (ctx, request) -> ResultMappers.resourceContents(
-                                    invoker.invoke(ctx, Map.of()), request.uri(), mimeType, serializer));
+                            resourceFn);
             return;
         }
         if (!variables.equals(new LinkedHashSet<>(invoker.argumentNames()))) {
             throw new IllegalStateException("@McpResource parameters " + invoker.argumentNames()
                     + " must match URI template variables " + variables + ": " + method);
         }
+        var resourceFn = privateCachingIfNeeded(invoker, (ctx, request) -> {
+            var values = new LinkedHashMap<String, @Nullable Object>();
+            request.params().forEach((variable, value) -> values.put(variable, value.scalarValue()));
+            return ResultMappers.resourceContents(
+                    invoker.invoke(ctx, values, request.meta()), request.uri(), mimeType, serializer);
+        });
         context.resources()
                 .registerTemplate(
                         ResourceTemplateDescriptor.builder()
@@ -228,12 +239,7 @@ public final class TachyonAnnotationProvider implements AnnotationProvider {
                                 .description(emptyToNull(resource.description()))
                                 .mimeType(mimeType)
                                 .build(),
-                        (ctx, request) -> {
-                            var values = new LinkedHashMap<String, @Nullable Object>();
-                            request.params().forEach((variable, value) -> values.put(variable, value.scalarValue()));
-                            return ResultMappers.resourceContents(
-                                    invoker.invoke(ctx, values), request.uri(), mimeType, serializer);
-                        });
+                        resourceFn);
         declared.put(RESOURCE + uri, List.copyOf(variables));
         registerEnumCompletion(
                 invoker,
@@ -241,6 +247,10 @@ public final class TachyonAnnotationProvider implements AnnotationProvider {
                 completed,
                 fn -> requireCompletionRegistry(context, "resource '" + uri + "'", method)
                         .registerForResourceIfAbsent(uri, fn));
+    }
+
+    private static ResourceFn privateCachingIfNeeded(MethodInvoker invoker, ResourceFn fn) {
+        return invoker.usesMeta() ? (PrivateCachingResourceFn) fn::apply : fn;
     }
 
     private void registerPrompt(
@@ -262,7 +272,7 @@ public final class TachyonAnnotationProvider implements AnnotationProvider {
                                 .arguments(invoker.promptArguments()),
                         (ctx, request) -> ResultMappers.promptResult(
                                 prompt.role(),
-                                invoker.invoke(ctx, request.arguments().asMap()),
+                                invoker.invoke(ctx, request.arguments().asMap(), request.meta()),
                                 serializer));
         declared.put(PROMPT + name, invoker.argumentNames());
         registerEnumCompletion(

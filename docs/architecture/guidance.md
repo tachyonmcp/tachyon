@@ -399,6 +399,9 @@ it's for advanced/extension use: `resourceDescriptor(name, uri) { extensionId = 
 
 `_meta` is the MCP runtime's protocol envelope — `progressToken`, reserved `io.modelcontextprotocol/*` keys, OpenTelemetry trace context — growing every protocol revision; implementations **must not** assume meaning for reserved keys (MCP spec, `_meta` section). Don't add `meta()` to an ergonomic type (`Args` and friends) — invites Hyrum's-law coupling to runtime internals, same failure mode as an `Internal*`-named type users are forced to hold.
 
+Native annotated methods may explicitly opt into request metadata with `@Meta`; it is excluded
+from argument schemas. See [parameter binding](../annotations.md#explicit-parameter-names-and-request-metadata).
+
 A function reads arguments and request metadata through `ToolRequest`; subclass the experimental
 `AbstractToolHandler` only when a function cannot express the implementation.
 

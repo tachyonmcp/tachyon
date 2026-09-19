@@ -26,11 +26,13 @@ import java.lang.annotation.Target;
  *     .build();
  * }</pre>
  *
- * <p><b>Input binding.</b> A parameter of type {@code InteractionContext} is injected and never
- * advertised. When exactly one other parameter remains and it is a record, POJO, or {@code Map},
- * the whole {@code arguments} object is decoded into it and its schema becomes the tool's
- * {@code inputSchema}. Otherwise each parameter is one named argument (compile with {@code
- * -parameters}); it is required unless it is {@code Optional}-typed or JSpecify {@code @Nullable}.
+ * <p><b>Input binding.</b> Parameters of type {@code InteractionContext} and parameters annotated
+ * with {@link Meta} are injected and never advertised. When exactly one argument remains and it
+ * is a record, POJO, or {@code Map}, the whole {@code arguments} object is decoded into it, unless
+ * {@link McpParam} explicitly selects named binding. Otherwise each argument binds by its
+ * {@link McpParam#name()} or Java parameter name (the latter requires {@code -parameters}).
+ * {@link McpParam#description()} describes the schema property. Named arguments are required
+ * unless {@code Optional}-typed or JSpecify {@code @Nullable}.
  *
  * <p><b>Result mapping.</b> {@code void}/{@code null} returns empty content; {@code ToolResult}
  * passes through; {@code String}, numbers, and booleans become text; a {@code ContentBlock}
