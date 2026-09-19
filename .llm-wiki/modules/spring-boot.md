@@ -2,20 +2,22 @@
 title: Spring Boot starter
 tags: [module, spring-boot, configuration]
 sources: [pom.xml, integrations/tachyon-spring-boot-starter/]
-updated: 2026-09-15
-commit: 9eec1092
+updated: 2026-09-19
+commit: ef09a290
 ---
 
 # 🌱 Spring Boot starter
 
 Build → register annotated singletons → start transport. Native annotation contracts live in [[declarative-configuration]].
 
-- `tachyon.*` → `TachyonProperties` record (enabled=true, name, version, host, port=8080) [TachyonProperties](../../integrations/tachyon-spring-boot-starter/src/main/java/dev/tachyonmcp/spring/boot/TachyonProperties.java).
+- `tachyon.*` → `TachyonProperties` record: flat `enabled=true`, `name`, `version`, `host`, `port=8080` plus nested `network`/`session`/`runtime` groups mirroring the `ServerBuilder` scopes ([TachyonProperties](../../integrations/tachyon-spring-boot-starter/src/main/java/dev/tachyonmcp/spring/boot/TachyonProperties.java)). Every nested component is `@Nullable` and only applied when set, so unset keys keep the core record's default ([TachyonPropertiesApplier#apply](../../integrations/tachyon-spring-boot-starter/src/main/java/dev/tachyonmcp/spring/boot/TachyonPropertiesApplier.java)). Values only — stores, generators, clocks and codecs stay `TachyonServerCustomizer` territory.
+- Config metadata: `@param` javadoc → `spring-configuration-metadata.json` via `spring-boot-configuration-processor`; documented defaults and value hints come from [additional-spring-configuration-metadata.json](../../integrations/tachyon-spring-boot-starter/src/main/resources/META-INF/additional-spring-configuration-metadata.json). `spring-boot-autoconfigure-processor` emits `spring-autoconfigure-metadata.properties` for condition pre-filtering. Both processors fail silently, so [TachyonConfigurationMetadataTest](../../integrations/tachyon-spring-boot-starter/src/test/java/dev/tachyonmcp/spring/boot/TachyonConfigurationMetadataTest.java) gates presence, Boot's description conventions, and drift of each documented default against the constant it copies.
 - Builds server with properties, ordered extensions and customizers, then registers annotated beans after singleton initialization, before lifecycle startup ([ServerConfiguration#tachyonServer](../../integrations/tachyon-spring-boot-starter/src/main/java/dev/tachyonmcp/spring/boot/TachyonAutoConfiguration.java), [TachyonBeanRegistrar#afterSingletonsInstantiated](../../integrations/tachyon-spring-boot-starter/src/main/java/dev/tachyonmcp/spring/boot/TachyonBeanRegistrar.java)). Annotated beans can inject `TachyonServer`.
 - Discovery uses `AopUtils.getTargetClass` on initialized beans; JDK and class proxies retain advice. Unrelated lazy beans stay uninitialized; lazy annotated beans need discoverable declared types ([TachyonBeanRegistrar#afterSingletonsInstantiated](../../integrations/tachyon-spring-boot-starter/src/main/java/dev/tachyonmcp/spring/boot/TachyonBeanRegistrar.java)).
 - User server ⇒ construction and registrar back off together; lifecycle still supplied ([TachyonAutoConfiguration#TachyonAutoConfiguration](../../integrations/tachyon-spring-boot-starter/src/main/java/dev/tachyonmcp/spring/boot/TachyonAutoConfiguration.java), [ServerConfiguration](../../integrations/tachyon-spring-boot-starter/src/main/java/dev/tachyonmcp/spring/boot/TachyonAutoConfiguration.java)).
 - Wire regression tests cover all three feature kinds through JDK proxy advice, server injection, custom codecs, lazy-bean isolation and user-server backoff ([TachyonBeanRegistrationTest#jdkProxyUsesTargetAnnotationsAndPreservesAdviceForEveryFeature](../../integrations/tachyon-spring-boot-starter/src/test/java/dev/tachyonmcp/spring/boot/TachyonBeanRegistrationTest.java)).
-- Spring Boot `4.1.1` pinned in the root [pom.xml](../../pom.xml); starter dependencies use that property, with no Boot BOM import in the [module POM](../../integrations/tachyon-spring-boot-starter/pom.xml).
+- Spring Boot `4.1.1` pinned in the root [pom.xml](../../pom.xml); the [module POM](../../integrations/tachyon-spring-boot-starter/pom.xml) imports `spring-boot-dependencies` at that version and depends on `spring-boot-starter`, which Boot requires every starter to pull in directly or indirectly. `spring-boot-health` and `micrometer-core` stay `<optional>`.
+- `tachyon.enabled` gates the auto-configuration through `@ConditionalOnBooleanProperty(matchIfMissing = true)` ([TachyonAutoConfiguration](../../integrations/tachyon-spring-boot-starter/src/main/java/dev/tachyonmcp/spring/boot/TachyonAutoConfiguration.java)).
 
 - Completion-only beans retain target parameter names and proxy advice ([TachyonCompletionBeanTest#discoversCompletionOnlyProxyAndBindsTargetParameterNamesThroughAdvice](../../integrations/tachyon-spring-boot-starter/src/test/java/dev/tachyonmcp/spring/boot/TachyonCompletionBeanTest.java)).
 - `TachyonServerLifecycle` starts/closes the server with the application context; lock serializes calls, `running` flips only after `start`/`close` succeeds (failure keeps prior state, retry allowed) ([TachyonServerLifecycle#start](../../integrations/tachyon-spring-boot-starter/src/main/java/dev/tachyonmcp/spring/boot/TachyonServerLifecycle.java)).
