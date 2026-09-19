@@ -45,9 +45,14 @@
             <groupId>dev.tachyonmcp</groupId>
             <artifactId>tachyon-core</artifactId>
         </dependency>
+        <!--
+          Boot requires every starter to reference the core starter directly or indirectly, so an
+          application created with only this starter still gets Boot's core features. It brings
+          spring-boot-autoconfigure along with it.
+        -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-autoconfigure</artifactId>
+            <artifactId>spring-boot-starter</artifactId>
         </dependency>
 
         <!-- Optional Actuator integration -->
@@ -122,6 +127,16 @@
                         <path>
                             <groupId>org.springframework.boot</groupId>
                             <artifactId>spring-boot-configuration-processor</artifactId>
+                            <version>${spring-boot.version}</version>
+                        </path>
+                        <!--
+                          Generates META-INF/spring-autoconfigure-metadata.properties, which lets
+                          Boot filter this auto-configuration on its conditions before loading the
+                          class.
+                        -->
+                        <path>
+                            <groupId>org.springframework.boot</groupId>
+                            <artifactId>spring-boot-autoconfigure-processor</artifactId>
                             <version>${spring-boot.version}</version>
                         </path>
                     </annotationProcessorPaths>

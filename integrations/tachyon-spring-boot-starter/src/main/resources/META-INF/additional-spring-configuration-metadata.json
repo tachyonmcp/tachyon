@@ -1,0 +1,113 @@
+{
+  "properties": [
+    {
+      "name": "tachyon.host",
+      "defaultValue": "127.0.0.1"
+    },
+    {
+      "name": "tachyon.network.endpoint-path",
+      "defaultValue": "/mcp"
+    },
+    {
+      "name": "tachyon.network.reader-idle-timeout",
+      "defaultValue": "60s"
+    },
+    {
+      "name": "tachyon.network.writer-idle-timeout",
+      "defaultValue": "5m"
+    },
+    {
+      "name": "tachyon.network.heartbeat-interval",
+      "defaultValue": "15s"
+    },
+    {
+      "name": "tachyon.network.max-content-length",
+      "defaultValue": "1MB"
+    },
+    {
+      "name": "tachyon.network.allowed-origins",
+      "defaultValue": []
+    },
+    {
+      "name": "tachyon.network.allowed-headers",
+      "defaultValue": []
+    },
+    {
+      "name": "tachyon.network.allowed-hosts",
+      "defaultValue": []
+    },
+    {
+      "name": "tachyon.network.allow-null-origin",
+      "defaultValue": false
+    },
+    {
+      "name": "tachyon.network.allow-private-networks",
+      "defaultValue": false
+    },
+    {
+      "name": "tachyon.network.io-engine",
+      "defaultValue": "auto"
+    },
+    {
+      "name": "tachyon.session.enabled",
+      "defaultValue": false
+    },
+    {
+      "name": "tachyon.session.session-ttl",
+      "defaultValue": "30s"
+    },
+    {
+      "name": "tachyon.session.janitor-interval",
+      "defaultValue": "5s"
+    },
+    {
+      "name": "tachyon.runtime.shutdown-grace-period",
+      "defaultValue": "5s"
+    },
+    {
+      "name": "tachyon.runtime.request-timeout",
+      "defaultValue": "60s"
+    }
+  ],
+  "hints": [
+    {
+      "name": "tachyon.host",
+      "values": [
+        {
+          "value": "127.0.0.1",
+          "description": "Loopback only; the MCP endpoint is unreachable from other hosts."
+        },
+        {
+          "value": "0.0.0.0",
+          "description": "All IPv4 interfaces."
+        },
+        {
+          "value": "::",
+          "description": "All interfaces, IPv6 and IPv4."
+        }
+      ]
+    },
+    {
+      "name": "tachyon.port",
+      "values": [
+        {
+          "value": 8080,
+          "description": "Collides with the default server.port of a Spring web application."
+        },
+        {
+          "value": 0,
+          "description": "Bind an ephemeral port, resolved after startup. Useful in tests."
+        }
+      ]
+    },
+    {
+      "name": "tachyon.network.allowed-origins",
+      "values": [
+        {
+          "value": "*",
+          "description": "Accept any origin. Do not use outside local development."
+        }
+      ]
+    }
+  ]
+}
