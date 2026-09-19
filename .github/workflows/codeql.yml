@@ -19,18 +19,40 @@ concurrency:
 
 jobs:
   analyze:
-    name: analyze (java-kotlin)
+    name: analyze (${{ matrix.language }})
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: ${{ matrix.timeout }}
     permissions:
       security-events: write
       packages: read
       contents: read
 
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The only language here that needs compiling.
+          - language: java-kotlin
+            build-mode: manual
+            timeout: 20
+          # tachyon-core/protocol/*.ts — the MCP spec declarations ts2java.py generates from.
+          - language: javascript-typescript
+            build-mode: none
+            timeout: 10
+          # Build and wiki tooling: ts2java.py, check-poms.py, .llm-wiki/tools/.
+          - language: python
+            build-mode: none
+            timeout: 10
+          # Workflow files themselves: injection sinks, unpinned actions, token scope.
+          - language: actions
+            build-mode: none
+            timeout: 10
+
     steps:
       - uses: actions/checkout@v7
 
       - name: Set up JDK 21
+        if: matrix.language == 'java-kotlin'
         uses: actions/setup-java@v6
         with:
           java-version: 21
@@ -40,14 +62,16 @@ jobs:
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4
         with:
-          languages: java-kotlin
-          build-mode: manual
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          config-file: ./.github/codeql-config.yml
 
       # Compile only: CodeQL needs the classes, not the reports.
       - name: Build
+        if: matrix.language == 'java-kotlin'
         run: ./mvnw clean test-compile -DskipTests -Dspotbugs.skip -Dspotless.skip -Djacoco.skip=true
 
       - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@v4
         with:
-          category: /language:java-kotlin
+          category: /language:${{ matrix.language }}
