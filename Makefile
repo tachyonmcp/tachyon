@@ -1,4 +1,4 @@
-.PHONY: all ci build test lint package install-server conformance apidocs e2e clean format help mcp-inspector examples examples-snapshot jmh
+.PHONY: all ci ci-lite build test lint package install-server conformance apidocs e2e clean format help mcp-inspector examples examples-snapshot jmh
 
 .DEFAULT_GOAL := help
 
@@ -12,12 +12,26 @@ endif
 
 MAVEN_TEST_ARGS := -Dsurefire.forkCount=$(SUREFIRE_FORK_COUNT) $(NETTY_ARGS)
 
+# Plugins that only produce reports or publishable artifacts: pure overhead when the
+# build is neither the gated one nor a release.
+SKIP_REPORT_ARGS := -Dmaven.javadoc.skip=true -Dmaven.source.skip=true -Djacoco.skip=true -Dspotbugs.skip=true -Dspotless.skip=true
+
 help: ## List available targets
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-22s %s\n", $$1, $$2}'
 
 all: clean format lint install-server revapi examples-snapshot examples ## Full build: clean, format, lint, live examples, build+install, SNAPSHOT examples
 
-ci: clean lint build revapi jmh ## CI pipeline: clean + lint + build + jmh regression check
+ci: ## CI pipeline: one reactor for clean + lint + build + revapi, then the JMH gate
+	@echo " 🏗️ 🔍  Building with lint + API compatibility..."
+	@./mvnw -version
+	@python3 .github/scripts/check-poms.py
+	@./mvnw clean verify -Plint -Drevapi.skip=false $(MAVEN_TEST_ARGS) --no-transfer-progress
+	@$(MAKE) --no-print-directory jmh
+
+ci-lite: ## Same build without the report/analysis plugins (non-primary JDKs)
+	@echo " 🏗️  Building (lite)..."
+	@./mvnw -version
+	@./mvnw clean verify $(MAVEN_TEST_ARGS) $(SKIP_REPORT_ARGS) --no-transfer-progress
 
 build: ## Compile, test, verify (mvn verify)
 	@echo " 🏗️ Building..."
@@ -30,12 +44,12 @@ test: ## Run unit + e2e tests
 
 revapi: ## Check API compatibility against baseline (oldVersion) + write report
 	@echo " 🔄  Checking API compatibility..."
-	@./mvnw verify -Drevapi.skip=false -pl tachyon-api,tachyon-core,extensions/tachyon-extensions,extensions/tachyon-extensions-skills,tachyon-testkit -DskipTests -Dspotbugs.skip -Dmaven.javadoc.skip=true -Djacoco.skip=true --no-transfer-progress
+	@./mvnw verify -Drevapi.skip=false -pl tachyon-api,tachyon-core,extensions/tachyon-extensions,extensions/tachyon-extensions-skills,tachyon-testkit -DskipTests $(SKIP_REPORT_ARGS) --no-transfer-progress
 	@echo " ✅  Done!"
 
 jmh: ## Run JMH benchmarks (perf regression check)
 	@echo " 🏎️   Running JMH benchmarks..."
-	@./mvnw -q -pl tachyon-core -am verify -Pjmh -DskipTests --no-transfer-progress
+	@./mvnw -q -pl tachyon-core -am verify -Pjmh -DskipTests $(SKIP_REPORT_ARGS) --no-transfer-progress
 	@echo " ✅  Done!"
 
 install-server: ## Build with tests and install to local Maven repo
@@ -44,8 +58,8 @@ install-server: ## Build with tests and install to local Maven repo
 
 package: ## Install artifacts to local Maven repo (skip tests)
 	@echo "📦 Packaging and installing to local repository..."
-	@rm -rf ~/.m2/repository/dev/tachyonmcp/
-	@./mvnw install -DskipTests -Dspotbugs.skip -Dspotless.skip
+	@rm -rf ~/.m2/repository/dev/tachyonmcp/*/*-SNAPSHOT
+	@./mvnw install -DskipTests $(SKIP_REPORT_ARGS) --no-transfer-progress
 
 apidocs:
 	@echo "📚  Building API Docs..."
@@ -76,7 +90,7 @@ e2e: package ## Run end-to-end tests
 
 clean: ## Remove all build artifacts
 	@echo " 🧹  Cleaning..."
-	@rm -rf ~/.m2/repository/dev/tachyonmcp
+	@rm -rf ~/.m2/repository/dev/tachyonmcp/*/*-SNAPSHOT
 	@find . -type d -name target -exec rm -rf {} +
 	@echo " ✅  All clean!"
 
