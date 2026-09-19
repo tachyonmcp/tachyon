@@ -18,6 +18,10 @@
     <name>Tachyon MCP — LangChain4j Annotations</name>
     <description>Maps dev.langchain4j.agent.tool annotations to Tachyon tool descriptors</description>
 
+    <properties>
+        <automatic.module.name>dev.tachyonmcp.annotations.langchain4j</automatic.module.name>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>dev.tachyonmcp</groupId>

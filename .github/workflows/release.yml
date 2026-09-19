@@ -52,6 +52,7 @@ jobs:
         run: >
           mvn -B clean versions:set
           -DnewVersion=${{ steps.release.outputs.release_version }}
+          -DprocessAllModules=true
           -DgenerateBackupPoms=false --no-transfer-progress
 
       - name: Set up JDK ${{ env.JAVA_VERSION }}
@@ -110,6 +111,7 @@ jobs:
         run: >
           ./mvnw -B versions:set
           -DnewVersion=${{ steps.next-version.outputs.next_version }}
+          -DprocessAllModules=true
           -DgenerateBackupPoms=false --no-transfer-progress
 
       - name: Commit and push next development version

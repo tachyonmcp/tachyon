@@ -3,22 +3,59 @@
   ~ Copyright (c) 2026 Konstantin Pavlov and contributors.
   -->
 
+<!--
+  Deliberately has no <parent>: a BOM inherits nothing, so importing it never leaks the build's own
+  third-party dependencyManagement (jackson, netty, junit, ...) into consumers.
+  Metadata and the release profile are therefore repeated from the root pom; `.github/scripts/check-bom.py`
+  keeps the artifact list and plugin versions in sync with it.
+-->
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <parent>
-        <groupId>dev.tachyonmcp</groupId>
-        <artifactId>root</artifactId>
-        <version>1.0.0-SNAPSHOT</version>
-        <relativePath>../pom.xml</relativePath>
-    </parent>
-
+    <groupId>dev.tachyonmcp</groupId>
     <artifactId>tachyon-bom</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
     <packaging>pom</packaging>
 
     <name>Tachyon MCP — BOM</name>
     <description>Bill of Materials for Tachyon MCP</description>
+    <url>https://github.com/tachyonmcp/tachyon</url>
+    <organization>
+        <name>IT Staff OÜ</name>
+        <url>https://itstaff.ee</url>
+    </organization>
+    <inceptionYear>2026</inceptionYear>
+
+    <licenses>
+        <license>
+            <name>Apache 2.0</name>
+            <url>https://opensource.org/license/apache-2.0</url>
+        </license>
+    </licenses>
+
+    <developers>
+        <developer>
+            <id>kpavlov</id>
+            <name>Konstantin Pavlov</name>
+            <url>https://github.com/kpavlov</url>
+        </developer>
+    </developers>
+
+    <scm>
+        <connection>scm:git:git://github.com/tachyonmcp/tachyon.git</connection>
+        <developerConnection>scm:git:ssh://github.com/tachyonmcp/tachyon.git</developerConnection>
+        <url>https://github.com/tachyonmcp/tachyon</url>
+    </scm>
+
+    <issueManagement>
+        <system>github</system>
+        <url>https://github.com/tachyonmcp/tachyon/issues</url>
+    </issueManagement>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
 
     <dependencyManagement>
         <dependencies>
@@ -89,4 +126,98 @@
             </dependency>
         </dependencies>
     </dependencyManagement>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <!-- No parent, so the root pom's formatting config is not inherited; check-poms.py keeps the version in sync -->
+                <plugin>
+                    <groupId>com.diffplug.spotless</groupId>
+                    <artifactId>spotless-maven-plugin</artifactId>
+                    <version>3.10.2</version>
+                    <configuration>
+                        <pom>
+                            <includes>
+                                <include>pom.xml</include>
+                            </includes>
+                        </pom>
+                    </configuration>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
+
+    <profiles>
+        <profile>
+            <id>lint</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>com.diffplug.spotless</groupId>
+                        <artifactId>spotless-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>spotless-check</id>
+                                <goals>
+                                    <goal>check</goal>
+                                </goals>
+                                <phase>verify</phase>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
+            <id>format</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>com.diffplug.spotless</groupId>
+                        <artifactId>spotless-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>spotless-apply</id>
+                                <goals>
+                                    <goal>apply</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
+            <id>release</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-gpg-plugin</artifactId>
+                        <version>3.2.8</version>
+                        <executions>
+                            <execution>
+                                <id>sign-artifacts</id>
+                                <goals>
+                                    <goal>sign</goal>
+                                </goals>
+                                <phase>verify</phase>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.sonatype.central</groupId>
+                        <artifactId>central-publishing-maven-plugin</artifactId>
+                        <version>0.11.0</version>
+                        <extensions>true</extensions>
+                        <configuration>
+                            <publishingServerId>central</publishingServerId>
+                            <autoPublish>true</autoPublish>
+                            <waitUntil>validated</waitUntil>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

@@ -19,6 +19,7 @@
     <description>Maps org.springframework.ai.mcp.annotation annotations to Tachyon tool, resource, and prompt descriptors</description>
 
     <properties>
+        <automatic.module.name>dev.tachyonmcp.annotations.spring.ai</automatic.module.name>
         <spring-ai.version>2.0.1</spring-ai.version>
     </properties>
 

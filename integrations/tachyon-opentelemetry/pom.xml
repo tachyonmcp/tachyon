@@ -19,6 +19,7 @@
     <description>OpenTelemetry MCP semantic conventions for Tachyon servers</description>
 
     <properties>
+        <automatic.module.name>dev.tachyonmcp.opentelemetry</automatic.module.name>
         <opentelemetry.version>1.65.0</opentelemetry.version>
         <opentelemetry-semconv.version>1.44.0-alpha</opentelemetry-semconv.version>
     </properties>

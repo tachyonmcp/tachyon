@@ -30,7 +30,7 @@ test: ## Run unit + e2e tests
 
 revapi: ## Check API compatibility against baseline (oldVersion) + write report
 	@echo " 🔄  Checking API compatibility..."
-	@./mvnw revapi:check revapi:report -pl tachyon-api,tachyon-core,extensions/tachyon-extensions,extensions/tachyon-extensions-skills,tachyon-testkit -DskipTests --no-transfer-progress
+	@./mvnw verify -Drevapi.skip=false -pl tachyon-api,tachyon-core,extensions/tachyon-extensions,extensions/tachyon-extensions-skills,tachyon-testkit -DskipTests -Dspotbugs.skip -Dmaven.javadoc.skip=true -Djacoco.skip=true --no-transfer-progress
 	@echo " ✅  Done!"
 
 jmh: ## Run JMH benchmarks (perf regression check)
@@ -82,15 +82,16 @@ clean: ## Remove all build artifacts
 
 format: ## Auto-format code (Spotless + Detekt)
 	@echo " 🎨  Formatting code..."
-	@./mvnw spotless:apply -Pformat,tests -q
+	@./mvnw spotless:apply -Pformat -q
 	@./mvnw install -pl tachyon-api,tachyon-core,tachyon-kotlin -DskipTests -Dspotbugs.skip -Dspotless.skip -q
-	@./mvnw exec:java@detekt-format -pl tachyon-kotlin-kt-schema -am -Pformat,tests -q
+	@./mvnw exec:java@detekt-format -pl tachyon-kotlin,tachyon-kotlin-kt-schema -Pformat -q
 	@echo " ✅  Done..."
 
 lint: ## Check code style (Spotless + Detekt); SpotBugs runs automatically during build
 	@echo " 🔍  Linting code..."
-	@./mvnw spotless:check -pl !reports -Plint,tests
-	@./mvnw process-test-classes -pl tachyon-kotlin-kt-schema -am -Plint,tests
+	@python3 .github/scripts/check-poms.py
+	@./mvnw spotless:check -pl !reports -Plint
+	@./mvnw process-test-classes -pl tachyon-kotlin-kt-schema -am -Plint
 	@echo " ✅  Done..."
 
 mcp-inspector: ## Launch MCP Inspector UI

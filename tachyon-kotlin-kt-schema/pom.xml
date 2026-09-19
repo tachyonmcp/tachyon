@@ -20,6 +20,10 @@
         Experimental kt-schema integration for Tachyon MCP Kotlin module with reflection JsonSchema generator.
     </description>
 
+    <properties>
+        <automatic.module.name>dev.tachyonmcp.kotlin.ktschema</automatic.module.name>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>dev.tachyonmcp</groupId>
@@ -40,7 +44,6 @@
         <dependency>
             <groupId>org.jetbrains.kotlinx</groupId>
             <artifactId>kotlinx-serialization-json</artifactId>
-            <version>${kotlinx-serialization-json.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -57,49 +60,13 @@
             <plugin>
                 <groupId>org.jetbrains.kotlin</groupId>
                 <artifactId>kotlin-maven-plugin</artifactId>
-                <version>${kotlin.version}</version>
                 <extensions>true</extensions>
                 <configuration>
-                    <javaParameters>true</javaParameters>
-                    <jvmTarget>${java.version}</jvmTarget>
-                    <languageVersion>${kotlin-language.version}</languageVersion>
-                    <args>
+                    <args combine.children="append">
                         <arg>-Xexplicit-api=strict</arg>
                         <arg>-Werror</arg>
-                        <arg>-Xjsr305=strict</arg>
                     </args>
                 </configuration>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-source-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <id>attach-sources</id>
-                        <goals>
-                            <goal>jar-no-fork</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <groupId>org.jacoco</groupId>
-                <artifactId>jacoco-maven-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <id>prepare-agent</id>
-                        <goals>
-                            <goal>prepare-agent</goal>
-                        </goals>
-                    </execution>
-                    <execution>
-                        <id>report</id>
-                        <phase>verify</phase>
-                        <goals>
-                            <goal>report</goal>
-                        </goals>
-                    </execution>
-                </executions>
             </plugin>
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>

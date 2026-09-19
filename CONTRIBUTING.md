@@ -3,7 +3,9 @@
 ## Setup
 
 - JDK 21+
-- Maven 3.9+
+- Maven 3.9+ (the `./mvnw` wrapper pins the version; `maven-enforcer-plugin` checks it)
+- Python 3 on `PATH`: `tachyon-core` generates the MCP protocol classes from `protocol/*.ts` with
+  `ts2java.py` at `generate-sources`. Skip it with `-Dts2java.skip=true` when `target/generated-sources` is up to date.
 
 ## Build & test
 
@@ -18,6 +20,8 @@ make jmh     # JMH benchmarks + throughput regression gate (BenchmarkGate)
 make ci      # what CI runs: clean + lint + build + revapi + jmh
 make all     # everything: clean + format + lint + full install + examples
 ```
+
+`e2e`, `conformance` and `reports` are built by the default-active `tests` profile; pass `-DskipTestModules` to leave them out.
 
 `lint`/`format` are Maven profiles (`-Plint`/`-Pformat`) kept out of the default
 build so `make build`/`make test` stay fast; `make ci`/`make all` wire them back

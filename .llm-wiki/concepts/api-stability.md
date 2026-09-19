@@ -2,8 +2,8 @@
 title: API stability
 tags: [concept, api, compat]
 sources: [tachyon-api/src/main/java/dev/tachyonmcp/api/annotations/, tachyon-api/revapi.json, tachyon-core/revapi.json, tachyon-core/pom.xml, tachyon-core/src/main/java/dev/tachyonmcp/core/server/internal/ServerEngine.java]
-updated: 2026-09-18
-commit: f2adbaed
+updated: 2026-09-19
+commit: 43ee83a1
 ---
 
 # 🧱 API stability
@@ -37,7 +37,7 @@ Descriptors/requests/config in api use `@Value.Immutable` + style `typeImmutable
 
 ## 🔍 Revapi
 
-`make revapi` compares against baseline `oldVersion`; per-module `revapi.json` ignores (generated ts2java classes excluded, commit `3cc96c5f`). Part of `make ci`.
+`revapi:check` is bound to `verify` in the modules that declare the plugin, but skipped by default (`revapi.skip=true` in `pom.xml`) because the baseline resolves from Central. `make revapi` runs `verify -Drevapi.skip=false` on those modules, so the jar it compares is built in the same reactor pass — no separate `make package` first. Compares against baseline `oldVersion`; per-module `revapi.json` ignores (generated ts2java classes excluded, commit `3cc96c5f`). Part of `make ci`.
 
 ## 📝 Javadoc rule
 

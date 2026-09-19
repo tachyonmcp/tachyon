@@ -19,6 +19,10 @@
         Runs a Tachyon MCP server in a Spring Boot application and exposes Mcp-annotated beans
     </description>
 
+    <properties>
+        <automatic.module.name>dev.tachyonmcp.spring.boot</automatic.module.name>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>dev.tachyonmcp</groupId>
