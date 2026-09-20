@@ -20,7 +20,7 @@ Import `tachyon-bom` once, then add modules with no `<version>`:
         <dependency>
             <groupId>dev.tachyonmcp</groupId>
             <artifactId>tachyon-bom</artifactId>
-            <version>1.0.0-beta.28</version> <!-- get latest version from Maven Central -->
+            <version>1.0.0-beta.30</version> <!-- get latest version from Maven Central -->
             <type>pom</type>
             <scope>import</scope>
         </dependency>
