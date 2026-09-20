@@ -3,14 +3,23 @@ package dev.tachyonmcp.spring.boot;
 
 import static dev.tachyonmcp.testkit.JsonRpcResponseAssert.assertThat;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.entry;
 import static org.awaitility.Awaitility.await;
 
 import dev.tachyonmcp.api.annotations.McpTool;
+import dev.tachyonmcp.api.server.domain.ServerError;
 import dev.tachyonmcp.core.server.TachyonServer;
+import dev.tachyonmcp.core.server.observability.OperationInfo;
+import dev.tachyonmcp.core.server.observability.OperationKind;
+import dev.tachyonmcp.core.server.observability.OperationOutcome;
 import dev.tachyonmcp.testkit.McpTestClients;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.health.contributor.HealthIndicator;
 import org.springframework.boot.health.contributor.Status;
@@ -45,8 +54,28 @@ class TachyonActuatorAutoConfigurationTest {
             context.getBean(TachyonServerLifecycle.class).stop();
             final var down = indicator.health();
             assertThat(down.getStatus()).isEqualTo(Status.DOWN);
-            assertThat(down.getDetails()).isEmpty();
+            assertThat(down.getDetails())
+                    .as("a bare DOWN cannot be acted on; shut down and still starting differ")
+                    .containsExactly(entry("state", "stopped"));
         });
+    }
+
+    @Test
+    void healthDistinguishesAServerThatNeverStartedFromOneThatStopped() {
+        try (var server = TachyonServer.builder().port(0).build()) {
+            final var lifecycle = new TachyonServerLifecycle(server);
+            final var indicator = new TachyonHealthIndicator(server, lifecycle);
+
+            final var beforeStart = indicator.health();
+            assertThat(beforeStart.getStatus()).isEqualTo(Status.DOWN);
+            assertThat(beforeStart.getDetails()).containsExactly(entry("state", "not-started"));
+
+            lifecycle.start();
+            assertThat(indicator.health().getStatus()).isEqualTo(Status.UP);
+
+            lifecycle.stop();
+            assertThat(indicator.health().getDetails()).containsExactly(entry("state", "stopped"));
+        }
     }
 
     @Test
@@ -103,6 +132,94 @@ class TachyonActuatorAutoConfigurationTest {
                 });
     }
 
+    /**
+     * The dispatcher builds its {@code OperationInfo} from the raw wire method before resolving a
+     * handler, so tagging it verbatim would let a client mint a meter per bogus method name and grow
+     * the registry without bound.
+     */
+    @Test
+    void unknownMethodsShareOneTagInsteadOfMintingAMeterEach() {
+        runner.withConfiguration(AutoConfigurations.of(MetricsAutoConfiguration.class))
+                .withBean(SimpleMeterRegistry.class, SimpleMeterRegistry::new)
+                .withBean(Greeter.class)
+                .run(context -> {
+                    final var registry = context.getBean(SimpleMeterRegistry.class);
+                    final var server = context.getBean(TachyonServer.class);
+                    try (var client = McpTestClients.latest(server.port())) {
+                        for (var i = 0; i < 5; i++) {
+                            // language=json
+                            client.post("""
+                                    {"jsonrpc":"2.0","id":%d,"method":"attack/%d"}
+                                    """.formatted(i, i));
+                        }
+                    }
+
+                    await().untilAsserted(() -> assertThat(registry.find(TachyonMetricsListener.OPERATIONS)
+                                    .tag("mcp.method.name", TachyonMetricsListener.UNKNOWN_METHOD)
+                                    .timer())
+                            .isNotNull()
+                            .satisfies(timer -> assertThat(timer.count()).isEqualTo(5)));
+                    assertThat(registry.find(TachyonMetricsListener.OPERATIONS).timers())
+                            .as("five bogus methods must not become five meters")
+                            .hasSize(1);
+                });
+    }
+
+    /**
+     * {@code TachyonServerCustomizer} is a plural SPI, so the metrics customizer must back off by
+     * bean name. A type-based condition would let any unrelated customizer in the application switch
+     * MCP metrics off — silently, since customizers are collected, not replaced.
+     */
+    @Test
+    void anUnrelatedCustomizerDoesNotDisableMetrics() {
+        runner.withConfiguration(AutoConfigurations.of(MetricsAutoConfiguration.class))
+                .withBean(SimpleMeterRegistry.class, SimpleMeterRegistry::new)
+                .withBean(Greeter.class)
+                .withBean("applicationCustomizer", TachyonServerCustomizer.class, () -> builder -> builder.version("9"))
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context.getBeansOfType(TachyonServerCustomizer.class))
+                            .containsKeys("applicationCustomizer", "tachyonMetricsCustomizer");
+
+                    final var registry = context.getBean(SimpleMeterRegistry.class);
+                    final var server = context.getBean(TachyonServer.class);
+                    try (var client = McpTestClients.latest(server.port())) {
+                        // language=json
+                        assertThat(client.post("""
+                                {"jsonrpc":"2.0","id":1,"method":"tools/call",
+                                 "params":{"name":"greet","arguments":{"name":"Ada"}}}
+                                """)).isSuccess().hasId(1);
+                    }
+                    await().untilAsserted(() -> assertThat(registry.find(TachyonMetricsListener.OPERATIONS)
+                                    .timer())
+                            .isNotNull());
+                    assertThat(server.config().identity().version()).isEqualTo("9");
+                });
+    }
+
+    /**
+     * The gauges bean is declared by its own type, not as a bare {@code SmartInitializingSingleton},
+     * so it can be conditioned on and replaced — and so it cannot be confused with
+     * {@code TachyonBeanRegistrar}, which implements the same callback interface.
+     */
+    @Test
+    void theGaugesBeanCarriesItsOwnTypeAndBacksOff() {
+        final var replacement =
+                new TachyonMeterBinder(TachyonServer.builder().port(0).build(), new SimpleMeterRegistry());
+
+        runner.withConfiguration(AutoConfigurations.of(MetricsAutoConfiguration.class))
+                .withBean(SimpleMeterRegistry.class, SimpleMeterRegistry::new)
+                .run(context -> assertThat(context).hasNotFailed().hasSingleBean(TachyonMeterBinder.class));
+
+        runner.withConfiguration(AutoConfigurations.of(MetricsAutoConfiguration.class))
+                .withBean(SimpleMeterRegistry.class, SimpleMeterRegistry::new)
+                .withBean("myGauges", TachyonMeterBinder.class, () -> replacement)
+                .run(context -> assertThat(context)
+                        .hasNotFailed()
+                        .hasSingleBean(TachyonMeterBinder.class)
+                        .doesNotHaveBean("tachyonMeterBinder"));
+    }
+
     @Test
     void metricsBackOffWithoutRegistryOrMicrometer() {
         runner.withBean(Greeter.class).run(context -> {
@@ -122,11 +239,43 @@ class TachyonActuatorAutoConfigurationTest {
 
     @Test
     void outcomeTagsUseSnakeCase() {
-        assertThat(TachyonMetricsListener.outcome(
-                        new dev.tachyonmcp.core.server.observability.OperationOutcome.Completed()))
+        assertThat(TachyonMetricsListener.outcome(new OperationOutcome.Completed()))
                 .isEqualTo("completed");
-        assertThat(TachyonMetricsListener.outcome(
-                        new dev.tachyonmcp.core.server.observability.OperationOutcome.NotificationAccepted()))
+        assertThat(TachyonMetricsListener.outcome(new OperationOutcome.NotificationAccepted()))
                 .isEqualTo("notification_accepted");
+    }
+
+    /**
+     * Collapsing to {@code unknown} bounds the tag's cardinality, so it must be narrow: only a method
+     * the server does not serve. A known method that failed for any other reason keeps its name, or
+     * the metric stops distinguishing the calls operators care about.
+     */
+    @ParameterizedTest
+    @MethodSource("outcomesAndTheirMethodTag")
+    void onlyUnservedMethodsCollapseIntoTheUnknownTag(OperationOutcome outcome, String expected) {
+        final var info =
+                OperationInfo.builder(OperationKind.REQUEST, "tools/call", null).build();
+
+        assertThat(TachyonMetricsListener.method(info, outcome)).isEqualTo(expected);
+    }
+
+    static Stream<Arguments> outcomesAndTheirMethodTag() {
+        return Stream.of(
+                Arguments.of(rejected(ServerError.Kind.METHOD_NOT_FOUND), TachyonMetricsListener.UNKNOWN_METHOD),
+                Arguments.of(new OperationOutcome.NotificationIgnored(), TachyonMetricsListener.UNKNOWN_METHOD),
+                Arguments.of(rejected(ServerError.Kind.INVALID_PARAMS), "tools/call"),
+                Arguments.of(rejected(ServerError.Kind.INVALID_REQUEST), "tools/call"),
+                Arguments.of(rejected(ServerError.Kind.UNSUPPORTED_PROTOCOL_VERSION), "tools/call"),
+                // A transport-level rejection carries no JSON-RPC envelope, so error() is null.
+                Arguments.of(new OperationOutcome.Rejected(null, 400, 0), "tools/call"),
+                Arguments.of(new OperationOutcome.Completed(), "tools/call"),
+                Arguments.of(
+                        new OperationOutcome.HandlerFailed(
+                                new ServerError(ServerError.Kind.INTERNAL_ERROR, "boom"), -32603, null),
+                        "tools/call"));
+    }
+
+    private static OperationOutcome.Rejected rejected(ServerError.Kind kind) {
+        return new OperationOutcome.Rejected(new ServerError(kind, kind.name()), 400, 0);
     }
 }

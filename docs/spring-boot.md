@@ -153,6 +153,59 @@ Stop the application with **Ctrl+C**; Spring closes the MCP server.
 Use Boot's usual overrides, such as `TACHYON_PORT=9090` or `--tachyon.port=9090`.
 For an ephemeral port, inject `TachyonServer` and read `server.port()` after startup.
 
+### Network transport
+
+| Property | Default | Purpose |
+|---|---|---|
+| `tachyon.network.endpoint-path` | `/mcp` | HTTP path serving the MCP endpoints. |
+| `tachyon.network.reader-idle-timeout` | `60s` | Close connections with no inbound traffic for this long. |
+| `tachyon.network.writer-idle-timeout` | `5m` | Close connections with no outbound traffic for this long. |
+| `tachyon.network.heartbeat-interval` | `15s` | SSE heartbeat that keeps an upgraded stream alive. Keep it below the reader idle timeout and the session TTL; `0` disables it. |
+| `tachyon.network.max-content-length` | `1MB` | Maximum HTTP request body size. Takes a `DataSize`, such as `512KB`. |
+| `tachyon.network.allowed-origins` | none | Origins accepted by the CORS handler. |
+| `tachyon.network.allowed-headers` | none | Request headers accepted by the CORS handler, beyond the built-in ones. |
+| `tachyon.network.allowed-hosts` | none | `Host` authorities the DNS-rebinding guard accepts beyond loopback, each a host or `host:port`. |
+| `tachyon.network.allow-null-origin` | `false` | Accept requests carrying `Origin: null`. |
+| `tachyon.network.allow-private-networks` | `false` | Accept CORS preflights from the private network address space. |
+| `tachyon.network.io-engine` | `auto` | Netty I/O engine: `auto`, `nio`, `epoll`, `kqueue`, `io_uring`. |
+
+The three list properties bind from a YAML list or from a comma-separated value:
+
+```yaml
+tachyon:
+  network:
+    endpoint-path: /mcp
+    max-content-length: 2MB
+    allowed-origins:
+      - https://app.example.com
+      - https://admin.example.com
+    allowed-hosts:
+      - mcp.example.com:8096
+```
+
+### Sessions
+
+| Property | Default | Purpose |
+|---|---|---|
+| `tachyon.session.enabled` | `false` | Keep server-side sessions. |
+| `tachyon.session.session-ttl` | `30s` | Evict a session idle for this long. |
+| `tachyon.session.janitor-interval` | `5s` | Interval between sweeps that evict expired sessions. |
+
+Setting `session-ttl` or `janitor-interval` enables sessions on its own, matching the core builder;
+`tachyon.session.enabled: true` turns them on with the defaults, and `false` states the stateless
+choice explicitly.
+
+A stateless server has no session, so `enabled: false` together with `session-ttl` or
+`janitor-interval` is rejected at startup rather than silently ignored. The failure names the keys
+you set and the file they came from.
+
+### Handler execution
+
+| Property | Default | Purpose |
+|---|---|---|
+| `tachyon.runtime.request-timeout` | `60s` | Timeout for requests the server sends to the client. |
+| `tachyon.runtime.shutdown-grace-period` | `5s` | Time in-flight handlers get to drain on shutdown. `0` interrupts them immediately. |
+
 ### Running alongside Spring MVC or WebFlux
 
 Tachyon owns a separate Netty HTTP server. `tachyon.port` controls MCP; `server.port` controls
@@ -171,8 +224,10 @@ MCP remains at `http://127.0.0.1:8080/mcp`. Spring HTTP endpoints use port `8081
 
 ### Customize the builder
 
-For settings beyond the five `tachyon.*` properties, declare a `TachyonServerCustomizer` bean.
-For example, this configuration enables sessions:
+`tachyon.*` covers values. Everything else — stores, id generators, clocks, JSON codecs,
+observability listeners, programmatic feature registration — is wiring, and goes through a
+`TachyonServerCustomizer` bean. For example, this configuration plugs in a custom session store —
+sessions themselves are already on, because `tachyon.session.session-ttl` is set:
 
 ```java
 package example;
@@ -184,15 +239,16 @@ import org.springframework.context.annotation.Configuration;
 @Configuration(proxyBeanMethods = false)
 public class McpConfiguration {
     @Bean
-    TachyonServerCustomizer mcpSessions() {
-        return builder -> builder.session(session -> session.enabled());
+    TachyonServerCustomizer mcpSessions(RedisSessionStore store) {
+        return builder -> builder.session(session -> session.sessionStore(store));
     }
 }
 ```
 
 Customizers run after properties and `ServerExtension` beans have been applied, so they can
 override property values. Multiple customizers follow Spring ordering, such as `@Order`.
-Use them for network guards, JSON codecs, observability, or programmatic feature registration.
+Use them for stores and generators, JSON codecs, observability, or programmatic feature
+registration.
 
 See [configuration](running/configuration.md) for builder options and
 [deployment](running/deployment.md) for bind addresses and accepted public hostnames.

@@ -13,9 +13,20 @@ import org.springframework.context.SmartLifecycle;
 @ExperimentalApi
 public final class TachyonServerLifecycle implements SmartLifecycle {
 
+    /**
+     * The {@link SmartLifecycle#getPhase() phase} the MCP transport starts and stops in: the highest
+     * there is, so it binds last and stops first. Spring's web server sits at
+     * {@code DEFAULT_PHASE - 2048}, its graceful shutdown at {@code - 1024}.
+     *
+     * <p>Give a {@link org.springframework.context.Lifecycle} bean a lower phase to make it outlive
+     * in-flight MCP operations; one left on the default phase has no defined order relative to this.
+     */
+    public static final int PHASE = SmartLifecycle.DEFAULT_PHASE;
+
     private final TachyonServer server;
     private final ReentrantLock lock = new ReentrantLock();
     private volatile boolean running;
+    private volatile boolean everStarted;
 
     /**
      * Creates the lifecycle for {@code server}.
@@ -33,6 +44,7 @@ public final class TachyonServerLifecycle implements SmartLifecycle {
             if (running) return;
             server.start();
             running = true;
+            everStarted = true;
         } finally {
             lock.unlock();
         }
@@ -53,5 +65,15 @@ public final class TachyonServerLifecycle implements SmartLifecycle {
     @Override
     public boolean isRunning() {
         return running;
+    }
+
+    @Override
+    public int getPhase() {
+        return PHASE;
+    }
+
+    /** Whether the transport has ever bound — distinguishes "not started yet" from "stopped". */
+    boolean hasStarted() {
+        return everStarted;
     }
 }

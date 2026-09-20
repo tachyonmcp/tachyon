@@ -6,13 +6,12 @@ import dev.tachyonmcp.api.server.extensions.ServerExtension;
 import dev.tachyonmcp.core.server.TachyonServer;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.health.autoconfigure.contributor.ConditionalOnEnabledHealthIndicator;
 import org.springframework.context.annotation.Bean;
@@ -35,7 +34,7 @@ import org.springframework.context.annotation.Configuration;
             "org.springframework.boot.micrometer.metrics.autoconfigure.CompositeMeterRegistryAutoConfiguration"
         })
 @EnableConfigurationProperties(TachyonProperties.class)
-@ConditionalOnProperty(prefix = "tachyon", name = "enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnBooleanProperty(name = "tachyon.enabled", matchIfMissing = true)
 public class TachyonAutoConfiguration {
 
     /** Creates the auto-configuration. */
@@ -54,15 +53,12 @@ public class TachyonAutoConfiguration {
          * @return the built server
          */
         @Bean
-        @ConditionalOnMissingBean
         public TachyonServer tachyonServer(
                 TachyonProperties properties,
                 ObjectProvider<ServerExtension> extensions,
                 ObjectProvider<TachyonServerCustomizer> customizers) {
-            var builder = TachyonServer.builder().port(properties.port());
-            if (properties.name() != null) builder.name(properties.name());
-            if (properties.version() != null) builder.version(properties.version());
-            if (properties.host() != null) builder.host(properties.host());
+            final var builder = TachyonServer.builder();
+            TachyonPropertiesApplier.apply(properties, builder);
             builder.withExtensions(extensions.orderedStream().toArray(ServerExtension[]::new));
             customizers.orderedStream().forEach(customizer -> customizer.customize(builder));
             return builder.build();
@@ -110,14 +106,18 @@ public class TachyonAutoConfiguration {
         @ConditionalOnBean(MeterRegistry.class)
         static class RegistryMetricsConfiguration {
 
+            /** By name, never by type: {@link TachyonServerCustomizer} is plural, so a type condition
+             * would let any application customizer switch MCP metrics off. */
             @Bean
+            @ConditionalOnMissingBean(name = "tachyonMetricsCustomizer")
             TachyonServerCustomizer tachyonMetricsCustomizer(MeterRegistry registry) {
                 return builder -> builder.observability(o -> o.listener(new TachyonMetricsListener(registry)));
             }
 
             @Bean
-            SmartInitializingSingleton tachyonMeterBinder(TachyonServer server, MeterRegistry registry) {
-                return () -> new TachyonMeterBinder(server).bindTo(registry);
+            @ConditionalOnMissingBean
+            TachyonMeterBinder tachyonMeterBinder(TachyonServer server, MeterRegistry registry) {
+                return new TachyonMeterBinder(server, registry);
             }
         }
     }
