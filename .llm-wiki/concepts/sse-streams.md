@@ -2,8 +2,8 @@
 title: SSE streams
 tags: [concept, transport, sse]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/sse/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/OutboundSseStream.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/OutboundSseStreamMessageRouter.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpOperationHandler.java]
-updated: 2026-09-17
-commit: d831e9b1
+updated: 2026-09-20
+commit: 04156c98
 ---
 
 # 📡 SSE streams
@@ -47,7 +47,7 @@ Initial headers and every queued event are aggregated with Netty `PromiseCombine
 
 ## 🫀 Keep-alive math
 
-`NetworkConfig`: `readerIdleTimeout` 60s closes silent non-SSE sockets; heartbeat 15s keeps SSE; keep heartbeat < reader idle and < session TTL (30s) `NetworkConfig`, `NetworkConfig#DEFAULT_READER_IDLE_TIMEOUT`. Idle tick on SSE channel = no-op `McpOperationHandler#userEventTriggered`.
+`NetworkConfig`: `readerIdleTimeout` 60s closes silent non-SSE sockets; heartbeat 15s keeps SSE; keep heartbeat < proxy idle timeouts and < session TTL (30s); heartbeats are outbound and never reset reader idle `NetworkConfig`, `NetworkConfig#DEFAULT_READER_IDLE_TIMEOUT`. Idle tick on SSE channel = no-op only in `McpOperationHandler#userEventTriggered` (requests carrying `MCP-Session-Id`). A POST without one — every 2026-07-28 request, `initialize` — runs under `McpInitializationHandler#userEventTriggered`, which closes on any idle tick, so reader idle still ends an upgraded stream there ([[findings]]).
 
 ## 🧯 Close semantics
 

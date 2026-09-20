@@ -14,6 +14,26 @@ it moves off a developer machine.
 Full option reference: [configuration](configuration.md). Stateless mode,
 long-running tools and shutdown behaviour: [FAQ](../faq.md#deployment-and-operations).
 
+## Before exposing the server publicly
+
+Listening on a public interface is only the first step. Tachyon serves plain HTTP and has no
+built-in authentication or authorization, so a public deployment has to supply both.
+
+- **TLS.** Terminate TLS in a reverse proxy, load balancer, or platform ingress in front of Tachyon.
+- **Authentication and authorization.** Enforce them in that front layer, or in a gateway that
+  forwards only authorized calls. Tachyon does not check credentials. `allowedHosts` and the
+  `Origin` check only decide which `Host` and `Origin` values a request may carry; they do not
+  identify a caller.
+- **Direct access.** Make Tachyon reachable only through that layer. A client that can reach the
+  Tachyon port directly bypasses whatever the layer enforces.
+- **Limits.** Set `maxContentLength` (default 1 MB) and the idle timeouts for your traffic. See
+  [Network configuration](configuration.md#network).
+- **Logs and telemetry.** Payload capture is off by default. Tool arguments and results often
+  carry credentials or personal data, so enable capture only where your data-handling policy
+  allows it. See [payload capture](observability.md#payload-capture-policy).
+- **Shutdown.** Match `shutdownGracePeriod` to the platform's termination window, and make sure
+  the JVM receives the stop signal. See [Containers](#containers).
+
 ## 1. Bind address
 
 `host` defaults to `127.0.0.1`. A platform routes to the process from outside,
@@ -34,7 +54,7 @@ instead of hard-coding one.
 
 ## 3. Public hostname
 
-This is the one that is easy to miss.
+A public deployment also needs an allowed `Host`.
 
 [DNS-rebinding protection](configuration.md#dns-rebinding-protection) is on by
 default, and it accepts only `localhost` and loopback authorities. A public
@@ -72,7 +92,12 @@ How the value reaches the app depends on the platform.
 A successful request does not prove the allowlist works, because an unset
 allowlist and a correct one both let a good request through on localhost. Send a
 request the server has to refuse. A trailing dot is the same host to DNS but a
-different string to the guard:
+different string to the guard.
+
+Aim the probe at Tachyon's own listener, or at a proxy that forwards the `Host`
+header unchanged. An ingress may normalize, reject, or replace `Host` before
+Tachyon sees it, so an answer from behind such a proxy describes the proxy, not
+Tachyon's guard.
 
 ```shell
 probe() {
@@ -86,17 +111,20 @@ probe 'YOUR-HOST'
 probe 'YOUR-HOST.'
 ```
 
-The second must return `403`. If both return the same code, the `Host` check is
-not filtering anything and the first result proved nothing. Treat `000` as a
-failed probe rather than a result: two failed requests also match each other,
-and they say nothing about the guard.
+Sent directly to Tachyon, the second probe must return `403`. If both return the
+same code, the `Host` check is not filtering anything and the first result proved
+nothing. If the probe went through a proxy, repeat it against Tachyon's own
+address before drawing that conclusion. Treat `000` as a failed probe rather than
+a result: two failed requests also match each other, and they say nothing about
+the guard.
 
 ## Browser clients
 
 `allowedHosts` widens the `Host` check only. A request carrying an `Origin`
-header that is not loopback is still rejected, so a browser page cannot reach a
-remote Tachyon server. Clients that send no `Origin` are unaffected, which is
-most MCP clients.
+header that is not loopback is still rejected with `403`, so a browser page
+cannot reach a remote Tachyon server. The [CORS options](configuration.md#cors)
+do not change that, because the guard runs before the CORS handler. Clients that
+send no `Origin` are unaffected, which is most MCP clients.
 
 ## More than one instance
 
@@ -135,4 +163,5 @@ Pick the variable holding the **bare authority**. Platforms that also expose a
 full URL (`https://…`) offer the wrong one for `allowedHosts` — an entry carrying
 a scheme or a path is rejected when the server is built.
 
-Deploy, then run the two `probe` calls above against the assigned hostname.
+Deploy, then run the two `probe` calls above against the assigned hostname. If the platform
+rewrites `Host`, run them against the container's own address instead.

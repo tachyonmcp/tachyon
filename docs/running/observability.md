@@ -21,7 +21,7 @@ OpenTelemetry using the [MCP semantic conventions](https://github.com/open-telem
 
 `OperationInfo` exposes trace context and server address/port through getters. When constructing one programmatically, supply these values through `OperationInfo.builder(...)`.
 
-Listeners cannot short-circuit, reject, or substitute results. Exceptions in listeners are fault-isolated and never affect handler execution, responses, or other listeners.
+Listeners cannot short-circuit, reject, or substitute results. Tachyon catches an `Exception` thrown by a listener, logs it at `WARN` without payloads, and carries on, so the fault does not affect handler execution, responses, or other listeners. Two cases are not isolated: an `Error` propagates, and an exception raised while the calling thread is interrupted, for example during a shutdown that interrupts handlers, is rethrown as a `RuntimeException`.
 
 Listeners nest in registration order: the scope a listener returns from `start` is opened inside the scope of every listener registered before it, so a later-registered listener's context is the active one while dispatch work runs. Scopes close innermost-first, which means each `close()` runs while its own context is current and restores whatever it displaced.
 
@@ -94,9 +94,7 @@ var openTelemetry = OpenTelemetrySdk.builder()
     .build();
 
 var server = TachyonServer.builder()
-    .observability(o -> o
-        .listener(McpOpenTelemetryListener.create(openTelemetry))
-        .payloadCapture(p -> p.requestArgs(true).responseContent(true)))
+    .observability(o -> o.listener(McpOpenTelemetryListener.create(openTelemetry)))
     .port(8080)
     .build();
 ```
@@ -118,15 +116,34 @@ val openTelemetry = OpenTelemetrySdk.builder()
 TachyonServer(port = 8080) {
     observability {
         listener(McpOpenTelemetryListener.create(openTelemetry))
-        payloadCapture {
-            requestArgs = true
-            responseContent = true
-        }
     }
 }
 ```
 
 `LoggingSpanExporter` and `LoggingMetricExporter` (`io.opentelemetry:opentelemetry-exporter-logging`) print telemetry to application logs. Use them to verify local configuration. Add OTLP exporters (`io.opentelemetry:opentelemetry-exporter-otlp`) as span processors or metric readers to send data to a collector such as Jaeger, Grafana Tempo, or Honeycomb.
+
+### Opt in to payload capture
+
+The setup above records identity facts only. To attach tool arguments and results to spans as
+`gen_ai.tool.call.arguments` and `gen_ai.tool.call.result`, enable the matching
+[payload capture](#payload-capture-policy) toggles. These values often carry credentials or
+personal data, and they leave the process with your telemetry, so enable them deliberately:
+
+```java
+.observability(o -> o
+    .listener(McpOpenTelemetryListener.create(openTelemetry))
+    .payloadCapture(p -> p.requestArgs(true).responseContent(true)))
+```
+
+```kotlin
+observability {
+    listener(McpOpenTelemetryListener.create(openTelemetry))
+    payloadCapture {
+        requestArgs = true
+        responseContent = true
+    }
+}
+```
 
 ### Trace Context
 

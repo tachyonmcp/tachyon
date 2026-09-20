@@ -11,17 +11,12 @@ Expose a Spring bean as an MCP tool with `@McpTool`. The starter discovers annot
 builds the MCP server, and starts and stops it with your application context.
 
 This guide creates a greeting tool at `http://127.0.0.1:8080/mcp` using Java 21+ and
-Spring Boot 4.1.1.
+Spring Boot 4.1.1. You need JDK 21+, Maven, and `curl`; Maven resolves Tachyon from Maven Central,
+so you don't need a Tachyon checkout.
 
 ## 1. Add the starter
 
-From a Tachyon repository checkout, install the starter and its dependencies:
-
-```bash
-./mvnw -q install -pl integrations/tachyon-spring-boot-starter -am -DskipTests
-```
-
-Create a separate `greeting-server` directory with this `pom.xml`:
+Create an empty `greeting-server` directory with this `pom.xml`:
 
 ```xml
 <project xmlns="http://maven.apache.org/POM/4.0.0"
@@ -160,7 +155,7 @@ For an ephemeral port, inject `TachyonServer` and read `server.port()` after sta
 | `tachyon.network.endpoint-path` | `/mcp` | HTTP path serving the MCP endpoints. |
 | `tachyon.network.reader-idle-timeout` | `60s` | Close connections with no inbound traffic for this long. |
 | `tachyon.network.writer-idle-timeout` | `5m` | Close connections with no outbound traffic for this long. |
-| `tachyon.network.heartbeat-interval` | `15s` | SSE heartbeat that keeps an upgraded stream alive. Keep it below the reader idle timeout and the session TTL; `0` disables it. |
+| `tachyon.network.heartbeat-interval` | `15s` | SSE heartbeat that keeps an upgraded stream alive. Keep it below the reader idle timeout and, with sessions, below the session TTL; `0` disables it. |
 | `tachyon.network.max-content-length` | `1MB` | Maximum HTTP request body size. Takes a `DataSize`, such as `512KB`. |
 | `tachyon.network.allowed-origins` | none | Origins accepted by the CORS handler. |
 | `tachyon.network.allowed-headers` | none | Request headers accepted by the CORS handler, beyond the built-in ones. |
@@ -204,7 +199,7 @@ you set and the file they came from.
 | Property | Default | Purpose |
 |---|---|---|
 | `tachyon.runtime.request-timeout` | `60s` | Timeout for requests the server sends to the client. |
-| `tachyon.runtime.shutdown-grace-period` | `5s` | Time in-flight handlers get to drain on shutdown. `0` interrupts them immediately. |
+| `tachyon.runtime.shutdown-grace-period` | `5s` | Time in-flight handlers get to finish on shutdown, before their threads are interrupted. `0` interrupts them immediately. |
 
 ### Running alongside Spring MVC or WebFlux
 

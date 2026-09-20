@@ -73,6 +73,7 @@ import dev.tachyonmcp.api.server.domain.PromptArgument;
 import dev.tachyonmcp.api.server.domain.PromptMessage;
 import dev.tachyonmcp.api.server.features.prompts.PromptResult;
 import dev.tachyonmcp.core.server.TachyonServer;
+import java.util.List;
 
 var server = TachyonServer.builder()
         .withPrompts(prompts -> prompts.register(
@@ -83,8 +84,8 @@ var server = TachyonServer.builder()
                                 "concern", "Concern", "Security, performance, or clarity", true)),
                 (context, request) -> {
                     var concern = request.arguments().stringValue("concern");
-                    return PromptResult.messages(PromptMessage.user(
-                            "Review this code for " + concern + "."));
+                    return PromptResult.messages(List.of(PromptMessage.user(
+                            "Review this code for " + concern + ".")));
                 }))
         .port(8080)
         .build();
@@ -102,7 +103,7 @@ Synchronous prompt handlers run on virtual threads. Register an `AsyncPromptFn` 
 server.prompts().registerAsync(
         descriptor,
         (context, request) -> promptService.create(request.arguments())
-                .thenApply(message -> PromptResult.messages(PromptMessage.user(message))));
+                .thenApply(message -> PromptResult.messages(List.of(PromptMessage.user(message)))));
 ```
 
 ## Use the Kotlin DSL

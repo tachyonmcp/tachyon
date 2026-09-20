@@ -7,8 +7,9 @@ description: |-
   Configure Tachyon servers: network settings, native I/O engines, sessions, CORS, keep-alive, graceful shutdown, and more.
 ---
 
-All configuration flows through `TachyonServer.builder()` (Java) or the `TachyonServer { }` DSL (Kotlin). Scopes: `info`, `capabilities`, `network`, `session`, `runtime`, `observability`.
+All configuration flows through `TachyonServer.builder()` (Java) or the `TachyonServer { }` DSL (Kotlin).
 
+Java:
 ```java
 var server = TachyonServer.builder()
     .info(i -> i.name("my-server").version("1.0"))
@@ -18,6 +19,7 @@ var server = TachyonServer.builder()
 server.start();
 ```
 
+Kotlin:
 ```kotlin
 val server = TachyonServer {
     info { name = "my-server"; version = "1.0" }
