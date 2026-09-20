@@ -72,6 +72,18 @@ public final class TachyonServerLifecycle implements SmartLifecycle {
         return PHASE;
     }
 
+    /**
+     * Never. A {@link TachyonServer} is single-use — {@link
+     * TachyonServer#close()} is terminal and a later {@link TachyonServer#start()} throws — so the
+     * stop/start cycle that {@code ConfigurableApplicationContext.pause()}/{@code restart()} and CRaC
+     * checkpoint-restore apply to pauseable beans would leave the transport permanently down. Spring's
+     * default is {@code true}; Boot's own web server lifecycles opt out the same way.
+     */
+    @Override
+    public boolean isPauseable() {
+        return false;
+    }
+
     /** Whether the transport has ever bound — distinguishes "not started yet" from "stopped". */
     boolean hasStarted() {
         return everStarted;

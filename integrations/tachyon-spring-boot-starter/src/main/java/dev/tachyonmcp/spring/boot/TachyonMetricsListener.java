@@ -12,11 +12,19 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 
-/** Times each inbound MCP operation into {@code mcp.server.operations}, tagged by method and outcome. */
+/**
+ * Times each inbound MCP operation into {@code mcp.server.operation.duration}, tagged by method and
+ * outcome.
+ */
 final class TachyonMetricsListener implements ObservationListener {
 
-    static final String OPERATIONS = "mcp.server.operations";
+    /** The OpenTelemetry semantic-convention name for an MCP server operation's duration. */
+    static final String OPERATION_DURATION = "mcp.server.operation.duration";
+
+    /** Compiled once: {@link #outcome} runs on every completed operation. */
+    private static final Pattern CAMEL_HUMP = Pattern.compile("([a-z])([A-Z])");
 
     /**
      * Tag value for a method the server does not serve. The dispatcher builds an
@@ -48,11 +56,15 @@ final class TachyonMetricsListener implements ObservationListener {
         timer(method(info, outcome), outcome(outcome)).record(end - start, TimeUnit.NANOSECONDS);
     }
 
-    /** Both tag values come from bounded sets, so the cache is bounded too. */
+    /**
+     * Both tag values come from bounded sets, so the cache is bounded too. Kept rather than calling
+     * {@code registry.timer(...)} per operation: this runs on every inbound message, and the cache
+     * trades a fixed map for a {@code Meter.Id} and tag list per call.
+     */
     private Timer timer(String method, String outcome) {
         return timers.computeIfAbsent(
                 new TimerKey(method, outcome),
-                key -> Timer.builder(OPERATIONS)
+                key -> Timer.builder(OPERATION_DURATION)
                         .description("Inbound MCP operation duration")
                         .tag("mcp.method.name", key.method())
                         .tag("outcome", key.outcome())
@@ -75,9 +87,9 @@ final class TachyonMetricsListener implements ObservationListener {
     }
 
     static String outcome(OperationOutcome outcome) {
-        return outcome.getClass()
-                .getSimpleName()
-                .replaceAll("([a-z])([A-Z])", "$1_$2")
+        return CAMEL_HUMP
+                .matcher(outcome.getClass().getSimpleName())
+                .replaceAll("$1_$2")
                 .toLowerCase(Locale.ROOT);
     }
 

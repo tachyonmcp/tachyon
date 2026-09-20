@@ -15,6 +15,7 @@ import dev.tachyonmcp.core.server.observability.OperationOutcome;
 import dev.tachyonmcp.testkit.McpTestClients;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.lang.reflect.Proxy;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -78,6 +79,28 @@ class TachyonActuatorAutoConfigurationTest {
         }
     }
 
+    /**
+     * The indicator reads the bound host and port only on the UP branch, but a health endpoint that
+     * throws is a 500 instead of a DOWN. {@code AbstractHealthIndicator} turns any escape into
+     * {@code DOWN} with an {@code error} detail an operator can act on.
+     */
+    @Test
+    void healthReportsDownInsteadOfThrowingWhenTheBindingCannotBeRead() {
+        final var unreadable = (TachyonServer) Proxy.newProxyInstance(
+                TachyonServer.class.getClassLoader(), new Class<?>[] {TachyonServer.class}, (proxy, method, args) -> {
+                    if ("start".equals(method.getName())) return null;
+                    throw new IllegalStateException("Server not started; call start() first");
+                });
+        final var lifecycle = new TachyonServerLifecycle(unreadable);
+        lifecycle.start();
+
+        final var health = new TachyonHealthIndicator(unreadable, lifecycle).health();
+
+        assertThat(health.getStatus()).isEqualTo(Status.DOWN);
+        assertThat(health.getDetails())
+                .containsEntry("error", "java.lang.IllegalStateException: Server not started; call start() first");
+    }
+
     @Test
     void healthBacksOffWhenDisabledOrHealthModuleAbsent() {
         runner.withPropertyValues("management.health.tachyon.enabled=false").run(context -> {
@@ -118,7 +141,7 @@ class TachyonActuatorAutoConfigurationTest {
                                 """)).isSuccess().hasId(1);
                     }
 
-                    await().untilAsserted(() -> assertThat(registry.find(TachyonMetricsListener.OPERATIONS)
+                    await().untilAsserted(() -> assertThat(registry.find(TachyonMetricsListener.OPERATION_DURATION)
                                     .tag("mcp.method.name", "tools/call")
                                     .tag("outcome", "completed")
                                     .timer())
@@ -154,12 +177,13 @@ class TachyonActuatorAutoConfigurationTest {
                         }
                     }
 
-                    await().untilAsserted(() -> assertThat(registry.find(TachyonMetricsListener.OPERATIONS)
+                    await().untilAsserted(() -> assertThat(registry.find(TachyonMetricsListener.OPERATION_DURATION)
                                     .tag("mcp.method.name", TachyonMetricsListener.UNKNOWN_METHOD)
                                     .timer())
                             .isNotNull()
                             .satisfies(timer -> assertThat(timer.count()).isEqualTo(5)));
-                    assertThat(registry.find(TachyonMetricsListener.OPERATIONS).timers())
+                    assertThat(registry.find(TachyonMetricsListener.OPERATION_DURATION)
+                                    .timers())
                             .as("five bogus methods must not become five meters")
                             .hasSize(1);
                 });
@@ -190,7 +214,7 @@ class TachyonActuatorAutoConfigurationTest {
                                  "params":{"name":"greet","arguments":{"name":"Ada"}}}
                                 """)).isSuccess().hasId(1);
                     }
-                    await().untilAsserted(() -> assertThat(registry.find(TachyonMetricsListener.OPERATIONS)
+                    await().untilAsserted(() -> assertThat(registry.find(TachyonMetricsListener.OPERATION_DURATION)
                                     .timer())
                             .isNotNull());
                     assertThat(server.config().identity().version()).isEqualTo("9");
@@ -200,7 +224,7 @@ class TachyonActuatorAutoConfigurationTest {
     /**
      * The gauges bean is declared by its own type, not as a bare {@code SmartInitializingSingleton},
      * so it can be conditioned on and replaced — and so it cannot be confused with
-     * {@code TachyonBeanRegistrar}, which implements the same callback interface.
+     * {@code TachyonFeatureRegistrar}, which implements the same callback interface.
      */
     @Test
     void theGaugesBeanCarriesItsOwnTypeAndBacksOff() {

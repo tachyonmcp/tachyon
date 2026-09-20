@@ -30,7 +30,7 @@ Verdict: `ServerExtension` = bootstrap hook (register features + custom JSON-RPC
 
 ## 🔁 Lifecycle
 
-Spring extensions still bootstrap during server construction. Discovered annotated beans register later, after singleton initialization, through the existing registries (`ServerConfiguration#tachyonServer`, `TachyonBeanRegistrar#afterSingletonsInstantiated`); see [[spring-boot]].
+Spring extensions still bootstrap during server construction. Discovered annotated beans register later, after singleton initialization, through the existing registries (`ServerConfiguration#tachyonServer`, `TachyonFeatureRegistrar#afterSingletonsInstantiated`); see [[spring-boot]].
 
 1. `withExtensions(...)` — duplicate id ⇒ IAE `DefaultServerBuilder.java` `addExtension`.
 2. Ctor `bootstrapExtensions`: record `methods()` owners, set `bootstrappingExtensionId`, call `bootstrap(this)`; any `registerHandler` during bootstrap also owned `DefaultTachyonServer#getHandler`, `DefaultTachyonServer#toJsonObject`.
