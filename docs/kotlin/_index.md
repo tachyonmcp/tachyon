@@ -21,6 +21,26 @@ Version is pinned by the `tachyon-bom` — see [Quickstart](../quickstart.md#1-a
 </dependency>
 ```
 
+A minimal Gradle build for the examples below, with JDK 21:
+
+```kotlin
+plugins {
+    kotlin("jvm") version "2.2.21"
+    application
+}
+
+repositories { mavenCentral() }
+
+dependencies {
+    implementation(platform("dev.tachyonmcp:tachyon-bom:1.0.0-beta.30"))
+    implementation("dev.tachyonmcp:tachyon-kotlin")
+}
+
+kotlin { jvmToolchain(21) }
+
+application { mainClass = "MyMcpServerKt" }
+```
+
 ## Entry points
 
 ```kotlin
@@ -28,91 +48,18 @@ Version is pinned by the `tachyon-bom` — see [Quickstart](../quickstart.md#1-a
 val server = TachyonServer(port = 8080) { /* configure */ }
 
 // Server logic only, no transport — for testing
-val server: TachyonServer = buildServer { /* configure */ }
+val testServer: TachyonServer = buildServer { /* configure */ }
 ```
 
 Both entry points configure a `TachyonServerBuilder`. `TachyonServer(port)` also binds the
 transport and starts serving; `buildServer` returns a configured server you start yourself, which
 is what you want in tests.
 
-## Structured value factories
-
-Kotlin factories use receiver blocks for structured values with more than three fields.
-`Annotations` follows the same shape because it is commonly nested inside descriptors:
-
-```kotlin
-val annotations = Annotations {
-    audience = listOf(Role.USER)
-    priority = 0.8
-}
-
-val icon = Icon {
-    src = "https://example.com/icon.svg"
-    mimeType = "image/svg+xml"
-    sizes = listOf("any")
-    theme = "light"
-}
-```
-
-Required fields fail fast when the block finishes. Flat overloads remain available for source
-compatibility, but new Kotlin code should use receiver factories for `Icon`, `Annotations`,
-content objects, and resource, prompt, and tool descriptors.
-
-## Full example
-
-```kotlin
-import dev.tachyonmcp.kotlin.server.TachyonServer
-import dev.tachyonmcp.api.server.domain.PromptMessage
-import dev.tachyonmcp.api.server.domain.TextResourceContents
-import dev.tachyonmcp.api.server.features.tools.ToolResult
-
-val server = TachyonServer(port = 8080) {
-    info {
-        name = "demo-server"
-        version = "1.0"
-        description = "Demo MCP server"
-    }
-    capabilities {
-        tools { listChanged = true }
-        resources {
-            subscribe = true
-            listChanged = true
-        }
-        prompts { listChanged = true }
-    }
-    session {
-        sessionTtl = 5.minutes
-        sessionIdGenerator = SessionIdGenerator { _, _ -> "sess_" + Uuid.random().toHexString() }
-    }
-    tool(name = "ping", description = "Ping the server") {
-        ToolResult.text("pong")
-    }
-    runtime {
-        shutdownGracePeriod = 5.seconds
-    }
-    resource(
-        name = "config",
-        uri = "demo://config",
-        description = "Server configuration",
-        mimeType = "application/json",
-    ) {
-        TextResourceContents {
-            uri = this@resource.uri
-            text = """{"env":"prod"}"""
-            mimeType = "application/json"
-        }
-    }
-    prompt(name = "greet", description = "Greeting prompt") {
-        listOf(PromptMessage.user("Say hello, ${arguments.stringOr("name", "world")}"))
-    }
-}
-```
-
 ## Tool handlers
 
 Tool lambdas are `suspend` functions with access to `ToolScope`, including `ctx`, `request`,
 and `arguments`. Start with a simple string tool. Save this as `src/main/kotlin/MyMcpServer.kt`
-in a Kotlin JVM project with the dependency above and JDK 21:
+in a Kotlin JVM project with the build above, then run it with `gradle run`:
 
 ```kotlin
 import dev.tachyonmcp.api.json.JsonSchema
@@ -163,6 +110,89 @@ pairs this pattern with a typed echo tool. It also shows registering the simple 
 kotlinx.serialization for the payloads.
 
 For the experimental class-based escape hatch, extend `AbstractToolHandler` and override `handle(ctx, request)` (sync) or `handleAsync(ctx, request)` (async).
+
+## Configuration example
+
+This complete file configures server info, capabilities, sessions, and runtime settings, and registers a tool, a resource, and a prompt. Save it as `src/main/kotlin/DemoServer.kt`
+in the project from [Tool handlers](#tool-handlers), and set `mainClass` to `DemoServerKt` to run it.
+It starts a server on port 8080 and closes it when the JVM stops:
+
+```kotlin
+import dev.tachyonmcp.api.server.domain.PromptMessage
+import dev.tachyonmcp.api.server.domain.TextResourceContents
+import dev.tachyonmcp.api.server.features.tools.ToolResult
+import dev.tachyonmcp.kotlin.server.TachyonServer
+import java.util.UUID
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
+
+fun main() {
+    val server = TachyonServer(port = 8080) {
+        info {
+            name = "demo-server"
+            version = "1.0"
+            description = "Demo MCP server"
+        }
+        capabilities {
+            tools { listChanged = true }
+            resources {
+                subscribe = true
+                listChanged = true
+            }
+            prompts { listChanged = true }
+        }
+        session {
+            sessionTtl = 5.minutes
+            sessionIdGenerator { _, _ -> "sess_" + UUID.randomUUID().toString().replace("-", "") }
+        }
+        tool(name = "ping", description = "Ping the server") {
+            ToolResult.text("pong")
+        }
+        runtime {
+            shutdownGracePeriod = 5.seconds
+        }
+        resource(
+            name = "config",
+            uri = "demo://config",
+            description = "Server configuration",
+            mimeType = "application/json",
+        ) {
+            TextResourceContents {
+                uri = this@resource.uri
+                text = """{"env":"prod"}"""
+                mimeType = "application/json"
+            }
+        }
+        prompt(name = "greet", description = "Greeting prompt") {
+            listOf(PromptMessage.user("Say hello, ${arguments.stringOr("name", "world")}"))
+        }
+    }
+    Runtime.getRuntime().addShutdownHook(Thread { server.close() })
+}
+```
+
+## Structured value factories
+
+Kotlin factories use receiver blocks for structured values with more than three fields.
+`Annotations` follows the same shape because it is commonly nested inside descriptors:
+
+```kotlin
+val annotations = Annotations {
+    audience = listOf(Role.USER)
+    priority = 0.8
+}
+
+val icon = Icon {
+    src = "https://example.com/icon.svg"
+    mimeType = "image/svg+xml"
+    sizes = listOf("any")
+    theme = "light"
+}
+```
+
+Required fields fail fast when the block finishes. Flat overloads remain available for source
+compatibility, but new Kotlin code should use receiver factories for `Icon`, `Annotations`,
+content objects, and resource, prompt, and tool descriptors.
 
 ## Resource & prompt handlers
 

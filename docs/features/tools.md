@@ -127,10 +127,11 @@ and the sampling compatibility boundary.
 
 ## Error behavior
 
-`ToolResult.error(...)` returns a tool result with `isError: true`. A request that fails input-schema validation
-instead receives a JSON-RPC error with code `-32602`, before the handler runs. Unexpected handler
-exceptions produce `-32603` with the message `Tool handler failed`; an `IllegalArgumentException`
-produces `-32602` with `Invalid params`. Internal exception messages are not returned to the client.
+`ToolResult.error(...)` returns a tool result with `isError: true`. 
+A request that fails input-schema validation
+instead receives a JSON-RPC error with code `-32602`, before the handler runs, and so does a call to an unknown tool (`Unknown tool: <name>`).
+Unexpected handler exceptions produce `-32603` with the message `Tool handler failed`; 
+an `IllegalArgumentException` produces `-32602` with `Invalid params`. Internal exception messages are not returned to the client.
 
 ## Test the tool
 

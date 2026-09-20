@@ -1,5 +1,5 @@
 ---
-title: "Testkit"
+title: "MCP Testkit"
 weight: 85
 sidebar_order: 85
 toc: true
@@ -171,7 +171,7 @@ try (var stream = client.openPostStream(null, """
      "params":{"notifications":{"toolsListChanged":true}}}
     """)) {
     stream.await(
-        frame -> frame.data().contains("notifications/subscriptions/acknowledged"),
+    frame -> frame.data().contains("notifications/subscriptions/acknowledged"),
         Duration.ofSeconds(5));
-}
+    }
 ```

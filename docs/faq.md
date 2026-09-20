@@ -74,7 +74,7 @@ Send progress notifications or SSE comments so the response becomes a live SSE s
 
 ### Does shutdown wait for active handlers?
 
-Yes. `close()` gives in-flight handlers 5 seconds to finish by default, then interrupts remaining work. Configure `shutdownGracePeriod` when your platform provides a different termination window.
+Yes. `close()` stops accepting connections, rejects new requests with `503`, and waits for admitted requests to finish for up to `shutdownGracePeriod`, five seconds by default. When that period ends, Tachyon interrupts the threads that run synchronous handlers. Interruption is cooperative: a handler that ignores it keeps running, and work Tachyon doesn't own, such as a `CompletionStage` on your own executor or an external workflow, isn't cancelled. Set `shutdownGracePeriod` to fit your platform's termination window. See [Runtime](running/configuration.md#runtime).
 
 ### How do I test a server without reserving a port?
 

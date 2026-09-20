@@ -90,7 +90,9 @@ var server = TachyonServer.builder()
                         .description("Server configuration")
                         .mimeType("application/json"),
                 (context, request) -> TextResourceContents.of(
-                        request.uri(), """{"environment":"production"}""", "application/json")))
+                        request.uri(),
+                        "{\"environment\":\"production\"}", 
+                        "application/json")))
         .port(8080)
         .build();
 ```

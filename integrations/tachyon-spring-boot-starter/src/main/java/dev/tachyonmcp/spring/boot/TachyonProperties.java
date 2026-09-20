@@ -58,8 +58,8 @@ public record TachyonProperties(
      *                            duration suffix is not specified, seconds will be used.
      * @param heartbeatInterval   Interval between SSE comment heartbeats that keep an upgraded stream
      *                            alive. If a duration suffix is not specified, seconds will be used.
-     *                            Keep it below the reader idle timeout and the session TTL. Zero
-     *                            disables heartbeats.
+     *                            Keep it below the idle timeout of any proxy in front of the server
+     *                            and below the session TTL. Zero disables heartbeats.
      * @param maxContentLength    Maximum size of an HTTP request body.
      * @param allowedOrigins      Origins accepted by the CORS handler.
      * @param allowedHeaders      Request headers accepted by the CORS handler, beyond the built-in

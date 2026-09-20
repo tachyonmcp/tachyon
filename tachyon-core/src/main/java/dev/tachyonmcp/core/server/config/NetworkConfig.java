@@ -20,10 +20,9 @@ import org.jspecify.annotations.Nullable;
  * computing — a tool slower than {@code readerIdleTimeout} is reaped before it can respond. The
  * remedy is not a larger timeout but SSE keep-alive: when a handler emits a server→client message
  * (e.g. {@code progress(...)}), the response upgrades to {@code text/event-stream} and a scheduler
- * emits a {@code :} comment heartbeat every {@code heartbeatInterval}, after which
- * {@code readerIdleTimeout} is a no-op on that stream. Keep
- * {@code heartbeatInterval < readerIdleTimeout}, and size {@code readerIdleTimeout} for dead-peer
- * detection rather than tool runtime.
+ * emits a {@code :} comment heartbeat every {@code heartbeatInterval}. Heartbeats are outbound and do
+ * not reset the inbound {@code readerIdleTimeout}; size that timeout for dead-peer detection rather
+ * than tool runtime.
  *
  * @param host               bind address (default {@code "127.0.0.1"})
  * @param port               listen port (must be set before {@code bind()})
@@ -40,7 +39,8 @@ import org.jspecify.annotations.Nullable;
  *                           beyond localhost ({@code null} = localhost-only)
  * @param ioEngine           Netty I/O engine; defaults to {@link NettyIoEngine#AUTO}
  * @param heartbeatInterval  SSE heartbeat interval that keeps an upgraded stream alive (default
- *                           15s); keep below {@code readerIdleTimeout}; {@code <= 0} disables
+ *                           15s); keep below the idle timeout of any proxy in front of the server
+ *                           and below the session TTL; {@code <= 0} disables
  */
 @ExperimentalApi
 public record NetworkConfig(

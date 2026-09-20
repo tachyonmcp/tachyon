@@ -221,8 +221,9 @@ Change `"Ada"` to your name and call again. The greeting changes with the argume
 `"arguments": {}` or `"arguments": {"name": 42}` to see a JSON-RPC `-32602` input-validation error.
 
 > [!IMPORTANT]
-> HTTP success alone does not mean a tool call succeeded. Inspect the JSON-RPC `error` field and,
-> for tool results, `isError`.
+> HTTP `200` alone does not mean a tool call succeeded. A tool that returns `ToolResult.error(...)`
+> yields `isError: true` in the result, and a handler that throws yields a JSON-RPC `-32603` error,
+> both with HTTP `200`. Inspect the JSON-RPC `error` field and, for tool results, `isError`.
 
 ## Executable coverage
 
