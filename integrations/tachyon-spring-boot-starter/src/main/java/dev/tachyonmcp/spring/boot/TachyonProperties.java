@@ -4,10 +4,12 @@ package dev.tachyonmcp.spring.boot;
 import dev.tachyonmcp.api.annotations.ExperimentalApi;
 import dev.tachyonmcp.core.transport.netty.NettyIoEngine;
 import java.time.Duration;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
+import org.springframework.boot.convert.DurationUnit;
 import org.springframework.util.unit.DataSize;
 
 /**
@@ -71,9 +73,9 @@ public record TachyonProperties(
      */
     public record Network(
             @Nullable String endpointPath,
-            @Nullable Duration readerIdleTimeout,
-            @Nullable Duration writerIdleTimeout,
-            @Nullable Duration heartbeatInterval,
+            @DurationUnit(ChronoUnit.SECONDS) @Nullable Duration readerIdleTimeout,
+            @DurationUnit(ChronoUnit.SECONDS) @Nullable Duration writerIdleTimeout,
+            @DurationUnit(ChronoUnit.SECONDS) @Nullable Duration heartbeatInterval,
             @Nullable DataSize maxContentLength,
             @Nullable List<String> allowedOrigins,
             @Nullable List<String> allowedHeaders,
@@ -95,8 +97,8 @@ public record TachyonProperties(
      */
     public record Session(
             @Nullable Boolean enabled,
-            @Nullable Duration sessionTtl,
-            @Nullable Duration janitorInterval) {}
+            @DurationUnit(ChronoUnit.SECONDS) @Nullable Duration sessionTtl,
+            @DurationUnit(ChronoUnit.SECONDS) @Nullable Duration janitorInterval) {}
 
     /**
      * {@code tachyon.runtime.*} settings, applied to Tachyon's handler-execution configuration.
@@ -108,6 +110,6 @@ public record TachyonProperties(
      *                            suffix is not specified, seconds will be used.
      */
     public record Runtime(
-            @Nullable Duration shutdownGracePeriod,
-            @Nullable Duration requestTimeout) {}
+            @DurationUnit(ChronoUnit.SECONDS) @Nullable Duration shutdownGracePeriod,
+            @DurationUnit(ChronoUnit.SECONDS) @Nullable Duration requestTimeout) {}
 }

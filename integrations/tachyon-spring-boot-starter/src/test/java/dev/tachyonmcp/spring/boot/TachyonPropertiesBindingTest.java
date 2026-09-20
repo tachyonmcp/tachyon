@@ -202,6 +202,47 @@ class TachyonPropertiesBindingTest {
                 });
     }
 
+    /**
+     * Boot binds a suffixless {@code Duration} as milliseconds unless {@code @DurationUnit} says
+     * otherwise, so without it {@code reader-idle-timeout: 90} meant 90ms — a timeout three orders of
+     * magnitude tighter than the documented "seconds will be used", reaping every connection. Each of
+     * the seven durations gets a distinct value so a misplaced annotation cannot pass.
+     */
+    @Test
+    void suffixlessDurationsBindAsSecondsAcrossEveryGroup() {
+        runner.withPropertyValues(
+                        "tachyon.network.reader-idle-timeout=90",
+                        "tachyon.network.writer-idle-timeout=120",
+                        "tachyon.network.heartbeat-interval=5",
+                        "tachyon.session.session-ttl=30",
+                        "tachyon.session.janitor-interval=7",
+                        "tachyon.runtime.shutdown-grace-period=3",
+                        "tachyon.runtime.request-timeout=45")
+                .run(context -> {
+                    var config = context.getBean(TachyonServer.class).config();
+
+                    assertThat(config.network().readerIdleTimeout()).isEqualTo(Duration.ofSeconds(90));
+                    assertThat(config.network().writerIdleTimeout()).isEqualTo(Duration.ofSeconds(120));
+                    assertThat(config.network().heartbeatInterval()).isEqualTo(Duration.ofSeconds(5));
+                    assertThat(config.session().sessionTtl()).isEqualTo(Duration.ofSeconds(30));
+                    assertThat(config.session().janitorInterval()).isEqualTo(Duration.ofSeconds(7));
+                    assertThat(config.runtime().shutdownGracePeriod()).isEqualTo(Duration.ofSeconds(3));
+                    assertThat(config.runtime().requestTimeout()).isEqualTo(Duration.ofSeconds(45));
+                });
+    }
+
+    /** {@code @DurationUnit} sets the default unit; an explicit suffix still decides. */
+    @Test
+    void anExplicitSuffixOverridesTheDefaultUnit() {
+        runner.withPropertyValues("tachyon.network.reader-idle-timeout=500ms", "tachyon.runtime.request-timeout=2m")
+                .run(context -> {
+                    var config = context.getBean(TachyonServer.class).config();
+
+                    assertThat(config.network().readerIdleTimeout()).isEqualTo(Duration.ofMillis(500));
+                    assertThat(config.runtime().requestTimeout()).isEqualTo(Duration.ofMinutes(2));
+                });
+    }
+
     @Configuration(proxyBeanMethods = false)
     static class EndpointPathCustomizer {
         @Bean

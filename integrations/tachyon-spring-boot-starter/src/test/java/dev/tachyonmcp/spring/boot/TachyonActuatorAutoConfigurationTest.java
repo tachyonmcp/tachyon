@@ -7,12 +7,19 @@ import static org.assertj.core.api.Assertions.entry;
 import static org.awaitility.Awaitility.await;
 
 import dev.tachyonmcp.api.annotations.McpTool;
+import dev.tachyonmcp.api.server.domain.ServerError;
 import dev.tachyonmcp.core.server.TachyonServer;
+import dev.tachyonmcp.core.server.observability.OperationInfo;
+import dev.tachyonmcp.core.server.observability.OperationKind;
 import dev.tachyonmcp.core.server.observability.OperationOutcome;
 import dev.tachyonmcp.testkit.McpTestClients;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.health.contributor.HealthIndicator;
 import org.springframework.boot.health.contributor.Status;
@@ -236,5 +243,39 @@ class TachyonActuatorAutoConfigurationTest {
                 .isEqualTo("completed");
         assertThat(TachyonMetricsListener.outcome(new OperationOutcome.NotificationAccepted()))
                 .isEqualTo("notification_accepted");
+    }
+
+    /**
+     * Collapsing to {@code unknown} bounds the tag's cardinality, so it must be narrow: only a method
+     * the server does not serve. A known method that failed for any other reason keeps its name, or
+     * the metric stops distinguishing the calls operators care about.
+     */
+    @ParameterizedTest
+    @MethodSource("outcomesAndTheirMethodTag")
+    void onlyUnservedMethodsCollapseIntoTheUnknownTag(OperationOutcome outcome, String expected) {
+        final var info =
+                OperationInfo.builder(OperationKind.REQUEST, "tools/call", null).build();
+
+        assertThat(TachyonMetricsListener.method(info, outcome)).isEqualTo(expected);
+    }
+
+    static Stream<Arguments> outcomesAndTheirMethodTag() {
+        return Stream.of(
+                Arguments.of(rejected(ServerError.Kind.METHOD_NOT_FOUND), TachyonMetricsListener.UNKNOWN_METHOD),
+                Arguments.of(new OperationOutcome.NotificationIgnored(), TachyonMetricsListener.UNKNOWN_METHOD),
+                Arguments.of(rejected(ServerError.Kind.INVALID_PARAMS), "tools/call"),
+                Arguments.of(rejected(ServerError.Kind.INVALID_REQUEST), "tools/call"),
+                Arguments.of(rejected(ServerError.Kind.UNSUPPORTED_PROTOCOL_VERSION), "tools/call"),
+                // A transport-level rejection carries no JSON-RPC envelope, so error() is null.
+                Arguments.of(new OperationOutcome.Rejected(null, 400, 0), "tools/call"),
+                Arguments.of(new OperationOutcome.Completed(), "tools/call"),
+                Arguments.of(
+                        new OperationOutcome.HandlerFailed(
+                                new ServerError(ServerError.Kind.INTERNAL_ERROR, "boom"), -32603, null),
+                        "tools/call"));
+    }
+
+    private static OperationOutcome.Rejected rejected(ServerError.Kind kind) {
+        return new OperationOutcome.Rejected(new ServerError(kind, kind.name()), 400, 0);
     }
 }
