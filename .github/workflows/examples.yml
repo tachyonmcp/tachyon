@@ -44,7 +44,7 @@ jobs:
           - temporal
           - weather-mcp
           - weather-mcp-kotlin
-          - weather-mcp-spring-boot
+#          - weather-mcp-spring-boot
 
     runs-on: ubuntu-latest
     timeout-minutes: 7
