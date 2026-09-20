@@ -47,7 +47,7 @@ or city elicitation. Unknown cities and invalid units are rejected.
 
 - **Actuator** (`spring-boot-starter-actuator`): the starter contributes the `tachyon` health
   indicator (`UP` + host/port while the transport runs) and Micrometer meters
-  `mcp.server.operations` (timer, tags `mcp.method.name`, `outcome`), `mcp.server.tools`,
+  `mcp.server.operation.duration` (timer, tags `mcp.method.name`, `outcome`), `mcp.server.tools`,
   `mcp.server.prompts`, `mcp.server.resources`. Exposed over HTTP by WebFlux on
   `http://127.0.0.1:8081/actuator/health` and `/actuator/metrics` (`server.port`; MCP stays on
   `tachyon.port`).
