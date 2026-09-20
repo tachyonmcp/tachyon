@@ -3,7 +3,7 @@ title: Spring Boot starter
 tags: [module, spring-boot, configuration]
 sources: [pom.xml, integrations/tachyon-spring-boot-starter/]
 updated: 2026-09-20
-commit: 9e539da8
+commit: 21173f69
 ---
 
 # 🌱 Spring Boot starter
