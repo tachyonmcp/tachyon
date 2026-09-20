@@ -315,13 +315,13 @@ Call the greeting tool, then inspect the endpoints:
 
 ```bash
 curl http://127.0.0.1:8081/actuator/health
-curl http://127.0.0.1:8081/actuator/metrics/mcp.server.operations
+curl http://127.0.0.1:8081/actuator/metrics/mcp.server.operation.duration
 ```
 
 | Signal | Meaning |
 |---|---|
 | `tachyon` health component | `UP` with bound `host` and `port` while the starter lifecycle runs; `DOWN` otherwise. |
-| `mcp.server.operations` | Operation timer tagged with `mcp.method.name` and `outcome`; created when operations complete. |
+| `mcp.server.operation.duration` | Operation timer tagged with `mcp.method.name` and `outcome`; created when operations complete. |
 | `mcp.server.tools` | Registered tool count. |
 | `mcp.server.prompts` | Registered prompt count. |
 | `mcp.server.resources` | Registered resource and resource-template count. |
@@ -369,5 +369,5 @@ tool once before shipping.
 
 - [Properties and defaults](https://github.com/tachyonmcp/tachyon/blob/main/integrations/tachyon-spring-boot-starter/src/main/java/dev/tachyonmcp/spring/boot/TachyonProperties.java#L24)
 - [Construction, ordering, backoff, and Actuator conditions](https://github.com/tachyonmcp/tachyon/blob/main/integrations/tachyon-spring-boot-starter/src/main/java/dev/tachyonmcp/spring/boot/TachyonAutoConfiguration.java#L43)
-- [Bean discovery](https://github.com/tachyonmcp/tachyon/blob/main/integrations/tachyon-spring-boot-starter/src/main/java/dev/tachyonmcp/spring/boot/TachyonBeanRegistrar.java#L19)
-- [Transport lifecycle](https://github.com/tachyonmcp/tachyon/blob/main/integrations/tachyon-spring-boot-starter/src/main/java/dev/tachyonmcp/spring/boot/TachyonServerLifecycle.java#L31)
+- [Bean discovery](https://github.com/tachyonmcp/tachyon/blob/main/integrations/tachyon-spring-boot-starter/src/main/java/dev/tachyonmcp/spring/boot/TachyonFeatureRegistrar.java#L31)
+- [Transport lifecycle](https://github.com/tachyonmcp/tachyon/blob/main/integrations/tachyon-spring-boot-starter/src/main/java/dev/tachyonmcp/spring/boot/TachyonServerLifecycle.java#L41)

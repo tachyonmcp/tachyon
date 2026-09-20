@@ -49,6 +49,20 @@ class TachyonServerLifecycleTest {
         assertThat(starts).hasValue(2);
     }
 
+    /**
+     * A {@code TachyonServer} is single-use: {@code close()} is terminal and a later {@code start()}
+     * throws. Spring's {@code SmartLifecycle} pauses beans by default, so a
+     * {@code ConfigurableApplicationContext.pause()}/{@code restart()} cycle — or a CRaC checkpoint —
+     * would stop the transport and never bring it back.
+     */
+    @Test
+    void theTransportOptsOutOfContextPause() {
+        final var lifecycle = new TachyonServerLifecycle(server);
+
+        assertThat(lifecycle.isPauseable()).isFalse();
+        assertThat(lifecycle.getPhase()).isEqualTo(TachyonServerLifecycle.PHASE);
+    }
+
     @Test
     void failedCloseLeavesRunningAndCanRetryOnce() {
         final var lifecycle = new TachyonServerLifecycle(server);

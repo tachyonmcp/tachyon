@@ -3,18 +3,17 @@ package dev.tachyonmcp.spring.boot;
 
 import dev.tachyonmcp.core.server.ServerBuilder;
 import java.util.ArrayList;
-import java.util.List;
-import java.util.function.Consumer;
-import org.jspecify.annotations.Nullable;
+import org.springframework.boot.context.properties.PropertyMapper;
 import org.springframework.boot.context.properties.source.InvalidConfigurationPropertyValueException;
+import org.springframework.util.StringUtils;
 import org.springframework.util.unit.DataSize;
 
 /**
  * Pushes {@code tachyon.*} properties onto a {@link ServerBuilder}.
  *
  * <p>Only properties the application actually set are applied, so every unset property keeps the
- * default that Tachyon's own configuration record defines. Customizers run afterwards and therefore
- * still win.
+ * default that Tachyon's own configuration record defines. {@link PropertyMapper} drops {@code null}
+ * sources by default, which is exactly that rule. Customizers run afterwards and therefore still win.
  *
  * <p>A value the core builders would reject is rejected here first, as an {@link
  * InvalidConfigurationPropertyValueException}: Boot's analyzer for it names the key and the file and
@@ -27,13 +26,15 @@ final class TachyonPropertiesApplier {
     private static final String JANITOR_INTERVAL = "tachyon.session.janitor-interval";
     private static final String MAX_CONTENT_LENGTH = "tachyon.network.max-content-length";
 
+    private static final PropertyMapper MAP = PropertyMapper.get();
+
     private TachyonPropertiesApplier() {}
 
     static void apply(TachyonProperties properties, ServerBuilder builder) {
         builder.port(properties.port());
-        setIfPresent(properties.name(), builder::name);
-        setIfPresent(properties.version(), builder::version);
-        setIfPresent(properties.host(), builder::host);
+        MAP.from(properties.name()).to(builder::name);
+        MAP.from(properties.version()).to(builder::version);
+        MAP.from(properties.host()).to(builder::host);
         applyNetwork(properties.network(), builder);
         applySession(properties.session(), builder);
         applyRuntime(properties.runtime(), builder);
@@ -41,19 +42,19 @@ final class TachyonPropertiesApplier {
 
     private static void applyNetwork(TachyonProperties.Network network, ServerBuilder builder) {
         builder.network(config -> {
-            setIfPresent(network.endpointPath(), config::endpointPath);
-            setIfPresent(network.readerIdleTimeout(), config::readerIdleTimeout);
-            setIfPresent(network.writerIdleTimeout(), config::writerIdleTimeout);
-            setIfPresent(network.heartbeatInterval(), config::heartbeatInterval);
-            setIfPresent(
-                    network.maxContentLength(),
-                    maxContentLength -> config.maxContentLength(toPositiveIntBytes(maxContentLength)));
-            setIfPresent(network.allowedOrigins(), values -> config.allowedOrigins(toArray(values)));
-            setIfPresent(network.allowedHeaders(), values -> config.allowedHeaders(toArray(values)));
-            setIfPresent(network.allowedHosts(), values -> config.allowedHosts(toArray(values)));
-            setIfPresent(network.allowNullOrigin(), config::allowNullOrigin);
-            setIfPresent(network.allowPrivateNetworks(), config::allowPrivateNetworks);
-            setIfPresent(network.ioEngine(), config::ioEngine);
+            MAP.from(network.endpointPath()).to(config::endpointPath);
+            MAP.from(network.readerIdleTimeout()).to(config::readerIdleTimeout);
+            MAP.from(network.writerIdleTimeout()).to(config::writerIdleTimeout);
+            MAP.from(network.heartbeatInterval()).to(config::heartbeatInterval);
+            MAP.from(network.maxContentLength())
+                    .as(TachyonPropertiesApplier::toPositiveIntBytes)
+                    .to(config::maxContentLength);
+            MAP.from(network.allowedOrigins()).as(StringUtils::toStringArray).to(config::allowedOrigins);
+            MAP.from(network.allowedHeaders()).as(StringUtils::toStringArray).to(config::allowedHeaders);
+            MAP.from(network.allowedHosts()).as(StringUtils::toStringArray).to(config::allowedHosts);
+            MAP.from(network.allowNullOrigin()).to(config::allowNullOrigin);
+            MAP.from(network.allowPrivateNetworks()).to(config::allowPrivateNetworks);
+            MAP.from(network.ioEngine()).to(config::ioEngine);
         });
     }
 
@@ -64,16 +65,16 @@ final class TachyonPropertiesApplier {
             return;
         }
         builder.session(config -> {
-            if (Boolean.TRUE.equals(session.enabled())) config.enabled();
-            setIfPresent(session.sessionTtl(), config::sessionTtl);
-            setIfPresent(session.janitorInterval(), config::janitorInterval);
+            MAP.from(session.enabled()).whenTrue().toCall(config::enabled);
+            MAP.from(session.sessionTtl()).to(config::sessionTtl);
+            MAP.from(session.janitorInterval()).to(config::janitorInterval);
         });
     }
 
     private static void applyRuntime(TachyonProperties.Runtime runtime, ServerBuilder builder) {
         builder.runtime(config -> {
-            setIfPresent(runtime.shutdownGracePeriod(), config::shutdownGracePeriod);
-            setIfPresent(runtime.requestTimeout(), config::requestTimeout);
+            MAP.from(runtime.shutdownGracePeriod()).to(config::shutdownGracePeriod);
+            MAP.from(runtime.requestTimeout()).to(config::requestTimeout);
         });
     }
 
@@ -97,7 +98,8 @@ final class TachyonPropertiesApplier {
 
     /**
      * The core takes the body limit as a positive {@code int} of bytes. Narrowing without this check
-     * fails as an {@code ArithmeticException} naming no property.
+     * fails as an {@code ArithmeticException} naming no property, and {@code Source#asInt} would
+     * truncate silently.
      */
     private static int toPositiveIntBytes(DataSize maxContentLength) {
         final var bytes = maxContentLength.toBytes();
@@ -109,13 +111,5 @@ final class TachyonPropertiesApplier {
                             .formatted(Integer.MAX_VALUE));
         }
         return (int) bytes;
-    }
-
-    private static String[] toArray(List<String> values) {
-        return values.toArray(String[]::new);
-    }
-
-    private static <T> void setIfPresent(@Nullable T value, Consumer<T> setter) {
-        if (value != null) setter.accept(value);
     }
 }

@@ -23,11 +23,11 @@ import org.springframework.util.ClassUtils;
 /**
  * Registers reflection hints for beans whose methods carry Tachyon feature annotations.
  *
- * <p>{@link TachyonBeanRegistrar} finds and invokes those methods reflectively at runtime. In a
+ * <p>{@link TachyonFeatureRegistrar} finds and invokes those methods reflectively at runtime. In a
  * native image nothing else reaches them, so without these hints a GraalVM build starts a server
  * with no tools, resources, prompts or completions registered — and reports no error.
  *
- * <p>Hints come from each bean definition's resolved type; {@link TachyonBeanRegistrar} reads the
+ * <p>Hints come from each bean definition's resolved type; {@link TachyonFeatureRegistrar} reads the
  * runtime target class. The two differ when a {@code @Bean} method returns an <em>interface</em> and
  * builds the implementation in its body — that class does not exist during AOT processing. Those
  * definitions are logged by {@link #warnAboutUninspectableBeans}.

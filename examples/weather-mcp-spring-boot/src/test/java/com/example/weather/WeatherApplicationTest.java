@@ -238,7 +238,7 @@ class WeatherApplicationTest {
                     .extracting(listener -> listener.getClass().getSimpleName())
                     .contains("McpOpenTelemetryListener", "TachyonMetricsListener");
             final var registry = context.getBean(MeterRegistry.class);
-            await().untilAsserted(() -> assertThat(registry.find("mcp.server.operations")
+            await().untilAsserted(() -> assertThat(registry.find("mcp.server.operation.duration")
                             .tag("mcp.method.name", "tools/call")
                             .timers())
                     .isNotEmpty());

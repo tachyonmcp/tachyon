@@ -14,6 +14,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.health.autoconfigure.contributor.ConditionalOnEnabledHealthIndicator;
+import org.springframework.boot.health.contributor.HealthIndicator;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -25,7 +26,12 @@ import org.springframework.context.annotation.Configuration;
  * <p>With Spring Boot health on the classpath, contributes {@link TachyonHealthIndicator} as
  * {@code tachyon} (disable with {@code management.health.tachyon.enabled=false}). With Micrometer
  * and a {@code MeterRegistry} bean, times operations of the starter-built server as
- * {@code mcp.server.operations} and gauges registered tools, prompts, and resources.
+ * {@code mcp.server.operation.duration} and gauges registered tools, prompts, and resources.
+ *
+ * <p>Do not promote the nested configurations to top-level classes. They inherit this class's
+ * {@code @ConditionalOnBooleanProperty} and its {@code afterName} ordering, which
+ * {@code @ConditionalOnBean(MeterRegistry.class)} relies on, and {@link TachyonAotProcessor}
+ * recognises the starter's own beans by the {@code TachyonAutoConfiguration$} prefix.
  */
 @ExperimentalApi
 @AutoConfiguration(
@@ -35,11 +41,16 @@ import org.springframework.context.annotation.Configuration;
         })
 @EnableConfigurationProperties(TachyonProperties.class)
 @ConditionalOnBooleanProperty(name = "tachyon.enabled", matchIfMissing = true)
-public class TachyonAutoConfiguration {
+public final class TachyonAutoConfiguration {
 
     /** Creates the auto-configuration. */
     public TachyonAutoConfiguration() {}
 
+    /**
+     * Server and annotated-bean scanning, both off when the application declares its own
+     * {@link TachyonServer}: that server owns its registrations, and quietly scanning beans into it
+     * would contradict what its own builder said.
+     */
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnMissingBean(TachyonServer.class)
     static class ServerConfiguration {
@@ -65,8 +76,10 @@ public class TachyonAutoConfiguration {
         }
 
         @Bean
-        TachyonBeanRegistrar tachyonBeanRegistrar(TachyonServer server, ConfigurableListableBeanFactory beanFactory) {
-            return new TachyonBeanRegistrar(server, beanFactory);
+        @ConditionalOnMissingBean
+        TachyonFeatureRegistrar tachyonFeatureRegistrar(
+                TachyonServer server, ConfigurableListableBeanFactory beanFactory) {
+            return new TachyonFeatureRegistrar(server, beanFactory);
         }
     }
 
@@ -83,42 +96,34 @@ public class TachyonAutoConfiguration {
     }
 
     @Configuration(proxyBeanMethods = false)
-    @ConditionalOnClass(name = "org.springframework.boot.health.contributor.HealthIndicator")
+    @ConditionalOnClass(HealthIndicator.class)
+    @ConditionalOnEnabledHealthIndicator("tachyon")
     static class HealthConfiguration {
 
-        @Configuration(proxyBeanMethods = false)
-        @ConditionalOnEnabledHealthIndicator("tachyon")
-        static class EnabledHealthConfiguration {
-
-            @Bean
-            @ConditionalOnMissingBean(name = "tachyonHealthIndicator")
-            TachyonHealthIndicator tachyonHealthIndicator(TachyonServer server, TachyonServerLifecycle lifecycle) {
-                return new TachyonHealthIndicator(server, lifecycle);
-            }
+        @Bean
+        @ConditionalOnMissingBean(name = "tachyonHealthIndicator")
+        TachyonHealthIndicator tachyonHealthIndicator(TachyonServer server, TachyonServerLifecycle lifecycle) {
+            return new TachyonHealthIndicator(server, lifecycle);
         }
     }
 
     @Configuration(proxyBeanMethods = false)
-    @ConditionalOnClass(name = "io.micrometer.core.instrument.MeterRegistry")
+    @ConditionalOnClass(MeterRegistry.class)
+    @ConditionalOnBean(MeterRegistry.class)
     static class MetricsConfiguration {
 
-        @Configuration(proxyBeanMethods = false)
-        @ConditionalOnBean(MeterRegistry.class)
-        static class RegistryMetricsConfiguration {
+        /** By name, never by type: {@link TachyonServerCustomizer} is plural, so a type condition
+         * would let any application customizer switch MCP metrics off. */
+        @Bean
+        @ConditionalOnMissingBean(name = "tachyonMetricsCustomizer")
+        TachyonServerCustomizer tachyonMetricsCustomizer(MeterRegistry registry) {
+            return builder -> builder.observability(o -> o.listener(new TachyonMetricsListener(registry)));
+        }
 
-            /** By name, never by type: {@link TachyonServerCustomizer} is plural, so a type condition
-             * would let any application customizer switch MCP metrics off. */
-            @Bean
-            @ConditionalOnMissingBean(name = "tachyonMetricsCustomizer")
-            TachyonServerCustomizer tachyonMetricsCustomizer(MeterRegistry registry) {
-                return builder -> builder.observability(o -> o.listener(new TachyonMetricsListener(registry)));
-            }
-
-            @Bean
-            @ConditionalOnMissingBean
-            TachyonMeterBinder tachyonMeterBinder(TachyonServer server, MeterRegistry registry) {
-                return new TachyonMeterBinder(server, registry);
-            }
+        @Bean
+        @ConditionalOnMissingBean
+        TachyonMeterBinder tachyonMeterBinder(TachyonServer server, MeterRegistry registry) {
+            return new TachyonMeterBinder(server, registry);
         }
     }
 }

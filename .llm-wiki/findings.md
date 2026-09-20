@@ -2,7 +2,7 @@
 title: Findings
 tags: [meta, findings]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/HandlerFutures.java]
-updated: 2026-09-19
+updated: 2026-09-20
 commit: 43ee83a1
 ---
 
@@ -12,8 +12,7 @@ Spotted while reading code. Not verified by tests. Fixed in code ⇒ 🗑️ rem
 
 - ⚠️ Notifications route onto the POST-SSE stream only from the dispatching thread (ThreadLocal). A handler continuing on another thread ⇒ event goes to the GET stream, or is dropped when there is none (stateful) — surprising for async tools. `OutboundSseStreamMessageRouter#currentSessionId`, `McpDispatcher#invokeHandlerAsync`
 - ⚠️ `UnsupportedProtocolVersionHandler` encodes the rejection with `ProtocolVersionHandler#LATEST_PROTOCOL` (not `Protocols#baseline`) + HTTP 400, even for legacy-looking clients. Intentional per SEP-2575? `UnsupportedProtocolVersionHandler#channelRead`
-- ⚠️ `tachyon-opentelemetry` ships `opentelemetry-semconv-incubating` at compile scope to consumers (`integrations/tachyon-opentelemetry/pom.xml`). Incubating semconv renames attributes between releases; decide `optional`/`provided` or inline the attribute keys.
-- ⚠️ `tachyon-spring-boot-starter` has no AOT/native support: `TachyonBeanRegistrar#afterSingletonsInstantiated` reflects over every singleton, with no `RuntimeHintsRegistrar`. Native images will silently register no features.
+- ⚠️ `examples/weather-mcp-spring-boot` asserts the new starter timer `mcp.server.operation.duration` (README, `WeatherApplicationTest`) but pins the released `tachyon-bom:1.0.0-beta.28`, which still emits `mcp.server.operations`. Green only under `examples-snapshot` (`-Dtachyon.version=1.0.0-SNAPSHOT`); the published-release `examples.yml` job fails for it until the pin moves to the release carrying the rename. Bump `tachyon.version` in the release docs commit, then 🗑️ this row.
 - 🪶 `HandlerFutures` is `@InternalApi` but lives in public `tachyon-api`, is statically imported by user-facing `AbstractToolHandler`, and is shown to users in `RpcMethodHandler`'s javadoc example. `HandlerFutures`, `RpcMethodHandler`
 
 ## 🪶 Polish

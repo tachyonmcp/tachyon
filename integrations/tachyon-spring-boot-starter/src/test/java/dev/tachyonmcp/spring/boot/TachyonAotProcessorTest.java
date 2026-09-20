@@ -72,7 +72,7 @@ class TachyonAotProcessorTest {
         assertThat(RuntimeHintsPredicates.reflection()
                         .onMethodInvocation(WeatherService.class, "getWeather")
                         .test(hints))
-                .as("TachyonBeanRegistrar invokes the annotated method reflectively")
+                .as("TachyonFeatureRegistrar invokes the annotated method reflectively")
                 .isTrue();
         assertThat(RuntimeHintsPredicates.reflection()
                         .onType(PlainService.class)

@@ -234,7 +234,7 @@ class TachyonBeanRegistrationTest {
     @Test
     void userProvidedServerKeepsItsOwnRegistrations() {
         runner.withUserConfiguration(UserServerConfig.class).run(context -> {
-            assertThat(context).hasSingleBean(TachyonServer.class).doesNotHaveBean(TachyonBeanRegistrar.class);
+            assertThat(context).hasSingleBean(TachyonServer.class).doesNotHaveBean(TachyonFeatureRegistrar.class);
             final var server = context.getBean(TachyonServer.class);
             try (var client = McpTestClients.latest(server.port())) {
                 // language=json
