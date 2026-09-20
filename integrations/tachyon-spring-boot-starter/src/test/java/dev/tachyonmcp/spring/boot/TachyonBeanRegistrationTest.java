@@ -8,10 +8,12 @@ import dev.tachyonmcp.api.annotations.McpPrompt;
 import dev.tachyonmcp.api.annotations.McpResource;
 import dev.tachyonmcp.api.annotations.McpTool;
 import dev.tachyonmcp.api.json.PayloadSerializer;
+import dev.tachyonmcp.api.server.features.tools.ToolDescriptor;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
 import dev.tachyonmcp.core.server.TachyonServer;
 import dev.tachyonmcp.core.server.json.JacksonPayloadSerde;
 import dev.tachyonmcp.testkit.McpTestClients;
+import java.util.Locale;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.aopalliance.intercept.MethodInterceptor;
 import org.junit.jupiter.api.Test;
@@ -112,7 +114,27 @@ class TachyonBeanRegistrationTest {
         }
     }
 
-    record Payload(String value) {}
+    public interface Announcer {
+        @McpTool
+        String announce(String message);
+    }
+
+    public static class LoudAnnouncer implements Announcer {
+        @Override
+        public String announce(String message) {
+            return message.toUpperCase(Locale.ROOT);
+        }
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    static class InterfaceDeclaredConfig {
+        @Bean
+        LoudAnnouncer announcer() {
+            return new LoudAnnouncer();
+        }
+    }
+
+    public record Payload(String value) {}
 
     public static class CodecService {
         @McpTool
@@ -134,7 +156,7 @@ class TachyonBeanRegistrationTest {
                 @Override
                 public <T> String serialize(T value) {
                     return JacksonPayloadSerde.INSTANCE.serialize(
-                            value instanceof Payload payload ? new Payload(payload.value() + " encoded") : value);
+                            value instanceof Payload(String value1) ? new Payload(value1 + " encoded") : value);
                 }
             }));
         }
@@ -178,6 +200,22 @@ class TachyonBeanRegistrationTest {
     }
 
     @Test
+    void featureDeclaredOnAnImplementedInterfaceIsRegisteredAndInvoked() {
+        runner.withUserConfiguration(InterfaceDeclaredConfig.class).run(context -> {
+            assertThat(context).hasNotFailed();
+            final var server = context.getBean(TachyonServer.class);
+            try (var client = McpTestClients.latest(server.port())) {
+                // language=json
+                assertThat(client.sendRpc("""
+                    {"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"announce","arguments":{"message":"hi"}}}
+                    """)).isSuccess().hasId(1).hasResult("""
+                    {"content":[{"type":"text","text":"HI"}],"resultType":"complete"}
+                    """);
+            }
+        });
+    }
+
+    @Test
     void annotatedBeanCanInjectServerBeforeTransportStarts() {
         runner.withUserConfiguration(ServerAwareConfig.class).run(context -> {
             assertThat(context).hasNotFailed();
@@ -207,7 +245,7 @@ class TachyonBeanRegistrationTest {
                         """);
             }
             assertThat(server.tools().descriptors())
-                    .extracting(descriptor -> descriptor.name())
+                    .extracting(ToolDescriptor::name)
                     .containsExactly("owned");
         });
     }

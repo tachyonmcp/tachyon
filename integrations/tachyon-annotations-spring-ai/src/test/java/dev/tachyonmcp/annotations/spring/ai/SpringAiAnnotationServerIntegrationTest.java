@@ -350,4 +350,60 @@ class SpringAiAnnotationServerIntegrationTest {
                 .hasMessageContaining("private")
                 .hasMessageContaining("privateTool");
     }
+
+    interface Operation<T> {
+        @McpTool(name = "run", description = "Runs an operation")
+        String run(@McpToolParam(description = "the input") T input);
+    }
+
+    static class StringOperation implements Operation<String> {
+        @Override
+        public String run(String input) {
+            return "ran " + input;
+        }
+    }
+
+    /** The annotation sits on {@code Operation<T>}; the schema and the call must use {@code String}, not the bare {@code T}. */
+    @Test
+    void toolDeclaredOnAGenericInterfaceUsesTheTypeItsImplementationBinds() throws Exception {
+        try (var server = startServer(new StringOperation());
+                var client = McpTestClients.latest(server.port())) {
+            var list = client.post("""
+                    {"jsonrpc":"2.0","id":1,"method":"tools/list"}
+                    """);
+
+            // language=json
+            var expectedList = """
+                    {"jsonrpc":"2.0","id":1,"result":{
+                        "tools":[{
+                            "name":"run",
+                            "description":"Runs an operation",
+                            "inputSchema":{"type":"object",
+                                "properties":{"input":{"type":"string","description":"the input"}},
+                                "required":["input"]},
+                            "annotations":{"readOnlyHint":false,
+                                "destructiveHint":true,
+                                "idempotentHint":false,
+                                "openWorldHint":true}
+                        }],
+                        "resultType":"complete","ttlMs":0,"cacheScope":"public"}
+                    }
+                    """;
+            assertThatJson(list.body()).isEqualTo(expectedList);
+
+            var call = client.post("""
+                    {"jsonrpc":"2.0","id":2,"method":"tools/call",
+                     "params":{"name":"run","arguments":{"input":"x"}}}
+                    """);
+
+            // language=json
+            var expectedCall = """
+                    {"jsonrpc":"2.0","id":2,"result":{
+                        "content":[{"type":"text","text":"ran x"}],
+                        "resultType":"complete"}
+                    }
+                    """;
+            assertThatJson(call.body()).isEqualTo(expectedCall);
+        }
+    }
 }

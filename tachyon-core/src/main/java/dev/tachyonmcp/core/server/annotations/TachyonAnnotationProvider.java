@@ -11,6 +11,7 @@ import dev.tachyonmcp.api.server.domain.PromptArgument;
 import dev.tachyonmcp.api.server.features.annotations.AnnotationInvocationSupport;
 import dev.tachyonmcp.api.server.features.annotations.AnnotationProvider;
 import dev.tachyonmcp.api.server.features.annotations.AnnotationRegistrationContext;
+import dev.tachyonmcp.api.server.features.annotations.ReflectionUtils;
 import dev.tachyonmcp.api.server.features.completions.CompletionFn;
 import dev.tachyonmcp.api.server.features.completions.CompletionResult;
 import dev.tachyonmcp.api.server.features.resources.ResourceFn;
@@ -103,8 +104,9 @@ public final class TachyonAnnotationProvider implements AnnotationProvider {
     }
 
     /**
-     * Returns whether {@code type} declares any {@link McpTool @McpTool},
-     * {@link McpResource @McpResource}, {@link McpPrompt @McpPrompt}, or {@link McpCompletion @McpCompletion} method.
+     * Returns whether {@code type} declares or inherits — from a superclass or an implemented
+     * interface — any {@link McpTool @McpTool}, {@link McpResource @McpResource},
+     * {@link McpPrompt @McpPrompt}, or {@link McpCompletion @McpCompletion} method.
      * Lets DI containers select candidate beans without instantiating them.
      *
      * @param type the class to inspect
@@ -112,11 +114,16 @@ public final class TachyonAnnotationProvider implements AnnotationProvider {
      */
     public static boolean declaresFeatures(Class<?> type) {
         for (Class<?> c = type; c != null && c != Object.class; c = c.getSuperclass()) {
-            for (Method method : c.getDeclaredMethods()) {
-                if (isFeature(method)) return true;
-            }
+            if (declaresFeature(c)) return true;
         }
-        for (Method method : type.getMethods()) {
+        for (Class<?> iface : ReflectionUtils.interfacesOf(type)) {
+            if (declaresFeature(iface)) return true;
+        }
+        return false;
+    }
+
+    private static boolean declaresFeature(Class<?> declaringType) {
+        for (Method method : declaringType.getDeclaredMethods()) {
             if (isFeature(method)) return true;
         }
         return false;
@@ -157,22 +164,33 @@ public final class TachyonAnnotationProvider implements AnnotationProvider {
             var tool = method.getAnnotation(McpTool.class);
             var resource = method.getAnnotation(McpResource.class);
             var prompt = method.getAnnotation(McpPrompt.class);
-            if (tool != null) registerTool(instance, method, tool, context, keys);
-            if (resource != null) registerResource(instance, method, resource, context, keys, declared, completed);
-            if (prompt != null) registerPrompt(instance, method, prompt, context, keys, declared, completed);
+            if (tool != null) registerTool(instance, annotatedType, method, tool, context, keys);
+            if (resource != null) {
+                registerResource(instance, annotatedType, method, resource, context, keys, declared, completed);
+            }
+            if (prompt != null) {
+                registerPrompt(instance, annotatedType, method, prompt, context, keys, declared, completed);
+            }
         }
         for (Method method : methods) {
             final var completion = method.getAnnotation(McpCompletion.class);
-            if (completion != null) registerCompletion(instance, method, completion, context, keys, declared);
+            if (completion != null) {
+                registerCompletion(instance, annotatedType, method, completion, context, keys, declared);
+            }
         }
     }
 
     private static void registerTool(
-            Object instance, Method method, McpTool tool, AnnotationRegistrationContext context, Set<String> keys) {
+            Object instance,
+            Class<?> annotatedType,
+            Method method,
+            McpTool tool,
+            AnnotationRegistrationContext context,
+            Set<String> keys) {
         var name = nameOf(tool.name(), method);
         claim(keys, "tool '" + name + "'", method);
-        var invoker = MethodInvoker.forTool(instance, method, context);
-        var returnType = method.getReturnType();
+        var invoker = MethodInvoker.forTool(instance, annotatedType, method, context);
+        var returnType = returnClass(method, annotatedType);
         var serializer = context.payloadSerializer();
         context.tools()
                 .register(
@@ -189,6 +207,7 @@ public final class TachyonAnnotationProvider implements AnnotationProvider {
 
     private void registerResource(
             Object instance,
+            Class<?> annotatedType,
             Method method,
             McpResource resource,
             AnnotationRegistrationContext context,
@@ -199,8 +218,8 @@ public final class TachyonAnnotationProvider implements AnnotationProvider {
         if (uri.isBlank()) throw new IllegalStateException("@McpResource uri must not be blank: " + method);
         claim(keys, "resource '" + uri + "'", method);
         var name = nameOf(resource.name(), method);
-        var mimeType = mimeTypeOf(resource, method);
-        var invoker = MethodInvoker.forArguments(instance, method, context);
+        var mimeType = mimeTypeOf(resource, method, annotatedType);
+        var invoker = MethodInvoker.forArguments(instance, annotatedType, method, context);
         var serializer = context.payloadSerializer();
         var variables = templateVariables(uri);
         if (variables.isEmpty()) {
@@ -255,6 +274,7 @@ public final class TachyonAnnotationProvider implements AnnotationProvider {
 
     private void registerPrompt(
             Object instance,
+            Class<?> annotatedType,
             Method method,
             McpPrompt prompt,
             AnnotationRegistrationContext context,
@@ -263,7 +283,7 @@ public final class TachyonAnnotationProvider implements AnnotationProvider {
             Set<String> completed) {
         var name = nameOf(prompt.name(), method);
         claim(keys, "prompt '" + name + "'", method);
-        var invoker = MethodInvoker.forArguments(instance, method, context);
+        var invoker = MethodInvoker.forArguments(instance, annotatedType, method, context);
         var serializer = context.payloadSerializer();
         context.prompts()
                 .register(
@@ -310,11 +330,12 @@ public final class TachyonAnnotationProvider implements AnnotationProvider {
     }
 
     private static boolean isFeature(Method method) {
-        return FEATURES.stream().anyMatch(method::isAnnotationPresent);
+        return ReflectionUtils.isAnnotatedDeclaration(method, FEATURES);
     }
 
     private static void registerCompletion(
             Object instance,
+            Class<?> annotatedType,
             Method method,
             McpCompletion completion,
             AnnotationRegistrationContext context,
@@ -326,8 +347,9 @@ public final class TachyonAnnotationProvider implements AnnotationProvider {
         }
         final var target = prompt ? completion.prompt() : completion.resource();
         claim(keys, "completion " + (prompt ? "prompt '" : "resource '") + target + "'", method);
-        ResultMappers.requireCompletionReturnType(method);
-        final var invoker = MethodInvoker.forCompletion(instance, method, context);
+        ResultMappers.requireCompletionReturnType(
+                method, AnnotationInvocationSupport.returnType(method, annotatedType));
+        final var invoker = MethodInvoker.forCompletion(instance, annotatedType, method, context);
         final var arguments = invoker.argumentNames();
         final String argument = arguments.isEmpty() ? null : arguments.getFirst();
         if (argument != null) {
@@ -369,9 +391,13 @@ public final class TachyonAnnotationProvider implements AnnotationProvider {
         return declared.isBlank() ? method.getName() : declared;
     }
 
-    private static @Nullable String mimeTypeOf(McpResource resource, Method method) {
+    private static @Nullable String mimeTypeOf(McpResource resource, Method method, Class<?> annotatedType) {
         if (!resource.mimeType().isBlank()) return resource.mimeType();
-        return JavaTypeSchemas.isObjectType(method.getReturnType()) ? JSON : null;
+        return JavaTypeSchemas.isObjectType(returnClass(method, annotatedType)) ? JSON : null;
+    }
+
+    private static Class<?> returnClass(Method method, Class<?> annotatedType) {
+        return ReflectionUtils.erase(AnnotationInvocationSupport.returnType(method, annotatedType));
     }
 
     private static Set<String> templateVariables(String uri) {

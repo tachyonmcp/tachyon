@@ -13,7 +13,6 @@ import java.lang.reflect.Parameter;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -21,6 +20,7 @@ import java.util.Optional;
 import java.util.OptionalDouble;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
+import java.util.function.UnaryOperator;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -36,13 +36,10 @@ import org.jspecify.annotations.Nullable;
  * registration time instead of silently misdescribing it.
  *
  * <p>{@link #discoverMethods} already calls {@link Method#setAccessible} on every method it
- * returns, so a provider that discovers methods through it (mcp-java, LangChain4j) may call
+ * returns, so every provider (mcp-java, LangChain4j, Spring AI, and Tachyon's own) may call
  * {@code method.invoke(...)} directly afterward regardless of the method's visibility or which
- * package the provider lives in. Spring AI discovers methods through Spring's own {@code
- * ReflectionUtils} instead and makes them accessible itself the same way, but still calls {@link
- * #requireNotPrivate} to apply the same private-method policy. Either way, providers should pass
- * the caught {@link InvocationTargetException} to {@link #unwrap} to rethrow the annotated
- * method's real exception.
+ * package the provider lives in. Providers should pass the caught {@link
+ * InvocationTargetException} to {@link #unwrap} to rethrow the annotated method's real exception.
  */
 @ExperimentalApi
 public final class AnnotationInvocationSupport {
@@ -94,14 +91,61 @@ public final class AnnotationInvocationSupport {
      * @throws IllegalStateException if {@code param}'s type isn't bindable
      */
     public static void requireBindable(Parameter param, Method method) {
+        requireBindable(new ResolvedParameter(param, param.getParameterizedType()), method);
+    }
+
+    /**
+     * Rejects {@code param} at registration time if its resolved type is neither a plain bindable
+     * scalar nor an {@code Optional}-family wrapper of one. Same contract as {@link
+     * #requireBindable(Parameter, Method)}, judging the type the scanned class sees rather than the
+     * declared one.
+     *
+     * @param param  the parameter to validate
+     * @param method the declaring method (for diagnostic messages)
+     * @throws IllegalStateException if {@code param}'s resolved type isn't bindable
+     */
+    public static void requireBindable(ResolvedParameter param, Method method) {
         try {
-            jsonSchemaType(param.getParameterizedType());
+            jsonSchemaType(param.type());
         } catch (IllegalStateException e) {
             throw new IllegalStateException(
-                    "Unsupported parameter type " + param.getParameterizedType().getTypeName() + " for parameter '"
-                            + param.getName() + "' on " + method,
+                    "Unsupported parameter type " + param.type().getTypeName() + " for parameter '"
+                            + param.parameter().getName() + "' on " + method,
                     e);
         }
+    }
+
+    /**
+     * Returns {@code method}'s parameters typed as {@code scanned} sees them. {@link
+     * #discoverMethods} returns the declaration carrying the annotation, which may sit on a generic
+     * interface or superclass; reading {@link Parameter#getParameterizedType()} off it yields a bare
+     * type variable where {@code scanned} binds a concrete type. Names and annotations still come from
+     * the declaration, through {@link ResolvedParameter#parameter()}.
+     *
+     * @param method  a method returned by {@link #discoverMethods}
+     * @param scanned the class that was scanned
+     * @return the parameters in declaration order
+     */
+    public static List<ResolvedParameter> parameters(Method method, Class<?> scanned) {
+        final UnaryOperator<Type> resolver = ReflectionUtils.resolverFor(scanned);
+        final List<ResolvedParameter> parameters = new ArrayList<>();
+        for (final Parameter parameter : method.getParameters()) {
+            parameters.add(new ResolvedParameter(parameter, resolver.apply(parameter.getParameterizedType())));
+        }
+        return parameters;
+    }
+
+    /**
+     * Returns {@code method}'s generic return type as {@code scanned} sees it, so {@code T get()}
+     * declared on {@code Source<T>} reads {@code String} for a class implementing {@code
+     * Source<String>}.
+     *
+     * @param method  a method returned by {@link #discoverMethods}
+     * @param scanned the class that was scanned
+     * @return the return type with type variables resolved against {@code scanned}
+     */
+    public static Type returnType(Method method, Class<?> scanned) {
+        return ReflectionUtils.resolverFor(scanned).apply(method.getGenericReturnType());
     }
 
     /** Returns whether {@code type} is {@code Optional}, {@code OptionalInt}, {@code OptionalLong}, or {@code OptionalDouble}.
@@ -202,7 +246,7 @@ public final class AnnotationInvocationSupport {
 
     /**
      * Returns the real exception an annotated method threw, unwrapped from the {@link
-     * InvocationTargetException} that {@link Method#invoke} wraps it in. Callers do {@code throw
+     * InvocationTargetException} that {@link Method#invoke(Object, Object...)} wraps it in. Callers do {@code throw
      * AnnotationInvocationSupport.unwrap(e);} from their {@code catch (InvocationTargetException
      * e)} block. If the cause is an {@link Error}, it is thrown directly from this method instead
      * of being returned, since {@code Error} isn't an {@code Exception}.
@@ -221,11 +265,21 @@ public final class AnnotationInvocationSupport {
      * Returns {@code clazz}'s methods annotated with one of {@code annotationTypes} — package-
      * private, protected, and public alike, mirroring the discovery rules Spring itself uses for
      * annotated-bean-method scanning (see {@code org.springframework.util.ReflectionUtils}) —
-     * including those inherited from superclasses and public interfaces, excluding synthetic and
+     * including those inherited from superclasses and interfaces, excluding synthetic and
      * bridge methods. Only {@code private} is rejected, as a matter of policy rather than a JVM
      * limitation — see {@link #requireNotPrivate}. Every accepted method has {@code
-     * setAccessible(true)} already applied, so providers can call {@link Method#invoke} on it
+     * setAccessible(true)} already applied, so providers can call {@link Method#invoke(Object, Object...)} on it
      * directly regardless of which package they live in.
+     *
+     * <p>The returned element is the <em>declaration carrying the annotation</em>, which is not
+     * always the one {@code clazz} declares: an {@code @McpTool} sitting on an interface method that
+     * {@code clazz} implements without re-annotating is returned as the interface's {@link Method}.
+     * {@link Method#invoke(Object, Object...)} dispatches virtually, so calling it on an instance still runs the
+     * override, and a provider reading {@code method.getAnnotation(...)} or
+     * {@code method.getParameters()} sees the annotated declaration. A re-annotated override wins
+     * over the superclass or interface declaration it overrides, also through generic type
+     * arguments, and a declaration some collected method already overrides is not returned twice. An
+     * overload with different parameter types is a separate method.
      *
      * @param clazz          the class to scan for annotated methods
      * @param annotationTypes the annotation types to search for
@@ -234,36 +288,49 @@ public final class AnnotationInvocationSupport {
      */
     @SafeVarargs
     public static List<Method> discoverMethods(Class<?> clazz, Class<? extends Annotation>... annotationTypes) {
-        Map<List<Object>, Method> methods = new LinkedHashMap<>();
+        final List<Class<? extends Annotation>> types = List.of(annotationTypes);
+        final List<Method> methods = new ArrayList<>();
         for (Class<?> c = clazz; c != null; c = c.getSuperclass()) {
-            collectAnnotated(c.getDeclaredMethods(), annotationTypes, methods);
+            collectAnnotated(clazz, c.getDeclaredMethods(), types, methods);
         }
-        collectAnnotated(clazz.getMethods(), annotationTypes, methods);
-        return new ArrayList<>(methods.values());
+        collectAnnotated(clazz, clazz.getMethods(), types, methods);
+        collectInheritedDeclarations(clazz, types, methods);
+        return methods;
+    }
+
+    /**
+     * Adds annotated interface declarations that no already-collected method overrides. {@code
+     * Class#getMethods} yields the implementing class's method for an abstract interface method, and
+     * that method carries none of the interface's annotations, so the declaration has to be reached
+     * through the interface itself.
+     */
+    private static void collectInheritedDeclarations(
+            Class<?> clazz, List<Class<? extends Annotation>> annotationTypes, List<Method> methods) {
+        for (Class<?> iface : ReflectionUtils.interfacesOf(clazz)) {
+            for (Method method : iface.getDeclaredMethods()) {
+                if (!ReflectionUtils.isAnnotatedDeclaration(method, annotationTypes)
+                        || ReflectionUtils.isOverriddenBy(clazz, method, methods)) continue;
+                requireNotPrivate(method);
+                accept(method, methods);
+            }
+        }
     }
 
     private static void collectAnnotated(
-            Method[] candidates, Class<? extends Annotation>[] annotationTypes, Map<List<Object>, Method> methods) {
+            Class<?> clazz,
+            Method[] candidates,
+            List<Class<? extends Annotation>> annotationTypes,
+            List<Method> methods) {
         for (Method method : candidates) {
-            if (method.isSynthetic() || method.isBridge() || !hasAnyAnnotation(method, annotationTypes)) continue;
+            if (!ReflectionUtils.isAnnotatedDeclaration(method, annotationTypes)) continue;
             requireNotPrivate(method);
-            method.setAccessible(true);
-            methods.putIfAbsent(signature(method), method);
+            if (!ReflectionUtils.isOverriddenBy(clazz, method, methods)) accept(method, methods);
         }
     }
 
-    private static List<Object> signature(Method method) {
-        List<Object> key = new ArrayList<>();
-        key.add(method.getName());
-        key.addAll(Arrays.asList(method.getParameterTypes()));
-        return key;
-    }
-
-    private static boolean hasAnyAnnotation(Method method, Class<? extends Annotation>[] annotationTypes) {
-        for (Class<? extends Annotation> annotationType : annotationTypes) {
-            if (method.isAnnotationPresent(annotationType)) return true;
-        }
-        return false;
+    private static void accept(Method method, List<Method> methods) {
+        method.setAccessible(true);
+        methods.add(method);
     }
 
     /**

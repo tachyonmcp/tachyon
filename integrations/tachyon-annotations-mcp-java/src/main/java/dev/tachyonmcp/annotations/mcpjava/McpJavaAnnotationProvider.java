@@ -18,6 +18,7 @@ import dev.tachyonmcp.api.server.domain.ToolAnnotations;
 import dev.tachyonmcp.api.server.features.annotations.AnnotationInvocationSupport;
 import dev.tachyonmcp.api.server.features.annotations.AnnotationProvider;
 import dev.tachyonmcp.api.server.features.annotations.AnnotationRegistrationContext;
+import dev.tachyonmcp.api.server.features.annotations.ResolvedParameter;
 import dev.tachyonmcp.api.server.features.prompts.PromptDescriptor;
 import dev.tachyonmcp.api.server.features.prompts.PromptFn;
 import dev.tachyonmcp.api.server.features.prompts.PromptRequest;
@@ -74,12 +75,12 @@ public class McpJavaAnnotationProvider implements AnnotationProvider {
 
     @Override
     public void register(Object instance, AnnotationRegistrationContext context) {
-        Class<?> clazz = instance.getClass();
-        PayloadSerializer serializer = context.payloadSerializer();
-        PayloadDeserializer deserializer = context.payloadDeserializer();
-        List<Method> methods = AnnotationInvocationSupport.discoverMethods(
+        var clazz = instance.getClass();
+        var serializer = context.payloadSerializer();
+        var deserializer = context.payloadDeserializer();
+        var methods = AnnotationInvocationSupport.discoverMethods(
                 clazz, Tool.class, Resource.class, ResourceTemplate.class, Prompt.class);
-        for (Method method : methods) {
+        for (var method : methods) {
             registerTools(instance, method, context, serializer, deserializer);
             registerResources(instance, method, context, serializer, deserializer);
             registerResourceTemplates(instance, method, context, serializer, deserializer);
@@ -93,17 +94,18 @@ public class McpJavaAnnotationProvider implements AnnotationProvider {
             AnnotationRegistrationContext context,
             PayloadSerializer serializer,
             PayloadDeserializer deserializer) {
-        Tool annotation = method.getAnnotation(Tool.class);
+        var annotation = method.getAnnotation(Tool.class);
         if (annotation == null) return;
 
-        String name = resolveName(annotation.name(), method);
-        String description = annotation.description().isEmpty() ? null : annotation.description();
-        String title = annotation.title().isEmpty() ? null : annotation.title();
+        var name = resolveName(annotation.name(), method);
+        var description = annotation.description().isEmpty() ? null : annotation.description();
+        var title = annotation.title().isEmpty() ? null : annotation.title();
 
-        ToolAnnotations toolAnnotations = mapToolAnnotations(annotation.annotations());
-        JsonSchema inputSchema = buildInputSchema(method, ToolArg.class);
+        var toolAnnotations = mapToolAnnotations(annotation.annotations());
+        final var parameters = AnnotationInvocationSupport.parameters(method, instance.getClass());
+        var inputSchema = buildInputSchema(method, parameters, ToolArg.class);
 
-        ToolDescriptor descriptor = ToolDescriptor.builder()
+        var descriptor = ToolDescriptor.builder()
                 .name(name)
                 .description(description)
                 .title(title)
@@ -111,7 +113,7 @@ public class McpJavaAnnotationProvider implements AnnotationProvider {
                 .annotations(toolAnnotations)
                 .build();
 
-        ToolFn fn = (ctx, req) -> invokeTool(instance, method, ctx, req, serializer, deserializer);
+        ToolFn fn = (ctx, req) -> invokeTool(instance, method, parameters, ctx, req, serializer, deserializer);
         context.tools().register(descriptor, fn);
     }
 
@@ -127,13 +129,14 @@ public class McpJavaAnnotationProvider implements AnnotationProvider {
     private ToolResult invokeTool(
             Object instance,
             Method method,
+            List<ResolvedParameter> parameters,
             InteractionContext ctx,
             ToolRequest req,
             PayloadSerializer serializer,
             PayloadDeserializer deserializer)
             throws Exception {
-        Object[] args = resolveArgs(method, ctx, req.arguments().asMap(), ToolArg.class, serializer, deserializer);
-        Object result = invoke(method, instance, args);
+        var args = resolveArgs(parameters, ctx, req.arguments().asMap(), ToolArg.class, serializer, deserializer);
+        var result = invoke(method, instance, args);
         return convertToolResult(result, serializer);
     }
 
@@ -149,29 +152,28 @@ public class McpJavaAnnotationProvider implements AnnotationProvider {
     }
 
     private Object[] resolveArgs(
-            Method method,
+            List<ResolvedParameter> parameters,
             InteractionContext ctx,
             Map<String, Object> values,
             Class<? extends Annotation> argAnnotation,
             PayloadSerializer serializer,
             PayloadDeserializer deserializer) {
-        Parameter[] params = method.getParameters();
-        Object[] args = new Object[params.length];
-        for (int i = 0; i < params.length; i++) {
-            Class<?> type = params[i].getType();
-            if (InteractionContext.class.isAssignableFrom(type)) {
+        var args = new Object[parameters.size()];
+        for (var i = 0; i < args.length; i++) {
+            final var param = parameters.get(i).parameter();
+            if (InteractionContext.class.isAssignableFrom(parameters.get(i).rawType())) {
                 args[i] = ctx;
                 continue;
             }
-            String paramName = resolveParamName(params[i], argAnnotation);
-            Type parameterizedType = params[i].getParameterizedType();
+            var paramName = resolveParamName(param, argAnnotation);
+            var parameterizedType = parameters.get(i).type();
             if (values.containsKey(paramName)) {
                 args[i] = AnnotationInvocationSupport.coerce(
                         values.get(paramName), parameterizedType, serializer, deserializer);
             } else {
-                Annotation ann = params[i].getAnnotation(argAnnotation);
-                String defaultVal = ann != null ? getStringAttribute(ann, "defaultValue") : null;
-                Object literal = (defaultVal != null && !defaultVal.isEmpty())
+                var ann = param.getAnnotation(argAnnotation);
+                var defaultVal = ann != null ? getStringAttribute(ann, "defaultValue") : null;
+                var literal = (defaultVal != null && !defaultVal.isEmpty())
                         ? parseDefaultLiteral(defaultVal, parameterizedType)
                         : null;
                 args[i] = AnnotationInvocationSupport.coerce(literal, parameterizedType, serializer, deserializer);
@@ -182,7 +184,7 @@ public class McpJavaAnnotationProvider implements AnnotationProvider {
 
     /** Parses an annotation's {@code defaultValue} string literal as the parameter's declared type. */
     private static @Nullable Object parseDefaultLiteral(String literal, Type type) {
-        Type effective = AnnotationInvocationSupport.unwrapOptional(type);
+        var effective = AnnotationInvocationSupport.unwrapOptional(type);
         if (effective == int.class || effective == Integer.class) return Integer.valueOf(literal);
         if (effective == long.class || effective == Long.class) return Long.valueOf(literal);
         if (effective == short.class || effective == Short.class) return Short.valueOf(literal);
@@ -212,7 +214,7 @@ public class McpJavaAnnotationProvider implements AnnotationProvider {
             }
             case List<?> list -> {
                 List<ContentBlock> blocks = new ArrayList<>();
-                for (Object item : list) {
+                for (var item : list) {
                     blocks.add(toContentBlock(item, serializer));
                 }
                 return ToolResult.content(blocks.toArray(new ContentBlock[0]));
@@ -246,7 +248,7 @@ public class McpJavaAnnotationProvider implements AnnotationProvider {
      * toString()}.
      */
     private ToolResult convertMcpJavaToolResponse(ToolResponse response) {
-        List<ContentBlock> blocks = response.content().stream()
+        var blocks = response.content().stream()
                 .map(this::convertMcpJavaContentBlock)
                 .toList();
         if (response.isError()) {
@@ -297,12 +299,12 @@ public class McpJavaAnnotationProvider implements AnnotationProvider {
     private static @Nullable Annotations convertMcpJavaAnnotations(
             Optional<org.mcpjava.server.content.Annotations> maybeAnnotations) {
         if (maybeAnnotations.isEmpty()) return null;
-        org.mcpjava.server.content.Annotations ann = maybeAnnotations.get();
-        List<Role> audience = ann.audience()
+        var ann = maybeAnnotations.get();
+        var audience = ann.audience()
                 .map(roles -> roles.stream().map(r -> Role.valueOf(r.name())).toList())
                 .orElse(List.of());
-        Double priority = ann.priority().isPresent() ? ann.priority().getAsDouble() : null;
-        String lastModified = ann.lastModified().map(Object::toString).orElse(null);
+        var priority = ann.priority().isPresent() ? ann.priority().getAsDouble() : null;
+        var lastModified = ann.lastModified().map(Object::toString).orElse(null);
         return Annotations.of(audience, priority, lastModified);
     }
 
@@ -312,21 +314,19 @@ public class McpJavaAnnotationProvider implements AnnotationProvider {
             AnnotationRegistrationContext context,
             PayloadSerializer serializer,
             PayloadDeserializer deserializer) {
-        Resource annotation = method.getAnnotation(Resource.class);
+        var annotation = method.getAnnotation(Resource.class);
         if (annotation == null) return;
 
-        for (Parameter param : method.getParameters()) {
-            if (InteractionContext.class.isAssignableFrom(param.getType())) continue;
-            AnnotationInvocationSupport.requireBindable(param, method);
-        }
+        final var parameters = AnnotationInvocationSupport.parameters(method, instance.getClass());
+        requireBindableValues(parameters, method);
 
-        String name = resolveName(annotation.name(), method);
-        String description = annotation.description().isEmpty() ? null : annotation.description();
-        String title = annotation.title().isEmpty() ? null : annotation.title();
-        String mimeType = annotation.mimeType().isEmpty() ? null : annotation.mimeType();
-        Long size = annotation.size() >= 0 ? (long) annotation.size() : null;
+        var name = resolveName(annotation.name(), method);
+        var description = annotation.description().isEmpty() ? null : annotation.description();
+        var title = annotation.title().isEmpty() ? null : annotation.title();
+        var mimeType = annotation.mimeType().isEmpty() ? null : annotation.mimeType();
+        var size = annotation.size() >= 0 ? (long) annotation.size() : null;
 
-        ResourceDescriptor descriptor = ResourceDescriptor.builder()
+        var descriptor = ResourceDescriptor.builder()
                 .name(name)
                 .uri(annotation.uri())
                 .description(description)
@@ -335,21 +335,23 @@ public class McpJavaAnnotationProvider implements AnnotationProvider {
                 .size(size)
                 .build();
 
-        ResourceFn fn = (ctx, req) -> invokeResource(instance, method, ctx, req, serializer, deserializer, mimeType);
+        ResourceFn fn = (ctx, req) ->
+                invokeResource(instance, method, parameters, ctx, req, serializer, deserializer, mimeType);
         context.resources().register(descriptor, fn);
     }
 
     private ResourceContents invokeResource(
             Object instance,
             Method method,
+            List<ResolvedParameter> parameters,
             InteractionContext ctx,
             ResourceRequest req,
             PayloadSerializer serializer,
             PayloadDeserializer deserializer,
             @Nullable String mimeType)
             throws Exception {
-        Object[] args = resolveArgs(method, ctx, Map.of(), ResourceTemplateArg.class, serializer, deserializer);
-        Object result = invoke(method, instance, args);
+        var args = resolveArgs(parameters, ctx, Map.of(), ResourceTemplateArg.class, serializer, deserializer);
+        var result = invoke(method, instance, args);
         return convertResourceContents(result, req.uri(), mimeType, serializer);
     }
 
@@ -374,20 +376,18 @@ public class McpJavaAnnotationProvider implements AnnotationProvider {
             AnnotationRegistrationContext context,
             PayloadSerializer serializer,
             PayloadDeserializer deserializer) {
-        ResourceTemplate annotation = method.getAnnotation(ResourceTemplate.class);
+        var annotation = method.getAnnotation(ResourceTemplate.class);
         if (annotation == null) return;
 
-        for (Parameter param : method.getParameters()) {
-            if (InteractionContext.class.isAssignableFrom(param.getType())) continue;
-            AnnotationInvocationSupport.requireBindable(param, method);
-        }
+        final var parameters = AnnotationInvocationSupport.parameters(method, instance.getClass());
+        requireBindableValues(parameters, method);
 
-        String name = resolveName(annotation.name(), method);
-        String description = annotation.description().isEmpty() ? null : annotation.description();
-        String title = annotation.title().isEmpty() ? null : annotation.title();
-        String mimeType = annotation.mimeType().isEmpty() ? null : annotation.mimeType();
+        var name = resolveName(annotation.name(), method);
+        var description = annotation.description().isEmpty() ? null : annotation.description();
+        var title = annotation.title().isEmpty() ? null : annotation.title();
+        var mimeType = annotation.mimeType().isEmpty() ? null : annotation.mimeType();
 
-        ResourceTemplateDescriptor descriptor = ResourceTemplateDescriptor.builder()
+        var descriptor = ResourceTemplateDescriptor.builder()
                 .name(name)
                 .uriTemplate(annotation.uriTemplate())
                 .description(description)
@@ -395,14 +395,15 @@ public class McpJavaAnnotationProvider implements AnnotationProvider {
                 .mimeType(mimeType)
                 .build();
 
-        ResourceFn fn =
-                (ctx, req) -> invokeResourceTemplate(instance, method, ctx, req, serializer, deserializer, mimeType);
+        ResourceFn fn = (ctx, req) ->
+                invokeResourceTemplate(instance, method, parameters, ctx, req, serializer, deserializer, mimeType);
         context.resources().registerTemplate(descriptor, fn);
     }
 
     private ResourceContents invokeResourceTemplate(
             Object instance,
             Method method,
+            List<ResolvedParameter> parameters,
             InteractionContext ctx,
             ResourceRequest req,
             PayloadSerializer serializer,
@@ -411,8 +412,8 @@ public class McpJavaAnnotationProvider implements AnnotationProvider {
             throws Exception {
         Map<String, Object> values = new LinkedHashMap<>();
         req.params().forEach((name, value) -> values.put(name, value.scalarValue()));
-        Object[] args = resolveArgs(method, ctx, values, ResourceTemplateArg.class, serializer, deserializer);
-        Object result = invoke(method, instance, args);
+        var args = resolveArgs(parameters, ctx, values, ResourceTemplateArg.class, serializer, deserializer);
+        var result = invoke(method, instance, args);
         return convertResourceContents(result, req.uri(), mimeType, serializer);
     }
 
@@ -422,36 +423,38 @@ public class McpJavaAnnotationProvider implements AnnotationProvider {
             AnnotationRegistrationContext context,
             PayloadSerializer serializer,
             PayloadDeserializer deserializer) {
-        Prompt annotation = method.getAnnotation(Prompt.class);
+        var annotation = method.getAnnotation(Prompt.class);
         if (annotation == null) return;
 
-        List<PromptArgument> arguments = buildPromptArguments(method);
+        final var parameters = AnnotationInvocationSupport.parameters(method, instance.getClass());
+        var arguments = buildPromptArguments(method, parameters);
 
-        String name = resolveName(annotation.name(), method);
-        String description = annotation.description().isEmpty() ? null : annotation.description();
-        String title = annotation.title().isEmpty() ? null : annotation.title();
+        var name = resolveName(annotation.name(), method);
+        var description = annotation.description().isEmpty() ? null : annotation.description();
+        var title = annotation.title().isEmpty() ? null : annotation.title();
 
-        PromptDescriptor descriptor = PromptDescriptor.builder()
+        var descriptor = PromptDescriptor.builder()
                 .name(name)
                 .description(description)
                 .title(title)
                 .arguments(arguments)
                 .build();
 
-        PromptFn fn = (ctx, req) -> invokePrompt(instance, method, ctx, req, serializer, deserializer);
+        PromptFn fn = (ctx, req) -> invokePrompt(instance, method, parameters, ctx, req, serializer, deserializer);
         context.prompts().register(descriptor, fn);
     }
 
-    private List<PromptArgument> buildPromptArguments(Method method) {
+    private List<PromptArgument> buildPromptArguments(Method method, List<ResolvedParameter> parameters) {
         List<PromptArgument> args = new ArrayList<>();
-        for (Parameter param : method.getParameters()) {
-            if (InteractionContext.class.isAssignableFrom(param.getType())) continue;
-            AnnotationInvocationSupport.requireBindable(param, method);
+        for (var resolved : parameters) {
+            if (InteractionContext.class.isAssignableFrom(resolved.rawType())) continue;
+            AnnotationInvocationSupport.requireBindable(resolved, method);
+            final var param = resolved.parameter();
 
-            PromptArg ann = param.getAnnotation(PromptArg.class);
-            String paramName = resolveParamName(param, PromptArg.class);
-            String desc = (ann != null && !ann.description().isEmpty()) ? ann.description() : null;
-            String paramTitle = (ann != null && !ann.title().isEmpty()) ? ann.title() : null;
+            var ann = param.getAnnotation(PromptArg.class);
+            var paramName = resolveParamName(param, PromptArg.class);
+            var desc = (ann != null && !ann.description().isEmpty()) ? ann.description() : null;
+            var paramTitle = (ann != null && !ann.title().isEmpty()) ? ann.title() : null;
             Boolean required = (ann != null) ? ann.required() : true;
             args.add(PromptArgument.builder()
                     .name(paramName)
@@ -466,13 +469,14 @@ public class McpJavaAnnotationProvider implements AnnotationProvider {
     private PromptResult invokePrompt(
             Object instance,
             Method method,
+            List<ResolvedParameter> parameters,
             InteractionContext ctx,
             PromptRequest req,
             PayloadSerializer serializer,
             PayloadDeserializer deserializer)
             throws Exception {
-        Object[] args = resolveArgs(method, ctx, req.arguments().asMap(), PromptArg.class, serializer, deserializer);
-        Object result = invoke(method, instance, args);
+        var args = resolveArgs(parameters, ctx, req.arguments().asMap(), PromptArg.class, serializer, deserializer);
+        var result = invoke(method, instance, args);
         return convertPromptResult(result, serializer);
     }
 
@@ -489,7 +493,7 @@ public class McpJavaAnnotationProvider implements AnnotationProvider {
             }
             case List<?> list -> {
                 List<PromptMessage> messages = new ArrayList<>();
-                for (Object item : list) {
+                for (var item : list) {
                     if (item instanceof PromptMessage pm) {
                         messages.add(pm);
                     } else if (item instanceof String s) {
@@ -505,6 +509,13 @@ public class McpJavaAnnotationProvider implements AnnotationProvider {
         return PromptResult.messages(List.of(PromptMessage.user(serializer.serialize(result))));
     }
 
+    private static void requireBindableValues(List<ResolvedParameter> parameters, Method method) {
+        for (var parameter : parameters) {
+            if (InteractionContext.class.isAssignableFrom(parameter.rawType())) continue;
+            AnnotationInvocationSupport.requireBindable(parameter, method);
+        }
+    }
+
     private static String resolveName(String annotationValue, Method method) {
         if (ELEMENT_NAME.equals(annotationValue) || annotationValue.isEmpty()) {
             return method.getName();
@@ -513,9 +524,9 @@ public class McpJavaAnnotationProvider implements AnnotationProvider {
     }
 
     private static <A extends Annotation> String resolveParamName(Parameter param, Class<A> annotationType) {
-        A ann = param.getAnnotation(annotationType);
+        var ann = param.getAnnotation(annotationType);
         if (ann != null) {
-            String name = getAnnotationName(ann);
+            var name = getAnnotationName(ann);
             if (!ELEMENT_NAME.equals(name) && !name.isEmpty()) {
                 return name;
             }
@@ -524,40 +535,42 @@ public class McpJavaAnnotationProvider implements AnnotationProvider {
     }
 
     private static <A extends Annotation> String getAnnotationName(A ann) {
-        String name = getStringAttribute(ann, "name");
+        var name = getStringAttribute(ann, "name");
         return name != null ? name : "";
     }
 
-    private JsonSchema buildInputSchema(Method method, Class<? extends Annotation> argAnnotation) {
+    private JsonSchema buildInputSchema(
+            Method method, List<ResolvedParameter> parameters, Class<? extends Annotation> argAnnotation) {
         Map<String, Object> properties = new LinkedHashMap<>();
         List<String> required = new ArrayList<>();
 
-        for (Parameter param : method.getParameters()) {
-            if (InteractionContext.class.isAssignableFrom(param.getType())) continue;
-            AnnotationInvocationSupport.requireBindable(param, method);
+        for (var resolved : parameters) {
+            if (InteractionContext.class.isAssignableFrom(resolved.rawType())) continue;
+            AnnotationInvocationSupport.requireBindable(resolved, method);
+            final var param = resolved.parameter();
 
-            String paramName = resolveParamName(param, argAnnotation);
-            String jsonType = AnnotationInvocationSupport.jsonSchemaType(param.getParameterizedType());
+            var paramName = resolveParamName(param, argAnnotation);
+            var jsonType = AnnotationInvocationSupport.jsonSchemaType(resolved.type());
 
             Map<String, Object> prop = new LinkedHashMap<>();
             prop.put("type", jsonType);
 
-            Annotation ann = param.getAnnotation(argAnnotation);
-            String description = getStringAttribute(ann, "description");
+            var ann = param.getAnnotation(argAnnotation);
+            var description = getStringAttribute(ann, "description");
             if (description != null && !description.isEmpty()) {
                 prop.put("description", description);
             }
 
             properties.put(paramName, prop);
 
-            boolean isRequired = true;
+            var isRequired = true;
             if (ann != null) {
-                Boolean requiredVal = getBooleanAttribute(ann, "required");
+                var requiredVal = getBooleanAttribute(ann, "required");
                 if (requiredVal != null) isRequired = requiredVal;
-                String defaultVal = getStringAttribute(ann, "defaultValue");
+                var defaultVal = getStringAttribute(ann, "defaultValue");
                 if (defaultVal != null && !defaultVal.isEmpty()) isRequired = false;
             }
-            if (AnnotationInvocationSupport.isOptionalType(param.getParameterizedType())) {
+            if (AnnotationInvocationSupport.isOptionalType(resolved.type())) {
                 isRequired = false;
             }
             if (isRequired) required.add(paramName);
@@ -568,20 +581,20 @@ public class McpJavaAnnotationProvider implements AnnotationProvider {
 
     /** Reflectively reads a {@link String}-typed annotation attribute, or {@code null} if absent/not a String. */
     private static @Nullable String getStringAttribute(@Nullable Annotation annotation, String attributeName) {
-        Object val = getAnnotationAttribute(annotation, attributeName);
+        var val = getAnnotationAttribute(annotation, attributeName);
         return val instanceof String s ? s : null;
     }
 
     /** Reflectively reads a {@code boolean}-typed annotation attribute, or {@code null} if absent/not a boolean. */
     private static @Nullable Boolean getBooleanAttribute(@Nullable Annotation annotation, String attributeName) {
-        Object val = getAnnotationAttribute(annotation, attributeName);
+        var val = getAnnotationAttribute(annotation, attributeName);
         return val instanceof Boolean b ? b : null;
     }
 
     private static @Nullable Object getAnnotationAttribute(@Nullable Annotation annotation, String attributeName) {
         if (annotation == null) return null;
         try {
-            Method m = annotation.annotationType().getMethod(attributeName);
+            var m = annotation.annotationType().getMethod(attributeName);
             return m.invoke(annotation);
         } catch (Exception e) {
             return null;

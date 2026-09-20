@@ -14,6 +14,7 @@ import dev.tachyonmcp.api.server.domain.TextContent;
 import dev.tachyonmcp.api.server.features.annotations.AnnotationInvocationSupport;
 import dev.tachyonmcp.api.server.features.annotations.AnnotationProvider;
 import dev.tachyonmcp.api.server.features.annotations.AnnotationRegistrationContext;
+import dev.tachyonmcp.api.server.features.annotations.ResolvedParameter;
 import dev.tachyonmcp.api.server.features.tools.ToolDescriptor;
 import dev.tachyonmcp.api.server.features.tools.ToolFn;
 import dev.tachyonmcp.api.server.features.tools.ToolRequest;
@@ -74,7 +75,8 @@ public class LangChain4jAnnotationProvider implements AnnotationProvider {
         String[] values = annotation.value();
         String description = (values.length > 0 && !values[0].isEmpty()) ? values[0] : null;
 
-        JsonSchema inputSchema = buildInputSchema(method, deserializer);
+        final List<ResolvedParameter> parameters = AnnotationInvocationSupport.parameters(method, instance.getClass());
+        JsonSchema inputSchema = buildInputSchema(method, parameters, deserializer);
 
         ToolDescriptor descriptor = ToolDescriptor.builder()
                 .name(name)
@@ -82,19 +84,20 @@ public class LangChain4jAnnotationProvider implements AnnotationProvider {
                 .inputSchema(inputSchema)
                 .build();
 
-        ToolFn fn = (ctx, req) -> invokeTool(instance, method, ctx, req, serializer, deserializer);
+        ToolFn fn = (ctx, req) -> invokeTool(instance, method, parameters, ctx, req, serializer, deserializer);
         context.tools().register(descriptor, fn);
     }
 
     private ToolResult invokeTool(
             Object instance,
             Method method,
+            List<ResolvedParameter> parameters,
             InteractionContext ctx,
             ToolRequest req,
             PayloadSerializer serializer,
             PayloadDeserializer deserializer)
             throws Exception {
-        Object[] args = resolveArgs(method, ctx, req, serializer, deserializer);
+        Object[] args = resolveArgs(parameters, ctx, req, serializer, deserializer);
         Object result = invoke(method, instance, args);
         return convertResult(result, serializer);
     }
@@ -109,27 +112,26 @@ public class LangChain4jAnnotationProvider implements AnnotationProvider {
     }
 
     private Object[] resolveArgs(
-            Method method,
+            List<ResolvedParameter> parameters,
             InteractionContext ctx,
             ToolRequest req,
             PayloadSerializer serializer,
             PayloadDeserializer deserializer) {
-        final Parameter[] params = method.getParameters();
-        final Object[] args = new Object[params.length];
+        final Object[] args = new Object[parameters.size()];
         final Map<String, Object> values = req.arguments().asMap();
-        for (int i = 0; i < params.length; i++) {
-            Class<?> type = params[i].getType();
-            if (InteractionContext.class.isAssignableFrom(type)) {
+        for (int i = 0; i < args.length; i++) {
+            final Parameter param = parameters.get(i).parameter();
+            if (InteractionContext.class.isAssignableFrom(parameters.get(i).rawType())) {
                 args[i] = ctx;
                 continue;
             }
-            String paramName = resolveParamName(params[i]);
-            Type parameterizedType = params[i].getParameterizedType();
+            String paramName = resolveParamName(param);
+            Type parameterizedType = parameters.get(i).type();
             if (values.containsKey(paramName)) {
                 args[i] = AnnotationInvocationSupport.coerce(
                         values.get(paramName), parameterizedType, serializer, deserializer);
             } else {
-                P pAnn = params[i].getAnnotation(P.class);
+                P pAnn = param.getAnnotation(P.class);
                 String defaultVal =
                         (pAnn != null && !P.NO_DEFAULT.equals(pAnn.defaultValue())) ? pAnn.defaultValue() : null;
                 Object literal = defaultVal != null ? parseDefaultLiteral(defaultVal, parameterizedType) : null;
@@ -212,21 +214,42 @@ public class LangChain4jAnnotationProvider implements AnnotationProvider {
      * InteractionContext} parameter, so it's stripped from the generated schema afterward.
      */
     @SuppressWarnings("unchecked")
-    private JsonSchema buildInputSchema(Method method, PayloadDeserializer deserializer) {
+    private JsonSchema buildInputSchema(
+            Method method, List<ResolvedParameter> parameters, PayloadDeserializer deserializer) {
         String specJson = ToolSpecifications.toolSpecificationFrom(method).toJson();
         Map<String, Object> spec = deserializer.deserialize(specJson, Map.class);
         Map<String, Object> parametersSchema = (Map<String, Object>) spec.get("parameters");
         Map<String, Object> properties = new LinkedHashMap<>((Map<String, Object>) parametersSchema.get("properties"));
         List<String> required = new ArrayList<>((List<String>) parametersSchema.getOrDefault("required", List.of()));
 
-        for (Parameter param : method.getParameters()) {
-            if (InteractionContext.class.isAssignableFrom(param.getType())) {
-                String paramName = resolveParamName(param);
+        for (ResolvedParameter resolved : parameters) {
+            final Parameter param = resolved.parameter();
+            final String paramName = resolveParamName(param);
+            if (InteractionContext.class.isAssignableFrom(resolved.rawType())) {
                 properties.remove(paramName);
                 required.remove(paramName);
+            } else if (!resolved.type().equals(param.getParameterizedType())) {
+                properties.put(paramName, boundScalarSchema(resolved, method, properties.get(paramName)));
             }
         }
 
         return AnnotationInvocationSupport.inputSchema(properties, required);
+    }
+
+    /**
+     * Replaces the schema LangChain4j derived from a type variable's declaration with the scalar the
+     * scanned class binds it to. LangChain4j reads {@link Method} alone, so it cannot see that {@code
+     * T} of {@code Operation<T>} is {@code String} for the implementing class; a bound type the shared
+     * scalar mapping cannot describe is rejected instead of advertised as a wrong schema.
+     */
+    private static Map<String, Object> boundScalarSchema(
+            ResolvedParameter resolved, Method method, @Nullable Object derived) {
+        AnnotationInvocationSupport.requireBindable(resolved, method);
+        final Map<String, Object> schema = new LinkedHashMap<>();
+        schema.put("type", AnnotationInvocationSupport.jsonSchemaType(resolved.type()));
+        if (derived instanceof Map<?, ?> declared && declared.get("description") instanceof String description) {
+            schema.put("description", description);
+        }
+        return schema;
     }
 }
