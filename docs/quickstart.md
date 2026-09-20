@@ -114,7 +114,7 @@ plugins {
 repositories { mavenCentral() }
 
 dependencies {
-    implementation(platform("dev.tachyonmcp:tachyon-bom:1.0.0-beta.28"))
+    implementation(platform("dev.tachyonmcp:tachyon-bom:1.0.0-beta.30"))
     implementation("dev.tachyonmcp:tachyon-core")
 }
 
