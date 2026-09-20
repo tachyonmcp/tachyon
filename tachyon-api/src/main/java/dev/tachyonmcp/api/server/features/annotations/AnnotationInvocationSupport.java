@@ -12,21 +12,15 @@ import java.lang.reflect.Modifier;
 import java.lang.reflect.Parameter;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Deque;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalDouble;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
-import java.util.Set;
+import java.util.function.UnaryOperator;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -97,14 +91,61 @@ public final class AnnotationInvocationSupport {
      * @throws IllegalStateException if {@code param}'s type isn't bindable
      */
     public static void requireBindable(Parameter param, Method method) {
+        requireBindable(new ResolvedParameter(param, param.getParameterizedType()), method);
+    }
+
+    /**
+     * Rejects {@code param} at registration time if its resolved type is neither a plain bindable
+     * scalar nor an {@code Optional}-family wrapper of one. Same contract as {@link
+     * #requireBindable(Parameter, Method)}, judging the type the scanned class sees rather than the
+     * declared one.
+     *
+     * @param param  the parameter to validate
+     * @param method the declaring method (for diagnostic messages)
+     * @throws IllegalStateException if {@code param}'s resolved type isn't bindable
+     */
+    public static void requireBindable(ResolvedParameter param, Method method) {
         try {
-            jsonSchemaType(param.getParameterizedType());
+            jsonSchemaType(param.type());
         } catch (IllegalStateException e) {
             throw new IllegalStateException(
-                    "Unsupported parameter type " + param.getParameterizedType().getTypeName() + " for parameter '"
-                            + param.getName() + "' on " + method,
+                    "Unsupported parameter type " + param.type().getTypeName() + " for parameter '"
+                            + param.parameter().getName() + "' on " + method,
                     e);
         }
+    }
+
+    /**
+     * Returns {@code method}'s parameters typed as {@code scanned} sees them. {@link
+     * #discoverMethods} returns the declaration carrying the annotation, which may sit on a generic
+     * interface or superclass; reading {@link Parameter#getParameterizedType()} off it yields a bare
+     * type variable where {@code scanned} binds a concrete type. Names and annotations still come from
+     * the declaration, through {@link ResolvedParameter#parameter()}.
+     *
+     * @param method  a method returned by {@link #discoverMethods}
+     * @param scanned the class that was scanned
+     * @return the parameters in declaration order
+     */
+    public static List<ResolvedParameter> parameters(Method method, Class<?> scanned) {
+        final UnaryOperator<Type> resolver = ReflectionUtils.resolverFor(scanned);
+        final List<ResolvedParameter> parameters = new ArrayList<>();
+        for (final Parameter parameter : method.getParameters()) {
+            parameters.add(new ResolvedParameter(parameter, resolver.apply(parameter.getParameterizedType())));
+        }
+        return parameters;
+    }
+
+    /**
+     * Returns {@code method}'s generic return type as {@code scanned} sees it, so {@code T get()}
+     * declared on {@code Source<T>} reads {@code String} for a class implementing {@code
+     * Source<String>}.
+     *
+     * @param method  a method returned by {@link #discoverMethods}
+     * @param scanned the class that was scanned
+     * @return the return type with type variables resolved against {@code scanned}
+     */
+    public static Type returnType(Method method, Class<?> scanned) {
+        return ReflectionUtils.resolverFor(scanned).apply(method.getGenericReturnType());
     }
 
     /** Returns whether {@code type} is {@code Optional}, {@code OptionalInt}, {@code OptionalLong}, or {@code OptionalDouble}.
@@ -236,8 +277,9 @@ public final class AnnotationInvocationSupport {
      * {@link Method#invoke(Object, Object...)} dispatches virtually, so calling it on an instance still runs the
      * override, and a provider reading {@code method.getAnnotation(...)} or
      * {@code method.getParameters()} sees the annotated declaration. A re-annotated override wins
-     * over the declaration it overrides, and an interface method some collected method already
-     * overrides is not returned twice.
+     * over the superclass or interface declaration it overrides, also through generic type
+     * arguments, and a declaration some collected method already overrides is not returned twice. An
+     * overload with different parameter types is a separate method.
      *
      * @param clazz          the class to scan for annotated methods
      * @param annotationTypes the annotation types to search for
@@ -246,13 +288,14 @@ public final class AnnotationInvocationSupport {
      */
     @SafeVarargs
     public static List<Method> discoverMethods(Class<?> clazz, Class<? extends Annotation>... annotationTypes) {
-        Map<List<Object>, Method> methods = new LinkedHashMap<>();
+        final List<Class<? extends Annotation>> types = List.of(annotationTypes);
+        final List<Method> methods = new ArrayList<>();
         for (Class<?> c = clazz; c != null; c = c.getSuperclass()) {
-            collectAnnotated(c.getDeclaredMethods(), annotationTypes, methods);
+            collectAnnotated(clazz, c.getDeclaredMethods(), types, methods);
         }
-        collectAnnotated(clazz.getMethods(), annotationTypes, methods);
-        collectInheritedDeclarations(clazz, annotationTypes, methods);
-        return new ArrayList<>(methods.values());
+        collectAnnotated(clazz, clazz.getMethods(), types, methods);
+        collectInheritedDeclarations(clazz, types, methods);
+        return methods;
     }
 
     /**
@@ -262,74 +305,32 @@ public final class AnnotationInvocationSupport {
      * through the interface itself.
      */
     private static void collectInheritedDeclarations(
-            Class<?> clazz, Class<? extends Annotation>[] annotationTypes, Map<List<Object>, Method> methods) {
-        for (Class<?> iface : interfacesOf(clazz)) {
+            Class<?> clazz, List<Class<? extends Annotation>> annotationTypes, List<Method> methods) {
+        for (Class<?> iface : ReflectionUtils.interfacesOf(clazz)) {
             for (Method method : iface.getDeclaredMethods()) {
-                if (method.isSynthetic() || method.isBridge() || !hasAnyAnnotation(method, annotationTypes)) continue;
-                if (isOverriddenBy(method, methods.values())) continue;
+                if (!ReflectionUtils.isAnnotatedDeclaration(method, annotationTypes)
+                        || ReflectionUtils.isOverriddenBy(clazz, method, methods)) continue;
                 requireNotPrivate(method);
-                method.setAccessible(true);
-                methods.putIfAbsent(signature(method), method);
+                accept(method, methods);
             }
         }
-    }
-
-    /** Every interface reachable from {@code clazz} or any of its superclasses, breadth-first. */
-    private static Set<Class<?>> interfacesOf(Class<?> clazz) {
-        Set<Class<?>> found = new LinkedHashSet<>();
-        Deque<Class<?>> pending = new ArrayDeque<>();
-        for (Class<?> c = clazz; c != null; c = c.getSuperclass()) {
-            Collections.addAll(pending, c.getInterfaces());
-        }
-        while (!pending.isEmpty()) {
-            Class<?> iface = pending.poll();
-            if (found.add(iface)) Collections.addAll(pending, iface.getInterfaces());
-        }
-        return found;
-    }
-
-    /**
-     * Whether some {@code collected} method overrides {@code declaration}. Compares erased parameter
-     * types by assignability rather than equality, so a generic interface method and the narrower
-     * implementation that overrides it are recognised as one method, not two.
-     */
-    private static boolean isOverriddenBy(Method declaration, Collection<Method> collected) {
-        for (Method candidate : collected) {
-            if (!candidate.getName().equals(declaration.getName())
-                    || candidate.getParameterCount() != declaration.getParameterCount()) continue;
-            Class<?>[] candidateParams = candidate.getParameterTypes();
-            Class<?>[] declaredParams = declaration.getParameterTypes();
-            boolean overrides = true;
-            for (int i = 0; i < candidateParams.length && overrides; i++) {
-                overrides = declaredParams[i].isAssignableFrom(candidateParams[i]);
-            }
-            if (overrides) return true;
-        }
-        return false;
     }
 
     private static void collectAnnotated(
-            Method[] candidates, Class<? extends Annotation>[] annotationTypes, Map<List<Object>, Method> methods) {
+            Class<?> clazz,
+            Method[] candidates,
+            List<Class<? extends Annotation>> annotationTypes,
+            List<Method> methods) {
         for (Method method : candidates) {
-            if (method.isSynthetic() || method.isBridge() || !hasAnyAnnotation(method, annotationTypes)) continue;
+            if (!ReflectionUtils.isAnnotatedDeclaration(method, annotationTypes)) continue;
             requireNotPrivate(method);
-            method.setAccessible(true);
-            methods.putIfAbsent(signature(method), method);
+            if (!ReflectionUtils.isOverriddenBy(clazz, method, methods)) accept(method, methods);
         }
     }
 
-    private static List<Object> signature(Method method) {
-        List<Object> key = new ArrayList<>();
-        key.add(method.getName());
-        key.addAll(Arrays.asList(method.getParameterTypes()));
-        return key;
-    }
-
-    private static boolean hasAnyAnnotation(Method method, Class<? extends Annotation>[] annotationTypes) {
-        for (Class<? extends Annotation> annotationType : annotationTypes) {
-            if (method.isAnnotationPresent(annotationType)) return true;
-        }
-        return false;
+    private static void accept(Method method, List<Method> methods) {
+        method.setAccessible(true);
+        methods.add(method);
     }
 
     /**

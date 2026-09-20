@@ -9,11 +9,13 @@ import dev.tachyonmcp.api.server.domain.ResourceContents;
 import dev.tachyonmcp.api.server.domain.Role;
 import dev.tachyonmcp.api.server.domain.TextContent;
 import dev.tachyonmcp.api.server.domain.TextResourceContents;
+import dev.tachyonmcp.api.server.features.annotations.ReflectionUtils;
 import dev.tachyonmcp.api.server.features.completions.CompletionResult;
 import dev.tachyonmcp.api.server.features.prompts.PromptResult;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
@@ -25,10 +27,11 @@ final class ResultMappers {
 
     private ResultMappers() {}
 
-    static void requireCompletionReturnType(Method method) {
-        if (CompletionResult.class.isAssignableFrom(method.getReturnType())) return;
-        if (List.class.isAssignableFrom(method.getReturnType())
-                && method.getGenericReturnType() instanceof ParameterizedType type
+    static void requireCompletionReturnType(Method method, Type returnType) {
+        final var rawType = ReflectionUtils.erase(returnType);
+        if (CompletionResult.class.isAssignableFrom(rawType)) return;
+        if (List.class.isAssignableFrom(rawType)
+                && returnType instanceof ParameterizedType type
                 && type.getActualTypeArguments()[0] == String.class) return;
         throw new IllegalStateException("@McpCompletion must return CompletionResult or List<String>: " + method);
     }

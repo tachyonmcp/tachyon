@@ -2,6 +2,7 @@
 package dev.tachyonmcp.annotations.langchain4j;
 
 import static net.javacrumbs.jsonunit.assertj.JsonAssertions.assertThatJson;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
@@ -237,5 +238,74 @@ class LangChain4jAnnotationServerIntegrationTest {
                     """;
             assertThatJson(call.body()).isEqualTo(expectedCall);
         }
+    }
+
+    interface Operation<T> {
+        @Tool("Runs an operation")
+        String run(@P(name = "input", description = "the input") T input);
+    }
+
+    static class StringOperation implements Operation<String> {
+        @Override
+        public String run(String input) {
+            return "ran " + input;
+        }
+    }
+
+    /** The annotation sits on {@code Operation<T>}; the schema and the call must use {@code String}, not the bare {@code T}. */
+    @Test
+    void toolDeclaredOnAGenericInterfaceUsesTheTypeItsImplementationBinds() throws Exception {
+        try (var server = startServer(new StringOperation());
+                var client = McpTestClients.latest(server.port())) {
+            var list = client.post("""
+                    {"jsonrpc":"2.0","id":1,"method":"tools/list"}
+                    """);
+
+            // language=json
+            var expectedList = """
+                    {"jsonrpc":"2.0","id":1,"result":{
+                        "tools":[{
+                            "name":"run",
+                            "description":"Runs an operation",
+                            "inputSchema":{"type":"object",
+                                "properties":{"input":{"type":"string","description":"the input"}},
+                                "required":["input"]}
+                        }],
+                        "resultType":"complete","ttlMs":0,"cacheScope":"public"}
+                    }
+                    """;
+            assertThatJson(list.body()).isEqualTo(expectedList);
+
+            var call = client.post("""
+                    {"jsonrpc":"2.0","id":2,"method":"tools/call",
+                     "params":{"name":"run","arguments":{"input":"x"}}}
+                    """);
+
+            // language=json
+            var expectedCall = """
+                    {"jsonrpc":"2.0","id":2,"result":{
+                        "content":[{"type":"text","text":"ran x"}],
+                        "resultType":"complete"}
+                    }
+                    """;
+            assertThatJson(call.body()).isEqualTo(expectedCall);
+        }
+    }
+
+    record Payload(String value) {}
+
+    static class PayloadOperation implements Operation<Payload> {
+        @Override
+        public String run(Payload input) {
+            return input.value();
+        }
+    }
+
+    /** LangChain4j cannot see the bound type, so a type the scalar mapping cannot describe is rejected, not advertised wrongly. */
+    @Test
+    void aBoundTypeTheScalarMappingCannotDescribeFailsRegistration() {
+        assertThatThrownBy(() -> startServer(new PayloadOperation()))
+                .hasStackTraceContaining("Unsupported parameter type")
+                .hasStackTraceContaining("Payload");
     }
 }

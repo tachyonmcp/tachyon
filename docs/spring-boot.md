@@ -270,7 +270,8 @@ register features at runtime.
 
 These are Tachyon annotations from `dev.tachyonmcp.api.annotations`. See
 [annotations](annotations.md) for parameter binding, structured results, and third-party adapters.
-Automatic bean discovery uses the native Tachyon annotations.
+Automatic bean discovery uses the native Tachyon annotations, including ones declared on an interface
+the bean implements.
 
 Spring AOP advice stays active when MCP calls your methods. With a JDK proxy, expose every
 annotated method through a proxy interface; annotations and parameter names are read from the
@@ -339,7 +340,7 @@ The starter discovers your tools by reflecting over Spring singletons, so a nati
 reflection metadata, or it starts a server with nothing registered — and reports no error. The
 starter's AOT processor (`TachyonAotProcessor`, registered in `META-INF/spring/aot.factories`)
 handles this for you: at AOT processing time it finds every bean type declaring Tachyon
-annotations and registers method-invocation hints for it.
+annotations and registers method-invocation hints for it and for each of its interfaces that declares them.
 
 What it does **not** cover are the types you bind to, because nothing declares them as beans —
 tool input records, structured output types and their nested types. Register those yourself:

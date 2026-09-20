@@ -62,6 +62,77 @@ class TachyonAnnotationProviderTest {
         assertThat(TachyonAnnotationProvider.declaresFeatures(String.class)).isFalse();
     }
 
+    interface Greeter {
+        @McpTool
+        String greet(String name);
+    }
+
+    static class PoliteGreeter implements Greeter {
+        @Override
+        public String greet(String name) {
+            return "hello " + name;
+        }
+    }
+
+    /** DI containers select candidates with {@code declaresFeatures}, so it must see what discovery sees. */
+    @Test
+    void aFeatureDeclaredOnAnImplementedInterfaceIsSelectedAndRegistered() {
+        assertThat(TachyonAnnotationProvider.declaresFeatures(PoliteGreeter.class))
+                .isTrue();
+
+        try (var server = build(new PoliteGreeter())) {
+            assertThat(server.tools().find("greet")).isPresent();
+        }
+    }
+
+    interface Operation<T> {
+        @McpTool(name = "run")
+        String run(T input);
+    }
+
+    static class StringOperation implements Operation<String> {
+        @Override
+        public String run(String input) {
+            return "got:" + input;
+        }
+    }
+
+    record Forecast(String city, int degrees) {}
+
+    interface Source<T> {
+        @McpTool(name = "fetch")
+        T fetch();
+    }
+
+    static class ForecastSource implements Source<Forecast> {
+        @Override
+        public Forecast fetch() {
+            return new Forecast("Oslo", 3);
+        }
+    }
+
+    /** The annotation sits on {@code Operation<T>}; the schema must describe {@code String}, not the bare {@code T}. */
+    @Test
+    void aGenericInterfaceToolAdvertisesTheTypeItsImplementationBinds() {
+        try (var server = build(new StringOperation())) {
+            assertThat(server.tools().find("run"))
+                    .hasValueSatisfying(tool -> assertThat(tool.inputSchema().json())
+                            // language=json
+                            .isEqualTo("""
+                            {"type":"object","properties":{"input":{"type":"string"}},"required":["input"]}""".strip()));
+        }
+    }
+
+    @Test
+    void aGenericInterfaceToolDerivesItsOutputSchemaFromTheBoundReturnType() {
+        try (var server = build(new ForecastSource())) {
+            assertThat(server.tools().find("fetch")).hasValueSatisfying(tool -> {
+                assertThat(tool.outputSchema()).isNotNull();
+                assertThat(tool.outputSchema().json()).contains("\"city\"").contains("\"degrees\"");
+            });
+        }
+    }
+
     @SuppressWarnings("unused")
     static class TwoAnnotations {
         @McpTool

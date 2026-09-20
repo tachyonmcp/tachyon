@@ -15,6 +15,7 @@ import dev.tachyonmcp.api.server.domain.UriTemplate;
 import dev.tachyonmcp.api.server.features.annotations.AnnotationInvocationSupport;
 import dev.tachyonmcp.api.server.features.annotations.AnnotationProvider;
 import dev.tachyonmcp.api.server.features.annotations.AnnotationRegistrationContext;
+import dev.tachyonmcp.api.server.features.annotations.ResolvedParameter;
 import dev.tachyonmcp.api.server.features.prompts.PromptDescriptor;
 import dev.tachyonmcp.api.server.features.prompts.PromptFn;
 import dev.tachyonmcp.api.server.features.prompts.PromptResult;
@@ -92,15 +93,16 @@ public class SpringAiAnnotationProvider implements AnnotationProvider {
         McpTool annotation = method.getAnnotation(McpTool.class);
         if (annotation == null) return;
 
+        final List<ResolvedParameter> parameters = AnnotationInvocationSupport.parameters(method, instance.getClass());
         ToolDescriptor descriptor = ToolDescriptor.builder()
                 .name(resolveName(annotation.name(), method))
                 .description(blankToNull(annotation.description()))
                 .title(blankToNull(annotation.title()))
-                .inputSchema(buildInputSchema(method, deserializer))
+                .inputSchema(buildInputSchema(method, parameters, deserializer))
                 .annotations(mapToolAnnotations(annotation))
                 .build();
 
-        ToolFn fn = (ctx, req) -> invokeTool(instance, method, ctx, req, serializer, deserializer);
+        ToolFn fn = (ctx, req) -> invokeTool(instance, method, parameters, ctx, req, serializer, deserializer);
         context.tools().register(descriptor, fn);
     }
 
@@ -118,13 +120,14 @@ public class SpringAiAnnotationProvider implements AnnotationProvider {
     private ToolResult invokeTool(
             Object instance,
             Method method,
+            List<ResolvedParameter> parameters,
             InteractionContext ctx,
             ToolRequest req,
             PayloadSerializer serializer,
             PayloadDeserializer deserializer)
             throws Exception {
         Object result = invoke(
-                method, instance, resolveArgs(method, ctx, req.arguments().asMap(), serializer, deserializer));
+                method, instance, resolveArgs(parameters, ctx, req.arguments().asMap(), serializer, deserializer));
         return convertToolResult(result);
     }
 
@@ -153,8 +156,9 @@ public class SpringAiAnnotationProvider implements AnnotationProvider {
             throw new IllegalArgumentException("@McpResource on " + method + " requires a non-blank uri");
         }
 
-        for (Parameter param : method.getParameters()) {
-            if (InteractionContext.class.isAssignableFrom(param.getType())) continue;
+        final List<ResolvedParameter> parameters = AnnotationInvocationSupport.parameters(method, instance.getClass());
+        for (ResolvedParameter param : parameters) {
+            if (InteractionContext.class.isAssignableFrom(param.rawType())) continue;
             requireNotUnsupportedSpringType(param, method);
             AnnotationInvocationSupport.requireBindable(param, method);
         }
@@ -174,7 +178,7 @@ public class SpringAiAnnotationProvider implements AnnotationProvider {
                 Map<String, Object> values = new LinkedHashMap<>();
                 req.params().forEach((name, value) -> values.put(name, value.scalarValue()));
                 return convertResourceContents(
-                        invoke(method, instance, resolveArgs(method, ctx, values, serializer, deserializer)),
+                        invoke(method, instance, resolveArgs(parameters, ctx, values, serializer, deserializer)),
                         req.uri(),
                         mimeType,
                         serializer);
@@ -194,7 +198,7 @@ public class SpringAiAnnotationProvider implements AnnotationProvider {
                                     invoke(
                                             method,
                                             instance,
-                                            resolveArgs(method, ctx, Map.of(), serializer, deserializer)),
+                                            resolveArgs(parameters, ctx, Map.of(), serializer, deserializer)),
                                     req.uri(),
                                     mimeType,
                                     serializer));
@@ -214,10 +218,12 @@ public class SpringAiAnnotationProvider implements AnnotationProvider {
                 .name(resolveName(annotation.name(), method))
                 .description(blankToNull(annotation.description()))
                 .title(blankToNull(annotation.title()));
-        for (Parameter param : method.getParameters()) {
-            if (InteractionContext.class.isAssignableFrom(param.getType())) continue;
-            requireNotUnsupportedSpringType(param, method);
-            AnnotationInvocationSupport.requireBindable(param, method);
+        final List<ResolvedParameter> parameters = AnnotationInvocationSupport.parameters(method, instance.getClass());
+        for (ResolvedParameter resolved : parameters) {
+            if (InteractionContext.class.isAssignableFrom(resolved.rawType())) continue;
+            requireNotUnsupportedSpringType(resolved, method);
+            AnnotationInvocationSupport.requireBindable(resolved, method);
+            final Parameter param = resolved.parameter();
 
             McpArg argAnnotation = param.getAnnotation(McpArg.class);
             String argName = resolveArgName(param);
@@ -234,26 +240,26 @@ public class SpringAiAnnotationProvider implements AnnotationProvider {
                 invoke(
                         method,
                         instance,
-                        resolveArgs(method, ctx, req.arguments().asMap(), serializer, deserializer)),
+                        resolveArgs(parameters, ctx, req.arguments().asMap(), serializer, deserializer)),
                 serializer);
         context.prompts().register(descriptor, fn);
     }
 
     private Object[] resolveArgs(
-            Method method,
+            List<ResolvedParameter> parameters,
             InteractionContext ctx,
             @Nullable Map<String, Object> values,
             PayloadSerializer serializer,
             PayloadDeserializer deserializer) {
-        Parameter[] params = method.getParameters();
-        Object[] resolved = new Object[params.length];
+        Object[] resolved = new Object[parameters.size()];
         Map<String, Object> map = values != null ? values : Map.of();
-        for (int i = 0; i < params.length; i++) {
-            if (InteractionContext.class.isAssignableFrom(params[i].getType())) {
+        for (int i = 0; i < resolved.length; i++) {
+            final ResolvedParameter param = parameters.get(i);
+            if (InteractionContext.class.isAssignableFrom(param.rawType())) {
                 resolved[i] = ctx;
             } else {
                 resolved[i] = AnnotationInvocationSupport.coerce(
-                        map.get(resolveArgName(params[i])), params[i].getParameterizedType(), serializer, deserializer);
+                        map.get(resolveArgName(param.parameter())), param.type(), serializer, deserializer);
             }
         }
         return resolved;
@@ -320,15 +326,17 @@ public class SpringAiAnnotationProvider implements AnnotationProvider {
      * Optional<T>} says otherwise — Spring AI's own generator instead reads a configurable
      * {@code PROPERTY_REQUIRED_BY_DEFAULT}.
      */
-    private JsonSchema buildInputSchema(Method method, PayloadDeserializer deserializer) {
+    private JsonSchema buildInputSchema(
+            Method method, List<ResolvedParameter> parameters, PayloadDeserializer deserializer) {
         Map<String, Object> properties = new LinkedHashMap<>();
         List<String> required = new ArrayList<>();
 
-        for (Parameter param : method.getParameters()) {
-            if (InteractionContext.class.isAssignableFrom(param.getType())) continue;
-            requireNotUnsupportedSpringType(param, method);
+        for (ResolvedParameter resolved : parameters) {
+            if (InteractionContext.class.isAssignableFrom(resolved.rawType())) continue;
+            requireNotUnsupportedSpringType(resolved, method);
+            final Parameter param = resolved.parameter();
 
-            Type type = param.getParameterizedType();
+            Type type = resolved.type();
             boolean optional = AnnotationInvocationSupport.isOptionalType(type);
             Type schemaType = optional ? AnnotationInvocationSupport.unwrapOptional(type) : type;
 
@@ -375,8 +383,9 @@ public class SpringAiAnnotationProvider implements AnnotationProvider {
      * than type, so it can't be caught by a type check at all. User-defined argument types
      * (records, enums, POJOs) are unaffected and flow through to {@link McpJsonSchemaGenerator}.
      */
-    private static void requireNotUnsupportedSpringType(Parameter param, Method method) {
-        Class<?> type = param.getType();
+    private static void requireNotUnsupportedSpringType(ResolvedParameter resolved, Method method) {
+        final Parameter param = resolved.parameter();
+        Class<?> type = resolved.rawType();
         if (param.isAnnotationPresent(McpProgressToken.class)) {
             throw new IllegalStateException("Unsupported @McpProgressToken parameter '" + param.getName() + "' on "
                     + method

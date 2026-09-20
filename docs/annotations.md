@@ -63,7 +63,7 @@ Only the annotation is required. `name` defaults to the method name; `descriptio
 
 | Rule | Behaviour |
 |---|---|
-| Discovery | non-private methods on the class, superclasses, public interfaces (class proxies work) |
+| Discovery | non-private methods on the class, its superclasses and every interface it implements (class proxies work). An annotation on an interface method is found even when the implementation is unannotated. An annotated override wins over the superclass or interface method it overrides, also through generic type arguments; an overload with different parameter types is a separate feature. A type variable in a generic declaration (`Operation<T>`) is read as what the registered class binds it to (`Operation<String>` advertises and decodes `string`), for parameters and return type |
 | `InteractionContext` parameter | injected, never advertised |
 | `@McpTool` with one record/POJO/`Map` argument and no `@McpParam` | whole `arguments` object decoded into it; its schema is `inputSchema` |
 | Other parameters | one named argument each (explicit `@McpParam(name)` or compile with `-parameters`); required unless JSpecify `@Nullable` (preferred) or `Optional*` |
@@ -268,7 +268,10 @@ Both providers still strip parameters neither framework knows about (Tachyon's o
 additionally rejects, at registration, parameter types under `org.springframework.ai.mcp.annotation`
 that aren't one of the three request-context types it actually emulates (`McpSyncRequestContext`,
 `McpAsyncRequestContext`, `MetaProvider`) — e.g. `McpMeta` or `McpTransportContext` — instead of
-silently resolving them to `null` at invocation.
+silently resolving them to `null` at invocation. `LangChain4jAnnotationProvider` cannot see generic
+type arguments — LangChain4j reads the declaring `Method` alone — so for a parameter declared with a type
+variable it describes the bound type with the scalar mapping above and rejects any other bound type at
+registration.
 
 Return-value conversion mirrors this across all three providers: a `@Tool`/`@McpTool` method
 returning anything other than a `ToolResult`, `String`, `ContentBlock`, `List<...>` (in

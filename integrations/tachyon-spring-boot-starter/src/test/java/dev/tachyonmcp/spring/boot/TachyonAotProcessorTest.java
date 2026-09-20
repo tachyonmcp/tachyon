@@ -9,6 +9,7 @@ import dev.tachyonmcp.example.aot.NamespacedBeanConfig;
 import dev.tachyonmcp.example.aot.NamespacedBeanConfig.Farewell;
 import example.aot.InterfaceBeanConfig;
 import example.aot.InterfaceBeanConfig.Greeter;
+import java.io.Serializable;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.aot.generate.GeneratedMethods;
@@ -29,6 +30,18 @@ class TachyonAotProcessorTest {
         @McpTool(name = "get-weather", description = "Weather for a city")
         ToolResult getWeather(String city) {
             return ToolResult.text(city);
+        }
+    }
+
+    interface Announcer {
+        @McpTool
+        ToolResult announce(String message);
+    }
+
+    static class AnnouncerService implements Announcer, Serializable {
+        @Override
+        public ToolResult announce(String message) {
+            return ToolResult.text(message);
         }
     }
 
@@ -65,6 +78,22 @@ class TachyonAotProcessorTest {
                         .onType(PlainService.class)
                         .test(hints))
                 .as("a bean with no Tachyon annotations must not be registered")
+                .isFalse();
+    }
+
+    @Test
+    void registersReflectionForAnInterfaceDeclaringFeaturesButNotForOtherInterfaces() {
+        final var hints = process(AnnouncerService.class);
+
+        assertThat(RuntimeHintsPredicates.reflection()
+                        .onMethodInvocation(Announcer.class, "announce")
+                        .test(hints))
+                .as("discovery reads the annotation off the interface's Method")
+                .isTrue();
+        assertThat(RuntimeHintsPredicates.reflection()
+                        .onType(Serializable.class)
+                        .test(hints))
+                .as("an interface declaring no feature would only widen the native image")
                 .isFalse();
     }
 

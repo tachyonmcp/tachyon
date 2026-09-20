@@ -4,12 +4,16 @@ package dev.tachyonmcp.core.server.features.annotations;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import dev.tachyonmcp.api.annotations.McpTool;
 import dev.tachyonmcp.api.server.features.annotations.AnnotationInvocationSupport;
+import dev.tachyonmcp.api.server.features.annotations.ResolvedParameter;
 import dev.tachyonmcp.core.server.json.JacksonPayloadSerde;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.lang.reflect.TypeVariable;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
@@ -171,6 +175,251 @@ class AnnotationInvocationSupportTest {
                 .json();
 
         assertThat(json).contains("\"properties\"").doesNotContain("\"required\"");
+    }
+
+    interface Runner {
+        @McpTool(name = "run-object")
+        String run(Object input);
+    }
+
+    static class OverloadedRunner implements Runner {
+        @Override
+        public String run(Object input) {
+            return "object:" + input;
+        }
+
+        @McpTool(name = "run-string")
+        public String run(String input) {
+            return "string:" + input;
+        }
+    }
+
+    /** {@code run(String)} overloads {@code run(Object)}; it does not override it, so both declarations stay. */
+    @Test
+    void anAnnotatedOverloadDoesNotHideAnAnnotatedInterfaceDeclaration() throws Exception {
+        final var methods = AnnotationInvocationSupport.discoverMethods(OverloadedRunner.class, McpTool.class);
+        final var target = new OverloadedRunner();
+
+        assertThat(methods).hasSize(2);
+        assertThat(methods)
+                .extracting(m -> m.getAnnotation(McpTool.class).name())
+                .containsExactlyInAnyOrder("run-object", "run-string");
+        assertThat(byToolName(methods, "run-object").getDeclaringClass()).isEqualTo(Runner.class);
+        assertThat(byToolName(methods, "run-string").getDeclaringClass()).isEqualTo(OverloadedRunner.class);
+        assertThat(byToolName(methods, "run-object").invoke(target, "x")).isEqualTo("object:x");
+        assertThat(byToolName(methods, "run-string").invoke(target, "x")).isEqualTo("string:x");
+    }
+
+    interface Operation<T> {
+        @McpTool(name = "run")
+        String run(T input);
+    }
+
+    static class StringOperation implements Operation<String> {
+        @Override
+        @McpTool(name = "run-upper")
+        public String run(String input) {
+            return input.toUpperCase(Locale.ROOT);
+        }
+    }
+
+    static class OverloadedStringOperation implements Operation<String> {
+        @Override
+        public String run(String input) {
+            return "string:" + input;
+        }
+
+        @McpTool(name = "run-chars")
+        public String run(CharSequence input) {
+            return "chars:" + input;
+        }
+    }
+
+    /**
+     * javac emits a bridge {@code run(Object)} on the implementation. The re-annotated {@code
+     * run(String)} and the generic declaration are one method, recognised without leaning on that bridge.
+     */
+    @Test
+    void aReannotatedOverrideOfAGenericDeclarationWinsOverIt() throws Exception {
+        final var methods = AnnotationInvocationSupport.discoverMethods(StringOperation.class, McpTool.class);
+
+        assertThat(methods).hasSize(1);
+        assertThat(methods.getFirst().getDeclaringClass()).isEqualTo(StringOperation.class);
+        assertThat(methods.getFirst().getAnnotation(McpTool.class).name()).isEqualTo("run-upper");
+        assertThat(methods.getFirst().invoke(new StringOperation(), "ada")).isEqualTo("ADA");
+    }
+
+    @Test
+    void anAnnotatedOverloadDoesNotHideAGenericInterfaceDeclarationBoundToAnotherType() throws Exception {
+        final var methods = AnnotationInvocationSupport.discoverMethods(OverloadedStringOperation.class, McpTool.class);
+        final var target = new OverloadedStringOperation();
+
+        assertThat(methods).hasSize(2);
+        assertThat(byToolName(methods, "run").getDeclaringClass()).isEqualTo(Operation.class);
+        assertThat(byToolName(methods, "run-chars").getDeclaringClass()).isEqualTo(OverloadedStringOperation.class);
+        assertThat(byToolName(methods, "run").invoke(target, "x")).isEqualTo("string:x");
+        assertThat(byToolName(methods, "run-chars").invoke(target, "x")).isEqualTo("chars:x");
+    }
+
+    interface Echo<T> {
+        @McpTool(name = "echo")
+        String echo(T value);
+    }
+
+    abstract static class RelayedEcho<U> implements Echo<U> {}
+
+    static class StringEcho extends RelayedEcho<String> {
+        @Override
+        @McpTool(name = "echo-string")
+        public String echo(String value) {
+            return value;
+        }
+    }
+
+    @Test
+    void aTypeArgumentRelayedThroughAnIntermediateClassStillResolvesTheDeclaration() {
+        final var methods = AnnotationInvocationSupport.discoverMethods(StringEcho.class, McpTool.class);
+
+        assertThat(methods).hasSize(1);
+        assertThat(methods.getFirst().getDeclaringClass()).isEqualTo(StringEcho.class);
+    }
+
+    interface Batch<T> {
+        @McpTool(name = "batch")
+        String run(T[] items, List<T> more);
+    }
+
+    static class StringBatch implements Batch<String> {
+        @Override
+        @McpTool(name = "batch-strings")
+        public String run(String[] items, List<String> more) {
+            return items.length + ":" + more.size();
+        }
+    }
+
+    @Test
+    void arrayAndParameterizedParametersResolveThroughTheTypeArgument() throws Exception {
+        final var methods = AnnotationInvocationSupport.discoverMethods(StringBatch.class, McpTool.class);
+
+        assertThat(methods).hasSize(1);
+        assertThat(methods.getFirst().getDeclaringClass()).isEqualTo(StringBatch.class);
+        assertThat(methods.getFirst().invoke(new StringBatch(), new String[] {"a", "b"}, List.of("c")))
+                .isEqualTo("2:1");
+    }
+
+    static class GenericBase<T> {
+        @McpTool(name = "base-run")
+        public String run(T input) {
+            return "base:" + input;
+        }
+    }
+
+    static class StringDerived extends GenericBase<String> {
+        @Override
+        @McpTool(name = "derived-run")
+        public String run(String input) {
+            return "derived:" + input;
+        }
+    }
+
+    /** Same override rule on the superclass chain: {@code run(String)} implements {@code GenericBase<String>.run(T)}. */
+    @Test
+    void aReannotatedOverrideOfAGenericSuperclassMethodWinsOverIt() throws Exception {
+        final var methods = AnnotationInvocationSupport.discoverMethods(StringDerived.class, McpTool.class);
+
+        assertThat(methods).hasSize(1);
+        assertThat(methods.getFirst().getDeclaringClass()).isEqualTo(StringDerived.class);
+        assertThat(methods.getFirst().getAnnotation(McpTool.class).name()).isEqualTo("derived-run");
+        assertThat(methods.getFirst().invoke(new StringDerived(), "x")).isEqualTo("derived:x");
+    }
+
+    static class PublicBase {
+        @McpTool(name = "inherited")
+        public String inherited() {
+            return "base";
+        }
+    }
+
+    static class PublicDerived extends PublicBase {}
+
+    /** A public inherited method is visible to both the superclass walk and {@code Class#getMethods}. */
+    @Test
+    void anInheritedAnnotatedMethodIsDiscoveredOnce() throws Exception {
+        final var methods = AnnotationInvocationSupport.discoverMethods(PublicDerived.class, McpTool.class);
+
+        assertThat(methods).hasSize(1);
+        assertThat(methods.getFirst().getDeclaringClass()).isEqualTo(PublicBase.class);
+        assertThat(methods.getFirst().invoke(new PublicDerived())).isEqualTo("base");
+    }
+
+    interface Greeter {
+        @McpTool(name = "greet")
+        String greet(String name);
+    }
+
+    static class ReannotatedGreeter implements Greeter {
+        @Override
+        @McpTool(name = "greet-louder")
+        public String greet(String name) {
+            return "HELLO, " + name;
+        }
+    }
+
+    @Test
+    void aReannotatedOverrideWinsOverTheInterfaceDeclaration() {
+        final var methods = AnnotationInvocationSupport.discoverMethods(ReannotatedGreeter.class, McpTool.class);
+
+        assertThat(methods).hasSize(1);
+        assertThat(methods.getFirst().getDeclaringClass()).isEqualTo(ReannotatedGreeter.class);
+        assertThat(methods.getFirst().getAnnotation(McpTool.class).name()).isEqualTo("greet-louder");
+    }
+
+    interface Repository<T, ID> {
+        @McpTool(name = "find")
+        T find(ID id, List<T> hints, T[] more);
+    }
+
+    static class StringRepository implements Repository<String, Integer> {
+        @Override
+        public String find(Integer id, List<String> hints, String[] more) {
+            return "found";
+        }
+    }
+
+    @Test
+    void parametersResolveTypeVariablesAgainstTheScannedClass() throws Exception {
+        final var find = Repository.class.getMethod("find", Object.class, List.class, Object[].class);
+
+        final var parameters = AnnotationInvocationSupport.parameters(find, StringRepository.class);
+
+        assertThat(parameters)
+                .extracting(p -> p.type().getTypeName())
+                .containsExactly("java.lang.Integer", "java.util.List<java.lang.String>", "java.lang.String[]");
+        assertThat(parameters)
+                .extracting(ResolvedParameter::rawType)
+                .containsExactly(Integer.class, List.class, String[].class);
+        assertThat(parameters).extracting(p -> p.parameter().getName()).containsExactly("id", "hints", "more");
+        assertThat(AnnotationInvocationSupport.returnType(find, StringRepository.class))
+                .isEqualTo(String.class);
+    }
+
+    @Test
+    void variablesTheScannedClassLeavesUnboundKeepTheirDeclaredBound() throws Exception {
+        final var find = Repository.class.getMethod("find", Object.class, List.class, Object[].class);
+
+        final var parameters = AnnotationInvocationSupport.parameters(find, Repository.class);
+
+        assertThat(parameters)
+                .extracting(ResolvedParameter::rawType)
+                .containsExactly(Object.class, List.class, Object[].class);
+        assertThat(parameters.getFirst().type()).isInstanceOf(TypeVariable.class);
+    }
+
+    private static Method byToolName(List<Method> methods, String name) {
+        return methods.stream()
+                .filter(m -> m.getAnnotation(McpTool.class).name().equals(name))
+                .findFirst()
+                .orElseThrow();
     }
 
     @SuppressWarnings("unused")

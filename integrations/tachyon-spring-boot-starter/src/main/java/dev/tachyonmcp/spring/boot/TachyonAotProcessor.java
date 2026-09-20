@@ -1,6 +1,7 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
 package dev.tachyonmcp.spring.boot;
 
+import dev.tachyonmcp.api.server.features.annotations.ReflectionUtils;
 import dev.tachyonmcp.core.server.annotations.TachyonAnnotationProvider;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -65,9 +66,22 @@ final class TachyonAotProcessor implements BeanFactoryInitializationAotProcessor
             final var type = typeOf(beanFactory, name);
             if (type != null && TachyonAnnotationProvider.declaresFeatures(type)) {
                 types.add(type);
+                types.addAll(featureInterfaces(type));
             }
         }
         return types;
+    }
+
+    /**
+     * Interfaces of {@code type} that declare a feature themselves: discovery reads their
+     * annotations off the interface's own {@code Method}, so the native image needs them hinted too.
+     */
+    private static Set<Class<?>> featureInterfaces(Class<?> type) {
+        final Set<Class<?>> interfaces = new LinkedHashSet<>();
+        for (final var iface : ReflectionUtils.interfacesOf(type)) {
+            if (TachyonAnnotationProvider.declaresFeatures(iface)) interfaces.add(iface);
+        }
+        return interfaces;
     }
 
     /** Logs every application {@code @Bean} method returning an interface. */
