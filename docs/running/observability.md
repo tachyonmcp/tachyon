@@ -17,7 +17,7 @@ Tool arguments and results stay out of telemetry until you [opt in](#capture-pay
 
 ## 1. Add dependencies
 
-`tachyon-opentelemetry` depends on `opentelemetry-api` only. You supply the OpenTelemetry SDK and an exporter.
+`tachyon-opentelemetry` depends on `opentelemetry-api` and `opentelemetry-semconv-incubating`. It does not provide an OpenTelemetry SDK or exporter, so you must supply both.
 The logging exporter needs no collector, so use it to check your setup first.
 
 <details open>
@@ -169,9 +169,9 @@ INFO: 'tools/call greet' : d8d835147756c8ec2da8caeb97816c22 792d57177a7a7d01 SER
   gen_ai.operation.name=execute_tool, gen_ai.tool.name=greet, server.address=127.0.0.1}, ...}
 ```
 
-Within 10 seconds, the metric exporter prints `name=mcp.server.operation.duration` with one data
-point per method, tagged with the same low-cardinality attributes. The span carries no tool
-arguments or result.
+Within 10 seconds, the metric exporter prints `name=mcp.server.operation.duration` data points
+partitioned by low-cardinality attributes. Failed operations additionally include `error.type` and,
+when applicable, `rpc.response.status_code`. Spans contain no tool arguments or result.
 
 The OpenTelemetry SDK also reports its own `otel.sdk.*` metrics on every export. They are not
 Tachyon telemetry; ignore them when checking this setup.
