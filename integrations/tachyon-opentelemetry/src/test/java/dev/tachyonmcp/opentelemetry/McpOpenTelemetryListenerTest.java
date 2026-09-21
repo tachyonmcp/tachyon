@@ -638,10 +638,15 @@ class McpOpenTelemetryListenerTest {
             assertThat(histogram.getUnit()).isEqualTo("s");
             assertThat(histogram.getHistogramData().getPoints())
                     .hasSizeGreaterThanOrEqualTo(3)
-                    .allSatisfy(point -> assertThat(point.getAttributes().asMap())
-                            .containsKey(MCP_METHOD_NAME)
-                            .doesNotContainKey(MCP_SESSION_ID)
-                            .doesNotContainKey(JSONRPC_REQUEST_ID));
+                    .allSatisfy(point -> {
+                        assertThat(point.getAttributes().asMap())
+                                .containsKey(MCP_METHOD_NAME)
+                                .doesNotContainKey(MCP_SESSION_ID)
+                                .doesNotContainKey(JSONRPC_REQUEST_ID);
+                        assertThat(point.getBoundaries())
+                                .containsExactly(
+                                        0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 30.0, 60.0, 120.0, 300.0);
+                    });
         }
     }
 

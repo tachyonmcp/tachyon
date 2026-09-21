@@ -85,6 +85,8 @@ public class McpOpenTelemetryListener implements ObservationListener {
 
     private static final String INSTRUMENTATION_NAME = "dev.tachyonmcp.opentelemetry";
     private static final String OPERATION_DURATION = "mcp.server.operation.duration";
+    private static final List<Double> OPERATION_DURATION_BUCKETS =
+            List.of(0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 30.0, 60.0, 120.0, 300.0);
     private static final double NANOS_PER_SECOND = 1_000_000_000.0;
 
     /** MCP's wire protocol is JSON-RPC 2.0, unconditionally. */
@@ -117,6 +119,7 @@ public class McpOpenTelemetryListener implements ObservationListener {
                 .histogramBuilder(OPERATION_DURATION)
                 .setUnit("s")
                 .setDescription("MCP request or notification duration as observed on the receiver")
+                .setExplicitBucketBoundariesAdvice(OPERATION_DURATION_BUCKETS)
                 .build();
     }
 
