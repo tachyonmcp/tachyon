@@ -1,8 +1,9 @@
 ---
 title: "MCP features"
+sidebar_title: "Build"
 overview_title: "Choose a feature"
-weight: 10
-sidebar_order: 10
+weight: 20
+sidebar_order: 20
 toc: true
 description: |-
   Add tools, resources, prompts, completions, client interactions, and long-running tasks.
@@ -28,7 +29,7 @@ var server = TachyonServer.builder()
 `tachyon-core`; no extra integration module is needed. Compile Java with `-parameters` so method
 parameter names become MCP argument names. The [Quickstart](../quickstart.md) includes the build
 configuration and a complete service. The [annotation reference](../annotations.md) covers shared
-binding rules and registration; the [Spring Boot starter](../spring-boot.md) discovers service beans
+binding rules and registration; the [Spring Boot starter](../spring-boot/) discovers service beans
 automatically.
 
 Each guide starts with annotations. Use programmatic registration for dynamic descriptors, custom

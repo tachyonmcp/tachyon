@@ -1,7 +1,7 @@
 ---
 title: "JSON and JSON Schema"
-weight: 32
-sidebar_order: 32
+weight: 41
+sidebar_order: 41
 toc: true
 description: |-
   How Tachyon handles JSON payloads and JSON Schema validation: JsonDocument types, schema dialects, and pluggable validators.

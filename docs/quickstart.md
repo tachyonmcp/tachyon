@@ -1,10 +1,11 @@
 ---
 title: "Quickstart"
-weight: 5
-sidebar_order: 5
+sidebar_title: "Quickstart"
+weight: 10
+sidebar_order: 10
 toc: true
 description: |-
-  Build a complete Java MCP server and call its greeting tool with curl.
+  Build a complete Java MCP server and call its greeting tool with MCP Inspector or curl.
 ---
 
 Run a server with one `greet` tool at `http://127.0.0.1:8080/mcp`. Send a name and get a personal
@@ -15,7 +16,7 @@ greeting back. Choose Maven or Gradle below. For Kotlin, start with the
 
 - JDK 21; set `JAVA_HOME` to its installation directory.
 - Maven 3.9+ or Gradle 8.14.3.
-- `curl` to call the server.
+- Node.js 22.19+ and npm to run MCP Inspector, or `curl` for the terminal alternative.
 
 > [!NOTE]
 > The project files pin **Tachyon ${tachyon.version}**, available from Maven Central.
@@ -175,7 +176,60 @@ From `greeting-server`, run the command for your build tool:
 Leave this terminal running. The server listens at `http://127.0.0.1:8080/mcp`. Stop it with
 **Ctrl+C** when you finish.
 
-## 3. Test with curl
+## 3. Call the greeting tool
+
+Use [MCP Inspector](https://github.com/modelcontextprotocol/inspector) to explore the server's tools,
+enter arguments, and inspect results in your browser. This is the recommended path for manual testing.
+
+<details open>
+<summary>Test with MCP Inspector (recommended)</summary>
+
+With your server still running, open a second terminal and launch MCP Inspector:
+
+```bash
+npx -y @modelcontextprotocol/inspector@2.7.0 \
+  --server-url http://127.0.0.1:8080/mcp \
+  --transport http \
+  --protocol-era modern
+```
+
+This selects Streamable HTTP and the modern MCP protocol used by the curl example below.
+Open the browser URL printed by MCP Inspector, including any authentication token in that URL.
+
+1. Connect to the server at `http://127.0.0.1:8080/mcp` using its connection control.
+2. Open **Tools** and select **greet**.
+3. Enter `Ada` in the **name** field and click **Execute Tool**.
+4. Check that the result contains the text **Hello, Ada!**.
+
+Change `Ada` to your name and execute the tool again. The greeting should change with the argument.
+See the [MCP Inspector guide](https://modelcontextprotocol.io/docs/2026-07-28/tools/inspector)
+for more ways to inspect tools, resources, and prompts.
+
+</details>
+
+<details>
+<summary>Call the tool from the MCP Inspector CLI</summary>
+
+For a terminal call without composing JSON-RPC headers, use MCP Inspector's CLI:
+
+```bash
+npx -y @modelcontextprotocol/inspector@2.7.0 --cli \
+  --server-url http://127.0.0.1:8080/mcp \
+  --transport http --protocol-era modern \
+  --connect-timeout 10000 \
+  --method tools/call --tool-name greet \
+  --tool-args-json '{"name":"Ada"}' --format json
+```
+
+The output's `result.content` contains `{"type":"text","text":"Hello, Ada!"}`.
+`--tool-args-json` preserves argument types, and `--format json` makes the output suitable for scripts.
+For automated checks, follow MCP Inspector's
+[CLI smoke-testing guide](https://github.com/modelcontextprotocol/inspector/blob/main/docs/cli-smoke-testing.md).
+
+</details>
+
+<details>
+<summary>Test with curl</summary>
 
 Open a second terminal. This request uses MCP **2026-07-28**: each request supplies its protocol
 and client metadata, so there is no initialization handshake or session ID to copy. The method
@@ -219,11 +273,14 @@ Expected response (formatted):
 
 Change `"Ada"` to your name and call again. The greeting changes with the argument. Send
 `"arguments": {}` or `"arguments": {"name": 42}` to see a JSON-RPC `-32602` input-validation error.
+MCP 2026-07-28 returns this error with HTTP `400`, so `--fail-with-body` prints the error body and curl exits with code `22`.
 
 > [!IMPORTANT]
 > HTTP `200` alone does not mean a tool call succeeded. A tool that returns `ToolResult.error(...)`
 > yields `isError: true` in the result, and a handler that throws yields a JSON-RPC `-32603` error,
 > both with HTTP `200`. Inspect the JSON-RPC `error` field and, for tool results, `isError`.
+
+</details>
 
 ## Executable coverage
 
@@ -235,7 +292,7 @@ extracted into the test suite.
 
 ## Next steps
 
-- [Spring Boot starter](spring-boot.md) — expose Spring beans as MCP tools.
+- [Spring Boot starter](spring-boot/) — expose Spring beans as MCP tools.
 
 - [Tools](features/tools.md) — bind typed arguments, return structured output, and handle errors.
 - [Annotations](annotations.md) — share registration and binding rules across feature services.

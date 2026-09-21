@@ -1,8 +1,8 @@
 ---
 title: Kotlin
 overview_title: "Introduction"
-weight: 35
-sidebar_order: 35
+weight: 55
+sidebar_order: 55
 toc: true
 description: |-
   Coroutine-first Kotlin DSL for Tachyon
@@ -657,4 +657,3 @@ val server = TachyonServer(port = 0) { tool("ping") { ToolResult.text("pong") } 
 ```
 
 For a client to drive it with, see [Testkit](../testkit.md).
-

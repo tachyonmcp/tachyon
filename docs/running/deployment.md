@@ -30,7 +30,7 @@ built-in authentication or authorization, so a public deployment has to supply b
   [Network configuration](configuration.md#network).
 - **Logs and telemetry.** Payload capture is off by default. Tool arguments and results often
   carry credentials or personal data, so enable capture only where your data-handling policy
-  allows it. See [payload capture](observability.md#payload-capture-policy).
+  allows it. See [payload capture](observability.md#capture-payloads).
 - **Shutdown.** Match `shutdownGracePeriod` to the platform's termination window, and make sure
   the JVM receives the stop signal. See [Containers](#containers).
 

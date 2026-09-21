@@ -1,20 +1,108 @@
 ---
 title: "Extensions"
 overview_title: "Introduction"
-weight: 75
-sidebar_order: 75
+weight: 50
+sidebar_order: 50
 toc: true
 description: |-
-  Add negotiable protocol extensions to your Tachyon server (SEP-2133), including extension-gated tool visibility.
+  Add protocol extensions to your Tachyon server (SEP-2133): built-in extensions, client negotiation per MCP version, and writing your own extension.
 ---
 
-Extensions add custom MCP methods. MCP 2025-11-25 clients negotiate them via the `initialize` handshake. They implement [SEP-2133](https://modelcontextprotocol.io/seps/2133-extensions).
+Extensions add optional MCP features beyond the base protocol, such as tasks or skills. The server
+advertises the extensions it supports; a client declares the ones it uses. Tachyon implements
+[SEP-2133](https://modelcontextprotocol.io/seps/2133-extensions) negotiation for MCP 2025-11-25 and
+2026-07-28.
 
-## The ServerExtension interface
+## Available extensions
 
-`bootstrap` receives an `ExtensionContext` (`@ExperimentalApi` — the shape may still change).
-It exposes feature registries and runtime configuration without leaking transport or server
-internals.
+| Extension | ID | Module | Enable with |
+|---|---|---|---|
+| [Tasks](../features/tasks.md) | `io.modelcontextprotocol/tasks` | `tachyon-core` | `.capabilities(c -> c.tasks(connector))`; registers the extension automatically |
+| [Skills](mcp-skills.md) | `io.modelcontextprotocol/skills` | `tachyon-extensions-skills` | `.withExtensions(SkillsExtension.builder()...build())` |
+| Kotlin coroutine runtime | `dev.tachyonmcp/kotlin-coroutines` | `tachyon-kotlin` | Added by the Kotlin DSL; never advertised to clients |
+
+## Add an extension
+
+Add the extension's module. `tachyon-bom` manages its version:
+
+```xml
+<dependency>
+    <groupId>dev.tachyonmcp</groupId>
+    <artifactId>tachyon-extensions-skills</artifactId>
+</dependency>
+```
+
+Then register it on the server builder. `withExtensions` takes several extensions at once:
+
+```java
+var server = TachyonServer.builder()
+        .withExtensions(SkillsExtension.builder()
+                .registry(new FilesystemSkillsRegistry(Path.of("skills")))
+                .build())
+        .port(8080)
+        .build();
+server.start();
+```
+
+In the Kotlin DSL, use `extensions(...)` on the builder. Tasks need no `withExtensions` call;
+configuring a task connector enables them.
+
+## What clients must send
+
+A client uses an extension by declaring its ID. Where it declares it, and what it gets back
+when it doesn't, depend on the MCP version:
+
+| | MCP 2025-11-25 | MCP 2026-07-28 |
+|---|---|---|
+| Server advertises extensions in | `initialize` result, `capabilities.extensions` | `server/discover` result, `capabilities.extensions` |
+| Client declares extensions in | `initialize` params, `capabilities.extensions` | `_meta."io.modelcontextprotocol/clientCapabilities".extensions` |
+| Declaration lasts | The whole session | One request; repeat it on every request |
+| Undeclared call to a `REQUIRED` extension method | JSON-RPC error `-32003` | JSON-RPC error `-32021`, HTTP `400` |
+
+A client declares an extension with its ID as a key, for example
+`"extensions": {"io.modelcontextprotocol/skills": {}}`. The value carries the client's settings for
+that extension.
+
+The rejection is Missing Required Client Capability. Its `data` names the extension to declare:
+
+```json
+{
+  "code": -32021,
+  "message": "Requires the 'com.example/audit' extension",
+  "data": {"requiredCapabilities": {"extensions": {"com.example/audit": {}}}}
+}
+```
+
+A method that does not exist, including one whose extension is not installed, is always
+`-32601 Method not found` (HTTP `404` on MCP 2026-07-28).
+
+## Negotiation policy
+
+`ExtensionNegotiation negotiation()` decides whether the client must declare the extension before
+Tachyon dispatches the JSON-RPC methods it owns:
+
+| Policy | Client declared the extension | Client did not declare it |
+|---|---|---|
+| `REQUIRED` (default) | dispatched | rejected, handler not invoked |
+| `OPTIONAL` | dispatched | dispatched |
+
+`OPTIONAL` is a compatibility mode for clients that call an extension's methods without declaring it.
+The extension is still advertised. Nothing is synthesized: `onConnectionInit` does not fire,
+`InteractionContext.isExtensionEnabled` stays `false`, and extension-specific optional settings or
+features are not turned on. It also skips the `requiresMetaEnvelope()` check; under `REQUIRED`, a
+declared call missing `_meta.<extensionId>` is `-32602 Invalid params`.
+
+Built-in extensions expose the policy on their builders; see
+[Skills negotiation](mcp-skills.md#extension-negotiation).
+
+## Write an extension
+
+> **API status:** `ServerExtension` and `ExtensionContext` are `@ExperimentalApi`; their shape may
+> still change.
+
+Implement `ServerExtension`. `bootstrap` runs once at server startup and receives an
+`ExtensionContext` with the feature registries and runtime configuration, but no transport or
+server internals:
 
 ```java
 import dev.tachyonmcp.api.runtime.InteractionContext;
@@ -30,7 +118,7 @@ public class AuditExtension implements ServerExtension {
 
     @Override
     public String extensionId() {
-        return "com.example/audit";  // reverse-DNS format
+        return "com.example/audit";
     }
 
     @Override
@@ -39,116 +127,78 @@ public class AuditExtension implements ServerExtension {
     }
 
     @Override
+    public ExtensionSettings serverSettings() {
+        return ExtensionSettings.of(Map.of("version", "1.0"));
+    }
+
+    @Override
     public void bootstrap(ExtensionContext context) {
         context.tools().register(
-            ToolDescriptor.builder().name("audit-log").description("Writes an audit entry").build(),
-            (interaction, request) -> ToolResult.text("ok"));
+                ToolDescriptor.builder()
+                        .name("audit-log")
+                        .description("Writes an audit entry")
+                        .extensionId(extensionId())
+                        .build(),
+                (interaction, request) -> ToolResult.text("ok"));
     }
 
     @Override
     public void onConnectionInit(InteractionContext ctx, ExtensionSettings clientSettings) {
-        // called when a client negotiates this extension
-    }
-
-    @Override
-    public ExtensionSettings serverSettings() {
-        return ExtensionSettings.of(Map.of("version", "1.0"));
+        // the client declared this extension
     }
 }
 ```
 
+Use a reverse-DNS extension ID. Register the extension with `withExtensions(new AuditExtension())`.
+
+### Extension-gated features
+
+A tool, resource, or prompt whose descriptor sets `extensionId(...)` belongs to that extension.
+Clients that did not declare the extension don't see it in `tools/list`, `resources/list`, or
+`prompts/list`, and calling it fails as unknown. Without `extensionId`, a feature registered from
+`bootstrap` is visible to every client.
+
 ### Raw JSON-RPC methods
 
-For a method that doesn't fit the tool/resource/prompt/completion shape, register a raw handler
-from `bootstrap`. The handler is transport-neutral: it sees the stable `InteractionContext` and a
-provider-neutral `JsonObject`, never the underlying transport or server internals.
+For a method that doesn't fit the tool, resource, prompt, or completion shape, register a raw handler
+from `bootstrap`. The handler sees the `InteractionContext` and a provider-neutral `JsonObject`,
+never the transport. The extension's negotiation policy gates the method:
 
 ```java
 @Override
 public void bootstrap(ExtensionContext context) {
     context.registerHandler("com.example/audit-query", (interaction, params) -> {
-        // handle the method; return value is serialized as the JSON-RPC result
         return Map.of("status", "ok");
     });
 }
 ```
 
-## Register an extension
+The return value becomes the JSON-RPC result. By default, `requiresMetaEnvelope()` is `true`: a
+declared call must also carry the extension's key in its params, such as
+`"_meta": {"com.example/audit": {}}`, or it fails with `-32602 Invalid params`. Override
+`requiresMetaEnvelope()` to return `false` when your methods take no envelope.
 
-```java
-var server = TachyonServer.builder()
-    .withExtensions(new AuditExtension())
-    .port(8080)
-    .build();
-server.start();
-```
+### Advertisement
 
-`withExtensions` is a vararg — pass several in one call: `.withExtensions(new AuditExtension(), TasksExtension.instance())`.
-Register one or more extensions with `withExtensions(...)`.
+`AdvertiseMode advertiseMode()` controls whether `capabilities.extensions` lists the extension and its
+`serverSettings()`:
 
-## How negotiation works
+| Mode | Advertised |
+|---|---|
+| `ALWAYS` | Always |
+| `NEGOTIATED` | Only when the client declared the extension in the same request |
+| `NEVER` | Never; for internal extensions such as the Kotlin coroutine runtime |
 
-1. Tachyon advertises each registered extension's `serverSettings()` in `capabilities.extensions` — in the `initialize` response (MCP 2025-11-25) and in the `server/discover` response (MCP 2026-07-28 and later) — subject to that extension's `AdvertiseMode advertiseMode()`:
+Advertisement does not affect negotiation: a client that already knows a `NEVER` extension's ID can
+still declare it.
 
-   - `ALWAYS` - Unconditionally.
-   - `NEVER` - useful for internal-only extensions, e.g. `tachyon-kotlin`'s coroutine runtime (`dev.tachyonmcp/kotlin-coroutines`), that clients aren't expected to know about or negotiate directly. |
-   - `NEGOTIATED` - Only if the client already declared the extension's ID in the same request — `capabilities.extensions` on `initialize`, or `_meta."io.modelcontextprotocol/clientCapabilities".extensions` on any 2026-07-28 request including `server/discover`. |
+### Lifecycle
 
-2. The client sends `initialize` with the extensions it supports, such as `"extensions": {"com.example/audit": {}}`.
-3. Tachyon calls `onConnectionInit` for each extension declared by both client and server — this still works for
-   `NEVER`-mode extensions if a client already knows the ID, since hiding only affects advertisement, not negotiation.
-4. Methods the extension owns — declared in `methods()` or registered from `bootstrap` — are dispatched
-   according to its `negotiation()` policy (below).
-
-## Negotiation policy
-
-`ExtensionNegotiation negotiation()` decides whether the client must declare the extension before
-Tachyon dispatches the JSON-RPC methods it owns. The server checks the method exists first, so an unknown
-method — or one whose extension is not installed — is always `-32601 Method not found`.
-
-| Policy | Client declared the extension | Client did not declare it |
-|---|---|---|
-| `REQUIRED` (default) | dispatched | rejected, handler not invoked |
-| `OPTIONAL` | dispatched | dispatched |
-
-Declaration is read from `initialize.params.capabilities.extensions` for the MCP 2025-11-25 session, and
-from `_meta."io.modelcontextprotocol/clientCapabilities".extensions` on **each** MCP 2026-07-28 request
-(no carry-over between requests). A `REQUIRED` rejection is Missing Required Client Capability —
-`-32021` with HTTP 400 on 2026-07-28, `-32003` on 2025-11-25:
-
-```json
-{
-  "code": -32021,
-  "message": "Requires the 'com.example/audit' extension",
-  "data": {"requiredCapabilities": {"extensions": {"com.example/audit": {}}}}
-}
-```
-
-`OPTIONAL` is a compatibility mode for clients that know an extension's wire methods but skip negotiation.
-The extension is still advertised. Nothing is synthesized: `onConnectionInit` does not fire,
-`InteractionContext.isExtensionEnabled` stays `false`, and extension-specific optional settings or
-features are not turned on. It also skips the `requiresMetaEnvelope()` check; under `REQUIRED`, a
-declared call missing `_meta.<extensionId>` is `-32602 Invalid params`.
-
-```java
-@Override
-public ExtensionNegotiation negotiation() {
-    return ExtensionNegotiation.OPTIONAL;
-}
-```
-
-## Built-in: TasksExtension
-
-`TasksExtension.instance()` is the reference implementation. See [Tasks](../features/tasks.md) for details.
-
-## Built-in: SkillsExtension
-
-`SkillsExtension` serves Agent Skills as `skill://` resources per SEP-2640. See
-[extensions/mcp-skills.md](mcp-skills.md) for details.
-
-## Extension shutdown
-
-Override `shutdown()` to release resources when the server stops:
+| Callback | When it runs |
+|---|---|
+| `bootstrap(ExtensionContext)` | Once, at server startup |
+| `onConnectionInit(InteractionContext, ExtensionSettings)` | When a client declares the extension: at `initialize` on MCP 2025-11-25, on each declaring request on MCP 2026-07-28 |
+| `shutdown()` | When the server stops; release resources here |
 
 ```java
 @Override
@@ -159,4 +209,4 @@ public void shutdown() {
 
 ---
 
-**See also:** [Tasks](../features/tasks.md) · [Tools](../features/tools.md) · [Quickstart](../quickstart.md)
+**See also:** [Tasks](../features/tasks.md) · [Skills](mcp-skills.md) · [Tools](../features/tools.md) · [Quickstart](../quickstart.md)

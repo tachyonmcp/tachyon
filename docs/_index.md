@@ -13,7 +13,7 @@ Start with a running server, add the features your application needs, then prepa
 ## Start
 
 - [Run your first server](quickstart.md) — build a Java server with Maven or Gradle and call its greeting tool with curl.
-- [Use Spring Boot](spring-boot.md) — expose annotated beans and add Actuator health and metrics.
+- [Use Spring Boot](spring-boot/) — build a greeting tool from a Spring bean and call it with MCP Inspector.
 - [Explore the Kotlin DSL](kotlin/) — start a Kotlin server, configure it, and write suspend handlers.
 - [Test a tool](testkit.md) — exercise a running server through an MCP client.
 

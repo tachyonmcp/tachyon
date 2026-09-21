@@ -1,139 +1,15 @@
 ---
-title: "Spring Boot starter"
-weight: 25
-sidebar_order: 25
+title: "Spring Boot reference"
+sidebar_title: "Reference"
+weight: 20
+sidebar_order: 20
 toc: true
 description: |-
-  Expose Spring beans as MCP tools with Tachyon's Spring Boot starter. Run your first tool, configure the server, and add Actuator health and metrics.
+  Configure Spring Boot integration: properties, bean discovery, customizers, Actuator, and native images.
 ---
 
-Expose a Spring bean as an MCP tool with `@McpTool`. The starter discovers annotated beans,
-builds the MCP server, and starts and stops it with your application context.
-
-This guide creates a greeting tool at `http://127.0.0.1:8080/mcp` using Java 21+ and
-Spring Boot 4.1.1. You need JDK 21+, Maven, and `curl`; Maven resolves Tachyon from Maven Central,
-so you don't need a Tachyon checkout.
-
-## 1. Add the starter
-
-Create an empty `greeting-server` directory with this `pom.xml`:
-
-```xml
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
-    <modelVersion>4.0.0</modelVersion>
-    <parent>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-starter-parent</artifactId>
-        <version>4.1.1</version>
-        <relativePath/>
-    </parent>
-    <groupId>example</groupId>
-    <artifactId>greeting-server</artifactId>
-    <version>1.0-SNAPSHOT</version>
-    <properties>
-        <java.version>21</java.version>
-    </properties>
-    <dependencyManagement>
-        <dependencies>
-            <dependency>
-                <groupId>dev.tachyonmcp</groupId>
-                <artifactId>tachyon-bom</artifactId>
-                <version>1.0.0-beta.30</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-        </dependencies>
-    </dependencyManagement>
-    <dependencies>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>dev.tachyonmcp</groupId>
-            <artifactId>tachyon-spring-boot-starter</artifactId>
-        </dependency>
-    </dependencies>
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-            </plugin>
-        </plugins>
-    </build>
-</project>
-```
-
-For an existing Boot application, import `tachyon-bom` and add `tachyon-spring-boot-starter`.
-Compile with `-parameters` so tool arguments retain their Java parameter names. Boot's parent
-POM enables this; without that parent, set `maven.compiler.parameters` to `true`.
-
-## 2. Create a tool
-
-Create `src/main/java/example/GreetingApplication.java`:
-
-```java
-package example;
-
-import org.springframework.boot.SpringApplication;
-import org.springframework.boot.autoconfigure.SpringBootApplication;
-
-@SpringBootApplication
-public class GreetingApplication {
-    public static void main(String[] args) {
-        SpringApplication.run(GreetingApplication.class, args);
-    }
-}
-```
-
-Create `src/main/java/example/GreetingService.java`:
-
-```java
-package example;
-
-import dev.tachyonmcp.api.annotations.McpTool;
-import org.springframework.stereotype.Component;
-
-@Component
-public class GreetingService {
-    @McpTool(description = "Say hello to someone")
-    public String greet(String name) {
-        return "Hello, " + name + "!";
-    }
-}
-```
-
-Keep the service in the application package or a subpackage so Spring discovers it. Tachyon
-uses the method name as the tool name and derives its input schema from the parameters.
-The returned string becomes text content.
-
-Create `src/main/resources/application.yaml`:
-
-```yaml
-tachyon:
-  name: greeting-server
-  version: "1.0.0"
-  host: 127.0.0.1
-  port: 8080
-```
-
-## 3. Run and call the tool
-
-From `greeting-server`:
-
-```bash
-mvn -q spring-boot:run
-```
-
-In another terminal, send the [quickstart's greeting request](quickstart.md#3-test-with-curl).
-It uses the same URL, tool name, and arguments. The response includes
-`{"type":"text","text":"Hello, Ada!"}` in `result.content`.
-
-For an MCP client, choose **Streamable HTTP** and connect to `http://127.0.0.1:8080/mcp`.
-Stop the application with **Ctrl+C**; Spring closes the MCP server.
+Use this reference to configure an existing Tachyon Spring Boot application. For your first
+server and greeting call, follow the [Spring Boot starter guide](./).
 
 ## Configure the server
 
@@ -155,7 +31,7 @@ For an ephemeral port, inject `TachyonServer` and read `server.port()` after sta
 | `tachyon.network.endpoint-path` | `/mcp` | HTTP path serving the MCP endpoints. |
 | `tachyon.network.reader-idle-timeout` | `60s` | Close connections with no inbound traffic for this long. |
 | `tachyon.network.writer-idle-timeout` | `5m` | Close connections with no outbound traffic for this long. |
-| `tachyon.network.heartbeat-interval` | `15s` | SSE heartbeat that keeps an upgraded stream alive. Keep it below the reader idle timeout and, with sessions, below the session TTL; `0` disables it. |
+| `tachyon.network.heartbeat-interval` | `15s` | SSE heartbeat that keeps an upgraded stream alive. Keep it below proxy idle timeouts and, with sessions, below the session TTL; `0` disables it. |
 | `tachyon.network.max-content-length` | `1MB` | Maximum HTTP request body size. Takes a `DataSize`, such as `512KB`. |
 | `tachyon.network.allowed-origins` | none | Origins accepted by the CORS handler. |
 | `tachyon.network.allowed-headers` | none | Request headers accepted by the CORS handler, beyond the built-in ones. |
@@ -204,7 +80,7 @@ you set and the file they came from.
 ### Running alongside Spring MVC or WebFlux
 
 Tachyon owns a separate Netty HTTP server. `tachyon.port` controls MCP; `server.port` controls
-Spring's web server. The minimal application above needs no MVC or WebFlux dependency.
+Spring's web server. The [onboarding application](./) needs no MVC or WebFlux dependency.
 
 If your application also serves REST endpoints or Actuator over HTTP, assign different ports:
 
@@ -245,8 +121,8 @@ override property values. Multiple customizers follow Spring ordering, such as `
 Use them for stores and generators, JSON codecs, observability, or programmatic feature
 registration.
 
-See [configuration](running/configuration.md) for builder options and
-[deployment](running/deployment.md) for bind addresses and accepted public hostnames.
+See [configuration](../running/configuration.md) for builder options and
+[deployment](../running/deployment.md) for bind addresses and accepted public hostnames.
 
 ## How bean discovery works
 
@@ -264,7 +140,7 @@ register features at runtime.
 | `TachyonServerCustomizer` | Adjusts the builder before construction. |
 
 These are Tachyon annotations from `dev.tachyonmcp.api.annotations`. See
-[annotations](annotations.md) for parameter binding, structured results, and third-party adapters.
+[annotations](../annotations.md) for parameter binding, structured results, and third-party adapters.
 Automatic bean discovery uses the native Tachyon annotations, including ones declared on an interface
 the bean implements.
 
@@ -326,7 +202,7 @@ Metrics require Micrometer and a `MeterRegistry` bean. The timer attaches throug
 and applies to starter-built servers. Feature gauges also work with a user-provided server.
 
 For traces, add Tachyon's OpenTelemetry listener through a customizer; see
-[observability](running/observability.md) and the
+[observability](../running/observability.md) and the
 [Spring Boot weather example](https://github.com/tachyonmcp/tachyon/tree/main/examples/weather-mcp-spring-boot).
 
 ## GraalVM native image
