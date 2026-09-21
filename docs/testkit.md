@@ -1,7 +1,8 @@
 ---
 title: "MCP Testkit"
-weight: 85
-sidebar_order: 85
+sidebar_title: "Test a tool"
+weight: 13
+sidebar_order: 13
 toc: true
 description: |-
   Test Tachyon servers end to end: shaping clients, dynamic-port servers, and fluent JSON-RPC assertions.

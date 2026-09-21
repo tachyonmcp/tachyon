@@ -1,8 +1,9 @@
 ---
 title: "MCP features"
+sidebar_title: "Build"
 overview_title: "Choose a feature"
-weight: 10
-sidebar_order: 10
+weight: 20
+sidebar_order: 20
 toc: true
 description: |-
   Add tools, resources, prompts, completions, client interactions, and long-running tasks.

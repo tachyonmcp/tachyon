@@ -1,8 +1,8 @@
 ---
 title: "Extensions"
 overview_title: "Introduction"
-weight: 75
-sidebar_order: 75
+weight: 50
+sidebar_order: 50
 toc: true
 description: |-
   Add negotiable protocol extensions to your Tachyon server (SEP-2133), including extension-gated tool visibility.

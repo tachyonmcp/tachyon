@@ -1,7 +1,8 @@
 ---
 title: "Annotations"
-weight: 22
-sidebar_order: 22
+sidebar_title: "Annotation reference"
+weight: 40
+sidebar_order: 40
 toc: true
 description: |-
   Declare tools, resources, prompts, and completions on plain Java methods — or bridge third-party annotation frameworks (mcp-java, LangChain4j, Spring AI) via the AnnotationProvider SPI.

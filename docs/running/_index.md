@@ -1,8 +1,9 @@
 ---
 title: "Running Tachyon"
+sidebar_title: "Operate"
 overview_title: "Plan a deployment"
-weight: 40
-sidebar_order: 40
+weight: 30
+sidebar_order: 30
 toc: true
 description: |-
   Configure, deploy, and observe a Tachyon MCP server.

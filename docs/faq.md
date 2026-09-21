@@ -1,7 +1,7 @@
 ---
 title: "FAQ"
-weight: 95
-sidebar_order: 95
+weight: 60
+sidebar_order: 60
 toc: true
 description: |-
   Answers to common questions about Tachyon: Java versions, frameworks, concurrency, deployment, and compatibility.

@@ -1,7 +1,7 @@
 ---
 title: "Spring Boot starter"
-weight: 25
-sidebar_order: 25
+weight: 12
+sidebar_order: 12
 toc: true
 description: |-
   Expose Spring beans as MCP tools with Tachyon's Spring Boot starter. Run your first tool, configure the server, and add Actuator health and metrics.

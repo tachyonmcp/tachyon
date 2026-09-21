@@ -3,7 +3,7 @@ name: tachyon-development
 description: >-
     Apply Tachyon MCP project rules when designing, implementing, reviewing,
     or testing Java and Kotlin server code, MCP protocol behaviour,
-    E2E fixtures, concurrency, JSON, and schemas.
+    E2E fixtures, concurrency, JSON, schemas, and documentation examples.
 ---
 
 # Prime directives
@@ -67,6 +67,19 @@ description: >-
   repeated IDs, and independent termination. Stateless concurrency must prove no session ID and no
   response/client-data crossover.
 - Test observable server behaviour through real clients. Don't add tests for test helpers.
+
+# Documentation examples
+
+- For manual testing in onboarding guides, lead with MCP Inspector; retain curl as an alternative.
+- Use HTML `<details>` with descriptive `<summary>` labels for alternative instructions and long
+  setup blocks. Open the recommended testing path with `<details open>`; keep alternatives collapsed.
+  Leave blank lines around fenced Markdown inside the elements and check the rendered Hugo page.
+- Give the launch command, transport, endpoint, tool arguments, and expected result. Verify Inspector
+  commands and UI labels against [its official repository](https://github.com/modelcontextprotocol/inspector),
+  and ground Tachyon behavior in source and existing tests.
+- For Inspector CLI examples, use `--tool-args-json` to preserve types and `--format json` for parsed
+  output. Follow the [CLI smoke-testing guide](https://github.com/modelcontextprotocol/inspector/blob/main/docs/cli-smoke-testing.md)
+  for automation: pin the Inspector version, bound connection time, and preserve failing exit codes.
 
 # JSON/JSON Schemas
 
