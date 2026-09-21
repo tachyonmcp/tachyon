@@ -175,7 +175,7 @@ This uses the server's configured payload serializers and feature registries. Re
 immediately, in order; a group of registrations is not transactional. DI containers can construct
 the server, inject it into service beans, register those beans, and then call `server.start()`.
 
-The [Spring Boot starter](spring-boot.md) follows that order. It discovers singleton beans after initialization,
+The [Spring Boot starter](spring-boot/reference.md#how-bean-discovery-works) follows that order. It discovers singleton beans after initialization,
 reads annotation metadata from Spring AOP target classes, and invokes JDK/class proxies so advice
 still runs. For JDK proxies, each annotated method must be exposed by an interface. A user-provided
 server keeps its own registration policy.
