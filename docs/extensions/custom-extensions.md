@@ -30,8 +30,9 @@ Usually not. Pick the simplest option that does the job:
 - **Extension ID**: a unique name such as `com.example/greetings`. Start it with a reversed domain
   you own, so it can't clash with other extensions.
 - **Advertise**: the server lists the extensions it supports in its capabilities.
-- **Declare**: the client lists the extensions it wants to use. A client must declare an extension
-  before calling its methods.
+- **Declare**: the client lists the extensions it wants to use. A client must declare a `REQUIRED`
+  extension before calling its methods, but may call an `OPTIONAL` extension without declaring it
+  first.
 - **MCP version**: MCP protocol revisions are named by date. This guide uses `2026-07-28`, the
   latest. See [what clients must send](_index.md#what-clients-must-send) for `2025-11-25`.
 
@@ -211,9 +212,10 @@ transport.
   guard against `null`. Read values with accessors such as `stringOr`, `intOpt`, and `objectOpt`.
 - **Result**: the return value is serialized as the JSON-RPC result. Return `null` for an empty
   result.
-- **Errors**: any exception the handler throws, including `IllegalArgumentException`, becomes
-  `-32603 Internal error` with HTTP `200`. Validate input inside the handler, and return a result
-  that describes the problem.
+- **Errors**: return a `ServerError` for an error response, using
+  `ServerError.Kind.INVALID_PARAMS` for expected input errors. `McpDispatcher` serializes it as a
+  JSON-RPC error envelope. Reserve exceptions for unexpected failures; normal results remain
+  successful responses.
 - **Negotiation**: the extension's [negotiation policy](_index.md#negotiation-policy) decides whether
   undeclared clients may call the method. Declaring the extension is enough; calls need no
   extension-specific `_meta` entry.
