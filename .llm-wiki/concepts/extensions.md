@@ -3,7 +3,7 @@ title: Extensions
 tags: [concept, extensions, spi]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/ProtocolVersionHandler.java, tachyon-api/src/main/java/dev/tachyonmcp/api/server/extensions/, tachyon-api/src/main/java/dev/tachyonmcp/api/runtime/Extension.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/handlers/ExtensionNegotiator.java, tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/mcp/v2026_07_28/transport/ExtensionNegotiationHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java, tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/mcp/v2026_07_28/transport/RequestValidationHandler.java]
 updated: 2026-09-22
-commit: 58f386e8
+commit: cedec4fd
 ---
 
 # 🧩 Extensions
@@ -58,7 +58,7 @@ Order: resolve handler first (`server.getHandler`, none ⇒ `methodNotFound`), t
 
 No per-call `_meta.<extId>` envelope: neither MCP spec nor SEP-2133 defines one, so the old `requiresMetaEnvelope()` gate was removed.
 
-Policy snapshot at bootstrap into `optionalNegotiationExtensionIds` `DefaultTachyonServer#optionalNegotiationExtensionIds`, `DefaultTachyonServer#bootstrapExtensions`, `DefaultTachyonServer#extensionNegotiationOptional`. `REQUIRED` on a stateless server ⇒ startup WARN (2025-11-25 clients always rejected) `DefaultTachyonServer#bootstrapExtensions`. "Declared on ctx" = session (stateful 2025) or per-request channel ctx (stateless 2025 and 2026) — no leak across 2026 requests. `OPTIONAL` never enables the ext: handler sees `isExtensionEnabled=false`, no `onConnectionInit`.
+Policy snapshot at bootstrap into `optionalNegotiationExtensionIds` `DefaultTachyonServer#optionalNegotiationExtensionIds`, `DefaultTachyonServer#bootstrapExtensions`, `DefaultTachyonServer#extensionNegotiationOptional`. `REQUIRED` on a stateless server ⇒ startup WARN (2025-11-25 clients always rejected) `DefaultTachyonServer#bootstrapExtensions`. "Declared on ctx" = session (stateful 2025) or per-request channel ctx (stateless 2025 and 2026) — no leak across 2026 requests. Only undeclared `OPTIONAL` requests keep the extension disabled (`isExtensionEnabled=false`, no `onConnectionInit`); declared `OPTIONAL` extensions are enabled and receive `onConnectionInit`.
 
 Capability requirement inside a handler: throw `MissingRequiredClientCapabilityException(msg, requiredCaps)` ⇒ -32021 (2026) `MissingRequiredClientCapabilityException`. Tasks gate helper `TasksExtension.requireDeclared` (shares `ServerErrors.missingRequiredExtension` `ServerErrors#missingRequiredExtension`) returns error only for session-less protocols `TasksExtension#requireDeclared`.
 

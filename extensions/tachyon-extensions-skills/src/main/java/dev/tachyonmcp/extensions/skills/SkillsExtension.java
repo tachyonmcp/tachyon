@@ -30,8 +30,8 @@ import org.jspecify.annotations.Nullable;
  * {@code skills/list}, {@code skills/get}, and {@code resources/directory/read}.
  * Skill files remain available through the base {@code resources/list} and {@code resources/read}
  * methods when the client has not negotiated this extension. By default
- * ({@link ExtensionNegotiation#REQUIRED}) the extension methods reject undeclared clients with Missing
- * Required Client Capability; build with {@link ExtensionNegotiation#OPTIONAL} to serve them anyway.
+ * ({@link ExtensionNegotiation#OPTIONAL}) the extension methods serve undeclared clients. Build with
+ * {@link ExtensionNegotiation#REQUIRED} to reject clients that did not declare the extension.
  *
  * <pre>{@code
  * TachyonServer.builder()

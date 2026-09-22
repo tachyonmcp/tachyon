@@ -100,12 +100,13 @@ Tachyon dispatches the JSON-RPC methods it owns:
 | `OPTIONAL` (default) | dispatched | dispatched |
 | `REQUIRED` | dispatched | rejected, handler not invoked |
 
-`OPTIONAL` follows the SEP-2133 fallback rule: when a client doesn't declare an extension, the server
-falls back to core behavior and rejects only if the extension is mandatory. The extension is still
-advertised. Nothing is synthesized for an undeclared client: `onConnectionInit` does not fire,
-`InteractionContext.isExtensionEnabled` stays `false`, and extension-specific settings or features
-are not turned on. Handlers that depend on the client's support check `isExtensionEnabled` and fall
-back.
+`OPTIONAL` follows the SEP-2133 fallback rule: the server dispatches the extension-owned handler even
+when the client did not declare the extension. The handler checks `isExtensionEnabled` and chooses
+any core fallback; the server does not choose one for it. `OPTIONAL` controls dispatch only.
+Advertisement follows `AdvertiseMode`: `ALWAYS` is always advertised, `NEGOTIATED` is advertised only
+when enabled, and `NEVER` is never advertised. For an undeclared client, `onConnectionInit` does not
+fire, `InteractionContext.isExtensionEnabled` stays `false`, and extension-specific settings or
+features are not turned on. An undeclared `NEGOTIATED` extension is neither enabled nor advertised.
 
 Choose `REQUIRED` only for a mandatory extension, one whose methods can't work for a client that
 doesn't support it. On MCP 2025-11-25 it needs server sessions.

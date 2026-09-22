@@ -3,7 +3,7 @@ title: tachyon-extensions-skills
 tags: [module, extensions, skills]
 sources: [extensions/tachyon-extensions-skills/src/main/java/dev/tachyonmcp/extensions/skills/, extensions/tachyon-extensions-skills/src/main/resources/]
 updated: 2026-09-22
-commit: 58f386e8
+commit: cedec4fd
 ---
 
 # 🎓 tachyon-extensions-skills

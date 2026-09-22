@@ -206,7 +206,7 @@ Those clients then get Missing Required Client Capability from the three extensi
 (`-32021` + HTTP 400 on 2026-07-28, `-32003`, Tachyon-defined, on 2025-11-25) with
 `data.requiredCapabilities.extensions."io.modelcontextprotocol/skills"`. They can still discover
 skill files through `resources/list` and fetch a known `skill://` URI through `resources/read`:
-[SEP-2640][SEP-2640]'s baseline resource transport.
+[SEP-2640]'s baseline resource transport.
 
 ⚠️ With `REQUIRED`, MCP 2025-11-25 clients also need server sessions
 (`.session(session -> session.enabled())`). Their declaration is made once in `initialize`, so a

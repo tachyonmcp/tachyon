@@ -10,6 +10,9 @@ import dev.tachyonmcp.api.server.extensions.ServerExtension;
 import dev.tachyonmcp.api.server.features.tools.ToolDescriptor;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
 import dev.tachyonmcp.core.server.TachyonServer;
+import dev.tachyonmcp.core.server.config.SessionConfig;
+import org.jspecify.annotations.NonNull;
+
 import java.util.Map;
 
 /**
@@ -22,22 +25,22 @@ final class ExtensionExample {
         static final String ID = "com.example/audit";
 
         @Override
-        public String extensionId() {
+        public @NonNull String extensionId() {
             return ID;
         }
 
         @Override
-        public AdvertiseMode advertiseMode() {
+        public @NonNull AdvertiseMode advertiseMode() {
             return AdvertiseMode.ALWAYS;
         }
 
         @Override
-        public ExtensionSettings serverSettings() {
+        public @NonNull ExtensionSettings serverSettings() {
             return ExtensionSettings.of(Map.of("version", "1.0"));
         }
 
         @Override
-        public void bootstrap(ExtensionContext context) {
+        public void bootstrap(@NonNull ExtensionContext context) {
             context.registerHandler("com.example/audit-query", (interaction, params) -> {
                 var user = params == null ? "anyone" : params.stringOr("user", "anyone");
                 return Map.of("user", user, "entries", 0);
@@ -52,7 +55,7 @@ final class ExtensionExample {
         }
 
         @Override
-        public void onConnectionInit(InteractionContext ctx, ExtensionSettings clientSettings) {
+        public void onConnectionInit(@NonNull InteractionContext ctx, @NonNull ExtensionSettings clientSettings) {
             // the client declared this extension
         }
     }
@@ -60,7 +63,7 @@ final class ExtensionExample {
     public static void main(String[] args) {
         var server = TachyonServer.builder()
                 .withExtensions(new AuditExtension())
-                .session(session -> session.enabled())
+                .session(SessionConfig.Builder::enabled)
                 .port(8080)
                 .build();
         Runtime.getRuntime().addShutdownHook(new Thread(server::close));
