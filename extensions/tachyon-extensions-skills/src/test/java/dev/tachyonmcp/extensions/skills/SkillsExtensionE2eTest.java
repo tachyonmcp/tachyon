@@ -682,9 +682,10 @@ class SkillsExtensionE2eTest {
     }
 
     @Test
-    void defaultNegotiationRejectsSkillMethodsButKeepsResourcesForUndeclaredClient() throws Exception {
+    void requiredNegotiationRejectsSkillMethodsButKeepsResourcesForUndeclaredClient() throws Exception {
         var extension = SkillsExtension.builder()
                 .registry(new ClasspathSkillsRegistry("skills"))
+                .negotiation(ExtensionNegotiation.REQUIRED)
                 .build();
         assertThat(extension.negotiation()).isEqualTo(ExtensionNegotiation.REQUIRED);
         try (final var server = startServer(extension);
@@ -868,10 +869,9 @@ class SkillsExtensionE2eTest {
     }
 
     @Test
-    void optionalNegotiationServesSkillMethodsToUndeclaredClient() throws Exception {
+    void defaultNegotiationServesSkillMethodsToUndeclaredClient() throws Exception {
         var extension = SkillsExtension.builder()
                 .registry(new ClasspathSkillsRegistry("skills"))
-                .negotiation(ExtensionNegotiation.OPTIONAL)
                 .build();
         assertThat(extension.negotiation()).isEqualTo(ExtensionNegotiation.OPTIONAL);
         try (final var server = startServer(extension);

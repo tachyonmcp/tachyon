@@ -125,7 +125,7 @@ public class McpChannelInitializer extends ChannelInitializer<SocketChannel> {
         }
         this.protocolRequestHandlers = handlers;
 
-        protocolVersionHandler = new ProtocolVersionHandler(endpointPath);
+        protocolVersionHandler = new ProtocolVersionHandler(endpointPath, stateless);
         acceptHeaderValidator = new AcceptValidationHandler(endpointPath);
         endpointValidatorHandler = new EndpointValidatorHandler(endpointPath);
     }

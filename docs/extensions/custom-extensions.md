@@ -30,9 +30,8 @@ Usually not. Pick the simplest option that does the job:
 - **Extension ID**: a unique name such as `com.example/greetings`. Start it with a reversed domain
   you own, so it can't clash with other extensions.
 - **Advertise**: the server lists the extensions it supports in its capabilities.
-- **Declare**: the client lists the extensions it wants to use. A client must declare a `REQUIRED`
-  extension before calling its methods, but may call an `OPTIONAL` extension without declaring it
-  first.
+- **Declare**: the client lists the extensions it wants to use. By default (`OPTIONAL`) a client can
+  call an extension's methods without declaring it. A `REQUIRED` extension rejects such calls.
 - **MCP version**: MCP protocol revisions are named by date. This guide uses `2026-07-28`, the
   latest. See [what clients must send](_index.md#what-clients-must-send) for `2025-11-25`.
 
@@ -106,8 +105,9 @@ public final class MyMcpServer {
 ```
 
 `withExtensions(...)` adds the extension. `session(...)` turns on server sessions. MCP `2026-07-28`
-clients don't need them, but `2025-11-25` clients do: without sessions, the server forgets which
-extensions they declared.
+clients don't need them. `2025-11-25` clients declare extensions once, in `initialize`, so without
+sessions the declaration lasts only for the `initialize` request. Reusing the TCP connection
+does not preserve it; later calls to this `REQUIRED` extension are rejected.
 
 ### 3. Run the server
 
@@ -160,8 +160,22 @@ The request has three parts that every MCP `2026-07-28` call needs:
 
 ### 5. Call it without declaring the extension
 
-Run the same command, but change the `extensions` line to `"extensions": {}`. The server now
-rejects the call. The response has HTTP status `400`, so curl also prints
+Run the same command, but change the `extensions` line to `"extensions": {}`. The call still
+succeeds: by default an extension is `OPTIONAL`, so the server serves clients that don't declare it,
+as SEP-2133's fallback rule allows. Inside the handler, `interaction.isExtensionEnabled("com.example/greetings")`
+returns `false` for this call, which lets you fall back to core behavior.
+
+To make the extension mandatory, override `negotiation()` in `GreetingsExtension`:
+
+```java
+@Override
+public ExtensionNegotiation negotiation() {
+    return ExtensionNegotiation.REQUIRED;
+}
+```
+
+Import `dev.tachyonmcp.api.server.extensions.ExtensionNegotiation`, restart the server, and repeat
+the call. The server now rejects it. The response has HTTP status `400`, so curl also prints
 `The requested URL returned error: 400` and exits with code `22`:
 
 ```json
@@ -177,8 +191,8 @@ You now have a working extension. The rest of this page explains the other optio
 
 | Response | Cause | Fix |
 |---|---|---|
-| `-32021 Requires the '<id>' extension`, HTTP `400` | The `2026-07-28` request doesn't declare the extension | Add the extension ID under `_meta."io.modelcontextprotocol/clientCapabilities".extensions` |
-| `-32003 Requires the '<id>' extension` | A `2025-11-25` client didn't declare it in `initialize`, or the server has no sessions | Declare it in `initialize` `capabilities.extensions`, and enable sessions on the server |
+| `-32021 Requires the '<id>' extension`, HTTP `400` | A `REQUIRED` extension: the `2026-07-28` request doesn't declare it | Add the extension ID under `_meta."io.modelcontextprotocol/clientCapabilities".extensions` |
+| `-32003 Requires the '<id>' extension` | A `REQUIRED` extension: a `2025-11-25` client didn't declare it in `initialize`, or the server has no sessions | Declare it in `initialize` `capabilities.extensions` and enable sessions on the server, or use `OPTIONAL` |
 | `-32020 Header mismatch: Mcp-Method is required…`, HTTP `400` | The `Mcp-Method` header is missing or differs from the body's `method` | Send `Mcp-Method` with the same value as `method` |
 | `-32601 Method not found`, HTTP `404` | The method name is misspelled, or the extension isn't registered | Check the name in `registerHandler` and the `withExtensions(...)` call |
 | `-32603 Internal error` | The handler threw an exception | Check the server log; validate input inside the handler instead of throwing |
@@ -192,7 +206,7 @@ You now have a working extension. The rest of this page explains the other optio
 | `extensionId()` | Yes | Unique ID, such as `com.example/greetings` |
 | `advertiseMode()` | Yes | When the server lists the extension; see [advertisement](#advertisement) |
 | `serverSettings()` | No | Settings sent to clients with the advertisement; empty by default |
-| `negotiation()` | No | `REQUIRED` (default) or `OPTIONAL`; see [negotiation policy](_index.md#negotiation-policy) |
+| `negotiation()` | No | `OPTIONAL` (default) or `REQUIRED`; see [negotiation policy](_index.md#negotiation-policy) |
 | `bootstrap(ExtensionContext)` | No | Registers methods and features at startup |
 | `onConnectionInit(InteractionContext, ExtensionSettings)` | No | Runs when a client declares the extension |
 | `methods()` | No | Claims methods whose handlers are registered outside `bootstrap` |

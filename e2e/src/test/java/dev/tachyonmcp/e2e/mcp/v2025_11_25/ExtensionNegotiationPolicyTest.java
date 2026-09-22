@@ -66,6 +66,22 @@ class ExtensionNegotiationPolicyTest extends AbstractStatefulMcpE2eTest {
         }
     }
 
+    @Test
+    void requiredDeclarationSurvivesConnectionChange() throws Exception {
+        try (var initializer = createTestClient();
+                var client = createTestClient()) {
+            final var sessionId = openSession(initializer, declaring(REQUIRED_ID));
+
+            final var response = call(client, sessionId, 2, "required/call");
+
+            assertThat(response).isSuccess().hasId(2).hasResult("""
+                    {"handled":"required/call"}
+                    """);
+            assertThat(required.declaredSeenByHandler).containsExactly(true);
+            assertThat(required.connectionInits).containsExactly(REQUIRED_ID);
+        }
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {UNDECLARED_REQUIRED, OTHER_EXTENSION_ONLY, NO_EXTENSIONS_MAP, NO_CAPABILITIES})
     void requiredExtensionRejectsUndeclaredClientWithoutInvokingHandler(String capabilities) throws Exception {
@@ -80,15 +96,18 @@ class ExtensionNegotiationPolicyTest extends AbstractStatefulMcpE2eTest {
     }
 
     @Test
-    void negotiationIsRequiredByDefault() throws Exception {
-        assertThat(defaulted.negotiation()).isEqualTo(ExtensionNegotiation.REQUIRED);
+    void negotiationIsOptionalByDefault() throws Exception {
+        assertThat(defaulted.negotiation()).isEqualTo(ExtensionNegotiation.OPTIONAL);
         try (var client = createTestClient()) {
             var sessionId = openSession(client, declaring(REQUIRED_ID));
 
             var response = call(client, sessionId, 2, "defaulted/call");
 
-            assertThat(response).isJsonRpcError().hasId(2).hasError(missingExtension(DEFAULTED_ID));
-            assertThat(defaulted.declaredSeenByHandler).isEmpty();
+            assertThat(response).isSuccess().hasId(2).hasResult("""
+                    {"handled":"defaulted/call"}
+                    """);
+            assertThat(defaulted.declaredSeenByHandler).containsExactly(false);
+            assertThat(defaulted.connectionInits).isEmpty();
         }
     }
 
@@ -131,14 +150,11 @@ class ExtensionNegotiationPolicyTest extends AbstractStatefulMcpE2eTest {
             var sessionId = openSession(client, declaring(REQUIRED_ID));
 
             assertThat(call(client, sessionId, 2, "required/call")).isSuccess().hasId(2);
-            assertThat(call(client, sessionId, 3, "defaulted/call"))
-                    .isJsonRpcError()
-                    .hasId(3)
-                    .hasError(missingExtension(DEFAULTED_ID));
+            assertThat(call(client, sessionId, 3, "defaulted/call")).isSuccess().hasId(3);
             assertThat(call(client, sessionId, 4, "optional/call")).isSuccess().hasId(4);
 
             assertThat(required.declaredSeenByHandler).containsExactly(true);
-            assertThat(defaulted.declaredSeenByHandler).isEmpty();
+            assertThat(defaulted.declaredSeenByHandler).containsExactly(false);
             assertThat(optional.declaredSeenByHandler).containsExactly(false);
         }
     }

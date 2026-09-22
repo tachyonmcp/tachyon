@@ -56,18 +56,22 @@ when it doesn't, depend on the MCP version:
 |---|---|---|
 | Server advertises extensions in | `initialize` result, `capabilities.extensions` | `server/discover` result, `capabilities.extensions` |
 | Client declares extensions in | `initialize` params, `capabilities.extensions` | `_meta."io.modelcontextprotocol/clientCapabilities".extensions` |
-| Declaration lasts | The whole session; requires server sessions | One request; repeat it on every request |
+| Declaration lasts | The whole session; without sessions, only the `initialize` request | One request; repeat it on every request |
 | Undeclared call to a `REQUIRED` extension method | JSON-RPC error `-32003` (Tachyon-defined) | JSON-RPC error `-32021`, HTTP `400` |
 
 On MCP 2025-11-25 the declaration is stored on the session. Tachyon servers are stateless by
-default, so enable sessions with `.session(session -> session.enabled())` if 2025-11-25 clients use
-`REQUIRED` extensions. Without a session, the declaration is lost after `initialize` and every call
-to the extension's methods is rejected with `-32003`.
+default. Without a session, every HTTP POST has a fresh context: later requests cannot
+see what the client declared in `initialize`, even on the same TCP connection. With the default `OPTIONAL` policy the extension's
+methods still work, but `isExtensionEnabled` reports `false`. If 2025-11-25 clients use a
+`REQUIRED` extension, enable sessions with `.session(session -> session.enabled())`; otherwise its
+methods are rejected with `-32003`, and the server logs a warning at startup.
 
 The 2025-11-25 schema defines no `extensions` capability. Tachyon follows
 [SEP-2133](https://modelcontextprotocol.io/seps/2133-extensions) there, which negotiates extensions
 through `initialize` capabilities. MCP 2026-07-28 adds `extensions` to the schema and moves client
-declarations into each request.
+declarations into each request, as described in the
+[extension negotiation overview](https://modelcontextprotocol.io/extensions/overview#negotiation).
+That per-request capability mechanism does not apply to MCP 2025-11-25.
 
 A client declares an extension with its ID as a key, for example
 `"extensions": {"io.modelcontextprotocol/skills": {}}`. The value carries the client's settings for
@@ -93,13 +97,18 @@ Tachyon dispatches the JSON-RPC methods it owns:
 
 | Policy | Client declared the extension | Client did not declare it |
 |---|---|---|
-| `REQUIRED` (default) | dispatched | rejected, handler not invoked |
-| `OPTIONAL` | dispatched | dispatched |
+| `OPTIONAL` (default) | dispatched | dispatched |
+| `REQUIRED` | dispatched | rejected, handler not invoked |
 
-`OPTIONAL` is a compatibility mode for clients that call an extension's methods without declaring it.
-The extension is still advertised. Nothing is synthesized: `onConnectionInit` does not fire,
-`InteractionContext.isExtensionEnabled` stays `false`, and extension-specific optional settings or
-features are not turned on.
+`OPTIONAL` follows the SEP-2133 fallback rule: when a client doesn't declare an extension, the server
+falls back to core behavior and rejects only if the extension is mandatory. The extension is still
+advertised. Nothing is synthesized for an undeclared client: `onConnectionInit` does not fire,
+`InteractionContext.isExtensionEnabled` stays `false`, and extension-specific settings or features
+are not turned on. Handlers that depend on the client's support check `isExtensionEnabled` and fall
+back.
+
+Choose `REQUIRED` only for a mandatory extension, one whose methods can't work for a client that
+doesn't support it. On MCP 2025-11-25 it needs server sessions.
 
 Built-in extensions expose the policy on their builders; see
 [Skills negotiation](mcp-skills.md#extension-negotiation).

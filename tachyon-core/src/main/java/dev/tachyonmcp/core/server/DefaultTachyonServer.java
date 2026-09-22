@@ -604,6 +604,11 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
             extensionsById.put(ext.extensionId(), ext);
             if (ext.negotiation() == ExtensionNegotiation.OPTIONAL) {
                 optionalNegotiationExtensionIds.add(ext.extensionId());
+            } else if (isStateless()) {
+                logger.warn(
+                        "Extension {} requires client negotiation, but sessions are disabled: "
+                                + "MCP 2025-11-25 clients may be rejected even after declaring it. Enable sessions or use OPTIONAL",
+                        ext.extensionId());
             }
             bootstrappingExtensionId = ext.extensionId();
             try {

@@ -15,19 +15,24 @@ package dev.tachyonmcp.api.server.extensions;
 public enum ExtensionNegotiation {
 
     /**
-     * Default. The client MUST declare the extension. A call to an extension-owned method without that
-     * declaration is rejected with Missing Required Client Capability ({@code -32021} under MCP
-     * 2026-07-28) carrying {@code data.requiredCapabilities.extensions.<extensionId>}; the handler is
-     * not invoked.
+     * Opt-in, for mandatory extensions. The client MUST declare the extension. A call to an
+     * extension-owned method without that declaration is rejected with Missing Required Client
+     * Capability ({@code -32021} under MCP 2026-07-28, {@code -32003} under MCP 2025-11-25) carrying
+     * {@code data.requiredCapabilities.extensions.<extensionId>}; the handler is not invoked.
+     *
+     * <p>Under MCP 2025-11-25 the declaration is kept on the session, so a stateless server (sessions
+     * disabled) retains it only for the {@code initialize} request. Later extension calls are
+     * rejected even on the same TCP connection. Enable sessions when 2025-11-25 clients use a {@code REQUIRED} extension.
      */
     REQUIRED,
 
     /**
-     * Compatibility mode for clients that know an extension's wire methods but skip negotiation. The
-     * extension is still advertised, and calls to its registered methods are dispatched even when the
-     * client did not declare it. Nothing is synthesized: the extension stays disabled on the request context,
-     * {@link ServerExtension#onConnectionInit} does not fire, and no extension-specific optional
-     * settings or features are turned on.
+     * Default. Calls to the extension's registered methods are dispatched whether or not the client
+     * declared it (SEP-2133 makes the client-capability check a SHOULD, not a MUST). Nothing is
+     * synthesized: an undeclared extension stays disabled on the request context,
+     * {@link ServerExtension#onConnectionInit} does not fire, and no extension-specific settings or
+     * features are turned on. Handlers that depend on the client's support check
+     * {@code isExtensionEnabled} and fall back to core behavior (SEP-2133 graceful degradation).
      */
     OPTIONAL
 }

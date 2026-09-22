@@ -93,17 +93,16 @@ class ExtensionNegotiationPolicyTest extends AbstractStatelessMcpE2eTest<McpClie
     }
 
     @Test
-    void negotiationIsRequiredByDefault() throws Exception {
-        assertThat(defaulted.negotiation()).isEqualTo(ExtensionNegotiation.REQUIRED);
+    void negotiationIsOptionalByDefault() throws Exception {
+        assertThat(defaulted.negotiation()).isEqualTo(ExtensionNegotiation.OPTIONAL);
         try (var client = createModernTestClient()) {
             var response = call(client, 1, "defaulted/call", declaring(REQUIRED_ID));
 
-            assertThat(response)
-                    .isJsonRpcError()
-                    .hasHttpStatusCode(400)
-                    .hasId(1)
-                    .hasError(missingExtension(DEFAULTED_ID));
-            assertThat(defaulted.declaredSeenByHandler).isEmpty();
+            assertThat(response).isSuccess().hasId(1).hasResult("""
+                    {"handled":"defaulted/call"}
+                    """);
+            assertThat(defaulted.declaredSeenByHandler).containsExactly(false);
+            assertThat(defaulted.connectionInits).isEmpty();
         }
     }
 
@@ -173,15 +172,11 @@ class ExtensionNegotiationPolicyTest extends AbstractStatelessMcpE2eTest<McpClie
             var declared = declaring(REQUIRED_ID);
 
             assertThat(call(client, 1, "required/call", declared)).isSuccess().hasId(1);
-            assertThat(call(client, 2, "defaulted/call", declared))
-                    .isJsonRpcError()
-                    .hasHttpStatusCode(400)
-                    .hasId(2)
-                    .hasError(missingExtension(DEFAULTED_ID));
+            assertThat(call(client, 2, "defaulted/call", declared)).isSuccess().hasId(2);
             assertThat(call(client, 3, "optional/call", declared)).isSuccess().hasId(3);
 
             assertThat(required.declaredSeenByHandler).containsExactly(true);
-            assertThat(defaulted.declaredSeenByHandler).isEmpty();
+            assertThat(defaulted.declaredSeenByHandler).containsExactly(false);
             assertThat(optional.declaredSeenByHandler).containsExactly(false);
         }
     }

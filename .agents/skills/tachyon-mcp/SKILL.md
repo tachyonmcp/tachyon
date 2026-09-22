@@ -301,7 +301,7 @@ public interface ServerExtension extends Extension<InteractionContext> {
     AdvertiseMode advertiseMode();         // required: ALWAYS | NEGOTIATED | NEVER
     default ExtensionSettings serverSettings() { return ExtensionSettings.empty(); }
     default Set<String> methods() { return Set.of(); }
-    default ExtensionNegotiation negotiation() { return ExtensionNegotiation.REQUIRED; } // or OPTIONAL
+    default ExtensionNegotiation negotiation() { return ExtensionNegotiation.OPTIONAL; } // or REQUIRED (mandatory ext)
     default void bootstrap(ExtensionContext context) {}
     default void onConnectionInit(InteractionContext context, ExtensionSettings clientSettings) {}
     // Extension: default void shutdown() {}
@@ -313,8 +313,8 @@ public interface ServerExtension extends Extension<InteractionContext> {
 - ⚠️ Any handler exception → `-32603 Internal error`, HTTP 200 (even `IllegalArgumentException`). Validate inside the handler.
 - Gated feature: set `.extensionId(ID)` on a tool/resource/prompt descriptor → hidden from lists, "unknown" on call unless declared. Without it, visible to everyone.
 - Client declares: 2026-07-28 → `_meta."io.modelcontextprotocol/clientCapabilities".extensions.{ID}` on **every** request, `Mcp-Method` header MUST mirror `method`. 2025-11-25 → `initialize` `capabilities.extensions`, kept on the session.
-- ⚠️ 2025-11-25 needs `.session(s -> s.enabled())`: stateless (default) loses the declaration → `REQUIRED` methods always `-32003`.
-- `REQUIRED` + undeclared → `-32021` + HTTP 400 (2026) / `-32003` (2025). `OPTIONAL` → dispatched anyway. Unknown method → `-32601` (HTTP 404 on 2026).
+- `OPTIONAL` (default, SEP-2133 graceful degradation) → dispatched even if undeclared; `isExtensionEnabled` = real declaration → handler falls back. `REQUIRED` (opt-in, mandatory ext) + undeclared → `-32021` + HTTP 400 (2026) / `-32003` (2025). Unknown method → `-32601` (HTTP 404 on 2026).
+- ⚠️ `REQUIRED` + 2025-11-25 needs `.session(s -> s.enabled())`: stateless (default) can't reliably see the `initialize` declaration → `-32003`; startup WARN.
 - No per-call `_meta.{ID}` envelope needed.
 
 Full: `resources/java/ExtensionExample.java`

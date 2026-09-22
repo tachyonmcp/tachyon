@@ -2,8 +2,8 @@
 title: Netty pipeline
 tags: [concept, transport, netty]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/http/]
-updated: 2026-09-17
-commit: e5c536ea
+updated: 2026-09-22
+commit: 58f386e8
 ---
 
 # 🧪 Netty pipeline
@@ -66,7 +66,7 @@ Verdict: one static-order pipeline per channel. Every registered `Protocol`'s ha
 
 Written by `PostSseStream#closeOnWriteFailure`, `SseHeartbeat#send` and `McpOperationHandler#exceptionCaught` — [[sse-streams]].
 
-⚠️ Keep-alive socket may carry different protocol versions (proxy pooling). 2026-07-28 always gets fresh ctx; older version keeps ctx only while version matches `ProtocolVersionHandler#channelRead`.
+⚠️ Keep-alive socket may carry different protocol versions (proxy pooling). Stateless servers and 2026-07-28 get a fresh context per POST; stateful older protocols keep it only while the version matches. [ProtocolVersionHandler#channelRead](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/ProtocolVersionHandler.java).
 
 ## 🌊 Backpressure
 
