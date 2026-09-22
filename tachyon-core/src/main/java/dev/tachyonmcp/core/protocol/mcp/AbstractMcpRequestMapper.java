@@ -261,12 +261,6 @@ public abstract class AbstractMcpRequestMapper implements ProtocolRequestMapper 
     }
 
     @Override
-    public boolean hasMetaKey(@Nullable Object params, String key) {
-        var meta = optionalObject(asObject(params), "_meta", "Invalid _meta");
-        return meta != null && meta.has(key);
-    }
-
-    @Override
     public @Nullable CancellationRequest cancellation(@Nullable Object params) {
         var node = asObject(params);
         var rawId = node.get("requestId");

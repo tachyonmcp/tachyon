@@ -288,11 +288,6 @@ class ExtensionNegotiationPolicyTest extends AbstractStatelessMcpE2eTest<McpClie
         }
 
         @Override
-        public boolean requiresMetaEnvelope() {
-            return false;
-        }
-
-        @Override
         public void onConnectionInit(InteractionContext context, ExtensionSettings clientSettings) {
             connectionInits.add(id);
         }

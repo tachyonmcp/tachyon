@@ -40,7 +40,7 @@ public interface ExtensionContext {
     /**
      * Registers a raw JSON-RPC method handler owned by this extension. Call from
      * {@link ServerExtension#bootstrap(ExtensionContext)}; the method is routed to this extension
-     * and gated by {@link ServerExtension#requiresMetaEnvelope()} negotiation.
+     * and gated by its {@link ServerExtension#negotiation()} policy.
      *
      * @param method the JSON-RPC method name to dispatch to the handler
      * @param handler the transport-neutral handler

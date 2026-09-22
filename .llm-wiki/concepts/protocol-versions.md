@@ -2,8 +2,8 @@
 title: Protocol versions
 tags: [concept, protocol, mcp]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/http/McpHeaderMatchHandler.java, tachyon-core/src/main/resources/META-INF/services/dev.tachyonmcp.core.protocol.Protocol, tachyon-core/ts2java.py, tachyon-core/protocol/, tachyon-core/pom.xml]
-updated: 2026-09-18
-commit: 1c15ddda
+updated: 2026-09-21
+commit: a5bf0b18
 ---
 
 # 🔀 Protocol versions
@@ -38,7 +38,7 @@ Request mappers: shared logic in `AbstractMcpRequestMapper` `AbstractMcpRequestM
 - 2025-11-25: own codec, else `invalid_params("Unsupported params type …")` `McpRequestMapper.java`.
 - 2026-07-28: own codec → fallback to 2025-11-25 codec → `invalid_params`; plus overrides `callTool`, `supportsLegacyTaskAugmentation=false`, `supportsSubscriptionsListen=true`, `subscriptionsListen` `McpRequestMapper.java`.
 
-Params rules `AbstractMcpRequestMapper`: `null` ⇒ empty object; `ObjectNode`/`Map` accepted; any other JSON (array, scalar) ⇒ `RequestMappingException(invalid_params "Params must be an object")`; codec `JacksonException` ⇒ `invalid_params` with Jackson message. `declaredExtensions`, `permittedLogLevel`, `hasMetaKey` also throw on non-object params/`_meta` `ProtocolRequestMapper#supportsLegacyTaskAugmentation`.
+Params rules `AbstractMcpRequestMapper`: `null` ⇒ empty object; `ObjectNode`/`Map` accepted; any other JSON (array, scalar) ⇒ `RequestMappingException(invalid_params "Params must be an object")`; codec `JacksonException` ⇒ `invalid_params` with Jackson message. `declaredExtensions`, `permittedLogLevel` also throw on non-object params/`_meta` `ProtocolRequestMapper#supportsLegacyTaskAugmentation`.
 
 Response mapper 2026 extends 2025 one `McpResponseMapper.java`.
 
@@ -76,7 +76,7 @@ Header names `McpHeaderNames` `McpHeaderNames#MCP_SESSION_ID`: `MCP-Session-Id`,
 
 ## 🗺️ Mapper surface
 
-`ProtocolRequestMapper` `ProtocolRequestMapper` — `page`, `callTool`, `getPrompt`, `readResource`, `complete`, `resourceUri`, `taskGet/Cancel/AwaitResult/Update`, `loggingLevel`, `initialize`, `declaredExtensions`, `permittedLogLevel`, `hasMetaKey`, `cancellation`, `taskStatus`, `subscriptionsListen`. Records: `PageRequest`, `ToolCallRequest(request, taskAugmented)`, `CompletionReference` sealed, `SubscriptionListenRequest`.
+`ProtocolRequestMapper` `ProtocolRequestMapper` — `page`, `callTool`, `getPrompt`, `readResource`, `complete`, `resourceUri`, `taskGet/Cancel/AwaitResult/Update`, `loggingLevel`, `initialize`, `declaredExtensions`, `permittedLogLevel`, `cancellation`, `taskStatus`, `subscriptionsListen`. Records: `PageRequest`, `ToolCallRequest(request, taskAugmented)`, `CompletionReference` sealed, `SubscriptionListenRequest`.
 
 `ProtocolResponseMapper` `ProtocolResponseMapper` — `encode`, `emptyResult`, `error`, `discoverResult`, `initializeResult`, `list*Result`, `callToolResult`, `readResourceResult`, `getPromptResult`, `inputRequiredResult`, task results, notification params (`loggingMessageParams`, `progressNotificationParams`, `taskStatusNotificationParams`, subscriptions ack/list-changed/resource-updated/graceful).
 

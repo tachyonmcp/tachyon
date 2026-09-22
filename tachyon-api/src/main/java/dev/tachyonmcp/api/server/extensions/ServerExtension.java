@@ -35,11 +35,6 @@ public interface ServerExtension extends Extension<InteractionContext> {
         return ExtensionNegotiation.REQUIRED;
     }
 
-    /** Whether the extension expects a meta envelope for its handler params. */
-    default boolean requiresMetaEnvelope() {
-        return true;
-    }
-
     /** Bootstraps the extension during server startup. */
     default void bootstrap(ExtensionContext context) {}
 

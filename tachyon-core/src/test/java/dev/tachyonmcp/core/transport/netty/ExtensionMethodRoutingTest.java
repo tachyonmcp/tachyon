@@ -53,10 +53,10 @@ class ExtensionMethodRoutingTest {
     }
 
     @Test
-    void dispatchesExtensionMethodWhenNegotiatedAndMetaPresent() throws Exception {
+    void dispatchesExtensionMethodWhenNegotiated() throws Exception {
         negotiateExtension();
         session.activate();
-        var params = Map.of("_meta", Map.of("com.test/ext", Map.of()));
+        var params = Map.<String, Object>of();
         var result = (McpDispatcher.DispatchResult.Response) dispatcher
                 .dispatchRequestAsync(RequestId.of(1), "test/ext-method", params, "sess_routing", null, context)
                 .join();
@@ -101,11 +101,6 @@ class ExtensionMethodRoutingTest {
         @Override
         public Set<String> methods() {
             return Set.of("test/ext-method");
-        }
-
-        @Override
-        public boolean requiresMetaEnvelope() {
-            return true;
         }
 
         @Override

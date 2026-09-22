@@ -315,7 +315,7 @@ public class McpDispatcher {
                 return CompletableFuture.completedFuture(
                         rejected(id, ServerErrors.methodNotFound("Method not found"), requestCtx));
             }
-            var negotiationRejection = extensionNegotiationRejection(method, params, requestCtx);
+            var negotiationRejection = extensionNegotiationRejection(method, requestCtx);
             if (negotiationRejection != null) {
                 return CompletableFuture.completedFuture(rejected(id, negotiationRejection, requestCtx));
             }
@@ -355,7 +355,7 @@ public class McpDispatcher {
             return CompletableFuture.completedFuture(
                     rejected(id, ServerErrors.methodNotFound("Method not found"), requestCtx));
         }
-        var negotiationRejection = extensionNegotiationRejection(method, params, requestCtx);
+        var negotiationRejection = extensionNegotiationRejection(method, requestCtx);
         if (negotiationRejection != null) {
             return CompletableFuture.completedFuture(rejected(id, negotiationRejection, requestCtx));
         }
@@ -369,7 +369,7 @@ public class McpDispatcher {
      * read from the context: the session under 2025-11-25, the per-request channel context under
      * 2026-07-28.
      */
-    private @Nullable ServerError extensionNegotiationRejection(String method, Object params, DispatchContext ic) {
+    private @Nullable ServerError extensionNegotiationRejection(String method, DispatchContext ic) {
         var owningExtensionId = server.extensionForMethod(method);
         if (owningExtensionId == null || server.extensionNegotiationOptional(owningExtensionId)) {
             return null;
@@ -377,10 +377,6 @@ public class McpDispatcher {
         if (!ic.isExtensionEnabled(owningExtensionId)) {
             logger.debug("Extension {} not declared by client for method {}", owningExtensionId, method);
             return ServerErrors.missingRequiredExtension(owningExtensionId);
-        }
-        if (server.extensionRequiresMeta(owningExtensionId)
-                && !ic.requestMapper().hasMetaKey(params, owningExtensionId)) {
-            return ServerErrors.invalidParams("Missing required client capability: " + owningExtensionId);
         }
         return null;
     }

@@ -46,9 +46,9 @@ class ExtensionNegotiationPolicyTest extends AbstractStatefulMcpE2eTest {
 
     @BeforeEach
     void startServerWithExtensions() {
-        required = new RecordingExtension(REQUIRED_ID, "required/call", ExtensionNegotiation.REQUIRED, false);
-        defaulted = new RecordingExtension(DEFAULTED_ID, "defaulted/call", null, false);
-        optional = new RecordingExtension(OPTIONAL_ID, "optional/call", ExtensionNegotiation.OPTIONAL, true);
+        required = new RecordingExtension(REQUIRED_ID, "required/call", ExtensionNegotiation.REQUIRED);
+        defaulted = new RecordingExtension(DEFAULTED_ID, "defaulted/call", null);
+        optional = new RecordingExtension(OPTIONAL_ID, "optional/call", ExtensionNegotiation.OPTIONAL);
         startServer(it -> it.withExtensions(required, defaulted, optional));
     }
 
@@ -219,13 +219,11 @@ class ExtensionNegotiationPolicyTest extends AbstractStatefulMcpE2eTest {
         private final String id;
         private final String method;
         private final @Nullable ExtensionNegotiation negotiation;
-        private final boolean requiresMeta;
 
-        RecordingExtension(String id, String method, @Nullable ExtensionNegotiation negotiation, boolean requiresMeta) {
+        RecordingExtension(String id, String method, @Nullable ExtensionNegotiation negotiation) {
             this.id = id;
             this.method = method;
             this.negotiation = negotiation;
-            this.requiresMeta = requiresMeta;
         }
 
         @Override
@@ -246,11 +244,6 @@ class ExtensionNegotiationPolicyTest extends AbstractStatefulMcpE2eTest {
         @Override
         public ExtensionNegotiation negotiation() {
             return negotiation != null ? negotiation : ServerExtension.super.negotiation();
-        }
-
-        @Override
-        public boolean requiresMetaEnvelope() {
-            return requiresMeta;
         }
 
         @Override

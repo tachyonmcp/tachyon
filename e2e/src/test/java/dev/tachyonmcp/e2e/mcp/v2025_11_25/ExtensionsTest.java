@@ -147,7 +147,7 @@ class ExtensionsTest extends AbstractStatefulMcpE2eTest {
     }
 
     @Test
-    void extensionMethodRequiresMetaEnvelope() throws Exception {
+    void declaredExtensionMethodDispatchesWithoutMetaEnvelope() throws Exception {
         startServer(it -> it.withExtensions(new TestExtension()));
 
         try (var client = createTestClient()) {
@@ -156,26 +156,28 @@ class ExtensionsTest extends AbstractStatefulMcpE2eTest {
             var sessionId = response.headers().firstValue("MCP-Session-Id").orElseThrow();
             client.sendInitialized(sessionId);
 
-            // Call extension method WITHOUT meta envelope -> known method, invalid params
+            // SEP-2133 negotiates via capabilities only; no per-call _meta envelope is required
             // language=JSON
             var callWithoutMeta = """
                     {"jsonrpc":"2.0","id":2,"method":"test/ext-call","params":{}}
                     """;
-            var resp1 = client.post(sessionId, callWithoutMeta);
-            assertThat(resp1)
-                    .isJsonRpcError()
-                    .hasErrorCode(-32602)
-                    .hasErrorMessage("Missing required client capability: " + TEST_EXT_ID);
+            assertThat(client.sendRpc(sessionId, callWithoutMeta))
+                    .isSuccess()
+                    .hasId(2)
+                    .hasResult("""
+                            {"status":"ok"}
+                            """);
 
-            // Call extension method WITH meta envelope -> should succeed
             // language=JSON
             var callWithMeta = """
                     {"jsonrpc":"2.0","id":3,"method":"test/ext-call","params":{"_meta":{"com.example/test":{}}}}
                     """;
-            var resp2 = client.sendRpc(sessionId, callWithMeta);
-            assertThat(resp2).isSuccess().hasId(3).hasResult("""
-                {"status":"ok"}
-                """);
+            assertThat(client.sendRpc(sessionId, callWithMeta))
+                    .isSuccess()
+                    .hasId(3)
+                    .hasResult("""
+                            {"status":"ok"}
+                            """);
         }
     }
 
