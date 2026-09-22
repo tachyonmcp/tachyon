@@ -662,12 +662,6 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
     }
 
     @Override
-    public boolean extensionRequiresMeta(String extensionId) {
-        var ext = extensionsById.get(extensionId);
-        return ext != null && ext.requiresMetaEnvelope();
-    }
-
-    @Override
     public boolean extensionNegotiationOptional(String extensionId) {
         return optionalNegotiationExtensionIds.contains(extensionId);
     }

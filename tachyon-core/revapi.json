@@ -1224,6 +1224,15 @@
             "since": "1.0.0-beta.29"
           }
 
+        },
+        {
+          "ignore": true,
+          "code": "java.method.removed",
+          "old": "method boolean dev.tachyonmcp.core.protocol.ProtocolRequestMapper::hasMetaKey(java.lang.Object, java.lang.String)",
+          "justification": "Only served the per-call _meta.<extensionId> envelope check, which neither the MCP spec nor SEP-2133 defines; the check and ServerExtension#requiresMetaEnvelope were removed",
+          "attachments": {
+            "since": "1.0.0-beta.31"
+          }
         }
       ]
     }

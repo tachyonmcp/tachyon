@@ -2,7 +2,7 @@
 title: Findings
 tags: [meta, findings]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/HandlerFutures.java]
-updated: 2026-09-20
+updated: 2026-09-22
 commit: 43ee83a1
 ---
 
@@ -14,6 +14,7 @@ Spotted while reading code. Not verified by tests. Fixed in code ⇒ 🗑️ rem
 - ⚠️ `UnsupportedProtocolVersionHandler` encodes the rejection with `ProtocolVersionHandler#LATEST_PROTOCOL` (not `Protocols#baseline`) + HTTP 400, even for legacy-looking clients. Intentional per SEP-2575? `UnsupportedProtocolVersionHandler#channelRead`
 - ⚠️ `examples/weather-mcp-spring-boot` asserts the new starter timer `mcp.server.operation.duration` (README, `WeatherApplicationTest`) but pins the released `tachyon-bom:1.0.0-beta.28`, which still emits `mcp.server.operations`. Green only under `examples-snapshot` (`-Dtachyon.version=1.0.0-SNAPSHOT`); the published-release `examples.yml` job fails for it until the pin moves to the release carrying the rename. Bump `tachyon.version` in the release docs commit, then 🗑️ this row.
 - 🪶 A declared extension call missing its `_meta.<extensionId>` envelope gets `-32602 "Missing required client capability: <id>"`. The message names the wrong problem: the client did declare the capability, and the missing piece is the envelope, which is also a different case from the real `-32021` Missing Required Client Capability. `McpDispatcher#extensionNegotiationRejection`
+- 🐛 Raw extension methods (`ExtensionContext#registerHandler`) map **every** handler exception to `-32603 Internal error`, HTTP 200 — including `InvalidArgumentException`, whose javadoc promises invalid-params, and bare `IllegalArgumentException`. Tools, prompts, resources, and completions route failures through `ServerErrors#fromUnhandledException` (⇒ `-32602`); the raw-handler path in `McpDispatcher#handleHandlerError` uses `ServerErrors.internalError("Internal error")` instead. Seen with curl against a snapshot build. `DefaultTachyonServer#registerHandler`, `McpDispatcher#handleHandlerError`
 - 🪶 `HandlerFutures` is `@InternalApi` but lives in public `tachyon-api`, is statically imported by user-facing `AbstractToolHandler`, and is shown to users in `RpcMethodHandler`'s javadoc example. `HandlerFutures`, `RpcMethodHandler`
 
 ## 🪶 Polish

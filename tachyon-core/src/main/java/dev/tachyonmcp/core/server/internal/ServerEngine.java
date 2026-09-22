@@ -75,9 +75,6 @@ public interface ServerEngine extends TachyonServer {
     @Nullable
     String extensionForMethod(String method);
 
-    /** Returns {@code true} if the given extension requires the meta envelope for its methods. */
-    boolean extensionRequiresMeta(String extensionId);
-
     /** Returns {@code true} if the given extension's methods may be dispatched without client declaration. */
     boolean extensionNegotiationOptional(String extensionId);
 

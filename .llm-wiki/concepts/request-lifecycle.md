@@ -2,8 +2,8 @@
 title: Request lifecycle
 tags: [concept, dispatch]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/RpcMethodHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpInitializationHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpOperationHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tools/ToolMethodHandlers.java, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/HandlerFutures.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/PeekedBody.java]
-updated: 2026-09-17
-commit: d831e9b1
+updated: 2026-09-21
+commit: a5bf0b18
 ---
 
 # 🔄 Request lifecycle
@@ -40,7 +40,7 @@ Verdict: event loop parses nothing heavy. Body hop → worker executor (VT) → 
 - **Session bypass** when `server.isStateless()` **or** `!protocol.supportsSessions()` (2026-07-28) **or** pre-session `ping` `McpDispatcher#dispatchTrackedRequestAsync`.
 - Stateful, no `MCP-Session-Id` ⇒ `DispatchResult.Status(400)` `McpDispatcher#dispatchTrackedRequestAsync`; unknown ⇒ `Status(404)` `McpDispatcher#dispatchTrackedRequestAsync`.
 - Session `CLOSED` ⇒ invalid request; `INITIALIZING` ⇒ only `ping` `McpDispatcher#dispatchTrackedRequestAsync`.
-- Handler resolved first (`server.getHandler`, none ⇒ `methodNotFound`); then `extensionNegotiationRejection` for extension-owned methods: `REQUIRED` + undeclared ⇒ missing required client capability, declared but no `_meta.<extId>` (if `requiresMetaEnvelope()`) ⇒ invalid params; `OPTIONAL` ⇒ no check `McpDispatcher#dispatchTrackedRequestAsync`, `McpDispatcher#dispatchTrackedRequestAsync`, `McpDispatcher#invokeHandlerAsync`. See [[extensions]].
+- Handler resolved first (`server.getHandler`, none ⇒ `methodNotFound`); then `extensionNegotiationRejection` for extension-owned methods: `REQUIRED` + undeclared ⇒ missing required client capability; declared ⇒ dispatch (no `_meta` envelope); `OPTIONAL` ⇒ no check `McpDispatcher#dispatchTrackedRequestAsync`, `McpDispatcher#dispatchTrackedRequestAsync`, `McpDispatcher#invokeHandlerAsync`. See [[extensions]].
 
 ## 📨 Result shapes
 

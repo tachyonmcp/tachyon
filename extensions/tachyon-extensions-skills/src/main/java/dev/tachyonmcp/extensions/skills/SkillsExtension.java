@@ -85,11 +85,6 @@ public final class SkillsExtension implements ServerExtension {
     }
 
     @Override
-    public boolean requiresMetaEnvelope() {
-        return false;
-    }
-
-    @Override
     public ExtensionNegotiation negotiation() {
         return negotiation;
     }

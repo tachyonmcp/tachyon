@@ -98,13 +98,6 @@ public interface ProtocolRequestMapper {
     @Nullable
     LoggingLevel permittedLogLevel(@Nullable Object params);
 
-    /**
-     * Returns {@code true} when params carry a {@code _meta} entry under the given key.
-     *
-     * @throws RequestMappingException with {@code invalid_params} if params or {@code _meta} are not objects
-     */
-    boolean hasMetaKey(@Nullable Object params, String key);
-
     /** Maps {@code notifications/cancelled} params, or {@code null} if the request cannot be identified. */
     @Nullable
     CancellationRequest cancellation(@Nullable Object params);
