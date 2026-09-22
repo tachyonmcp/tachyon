@@ -2,8 +2,8 @@
 title: Testing
 tags: [module, testing, e2e, conformance]
 sources: [e2e/src/test/, conformance/, Makefile, reports/pom.xml, tachyon-core/src/test/, .github/workflows/build.yml, .github/workflows/release.yml]
-updated: 2026-09-22
-commit: 58f386e8
+updated: 2026-09-23
+commit: bf825914
 ---
 
 # ✅ Testing
@@ -27,6 +27,10 @@ Verdict: E2E-first (AGENTS.md). Real server on port 0, clients = official MCP Ja
 🔴 Every target routes through `MAVEN_TEST_ARGS` (`Makefile`): with `CI=true` it caps `-Dsurefire.forkCount=1` (pom default is `1C`) and `-Dio.netty.eventLoopThreads=2`. Without the caps a runner forks one JVM per CPU, each sizing its Netty groups at `availableProcessors * 2`, and the build dies with `failed to create a child event loop`. Bare `./mvnw` in a workflow bypasses this — call `make`.
 
 `e2e`, `conformance`, `reports` are profile modules in root `pom.xml` — not in the default module list. The `tests` profile that adds them is activated by the absence of `skipTestModules`, so a `-P` flag no longer drops them.
+
+[ProgressKeepAliveTest#commentKeepAliveUpgradesWithoutProgressToken](../../e2e/src/test/java/dev/tachyonmcp/e2e/mcp/ProgressKeepAliveTest.java) exercises both 2025-11-25 session and 2026-07-28 sessionless POSTs: 1s reader idle, 250ms heartbeats, 3s tool runtime. It asserts scheduled comments and the complete successful result. [ProgressKeepAliveTest#sessionlessCommentStreamClosesOnReaderIdleWhenHeartbeatsDisabled](../../e2e/src/test/java/dev/tachyonmcp/e2e/mcp/ProgressKeepAliveTest.java) disables heartbeats on an isolated server, holds the tool pending, and asserts the initial comment followed by a broken stream with no result. See [[sse-streams]].
+
+[McpInitializationBackpressureTest](../../tachyon-core/src/test/java/dev/tachyonmcp/core/transport/netty/McpInitializationBackpressureTest.java) dispatches a pending tool through the init handler behind an `IdleStateHandler`, then uses controlled writability and virtual channel time to verify writer-idle close on stall, zero writer idle disabling it, heartbeats holding a writable stream open, and recovery. [McpOperationHandlerTest#writerIdleOnSseStreamClosesChannel](../../tachyon-core/src/test/java/dev/tachyonmcp/core/transport/netty/McpOperationHandlerTest.java) covers the operation phase.
 
 ## 📊 Coverage gate
 

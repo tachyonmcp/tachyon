@@ -20,6 +20,7 @@ import dev.tachyonmcp.core.server.internal.ServerEngine;
 import dev.tachyonmcp.core.transport.jsonrpc.JsonRpcCodec;
 import dev.tachyonmcp.core.transport.jsonrpc.JsonRpcMessage;
 import dev.tachyonmcp.core.transport.netty.sse.PostSseStream;
+import dev.tachyonmcp.core.transport.netty.sse.SseHeartbeat;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
@@ -349,11 +350,13 @@ public class McpInitializationHandler extends ChannelInboundHandlerAdapter {
 
     @Override
     public void userEventTriggered(ChannelHandlerContext ctx, Object evt) {
-        if (evt instanceof IdleStateEvent) {
-            logger.debug(
-                    "Idle timeout during initialization, closing channel: {}",
-                    ctx.channel().remoteAddress());
-            ctx.close();
+        if (evt instanceof IdleStateEvent idle) {
+            if (!SseHeartbeat.ignoresIdle(ctx.channel(), idle)) {
+                logger.debug(
+                        "Idle timeout during initialization, closing channel: {}",
+                        ctx.channel().remoteAddress());
+                ctx.close();
+            }
         } else {
             ctx.fireUserEventTriggered(evt);
         }

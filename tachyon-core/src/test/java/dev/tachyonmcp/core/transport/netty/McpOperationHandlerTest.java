@@ -16,6 +16,7 @@ import dev.tachyonmcp.core.server.session.SessionEvent;
 import dev.tachyonmcp.core.server.session.SessionKey;
 import dev.tachyonmcp.core.server.session.SessionSnapshot;
 import dev.tachyonmcp.core.server.session.SessionStore;
+import dev.tachyonmcp.core.transport.netty.sse.SseHeartbeat;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
@@ -316,6 +317,28 @@ class McpOperationHandlerTest {
         assertThat((Object) channel.readOutbound())
                 .as("idle tick must NOT emit a heartbeat (scheduler-driven)")
                 .isNull();
+    }
+
+    @Test
+    void writerIdleOnSseStreamClosesChannel() {
+        server.createSession("sess-stall").activate();
+
+        var request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/mcp");
+        request.headers()
+                .set(HttpHeaderNames.ORIGIN, "http://localhost:3000")
+                .set(HttpHeaderNames.ACCEPT, "text/event-stream")
+                .set("MCP-Session-Id", "sess-stall");
+        channel.writeInbound(request);
+        channel.runPendingTasks();
+        drainOutbound();
+        assertThat(SseHeartbeat.isEnabled(channel)).isTrue();
+
+        channel.pipeline().fireUserEventTriggered(IdleStateEvent.FIRST_WRITER_IDLE_STATE_EVENT);
+        channel.runPendingTasks();
+
+        assertThat(channel.isOpen())
+                .as("writer idle means heartbeats stalled, so the stream must close")
+                .isFalse();
     }
 
     @Test

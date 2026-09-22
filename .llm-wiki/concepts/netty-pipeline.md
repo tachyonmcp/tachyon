@@ -2,8 +2,8 @@
 title: Netty pipeline
 tags: [concept, transport, netty]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/http/]
-updated: 2026-09-22
-commit: 58f386e8
+updated: 2026-09-23
+commit: bf825914
 ---
 
 # 🧪 Netty pipeline
@@ -50,7 +50,7 @@ Verdict: one static-order pipeline per channel. Every registered `Protocol`'s ha
 
 - `InteractionEvent` sealed: `OperationStarted(session?)`, `ShutdownStarted(sessionId?)`, `ShutdownComplete` `InteractionEvent`.
 - `LifecyclePipelineCoordinator` on `OperationStarted` → `pipeline.replace(init, ops, new McpOperationHandler)` `LifecyclePipelineCoordinator#userEventTriggered`; on `ShutdownStarted` → `McpHandlerManager.onShutdownStarted` removes session on executor `McpHandlerManager#onShutdownStarted`.
-- Init handler: session-less POST `initialize` ⇒ dispatch, then fire `OperationStarted(localSession)` **before** writing response `McpInitializationHandler`. Everything else (has session id, GET, DELETE, pre-session non-init) ⇒ `forwardToOperationHandler` `McpInitializationHandler#forwardToOperationHandler`.
+- POST without session id stays under the init handler during dispatch: `initialize` fires `OperationStarted(localSession)` **before** writing its response; other requests dispatch without a phase swap [McpInitializationHandler#handleRequest](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpInitializationHandler.java), [McpInitializationHandler#dispatchPreSessionRequest](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpInitializationHandler.java). Session-header requests, GET and DELETE forward to operations; OPTIONS answers directly [McpInitializationHandler#forwardToOperationHandler](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpInitializationHandler.java). Both phases exempt heartbeat-enabled SSE from reader-idle closure only → [[sse-streams]].
 - Init channel closed abruptly with a session ⇒ `ShutdownStarted` ⇒ session removed `InteractionEvent`.
 
 ## 🧷 Per-channel state
@@ -71,6 +71,8 @@ Written by `PostSseStream#closeOnWriteFailure`, `SseHeartbeat#send` and `McpOper
 ## 🌊 Backpressure
 
 `McpOperationHandler.channelWritabilityChanged` toggles `autoRead` `McpOperationHandler#channelWritabilityChanged`. `Session.send` drops (returns false) when connection not writable — event stays in log for replay `Session#send`.
+
+Sustained non-writability on a heartbeat stream ends in writer idle, which both phases honor [SseHeartbeat#ignoresIdle](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/sse/SseHeartbeat.java) → [[sse-streams]].
 
 ## 📤 Response helpers
 

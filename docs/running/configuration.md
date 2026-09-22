@@ -66,18 +66,21 @@ sequenceDiagram
   TachyonServer->>McpClient: tool-call result: "done"
 ```
 
-`readerIdleTimeout` closes any connection that receives **no inbound bytes** for its duration.
-After a client finishes sending a request it stays silent while waiting for the reply, so this
-timer also runs while your handler is computing — a tool that takes longer than
-`readerIdleTimeout` (default `60s`) to respond has its connection reaped before it can answer.
+`readerIdleTimeout` closes connections that receive **no inbound bytes** for its duration,
+unless an SSE stream has heartbeats enabled. After a client finishes sending a request it stays
+silent while waiting for the reply, so this timer also runs while your handler is computing.
+A tool that takes longer than `readerIdleTimeout` (default `60s`) must upgrade to SSE with
+heartbeats before the timeout expires to keep its connection open.
 
 > **Note:** Set `readerIdleTimeout` to `Duration.ZERO` to disable the inbound idle timeout.
 
-The fix is not a bigger timeout — it is to keep the stream alive with **SSE + heartbeats**. Any
-server→client message on the POST upgrades the response from buffered JSON to `text/event-stream`;
-from then on the connection is a live SSE stream, `readerIdleTimeout` is a **no-op** on it, and a
-fixed-rate scheduler emits a `:\r\n` comment every `heartbeatInterval` (default `15s`) so the
-stream never looks idle. There are two ways to trigger the upgrade:
+Keep the stream alive with **SSE + heartbeats**. Any server→client message on the POST upgrades
+the response from buffered JSON to `text/event-stream`.
+With a positive `heartbeatInterval`, both initialization and operation handlers ignore
+**reader**-idle events on the upgraded stream. This applies to sessionless `2026-07-28` requests and legacy
+requests, including `initialize`. A fixed-rate scheduler emits a `:\r\n` comment every
+`heartbeatInterval` (default `15s`). Heartbeats are outbound writes: they do not reset the
+reader-idle timer. There are two ways to trigger the upgrade:
 
 - **`progress(token, ...)`** — when the client requested progress (sent `_meta.progressToken`).
   Forward that token, exposed as `ToolRequest.progressToken()`. A `null` token is **silently
@@ -118,13 +121,20 @@ Guidance:
 
 - No token available? Use `comment(...)` — it upgrades and keeps the stream alive without one.
   A `null`-token `progress(...)` call is silently dropped (no throw, no bytes sent, no upgrade).
-- Keep `heartbeatInterval < readerIdleTimeout` (default `15s < 60s`) so a live stream's own
-  heartbeats always beat the reader-idle deadline.
+- Keep `heartbeatInterval` below proxy/load-balancer idle timeouts and, for stateful streams,
+  below the session TTL. The heartbeat interval does not need to beat `readerIdleTimeout`:
+  reader idle is a no-op while heartbeats run.
+- Keep `heartbeatInterval < writerIdleTimeout` (default `15s < 5m`). Writer idle still closes
+  heartbeat streams, so it catches a stalled peer.
 - Size `readerIdleTimeout` for **dead-peer detection** (how long a silent connection may live),
   not for how long a tool runs. Bumping it to cover a slow tool is the wrong lever — use the SSE
   keep-alive pattern above.
 - `heartbeatInterval <= 0` disables heartbeats; silent SSE streams then close on idle. Lower it
   below any proxy/load-balancer idle timeout sitting in front of the server.
+
+A peer that stops reading leaves the channel non-writable. Heartbeats skip non-writable channels,
+so no write completes and the stream closes after `writerIdleTimeout`, with or without a session.
+Set `writerIdleTimeout` to `Duration.ZERO` to disable that close.
 
 ### Reconnecting to an SSE stream
 

@@ -1,7 +1,10 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
 package dev.tachyonmcp.e2e.mcp;
 
+import static dev.tachyonmcp.testkit.JsonRpcResponseAssert.assertThatJsonRpcResponse;
+import static dev.tachyonmcp.testkit.McpClient.extractJsonRpcResponse;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 
 import dev.tachyonmcp.api.runtime.InteractionContext;
@@ -16,9 +19,12 @@ import dev.tachyonmcp.core.transport.netty.NettyIoEngine;
 import dev.tachyonmcp.core.transport.netty.NettyServer;
 import dev.tachyonmcp.core.transport.netty.NettyServerConfig;
 import dev.tachyonmcp.testkit.Mcp20251125Client;
+import dev.tachyonmcp.testkit.Mcp20260728Client;
+import java.io.IOException;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import org.intellij.lang.annotations.Language;
 import org.junit.jupiter.api.AfterAll;
@@ -26,6 +32,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 /**
  * Verifies the lazy SSE upgrade and keep-alive paths for a long-running POST. Two triggers upgrade
@@ -48,27 +56,10 @@ import org.junit.jupiter.api.Timeout;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class ProgressKeepAliveTest {
 
-    /**
-     * How reader-idle should be configured for long-running, silent tasks (design)
-     * Reader-idle is a dead-peer detector, not a compute budget. It only means "no inbound bytes
-     * for N seconds" — which during request processing is normal, not dead. Two rules:
-     * <p>
-     * 1. Long tasks must ride SSE + heartbeats. When a tool emits a server→client message
-     * (ctx.notifications().progress(...)), the POST upgrades to SSE, SseHeartbeat arms, and
-     * reader-idle becomes a no-op on that channel (McpOperationHandler.java). The heartbeat
-     * (default 15 s) then keeps the stream alive indefinitely. So any tool that may exceed
-     * readerIdleTimeout should emit an early progress/keepalive — exactly what this test's tool
-     * does. Keep the invariant heartbeatInterval (15s) < readerIdleTimeout (60s).
-     * <p>
-     * 2. Size reader-idle to peer-death tolerance, not to tool runtime (default 60 s is fine).
-     * Bumping it to cover a 10-minute tool is the wrong lever.
-     * <p>
-     * The test fix (reader-idle ZERO) makes CI green
-     */
-    private static final Duration READER_IDLE = Duration.ZERO;
+    private static final Duration READER_IDLE = Duration.ofSeconds(1);
 
     private static final Duration HEARTBEAT = Duration.ofMillis(250);
-    private static final long SLOW_SLEEP_MS = 2_000L;
+    private static final long SLOW_SLEEP_MS = 3_000L;
 
     // slow-progress request asks for progress: the client supplies _meta.progressToken, which the
     // handler forwards to ctx.notifications().progress(...). This is the token-driven keep-alive.
@@ -182,12 +173,13 @@ class ProgressKeepAliveTest {
         }
     }
 
-    @Test
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
     @Timeout(30)
-    void commentKeepAliveUpgradesWithoutProgressToken() throws Exception {
+    void commentKeepAliveUpgradesWithoutProgressToken(boolean modernProtocol) throws Exception {
         var lines = new CopyOnWriteArrayList<String>();
-        try (var client = new Mcp20251125Client(port)) {
-            var sessionId = client.initialize();
+        try (var client = modernProtocol ? new Mcp20260728Client(port) : new Mcp20251125Client(port)) {
+            final var sessionId = modernProtocol ? null : client.initialize();
             var response = client.sendStreamingRequest(sessionId, COMMENT_CALL);
             assertThat(response.statusCode()).isEqualTo(200);
             assertThat(response.headers().firstValue("content-type").orElse("")).startsWith("text/event-stream");
@@ -198,10 +190,57 @@ class ProgressKeepAliveTest {
                             .anyMatch(l -> l.startsWith(":")));
             consume.get(15, TimeUnit.SECONDS);
             var body = String.join("\n", lines);
-            assertThat(body).contains("done");
+            assertThat(lines.stream().filter(line -> line.startsWith(":")).count())
+                    .as("initial comment plus scheduled heartbeats")
+                    .isGreaterThan(1);
+            assertThatJsonRpcResponse(extractJsonRpcResponse(body, "1"))
+                    .isSuccess()
+                    .hasId(1)
+                    .hasResult(modernProtocol ? """
+                              {"content":[{"type":"text","text":"done"}],"resultType":"complete"}
+                              """ : """
+                              {"content":[{"type":"text","text":"done"}]}
+                              """);
             // No progress token was sent, so no progress notification should appear — the comment
             // alone drove the upgrade and keep-alive.
             assertThat(body).doesNotContain("notifications/progress");
+        }
+    }
+
+    @Test
+    @Timeout(30)
+    void sessionlessCommentStreamClosesOnReaderIdleWhenHeartbeatsDisabled() throws Exception {
+        final var releaseTool = new CompletableFuture<Void>();
+        final var lines = new CopyOnWriteArrayList<String>();
+        try (final var isolatedServer = TachyonServer.builder()
+                .network(n -> n.port(0).readerIdleTimeout(READER_IDLE).heartbeatInterval(Duration.ZERO))
+                .build()) {
+            isolatedServer
+                    .tools()
+                    .register(ToolDescriptor.builder().name("silent-comment").build(), (ctx, request) -> {
+                        ctx.notifications().comment();
+                        releaseTool.get(15, TimeUnit.SECONDS);
+                        return ToolResult.text("done");
+                    });
+            isolatedServer.start();
+            try (final var client = new Mcp20260728Client(isolatedServer.port())) {
+                final var response = client.sendStreamingRequest(null, COMMENT_CALL);
+                assertThat(response.statusCode()).isEqualTo(200);
+                assertThat(response.headers().firstValue("content-type").orElse(""))
+                        .startsWith("text/event-stream");
+                try (final var body = response.body()) {
+                    final var consume = CompletableFuture.runAsync(() -> body.forEach(lines::add));
+                    assertThatThrownBy(() -> consume.get(5, TimeUnit.SECONDS))
+                            .isInstanceOf(ExecutionException.class)
+                            .hasRootCauseInstanceOf(IOException.class);
+                    assertThat(lines.stream().filter(line -> line.startsWith(":")))
+                            .as("only the tool's initial comment, no scheduled heartbeats")
+                            .containsExactly(":");
+                    assertThat(String.join("\n", lines)).doesNotContain("done", "\"result\"");
+                }
+            } finally {
+                releaseTool.complete(null);
+            }
         }
     }
 
