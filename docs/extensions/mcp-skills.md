@@ -29,9 +29,9 @@ var server = TachyonServer.builder()
 server.start();
 ```
 
-Skills extension ID is `io.modelcontextprotocol/skills`. Clients must declare it before calling its
-extension methods by default; lenient [negotiation](#extension-negotiation) is opt-in. Skill files
-remain available through the standard Resources API.
+Skills extension ID is `io.modelcontextprotocol/skills`. By default any client can call its methods,
+declared or not; strict [negotiation](#extension-negotiation) is opt-in. Skill files remain
+available through the standard Resources API.
 
 ## Skill directory layout
 
@@ -187,26 +187,34 @@ The Skills extension methods are `skills/list`, `skills/get`, and `resources/dir
 2025-11-25 clients declare support in `initialize.params.capabilities.extensions`; MCP 2026-07-28
 clients declare it on each request in `_meta."io.modelcontextprotocol/clientCapabilities".extensions`.
 
-`SkillsExtension` defaults to `ExtensionNegotiation.REQUIRED` — strict
-[SEP-2133](https://modelcontextprotocol.io/seps/2133-extensions) negotiation. A client that does not
-declare the extension gets Missing Required Client Capability from the three extension methods
-(`-32021` + HTTP 400 on 2026-07-28, `-32003`, Tachyon-defined, on 2025-11-25) with
-`data.requiredCapabilities.extensions."io.modelcontextprotocol/skills"`. It can still discover skill
-files through `resources/list` and fetch a known `skill://` URI through `resources/read` —
-[SEP-2640][SEP-2640]'s baseline resource transport. See [negotiation policy](_index.md#negotiation-policy).
+`SkillsExtension` defaults to `ExtensionNegotiation.OPTIONAL`. The Skills extension requires only the
+server's declaration: a client calls `skills/list` and `skills/get` after it sees the extension in
+the server's capabilities. So the three extension methods serve every client, including clients
+such as MCP Inspector that don't declare the extension, and stateless servers serving MCP
+2025-11-25 clients. An undeclared call is not marked as negotiated for the request.
 
-Some real clients (for example MCP Inspector) call the extension methods without declaring the
-extension. To serve them, opt in to `OPTIONAL`:
+To reject clients that don't declare the extension, opt in to `REQUIRED`:
 
 ```java
 SkillsExtension.builder()
         .registry(new ClasspathSkillsRegistry("skills"))
-        .negotiation(ExtensionNegotiation.OPTIONAL)
+        .negotiation(ExtensionNegotiation.REQUIRED)
         .build();
 ```
 
-`OPTIONAL` changes dispatch only — the extension and its `{"directoryRead": true}` setting are
-advertised exactly the same, and the extension is not marked as negotiated for the request.
+Those clients then get Missing Required Client Capability from the three extension methods
+(`-32021` + HTTP 400 on 2026-07-28, `-32003`, Tachyon-defined, on 2025-11-25) with
+`data.requiredCapabilities.extensions."io.modelcontextprotocol/skills"`. They can still discover
+skill files through `resources/list` and fetch a known `skill://` URI through `resources/read`:
+[SEP-2640]'s baseline resource transport.
+
+⚠️ With `REQUIRED`, MCP 2025-11-25 clients also need server sessions
+(`.session(session -> session.enabled())`). Their declaration is made once in `initialize`, so a
+stateless server can't see it on later requests and rejects them with `-32003`. See
+[what clients must send](_index.md#what-clients-must-send).
+
+The policy changes dispatch only. The extension and its `{"directoryRead": true}` setting are
+advertised the same way under both policies.
 
 `SkillsExtension` uses `AdvertiseMode.ALWAYS`, so the server advertises
 `io.modelcontextprotocol/skills` even when the client has not declared it. `serverSettings()` reports

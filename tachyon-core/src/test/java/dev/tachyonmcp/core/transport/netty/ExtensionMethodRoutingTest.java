@@ -7,6 +7,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import dev.tachyonmcp.api.server.domain.RequestId;
 import dev.tachyonmcp.api.server.extensions.AdvertiseMode;
 import dev.tachyonmcp.api.server.extensions.ExtensionContext;
+import dev.tachyonmcp.api.server.extensions.ExtensionNegotiation;
 import dev.tachyonmcp.api.server.extensions.ServerExtension;
 import dev.tachyonmcp.core.protocol.Protocols;
 import dev.tachyonmcp.core.protocol.mcp.v2025_11_25.models.ClientCapabilities;
@@ -101,6 +102,11 @@ class ExtensionMethodRoutingTest {
         @Override
         public Set<String> methods() {
             return Set.of("test/ext-method");
+        }
+
+        @Override
+        public ExtensionNegotiation negotiation() {
+            return ExtensionNegotiation.REQUIRED;
         }
 
         @Override

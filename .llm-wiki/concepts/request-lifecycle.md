@@ -1,9 +1,9 @@
 ---
 title: Request lifecycle
 tags: [concept, dispatch]
-sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/RpcMethodHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpInitializationHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpOperationHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tools/ToolMethodHandlers.java, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/HandlerFutures.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/PeekedBody.java]
-updated: 2026-09-21
-commit: a5bf0b18
+sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/ProtocolVersionHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/RpcMethodHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpInitializationHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpOperationHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tools/ToolMethodHandlers.java, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/HandlerFutures.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/PeekedBody.java]
+updated: 2026-09-22
+commit: 58f386e8
 ---
 
 # 🔄 Request lifecycle
@@ -15,7 +15,7 @@ Verdict: event loop parses nothing heavy. Body hop → worker executor (VT) → 
 | # | Step | Thread | Proof |
 |---|---|---|---|
 | 1 | Pipeline guards (host, endpoint, headers, Accept, aggregate) | event loop | [[netty-pipeline]] |
-| 2 | `ProtocolVersionHandler` binds `ChannelContext` for negotiated `Protocol` | event loop | `ProtocolVersionHandler#channelRead` |
+| 2 | `ProtocolVersionHandler` binds `ChannelContext` for negotiated `Protocol`; fresh per POST on stateless servers | event loop | `ProtocolVersionHandler#channelRead` |
 | 3 | Every version: `McpHeaderMatchHandler` peeks body via `PeekedBody#peek` (first peek parses, the rest reuse it), compares SEP-2243 mirrors to it | event loop | [[protocol-versions]] |
 | 3b | 2026-07-28 only: `RequestValidationHandler` (`_meta`, removed methods) → `RequiredHeadersHandler` (mirror presence) → `ExtensionNegotiationHandler`, same cached peek | event loop | [[protocol-versions]] |
 | 4 | First request on channel hits `McpInitializationHandler`; non-`initialize` → fires `OperationStarted.STATELESS`, forwards to `McpOperationHandler` | event loop | `McpInitializationHandler#handleRequest`, `McpInitializationHandler#forwardToOperationHandler` |
@@ -40,7 +40,7 @@ Verdict: event loop parses nothing heavy. Body hop → worker executor (VT) → 
 - **Session bypass** when `server.isStateless()` **or** `!protocol.supportsSessions()` (2026-07-28) **or** pre-session `ping` `McpDispatcher#dispatchTrackedRequestAsync`.
 - Stateful, no `MCP-Session-Id` ⇒ `DispatchResult.Status(400)` `McpDispatcher#dispatchTrackedRequestAsync`; unknown ⇒ `Status(404)` `McpDispatcher#dispatchTrackedRequestAsync`.
 - Session `CLOSED` ⇒ invalid request; `INITIALIZING` ⇒ only `ping` `McpDispatcher#dispatchTrackedRequestAsync`.
-- Handler resolved first (`server.getHandler`, none ⇒ `methodNotFound`); then `extensionNegotiationRejection` for extension-owned methods: `REQUIRED` + undeclared ⇒ missing required client capability; declared ⇒ dispatch (no `_meta` envelope); `OPTIONAL` ⇒ no check `McpDispatcher#dispatchTrackedRequestAsync`, `McpDispatcher#dispatchTrackedRequestAsync`, `McpDispatcher#invokeHandlerAsync`. See [[extensions]].
+- Handler resolved first (`server.getHandler`, none ⇒ `methodNotFound`); then `extensionNegotiationRejection` for extension-owned methods: `REQUIRED` (opt-in) + undeclared ⇒ missing required client capability; declared ⇒ dispatch (no `_meta` envelope); `OPTIONAL` (default) ⇒ no check `McpDispatcher#dispatchTrackedRequestAsync`, `McpDispatcher#dispatchTrackedRequestAsync`, `McpDispatcher#invokeHandlerAsync`. See [[extensions]].
 
 ## 📨 Result shapes
 

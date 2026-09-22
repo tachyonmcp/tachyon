@@ -26,6 +26,8 @@ Code knowledge base: [`.llm-wiki/index.md`](.llm-wiki/index.md). Built from **co
 
 **🗺️ Index, not spec.** Page ≠ code → code wins, fix the page. 🔴 Never implement a page, never cite one as proof, update page.
 
+Specs live under [specs](specs).
+
 Use [tachyon-wiki](.agents/skills/tachyon-wiki/SKILL.md) when creating, updating, reorganizing, or checking wiki pages, including refreshes after code changes.
 
 - **Before work**: read `index.md`, then relevant pages. Still verify claims in code.

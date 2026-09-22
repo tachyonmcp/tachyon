@@ -2,8 +2,8 @@
 title: Testing
 tags: [module, testing, e2e, conformance]
 sources: [e2e/src/test/, conformance/, Makefile, reports/pom.xml, tachyon-core/src/test/, .github/workflows/build.yml, .github/workflows/release.yml]
-updated: 2026-09-19
-commit: 95dbd763
+updated: 2026-09-22
+commit: 58f386e8
 ---
 
 # ✅ Testing
@@ -81,3 +81,5 @@ Parameter names, whole-object binding alongside metadata, nullable/missing metad
 The same declarative metadata suite proves 2026-07-28 resource cache isolation for both static and templated `@Meta` handlers, plus the public-cache default for a metadata-free annotated resource ([DeclarativeParameterMetadataTest#injectsMetadataAcrossPromptsResourcesAndCompletionShapes](../../e2e/src/test/java/dev/tachyonmcp/e2e/mcp/DeclarativeParameterMetadataTest.java)).
 
 Explicit-name fixtures use Java parameter `arg0` with a different `@McpParam` name in schema and wire tests. This verifies name precedence, not absent reflection parameter metadata ([TachyonAnnotationProviderTest#mcpParamRenamesAndDescribesToolArguments](../../tachyon-core/src/test/java/dev/tachyonmcp/core/server/annotations/TachyonAnnotationProviderTest.java), [DeclarativeParameterMetadataTest#bindsWholeAndNamedObjectsWithSeparateMetadata](../../e2e/src/test/java/dev/tachyonmcp/e2e/mcp/DeclarativeParameterMetadataTest.java)).
+
+Stateless 2025 extension isolation has real-HTTP coverage for reused/fresh connections and overlapping requests on one socket, including preservation of the in-flight initializer's context ([StatelessExtensionNegotiationTest](../../e2e/src/test/java/dev/tachyonmcp/e2e/mcp/v2025_11_25/StatelessExtensionNegotiationTest.java)). Stateful declarations survive reconnect ([ExtensionNegotiationPolicyTest#requiredDeclarationSurvivesConnectionChange](../../e2e/src/test/java/dev/tachyonmcp/e2e/mcp/v2025_11_25/ExtensionNegotiationPolicyTest.java)).

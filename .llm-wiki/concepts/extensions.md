@@ -1,14 +1,16 @@
 ---
 title: Extensions
 tags: [concept, extensions, spi]
-sources: [tachyon-api/src/main/java/dev/tachyonmcp/api/server/extensions/, tachyon-api/src/main/java/dev/tachyonmcp/api/runtime/Extension.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/handlers/ExtensionNegotiator.java, tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/mcp/v2026_07_28/transport/ExtensionNegotiationHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java, tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/mcp/v2026_07_28/transport/RequestValidationHandler.java]
+sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/ProtocolVersionHandler.java, tachyon-api/src/main/java/dev/tachyonmcp/api/server/extensions/, tachyon-api/src/main/java/dev/tachyonmcp/api/runtime/Extension.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/handlers/ExtensionNegotiator.java, tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/mcp/v2026_07_28/transport/ExtensionNegotiationHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java, tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/mcp/v2026_07_28/transport/RequestValidationHandler.java]
 updated: 2026-09-22
-commit: a5bf0b18
+commit: cedec4fd
 ---
 
 # 🧩 Extensions
 
-Verdict: `ServerExtension` = bootstrap hook (register features + custom JSON-RPC methods through `ExtensionContext`) + negotiation hook. Methods an extension registers are **owned** by it. `negotiation()` policy: `REQUIRED` (default) ⇒ client must declare ext on current context, else -32021 (2026) / -32003 (2025); `OPTIONAL` ⇒ dispatched regardless, nothing synthesized.
+Negotiation requirements: [extension-negotiation.md](../../specs/extension-negotiation.md)
+
+Verdict: `ServerExtension` = bootstrap hook (register features + custom JSON-RPC methods through `ExtensionContext`) + negotiation hook. Methods an extension registers are **owned** by it. `negotiation()` policy: `OPTIONAL` (default, SEP-2133 graceful degradation) ⇒ dispatched regardless, nothing synthesized; `REQUIRED` (opt-in, mandatory ext) ⇒ client must declare ext on current context, else -32021 (2026) / -32003 (2025).
 
 ## 🧱 Contract
 
@@ -18,7 +20,7 @@ Verdict: `ServerExtension` = bootstrap hook (register features + custom JSON-RPC
 | `advertiseMode()` | — (`ALWAYS` / `NEVER` / `NEGOTIATED`) | [AdvertiseMode](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/extensions/AdvertiseMode.java) |
 | `serverSettings()` | empty | [ServerExtension#serverSettings](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/extensions/ServerExtension.java) |
 | `methods()` | empty set (pre-declared owned methods) | [ServerExtension#methods](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/extensions/ServerExtension.java) |
-| `negotiation()` | **`REQUIRED`** (`REQUIRED` / `OPTIONAL`) | [ServerExtension#negotiation](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/extensions/ServerExtension.java), `.../server/extensions/ExtensionNegotiation.java` |
+| `negotiation()` | **`OPTIONAL`** (`OPTIONAL` / `REQUIRED`) | [ServerExtension#negotiation](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/extensions/ServerExtension.java), `.../server/extensions/ExtensionNegotiation.java` |
 | `bootstrap(ExtensionContext)` | no-op | [ServerExtension#bootstrap](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/extensions/ServerExtension.java) |
 | `onConnectionInit(ctx, clientSettings)` | no-op | [ServerExtension#onConnectionInit](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/extensions/ServerExtension.java) |
 | `onConnectionClose(ctx)`, `shutdown()` | no-op | [Extension#onConnectionClose](../../tachyon-api/src/main/java/dev/tachyonmcp/api/runtime/Extension.java), [Extension#shutdown](../../tachyon-api/src/main/java/dev/tachyonmcp/api/runtime/Extension.java) |
@@ -38,7 +40,7 @@ Spring extensions still bootstrap during server construction. Discovered annotat
 2. Ctor `bootstrapExtensions`: record `methods()` owners, set `bootstrappingExtensionId`, call `bootstrap(this)`; any `registerHandler` during bootstrap also owned `DefaultTachyonServer#getHandler`, `DefaultTachyonServer#toJsonObject`.
 3. Features registered with `descriptor.extensionId(...)` hidden from lists/calls unless enabled on ctx (`ToolMethodHandlers`, `PromptMethodHandlers`, `ResourceMethodHandlers` filters).
 4. Negotiation → `ExtensionNegotiator.negotiate(extensions, ctx, declared)`: enable matching ids + `onConnectionInit` `ExtensionNegotiator#negotiate`.
-   - 2025-11-25: schema has no `extensions` capability; Tachyon follows SEP-2133 (`initialize` capabilities). ⚠️ Needs sessions: stateless server (default) keeps no declaration ⇒ every `REQUIRED` ext method ⇒ `-32003` even for declaring clients. Once in `InitializeHandler` from `initialize` params, enabled ids stored on **session** (persisted) `InitializeHandler#handle`, `DefaultDispatchContext#enableExtension`.
+   - 2025-11-25: `InitializeHandler#handle` negotiates from `initialize` capabilities. `DefaultDispatchContext#enableExtension` stores declarations on the session when present. Stateless servers get a fresh context per POST, so declarations last only for `initialize`, even on a reused connection; later OPTIONAL calls see `false`, REQUIRED calls reject. [ProtocolVersionHandler#channelRead](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/ProtocolVersionHandler.java), [StatelessExtensionNegotiationTest](../../e2e/src/test/java/dev/tachyonmcp/e2e/mcp/v2025_11_25/StatelessExtensionNegotiationTest.java).
    - 2026-07-28: every POST, `ExtensionNegotiationHandler` in pipeline, on fresh channel ctx `ExtensionNegotiationHandler#channelRead`. Non-object params ⇒ `RequestMappingException` swallowed, **no extension enabled**, request passes on so dispatcher answers `invalid_params` `RequestMappingException`.
 5. Advertise in `initialize`/`server/discover`: `ALWAYS` always, `NEGOTIATED` if enabled, `NEVER` never `ExtensionNegotiator#registeredExtensions`.
 6. `close()` → `shutdownExtensions(deadline)` each on own VT, joined with remaining grace; slow one logged + abandoned `DefaultTachyonServer#bootstrapExtensions`.
@@ -56,7 +58,7 @@ Order: resolve handler first (`server.getHandler`, none ⇒ `methodNotFound`), t
 
 No per-call `_meta.<extId>` envelope: neither MCP spec nor SEP-2133 defines one, so the old `requiresMetaEnvelope()` gate was removed.
 
-Policy snapshot at bootstrap into `optionalNegotiationExtensionIds` `DefaultTachyonServer#optionalNegotiationExtensionIds`, `DefaultTachyonServer#bootstrapExtensions`, `DefaultTachyonServer#extensionNegotiationOptional`. "Declared on ctx" = session (2025) or per-request channel ctx (2026) — no leak across 2026 requests. `OPTIONAL` never enables the ext: handler sees `isExtensionEnabled=false`, no `onConnectionInit`.
+Policy snapshot at bootstrap into `optionalNegotiationExtensionIds` `DefaultTachyonServer#optionalNegotiationExtensionIds`, `DefaultTachyonServer#bootstrapExtensions`, `DefaultTachyonServer#extensionNegotiationOptional`. `REQUIRED` on a stateless server ⇒ startup WARN (2025-11-25 clients always rejected) `DefaultTachyonServer#bootstrapExtensions`. "Declared on ctx" = session (stateful 2025) or per-request channel ctx (stateless 2025 and 2026) — no leak across 2026 requests. Only undeclared `OPTIONAL` requests keep the extension disabled (`isExtensionEnabled=false`, no `onConnectionInit`); declared `OPTIONAL` extensions are enabled and receive `onConnectionInit`.
 
 Capability requirement inside a handler: throw `MissingRequiredClientCapabilityException(msg, requiredCaps)` ⇒ -32021 (2026) `MissingRequiredClientCapabilityException`. Tasks gate helper `TasksExtension.requireDeclared` (shares `ServerErrors.missingRequiredExtension` `ServerErrors#missingRequiredExtension`) returns error only for session-less protocols `TasksExtension#requireDeclared`.
 
@@ -65,7 +67,7 @@ Capability requirement inside a handler: throw `MissingRequiredClientCapabilityE
 | Id | Impl | Mode | Page |
 |---|---|---|---|
 | `io.modelcontextprotocol/tasks` | `TasksExtension` (core) | ALWAYS | [[tasks]] |
-| `io.modelcontextprotocol/skills` | `SkillsExtension` | ALWAYS, negotiation via builder (default **REQUIRED**, same as SPI default; `OPTIONAL` opt-in) | [[tachyon-extensions-skills]] |
+| `io.modelcontextprotocol/skills` | `SkillsExtension` | ALWAYS, negotiation via builder (default **OPTIONAL**, same as SPI default; `REQUIRED` opt-in) | [[tachyon-extensions-skills]] |
 | `dev.tachyonmcp/kotlin-coroutines` | `CoroutineRuntime` (internal, lifecycle only) | NEVER | [[tachyon-kotlin]] |
 
 Related: [[feature-registries]], [[protocol-versions]].

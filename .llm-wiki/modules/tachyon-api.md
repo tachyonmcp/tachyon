@@ -2,8 +2,8 @@
 title: tachyon-api
 tags: [module, api]
 sources: [tachyon-api/src/main/java/dev/tachyonmcp/api/]
-updated: 2026-09-18
-commit: f2adbaed
+updated: 2026-09-22
+commit: 58f386e8
 ---
 
 # 📜 tachyon-api

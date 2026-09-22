@@ -27,6 +27,7 @@ public class ProtocolVersionHandler extends ChannelInboundHandlerAdapter {
     static final AttributeKey<String> UNSUPPORTED_VERSION_KEY = AttributeKey.valueOf("unsupportedProtocolVersion");
 
     private final String mcpEndpoint;
+    private final boolean stateless;
     static final Protocol LATEST_PROTOCOL;
     static final List<String> SUPPORTED_VERSIONS;
 
@@ -40,8 +41,20 @@ public class ProtocolVersionHandler extends ChannelInboundHandlerAdapter {
                 .toList();
     }
 
+    /** Creates a protocol binder for a server with session support. */
     public ProtocolVersionHandler(String mcpEndpoint) {
+        this(mcpEndpoint, false);
+    }
+
+    /**
+     * Creates a protocol binder, isolating every POST when the server is stateless.
+     *
+     * @param mcpEndpoint the MCP endpoint path
+     * @param stateless whether server sessions are disabled
+     */
+    public ProtocolVersionHandler(String mcpEndpoint, boolean stateless) {
         this.mcpEndpoint = mcpEndpoint;
+        this.stateless = stateless;
     }
 
     @Override
@@ -56,13 +69,8 @@ public class ProtocolVersionHandler extends ChannelInboundHandlerAdapter {
             } else {
                 var interaction = ctx.channel().attr(InteractionHandler.INTERACTION_CONTEXT_KEY);
                 var current = interaction.get();
-                // 2026-07-28 is sessionless and negotiates extensions per request, so it always starts
-                // a fresh context. Older versions keep theirs across the keep-alive connection, since
-                // the session lives on the channel — but only while the version still matches: a
-                // proxy pooling upstream connections across unrelated clients can put a 2026-07-28
-                // request ahead of a 2025-11-25 one, and validating the latter against the context the
-                // former left behind rejects a perfectly legal request.
-                if (McpProtocol.VERSION.equals(protocol.get().versionString())
+                if (stateless
+                        || McpProtocol.VERSION.equals(protocol.get().versionString())
                         || current == null
                         || !protocol.get().versionString().equals(current.protocolVersion())) {
                     interaction.set(protocol.get().createInteractionContext());

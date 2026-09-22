@@ -27,17 +27,25 @@ public interface ServerExtension extends Extension<InteractionContext> {
 
     /**
      * Whether the client must declare this extension before its methods are dispatched. Defaults to
-     * {@link ExtensionNegotiation#REQUIRED}. Read once at server construction.
+     * {@link ExtensionNegotiation#OPTIONAL}; override with {@link ExtensionNegotiation#REQUIRED} only
+     * for a mandatory extension. Read once at server construction.
      *
      * @return the negotiation policy for this extension's methods
      */
     default ExtensionNegotiation negotiation() {
-        return ExtensionNegotiation.REQUIRED;
+        return ExtensionNegotiation.OPTIONAL;
     }
 
     /** Bootstraps the extension during server startup. */
     default void bootstrap(ExtensionContext context) {}
 
-    /** Called when a new client connection is initialised with the extension's client settings. */
+    /**
+     * Called when a client declares this extension: during {@code initialize} for MCP 2025-11-25,
+     * or on each declaring request for MCP 2026-07-28. On a stateless server, the declaration and
+     * settings apply only to the current request, regardless of TCP connection reuse.
+     *
+     * @param context the interaction receiving the declaration
+     * @param clientSettings the client's extension settings
+     */
     default void onConnectionInit(InteractionContext context, ExtensionSettings clientSettings) {}
 }

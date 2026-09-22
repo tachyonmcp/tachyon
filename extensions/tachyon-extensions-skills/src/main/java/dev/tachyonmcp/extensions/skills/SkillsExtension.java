@@ -30,8 +30,8 @@ import org.jspecify.annotations.Nullable;
  * {@code skills/list}, {@code skills/get}, and {@code resources/directory/read}.
  * Skill files remain available through the base {@code resources/list} and {@code resources/read}
  * methods when the client has not negotiated this extension. By default
- * ({@link ExtensionNegotiation#REQUIRED}) the extension methods reject undeclared clients with Missing
- * Required Client Capability; build with {@link ExtensionNegotiation#OPTIONAL} to serve them anyway.
+ * ({@link ExtensionNegotiation#OPTIONAL}) the extension methods serve undeclared clients. Build with
+ * {@link ExtensionNegotiation#REQUIRED} to reject clients that did not declare the extension.
  *
  * <pre>{@code
  * TachyonServer.builder()
@@ -265,7 +265,7 @@ public final class SkillsExtension implements ServerExtension {
         private final List<SkillsRegistry> registries = new ArrayList<>();
         private long cacheTtlMs = 0;
         private String cacheScope = "public";
-        private ExtensionNegotiation negotiation = ExtensionNegotiation.REQUIRED;
+        private ExtensionNegotiation negotiation = ExtensionNegotiation.OPTIONAL;
 
         /**
          * Adds a skill registry. Construct {@link FilesystemSkillsRegistry} or
@@ -317,9 +317,9 @@ public final class SkillsExtension implements ServerExtension {
         /**
          * Sets whether clients must declare {@code io.modelcontextprotocol/skills} before calling
          * {@code skills/list}, {@code skills/get}, and {@code resources/directory/read}. Defaults to
-         * {@link ExtensionNegotiation#REQUIRED} (strict SEP-2133 negotiation); use
-         * {@link ExtensionNegotiation#OPTIONAL} for clients such as MCP Inspector that call these
-         * methods without declaring the extension.
+         * {@link ExtensionNegotiation#OPTIONAL}: the Skills extension only requires the server's
+         * declaration, so these methods serve any client. Use {@link ExtensionNegotiation#REQUIRED}
+         * to reject clients that did not declare the extension.
          *
          * @param negotiation the negotiation policy
          * @return this builder

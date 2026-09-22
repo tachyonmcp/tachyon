@@ -9,7 +9,6 @@ import static net.javacrumbs.jsonunit.assertj.JsonAssertions.assertThatJson;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.tachyonmcp.api.server.extensions.ExtensionNegotiation;
-import dev.tachyonmcp.core.server.TachyonServer;
 import dev.tachyonmcp.core.server.features.resources.MimeTypes;
 import dev.tachyonmcp.testkit.Mcp20251125Client;
 import dev.tachyonmcp.testkit.Mcp20260728Client;
@@ -22,7 +21,6 @@ import java.util.Base64;
 import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.Map;
-import java.util.concurrent.CountDownLatch;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -54,20 +52,6 @@ class SkillsExtensionE2eTest {
 
     private static final SkillsRegistry combinedRegistry =
             new CompositeSkillsRegistry(filesystemSkillsRegistry, classpathSkillsRegistry);
-
-    // quickstart example
-    public static void main(String... args) throws InterruptedException {
-        try (var server = TachyonServer.builder()
-                .port(8080)
-                .withExtensions(SkillsExtension.builder()
-                        .registry(combinedRegistry)
-                        .negotiation(ExtensionNegotiation.OPTIONAL)
-                        .build())
-                .build()) {
-            server.start();
-            new CountDownLatch(1).await();
-        }
-    }
 
     @Test
     void classpathSkillsListedWithDigests() throws Exception {
@@ -682,9 +666,10 @@ class SkillsExtensionE2eTest {
     }
 
     @Test
-    void defaultNegotiationRejectsSkillMethodsButKeepsResourcesForUndeclaredClient() throws Exception {
+    void requiredNegotiationRejectsSkillMethodsButKeepsResourcesForUndeclaredClient() throws Exception {
         var extension = SkillsExtension.builder()
                 .registry(new ClasspathSkillsRegistry("skills"))
+                .negotiation(ExtensionNegotiation.REQUIRED)
                 .build();
         assertThat(extension.negotiation()).isEqualTo(ExtensionNegotiation.REQUIRED);
         try (final var server = startServer(extension);
@@ -868,10 +853,9 @@ class SkillsExtensionE2eTest {
     }
 
     @Test
-    void optionalNegotiationServesSkillMethodsToUndeclaredClient() throws Exception {
+    void defaultNegotiationServesSkillMethodsToUndeclaredClient() throws Exception {
         var extension = SkillsExtension.builder()
                 .registry(new ClasspathSkillsRegistry("skills"))
-                .negotiation(ExtensionNegotiation.OPTIONAL)
                 .build();
         assertThat(extension.negotiation()).isEqualTo(ExtensionNegotiation.OPTIONAL);
         try (final var server = startServer(extension);
