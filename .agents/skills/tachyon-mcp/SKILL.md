@@ -70,7 +70,7 @@ server.start();
 | `.withResources(registrar)` | bootstrap resources/templates through their façade |
 | `.withPrompts(registrar)` | bootstrap through `Prompts.register/registerAsync` |
 | `.withCompletions(registrar)` | bootstrap completion functions |
-| `.withExtensions(ext...)` | `ServerExtension` plugin(s), vararg — `.extension(ext)` still works but is deprecated |
+| `.withExtensions(ext...)` | `ServerExtension` plugin(s), vararg |
 | `.json(cfg)` | serde + input/output schema validators |
 | ~~`.jsonSchemaValidator(v)`~~ | removed — use `.json(cfg -> cfg.inputSchemaValidator(v).outputSchemaValidator(v))` |
 | `.pipelineCustomizer(c)` | raw Netty pipeline escape hatch |
@@ -293,18 +293,31 @@ overloads have been removed, use `.name(...)` on the builder instead. `.tool(nam
 
 ## Extensions
 
+SEP-2133. `@ExperimentalApi`. Built-ins: Tasks (`.capabilities(c -> c.tasks(connector))`, auto-registered), Skills (`tachyon-extensions-skills`, `.withExtensions(SkillsExtension.builder()...build())`).
+
 ```java
 public interface ServerExtension extends Extension<InteractionContext> {
-    String extensionId(); // reverse-DNS, e.g. "com.example/audit"
+    String extensionId();                  // required, reverse-DNS: "com.example/audit"
+    AdvertiseMode advertiseMode();         // required: ALWAYS | NEGOTIATED | NEVER
     default ExtensionSettings serverSettings() { return ExtensionSettings.empty(); }
     default Set<String> methods() { return Set.of(); }
-    default boolean requiresMetaEnvelope() { return true; }
+    default ExtensionNegotiation negotiation() { return ExtensionNegotiation.REQUIRED; } // or OPTIONAL
     default void bootstrap(ExtensionContext context) {}
     default void onConnectionInit(InteractionContext context, ExtensionSettings clientSettings) {}
+    // Extension: default void shutdown() {}
 }
 ```
 
-Register with `.withExtensions(myExtension)` (vararg — pass several in one call). `.extension(ext)` still works but is deprecated.
+- Register: `.withExtensions(ext...)` (vararg). Kotlin DSL: `extensions(...)`.
+- Raw method, from `bootstrap`: `context.registerHandler("com.example/audit-query", (interaction, params) -> Map.of(...))`. `params` = read-only `JsonObject` (`@Nullable` — guard), read with `stringOr`/`intOpt`/`objectOpt`. Return → JSON-RPC result; `null` → empty result.
+- ⚠️ Any handler exception → `-32603 Internal error`, HTTP 200 (even `IllegalArgumentException`). Validate inside the handler.
+- Gated feature: set `.extensionId(ID)` on a tool/resource/prompt descriptor → hidden from lists, "unknown" on call unless declared. Without it, visible to everyone.
+- Client declares: 2026-07-28 → `_meta."io.modelcontextprotocol/clientCapabilities".extensions.{ID}` on **every** request, `Mcp-Method` header MUST mirror `method`. 2025-11-25 → `initialize` `capabilities.extensions`, kept on the session.
+- ⚠️ 2025-11-25 needs `.session(s -> s.enabled())`: stateless (default) loses the declaration → `REQUIRED` methods always `-32003`.
+- `REQUIRED` + undeclared → `-32021` + HTTP 400 (2026) / `-32003` (2025). `OPTIONAL` → dispatched anyway. Unknown method → `-32601` (HTTP 404 on 2026).
+- No per-call `_meta.{ID}` envelope needed.
+
+Full: `resources/java/ExtensionExample.java`
 
 ## Tests
 
@@ -432,6 +445,7 @@ Load on demand (next to this skill):
 - [resources/java/ToolHandlerExample.java](resources/java/ToolHandlerExample.java) — descriptor/function registration and experimental `AbstractToolHandler`
 - [resources/java/ResourceFnExample.java](resources/java/ResourceFnExample.java) — `ResourceDescriptor`, `ResourceTemplateEntry`, `ResourceFn`
 - [resources/java/PromptFnExample.java](resources/java/PromptFnExample.java) — `PromptDescriptor`, `PromptArgument`, `PromptFn`
+- [resources/java/ExtensionExample.java](resources/java/ExtensionExample.java) — custom extension: raw method, gated tool, sessions for 2025-11-25
 - [resources/java/ConfigReference.java](resources/java/ConfigReference.java) — `CapabilitiesConfig.Builder`, `NetworkConfig.Builder`, `SessionConfig.Builder`
 - [resources/kotlin/ServerBasic.kt](resources/kotlin/ServerBasic.kt) — full server, all features (Kotlin DSL)
 - [resources/kotlin/ToolHandlerExample.kt](resources/kotlin/ToolHandlerExample.kt) — suspend handler, `extends AbstractToolHandler` (`handle`/`handleAsync`), `registerTool`

@@ -190,7 +190,7 @@ clients declare it on each request in `_meta."io.modelcontextprotocol/clientCapa
 `SkillsExtension` defaults to `ExtensionNegotiation.REQUIRED` — strict
 [SEP-2133](https://modelcontextprotocol.io/seps/2133-extensions) negotiation. A client that does not
 declare the extension gets Missing Required Client Capability from the three extension methods
-(`-32021` + HTTP 400 on 2026-07-28, `-32003` on 2025-11-25) with
+(`-32021` + HTTP 400 on 2026-07-28, `-32003`, Tachyon-defined, on 2025-11-25) with
 `data.requiredCapabilities.extensions."io.modelcontextprotocol/skills"`. It can still discover skill
 files through `resources/list` and fetch a known `skill://` URI through `resources/read` —
 [SEP-2640][SEP-2640]'s baseline resource transport. See [negotiation policy](_index.md#negotiation-policy).
