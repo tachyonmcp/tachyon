@@ -27,8 +27,10 @@ public interface ExtensionMethodHandler {
      *     empty result
      * @throws Exception on handler failure; an {@link
      *     dev.tachyonmcp.api.server.domain.InvalidArgumentException} surfaces as {@code invalid-params}
-     *     with its message, any other {@link IllegalArgumentException} as a redacted {@code
-     *     invalid-params}, everything else as {@code internal-error}
+     *     with its message, a {@code MissingRequiredClientCapabilityException} as
+     *     {@code missing-required-client-capability} with its required capabilities, any other
+     *     {@link IllegalArgumentException} as a redacted {@code invalid-params}, everything else as
+     *     {@code internal-error}
      */
     @Nullable
     Object handle(InteractionContext interaction, @Nullable JsonObject params) throws Exception;
