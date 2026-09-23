@@ -4,6 +4,7 @@ package dev.tachyonmcp.core.transport.netty.http;
 import static dev.tachyonmcp.core.transport.netty.ChannelHandlerUtils.dropIfRejected;
 import static dev.tachyonmcp.core.transport.netty.ChannelHandlerUtils.rejectAndClose;
 
+import dev.tachyonmcp.api.annotations.InternalApi;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
@@ -49,6 +50,7 @@ import java.util.stream.Collectors;
  * IllegalArgumentException}. The default (empty allowlist) preserves the loopback-only behaviour.
  */
 @ChannelHandler.Sharable
+@InternalApi
 public class DnsRebindingProtectionHandler extends ChannelInboundHandlerAdapter {
 
     private final Set<String> allowedHosts;

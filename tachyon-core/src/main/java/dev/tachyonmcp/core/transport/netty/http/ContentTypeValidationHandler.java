@@ -4,6 +4,7 @@ package dev.tachyonmcp.core.transport.netty.http;
 import static dev.tachyonmcp.core.transport.netty.ChannelHandlerUtils.markRejected;
 import static dev.tachyonmcp.core.transport.netty.ChannelHandlerUtils.sendResponseAndClose;
 
+import dev.tachyonmcp.api.annotations.InternalApi;
 import dev.tachyonmcp.core.transport.jsonrpc.JsonRpcCodec;
 import io.netty.channel.ChannelHandler.Sharable;
 import io.netty.channel.ChannelHandlerContext;
@@ -31,6 +32,7 @@ import org.slf4j.LoggerFactory;
  * request the endpoint validator lets through is covered, however its path is spelled.
  */
 @Sharable
+@InternalApi
 public final class ContentTypeValidationHandler extends ChannelInboundHandlerAdapter {
 
     /** Shared instance; the handler is stateless. */

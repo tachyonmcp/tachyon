@@ -131,11 +131,6 @@ class DefaultChannelContextTest {
     private static final class FakeProtocol implements Protocol {
 
         @Override
-        public String endpoint() {
-            return "/test";
-        }
-
-        @Override
         public String familyName() {
             return "test";
         }

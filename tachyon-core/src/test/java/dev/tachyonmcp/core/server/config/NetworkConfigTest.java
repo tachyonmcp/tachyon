@@ -12,6 +12,8 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 /**
  * Verifies {@link NetworkConfig} defaults, builder validation, and immutability of collection
@@ -120,5 +122,31 @@ class NetworkConfigTest {
         assertThat(config1).isNotSameAs(config2);
         assertThat(config1.port()).isEqualTo(8080);
         assertThat(config2.port()).isEqualTo(9090);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"/", "/mcp", "/mcp/", "/api/v1/mcp", "/mcp-server_1.0~x"})
+    void acceptsEndpointPath(String path) {
+        assertThat(NetworkConfig.builder().endpointPath(path).build().endpointPath())
+                .isEqualTo(path);
+    }
+
+    /** A path the endpoint validator can never match would 404 every request without a word. */
+    @ParameterizedTest
+    @ValueSource(strings = {"", "mcp", " /mcp", "/mcp ", "/m cp", "/mcp?x=1", "/mcp#top", "/mcp\t", "/mcp\u0000"})
+    void rejectsUnservableEndpointPath(String path) {
+        var builder = NetworkConfig.builder().endpointPath(path);
+
+        assertThatIllegalArgumentException()
+                .isThrownBy(builder::build)
+                .withMessage("endpointPath must start with '/' and contain no query, fragment,"
+                        + " whitespace or control characters");
+    }
+
+    @Test
+    void rejectsNullEndpointPath() {
+        var builder = NetworkConfig.builder().endpointPath(null);
+
+        assertThatNullPointerException().isThrownBy(builder::build).withMessage("endpointPath");
     }
 }

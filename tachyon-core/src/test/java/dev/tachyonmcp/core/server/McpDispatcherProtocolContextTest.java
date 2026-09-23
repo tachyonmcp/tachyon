@@ -35,11 +35,6 @@ class McpDispatcherProtocolContextTest {
         RecordingProtocol() {}
 
         @Override
-        public String endpoint() {
-            return "/mcp";
-        }
-
-        @Override
         public String familyName() {
             return "fake";
         }

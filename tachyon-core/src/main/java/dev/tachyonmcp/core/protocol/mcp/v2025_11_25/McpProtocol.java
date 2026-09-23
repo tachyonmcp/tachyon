@@ -19,7 +19,6 @@ import java.util.Set;
  */
 public final class McpProtocol implements Protocol {
 
-    private static final String ENDPOINT = "/mcp";
     private static final String PROTOCOL_NAME = "mcp";
     public static final String VERSION = "2025-11-25";
 
@@ -35,11 +34,6 @@ public final class McpProtocol implements Protocol {
             new dev.tachyonmcp.core.protocol.mcp.v2025_11_25.codecs.McpRequestMapper();
 
     @Override
-    public String endpoint() {
-        return ENDPOINT;
-    }
-
-    @Override
     public String familyName() {
         return PROTOCOL_NAME;
     }
@@ -51,9 +45,6 @@ public final class McpProtocol implements Protocol {
 
     @Override
     public boolean matches(HttpRequest request) {
-        if (!request.uri().startsWith(endpoint())) {
-            return false;
-        }
         if (request.method() == HttpMethod.POST) {
             var clientVersion = request.headers().get(McpHeaderNames.MCP_PROTOCOL_VERSION);
             return clientVersion == null || ACCEPTED_CLIENT_VERSIONS.contains(clientVersion);

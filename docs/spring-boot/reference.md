@@ -28,7 +28,7 @@ For an ephemeral port, inject `TachyonServer` and read `server.port()` after sta
 
 | Property | Default | Purpose |
 |---|---|---|
-| `tachyon.network.endpoint-path` | `/mcp` | HTTP path serving the MCP endpoints. |
+| `tachyon.network.endpoint-path` | `/mcp` | HTTP path serving the MCP endpoints. Must start with `/`, no query, fragment or whitespace. Requests: a trailing `/` and the query string are ignored; any other path gets `404`. |
 | `tachyon.network.reader-idle-timeout` | `60s` | Close connections with no inbound traffic for this long. |
 | `tachyon.network.writer-idle-timeout` | `5m` | Close connections with no outbound traffic for this long. |
 | `tachyon.network.heartbeat-interval` | `15s` | SSE heartbeat that keeps an upgraded stream alive. Keep it below proxy idle timeouts and, with sessions, below the session TTL; `0` disables it. |

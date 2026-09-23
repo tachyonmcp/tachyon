@@ -3,6 +3,7 @@ package dev.tachyonmcp.core.transport.netty.http;
 
 import static dev.tachyonmcp.core.transport.netty.ChannelHandlerUtils.rejectAndClose;
 
+import dev.tachyonmcp.api.annotations.InternalApi;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
@@ -15,6 +16,7 @@ import io.netty.handler.codec.http.HttpResponseStatus;
  * headers ({@code MCP-Session-Id}, {@code Last-Event-ID}) and DELETE methods.
  */
 @ChannelHandler.Sharable
+@InternalApi
 public class StatelessValidatorHandler extends ChannelInboundHandlerAdapter {
 
     @Override

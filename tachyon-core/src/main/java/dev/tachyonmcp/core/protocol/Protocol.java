@@ -13,16 +13,14 @@ import java.util.List;
  * SPI for protocol versions, loadable via {@link java.util.ServiceLoader}.
  *
  * <p>Each implementation represents one negotiated server version (e.g. MCP 2025-11-25, MCP 2026-07-28)
- * and encapsulates the endpoint path, request matching predicate, response mapper,
- * and per-channel context factory.
+ * and encapsulates the request matching predicate, response mapper, and per-channel context factory.
+ * The endpoint path is server configuration, not a protocol trait: see
+ * {@link dev.tachyonmcp.core.server.config.NetworkConfig#endpointPath()}.
  *
  * <p>To register an implementation, add its fully-qualified class name to
  * {@code META-INF/services/dev.tachyonmcp.core.protocol.Protocol}.
  */
 public interface Protocol {
-
-    /** HTTP endpoint path this protocol is served on, e.g. {@code "/mcp"}. */
-    String endpoint();
 
     /** Protocol family name, e.g. {@code "mcp"}. */
     String familyName();
@@ -51,9 +49,10 @@ public interface Protocol {
     }
 
     /**
-     * Returns {@code true} when this implementation can handle the given HTTP request.
-     * POST requests are matched by endpoint AND {@code MCP-Protocol-Version} header compatibility;
-     * other methods (GET for SSE, DELETE for session close, OPTIONS) are matched by endpoint only.
+     * Returns {@code true} when this implementation can handle the given HTTP request, which has
+     * already been routed to the MCP endpoint. POST requests are matched by
+     * {@code MCP-Protocol-Version} header compatibility; other methods (GET for SSE, DELETE for
+     * session close, OPTIONS) match any protocol version that serves them.
      */
     boolean matches(HttpRequest request);
 

@@ -3,7 +3,7 @@ title: Netty pipeline
 tags: [concept, transport, netty]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/http/]
 updated: 2026-09-23
-commit: b2ac69b9
+commit: 67b31b54
 ---
 
 # 🧪 Netty pipeline
@@ -32,10 +32,10 @@ Verdict: one static-order pipeline per channel. Every registered `Protocol`'s ha
 | 4 | `dns-rebinding` | `DnsRebindingProtectionHandler` | 403 → [[security-guards]] |
 | – | `cors-mcp-param` | `McpParamPreflightHandler` | only if CORS config, just before `cors`: appends requested `Mcp-Param-<token>` names to a granted preflight's `Access-Control-Allow-Headers` (no `*`) `McpParamPreflightHandler#write` |
 | 5 | `cors` | `CorsHandler` | only if CORS config; answers preflights itself `NettyServerConfig#buildCorsConfig` |
-| 6 | `mcp-endpoint` | `EndpointValidatorHandler` | 404 path ≠ endpoint (trailing `/`, query ignored) `EndpointValidatorHandler#channelRead` |
+| 6 | `mcp-endpoint` | `EndpointValidatorHandler` | 404 path ≠ endpoint (trailing `/`, query ignored) `EndpointValidatorHandler#channelRead`. **Only** path check: every later handler and `Protocol#matches` trust it, so a custom `endpointPath` works end to end |
 | 7 | `mcp-header-guard` | `McpHeaderGuardHandler` | 400 duplicate singleton MCP header (incl. SEP-2243 mirrors); body-independent, so it runs pre-aggregation `McpHeaderGuardHandler#hasDuplicateSingleton` |
-| 8 | `protocol-version` | `ProtocolVersionHandler` | POST: resolve protocol, bind ctx, or flag unsupported |
-| 9 | `accept-header` | `AcceptValidationHandler` | 406 |
+| 8 | `protocol-version` | `ProtocolVersionHandler` | every POST: resolve protocol, bind ctx, or flag unsupported. Flag is a channel attr, cleared on **every** request: a flagged request refused before #13 (aggregator 413 keeps keep-alive open) must not reject the next one on the connection `ProtocolVersionHandler#channelRead` |
+| 9 | `accept-header` | `AcceptValidationHandler#INSTANCE` | 406 |
 | 10 | `content-type` | `ContentTypeValidationHandler#INSTANCE` | 415 JSON-RPC `-32600` on POST without `application/json`: a CORS "simple" request no preflight gated. Every POST past `mcp-endpoint`, no path match `ContentTypeValidationHandler#channelRead` |
 | 11 | `stateless-mcp` | `StatelessValidatorHandler` | only stateless server: 404 on session/Last-Event-ID headers, 405 DELETE |
 | 12 | `http-aggregator` | `HttpObjectAggregator(maxContentLength)` | 413/417; owns `Expect: 100-continue` (`EndpointValidatorHandler`) |

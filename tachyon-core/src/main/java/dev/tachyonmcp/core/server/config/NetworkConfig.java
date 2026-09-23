@@ -26,7 +26,9 @@ import org.jspecify.annotations.Nullable;
  *
  * @param host               bind address (default {@code "127.0.0.1"})
  * @param port               listen port (must be set before {@code bind()})
- * @param endpointPath       HTTP path for MCP endpoints (default {@code "/mcp"})
+ * @param endpointPath       HTTP path for MCP endpoints (default {@code "/mcp"}); must start with
+ *                           {@code /} and contain no query, fragment, whitespace or control
+ *                           characters
  * @param readerIdleTimeout  close connections with no inbound traffic for this long (default 60s);
  *                           long-running tools stay alive via SSE heartbeats, not a larger value
  * @param writerIdleTimeout  idle timeout for writing (default 5min)
@@ -60,6 +62,11 @@ public record NetworkConfig(
         Duration heartbeatInterval) {
 
     public NetworkConfig {
+        Objects.requireNonNull(endpointPath, "endpointPath");
+        if (!isServablePath(endpointPath)) {
+            throw new IllegalArgumentException("endpointPath must start with '/' and contain no query, fragment,"
+                    + " whitespace or control characters");
+        }
         if (allowedOrigins != null) {
             allowedOrigins = List.copyOf(allowedOrigins);
         }
@@ -69,6 +76,12 @@ public record NetworkConfig(
         if (allowedHosts != null) {
             allowedHosts = List.copyOf(allowedHosts);
         }
+    }
+
+    private static boolean isServablePath(String path) {
+        return path.startsWith("/")
+                && path.chars()
+                        .noneMatch(c -> c == '?' || c == '#' || Character.isWhitespace(c) || Character.isISOControl(c));
     }
 
     public static final String DEFAULT_HOST = "127.0.0.1";

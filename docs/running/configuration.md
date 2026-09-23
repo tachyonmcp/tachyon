@@ -37,7 +37,7 @@ Configured via `network { }` / `NetworkConfig.Builder`.
 | `host` | `127.0.0.1` | Bind address |
 | `port` | — | Listen port; `0` picks a free port. Must be set before `start()` |
 | `address` | — | Full `SocketAddress`; mutually exclusive with `host`/`port` |
-| `endpointPath` | `/mcp` | HTTP endpoint path |
+| `endpointPath` | `/mcp` | HTTP endpoint path. Must start with `/`, no query, fragment or whitespace. Requests: a trailing `/` and the query string are ignored; any other path gets `404` |
 | `readerIdleTimeout` | `60s` | Close connections with no inbound traffic for this long |
 | `writerIdleTimeout` | `5m` | Close connections with no outbound traffic for this long |
 | `heartbeatInterval` | `15s` | SSE heartbeat interval for silent listening streams; `<= 0` disables |

@@ -2,8 +2,8 @@
 title: Protocol versions
 tags: [concept, protocol, mcp]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/http/McpHeaderMatchHandler.java, tachyon-core/src/main/resources/META-INF/services/dev.tachyonmcp.core.protocol.Protocol, tachyon-core/ts2java.py, tachyon-core/protocol/, tachyon-core/pom.xml]
-updated: 2026-09-21
-commit: a5bf0b18
+updated: 2026-09-23
+commit: 150e2ac9
 ---
 
 # 🔀 Protocol versions
@@ -12,7 +12,7 @@ Verdict: `Protocol` SPI via ServiceLoader, two impls registered. Negotiation = h
 
 ## 🔌 SPI
 
-`Protocol` `Protocol`: `endpoint`, `familyName`, `versionString` (ISO date ⇒ lexical = chronological), `priority`, `supportsSessions` (`Protocol#supportsSessions`), `matches(HttpRequest)`, `responseMapper`, `requestMapper`, `createInteractionContext`, `requestHandlers(server)` (`Protocol#requestHandlers`, must be `@Sharable`, must no-op for other versions).
+`Protocol` `Protocol`: `familyName`, `versionString` (ISO date ⇒ lexical = chronological), `priority`, `supportsSessions` (`Protocol#supportsSessions`), `matches(HttpRequest)`, `responseMapper`, `requestMapper`, `createInteractionContext`, `requestHandlers(server)` (`Protocol#requestHandlers`, must be `@Sharable`, must no-op for other versions).
 
 Registry `Protocols` static ServiceLoader, fails if empty `Protocols#PROTOCOLS`; `resolve` = filter `matches` → max by version then priority `Protocols#resolve`. Services file `tachyon-core/src/main/resources/META-INF/services/dev.tachyonmcp.core.protocol.Protocol` (order irrelevant). No negotiated version (programmatic dispatch, stateless ctx, `broadcastLog`, `ServerEngine#responseMapper`) ⇒ `Protocols#baseline` = **oldest** registered version, min by version then priority — deterministic, not ServiceLoader order.
 
@@ -22,7 +22,7 @@ Registry `Protocols` static ServiceLoader, fails if empty `Protocols#PROTOCOLS`;
 |---|---|---|
 | Impl | `protocol/mcp/v2025_11_25/McpProtocol.java` | `protocol/mcp/v2026_07_28/McpProtocol.java` |
 | `matches` POST | header absent **or** in `{2025-11-25, 2025-06-18, 2025-03-26}` [McpProtocol#matches](../../tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/mcp/v2025_11_25/McpProtocol.java) | header == `2026-07-28` [McpProtocol#matches](../../tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/mcp/v2026_07_28/McpProtocol.java) |
-| `matches` GET/DELETE/OPTIONS | yes (endpoint only) | no |
+| `matches` GET/DELETE/OPTIONS | yes | no |
 | `supportsSessions` | true | **false** `McpProtocol#supportsSessions` |
 | Handshake | `initialize` + `notifications/initialized` | none; `server/discover` |
 | Extensions | once at `initialize` (`InitializeHandler`) | per request `_meta."io.modelcontextprotocol/clientCapabilities".extensions` |

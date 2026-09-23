@@ -16,7 +16,7 @@ import org.junit.jupiter.api.Test;
 
 class ProtocolVersionHandlerTest {
 
-    private final EmbeddedChannel channel = new EmbeddedChannel(new ProtocolVersionHandler("/mcp"));
+    private final EmbeddedChannel channel = new EmbeddedChannel(new ProtocolVersionHandler());
 
     @AfterEach
     void tearDown() {
@@ -42,22 +42,6 @@ class ProtocolVersionHandlerTest {
     }
 
     @Test
-    void unsupportedVersionRejectsNonMcpUri() {
-        var body = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\"}";
-        var request = new DefaultFullHttpRequest(
-                HttpVersion.HTTP_1_1, HttpMethod.POST, "/other", Unpooled.copiedBuffer(body, StandardCharsets.UTF_8));
-        request.headers()
-                .set(HttpHeaderNames.ORIGIN, "http://localhost:3000")
-                .set("MCP-Protocol-Version", "2099-01-01");
-        channel.writeInbound(request);
-
-        assertThat((Object) channel.readOutbound()).isNull();
-        assertThat(channel.attr(ProtocolVersionHandler.UNSUPPORTED_VERSION_KEY).get())
-                .isNull();
-        channel.finishAndReleaseAll();
-    }
-
-    @Test
     void supportedVersionPassesThrough() {
         var body = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\"}";
         var request = new DefaultFullHttpRequest(
@@ -73,7 +57,7 @@ class ProtocolVersionHandlerTest {
 
     @Test
     void latestVersionBindsItsProtocolToTheInteraction() {
-        var negotiationChannel = new EmbeddedChannel(new ProtocolVersionHandler("/mcp"), new InteractionHandler());
+        var negotiationChannel = new EmbeddedChannel(new ProtocolVersionHandler(), new InteractionHandler());
         var request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/mcp");
         request.headers().set("MCP-Protocol-Version", McpProtocol.VERSION);
 
@@ -94,7 +78,7 @@ class ProtocolVersionHandlerTest {
         // context by the first. A fresh EmbeddedChannel per request can't catch a regression to
         // setIfAbsent here — there'd be nothing yet to overwrite either way — so this reuses one
         // channel across both requests, the same way a real keep-alive connection would.
-        var negotiationChannel = new EmbeddedChannel(new ProtocolVersionHandler("/mcp"), new InteractionHandler());
+        var negotiationChannel = new EmbeddedChannel(new ProtocolVersionHandler(), new InteractionHandler());
         var firstRequest = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/mcp");
         firstRequest.headers().set("MCP-Protocol-Version", McpProtocol.VERSION);
         negotiationChannel.writeInbound(firstRequest);
@@ -123,21 +107,6 @@ class ProtocolVersionHandlerTest {
 
         assertThat((Object) channel.readOutbound()).isNull();
         channel.finishAndReleaseAll();
-    }
-
-    @Test
-    void missingVersionOnUnregisteredEndpointFlagsRequest() {
-        var customChannel = new EmbeddedChannel(new ProtocolVersionHandler("/custom"));
-        var request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/custom");
-
-        customChannel.writeInbound(request);
-
-        assertThat((Object) customChannel.readOutbound()).isNull();
-        assertThat(customChannel
-                        .attr(ProtocolVersionHandler.UNSUPPORTED_VERSION_KEY)
-                        .get())
-                .isEqualTo("");
-        customChannel.finishAndReleaseAll();
     }
 
     @Test
