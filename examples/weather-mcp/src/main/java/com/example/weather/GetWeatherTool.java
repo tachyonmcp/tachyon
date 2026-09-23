@@ -96,10 +96,10 @@ class GetWeatherTool {
         return ToolResult.error("Could not get weather");
     }
 
-    private static Optional<String> elicitCity(InteractionContext ctx, String city) throws Exception {
-        var request = new ElicitationRequest(
+    private static Optional<String> elicitCity(InteractionContext ctx, String city) {
+        final var request = new ElicitationRequest(
             "City '%s' was not found. Enter another city.".formatted(city), CITY_SCHEMA);
-        var result = HandlerFutures.joinInterruptibly(ctx.client().elicitation().create(request));
+        final var result = ctx.client().elicitation().create(request).join();
         if (result.action() != ElicitationResult.Action.ACCEPT || result.content() == null) {
             return Optional.empty();
         }

@@ -3,13 +3,13 @@ package dev.tachyonmcp.core.server.features.prompts;
 
 import dev.tachyonmcp.api.annotations.InternalApi;
 import dev.tachyonmcp.api.server.config.Mode;
-import dev.tachyonmcp.api.server.features.HandlerFutures;
 import dev.tachyonmcp.api.server.features.prompts.AsyncPromptFn;
 import dev.tachyonmcp.api.server.features.prompts.PromptDescriptor;
 import dev.tachyonmcp.api.server.features.prompts.PromptFn;
 import dev.tachyonmcp.api.server.features.prompts.Prompts;
 import dev.tachyonmcp.core.server.config.FeatureConfig;
 import dev.tachyonmcp.core.server.features.AbstractRegistry;
+import dev.tachyonmcp.core.server.internal.HandlerFutures;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;

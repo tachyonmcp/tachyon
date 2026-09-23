@@ -2,13 +2,13 @@
 package dev.tachyonmcp.core.server.features.completions;
 
 import dev.tachyonmcp.api.server.domain.ServerError;
-import dev.tachyonmcp.api.server.features.HandlerFutures;
 import dev.tachyonmcp.api.server.features.completions.AsyncCompletionFn;
 import dev.tachyonmcp.api.server.features.completions.CompletionResult;
 import dev.tachyonmcp.core.protocol.ProtocolRequestMapper;
 import dev.tachyonmcp.core.protocol.ProtocolRequestMapper.CompletionReference;
 import dev.tachyonmcp.core.server.RpcMethodHandler;
 import dev.tachyonmcp.core.server.domain.ServerErrors;
+import dev.tachyonmcp.core.server.internal.HandlerFutures;
 import dev.tachyonmcp.core.server.session.DispatchContext;
 import java.util.Map;
 import java.util.Optional;
@@ -46,7 +46,7 @@ public final class CompletionMethodHandlers {
         @Override
         public Object handle(DispatchContext context, ProtocolRequestMapper.CompletionCallRequest request)
                 throws Exception {
-            return HandlerFutures.joinInterruptibly(handleAsync(context, request));
+            return HandlerFutures.joinInterruptible(handleAsync(context, request));
         }
 
         @Override

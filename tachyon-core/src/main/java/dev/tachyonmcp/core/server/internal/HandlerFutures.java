@@ -1,5 +1,5 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
-package dev.tachyonmcp.api.server.features;
+package dev.tachyonmcp.core.server.internal;
 
 import dev.tachyonmcp.api.annotations.InternalApi;
 import java.util.concurrent.Callable;
@@ -32,7 +32,7 @@ public final class HandlerFutures {
      * @return the result of the stage
      * @throws Exception if the stage completed exceptionally
      */
-    public static <T> T joinInterruptibly(CompletionStage<T> stage) throws Exception {
+    public static <T> T joinInterruptible(CompletionStage<T> stage) throws Exception {
         try {
             return stage.toCompletableFuture().get();
         } catch (InterruptedException e) {
@@ -78,7 +78,7 @@ public final class HandlerFutures {
     public static <T, R> CompletionStage<R> completeOn(
             CompletionStage<T> stage,
             Executor executor,
-            BiFunction<@Nullable ? super T, @Nullable Throwable, ? extends R> fn) {
+            BiFunction<? super @Nullable T, @Nullable Throwable, ? extends R> fn) {
         var future = stage.toCompletableFuture();
         final var mapped = future.isDone() ? future.<R>handle(fn) : future.<R>handleAsync(fn, executor);
         mapped.whenComplete((result, error) -> {

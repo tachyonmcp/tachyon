@@ -14,13 +14,13 @@ import dev.tachyonmcp.api.json.PayloadSerializer;
 import dev.tachyonmcp.api.json.SchemaValidationError;
 import dev.tachyonmcp.api.server.domain.LoggingLevel;
 import dev.tachyonmcp.api.server.domain.ServerError;
-import dev.tachyonmcp.api.server.features.HandlerFutures;
 import dev.tachyonmcp.api.server.features.tasks.TaskSupport;
 import dev.tachyonmcp.api.server.features.tools.ToolRequest;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
 import dev.tachyonmcp.core.protocol.ProtocolRequestMapper;
 import dev.tachyonmcp.core.server.RpcMethodHandler;
 import dev.tachyonmcp.core.server.features.tasks.TasksExtension;
+import dev.tachyonmcp.core.server.internal.HandlerFutures;
 import dev.tachyonmcp.core.server.json.JsonUtils;
 import dev.tachyonmcp.core.server.observability.CapturedPayload;
 import dev.tachyonmcp.core.server.session.DispatchContext;
@@ -99,7 +99,7 @@ public final class ToolMethodHandlers {
         @Override
         public @Nullable Object handle(DispatchContext context, ProtocolRequestMapper.ToolCallRequest mapped)
                 throws Exception {
-            return HandlerFutures.joinInterruptibly(handleAsync(context, mapped));
+            return HandlerFutures.joinInterruptible(handleAsync(context, mapped));
         }
 
         @Override

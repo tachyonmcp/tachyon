@@ -1,5 +1,5 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
-package dev.tachyonmcp.api.server.features;
+package dev.tachyonmcp.core.server.internal;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -10,6 +10,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 
 class HandlerFuturesTest {
@@ -34,14 +35,14 @@ class HandlerFuturesTest {
     @Test
     void shouldReturnResultForAlreadyCompleteStage() throws Exception {
         var future = CompletableFuture.completedFuture("done");
-        assertThat(HandlerFutures.joinInterruptibly(future)).isEqualTo("done");
+        assertThat(HandlerFutures.joinInterruptible(future)).isEqualTo("done");
     }
 
     @Test
     void shouldUnwrapRuntimeException() {
         var cause = new IllegalArgumentException("boom");
         var future = CompletableFuture.failedFuture(cause);
-        assertThatThrownBy(() -> HandlerFutures.joinInterruptibly(future))
+        assertThatThrownBy(() -> HandlerFutures.joinInterruptible(future))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("boom");
     }
@@ -50,14 +51,14 @@ class HandlerFuturesTest {
     void shouldWrapCheckedExceptionInCompletionException() {
         var cause = new Exception("checked");
         var future = CompletableFuture.failedFuture(cause);
-        assertThatThrownBy(() -> HandlerFutures.joinInterruptibly(future))
+        assertThatThrownBy(() -> HandlerFutures.joinInterruptible(future))
                 .isInstanceOf(CompletionException.class)
                 .hasCause(cause);
     }
 
     @Test
     void shouldThrowInterruptedExceptionAndRestoreInterruptFlag() throws Exception {
-        var exRef = new AtomicReference<Exception>();
+        var exRef = new AtomicReference<@Nullable Exception>();
         var started = new CountDownLatch(1);
         var blocked = new CountDownLatch(1);
 
@@ -72,7 +73,7 @@ class HandlerFuturesTest {
         var t = new Thread(() -> {
             started.countDown();
             try {
-                HandlerFutures.joinInterruptibly(blockingFuture);
+                HandlerFutures.joinInterruptible(blockingFuture);
             } catch (Exception e) {
                 exRef.set(e);
             }
