@@ -45,7 +45,7 @@ Verdict: one static-order pipeline per channel. Every registered `Protocol`'s ha
 | 16 | `mcp-header-match` | `McpHeaderMatchHandler` | SEP-2243 mirror **agreement** vs body, every version, ungated `McpHeaderMatchHandler#channelRead` |
 | 17 | `mcp-<ver>-*` | `Protocol.requestHandlers(server)` for each protocol | 2025: none; 2026: `RequestValidationHandler` (`_meta`/removed methods) → `RequiredHeadersHandler` (mirror **presence**) → `ExtensionNegotiationHandler` |
 | 18 | `mcp-phase-init` | `McpInitializationHandler` (per channel) | first request |
-| 19 | `lifecycle` | `LifecyclePipelineCoordinator` | swaps 17 → `mcp-phase-operations` |
+| 19 | `lifecycle` | `LifecyclePipelineCoordinator` | replaces `mcp-phase-init` (phase 18) → `mcp-phase-operations` |
 | – | customizer | `ServerBuilder.pipelineCustomizer` | user hook, runs last `InteractionHandler` |
 
 ## 🔁 Phase swap

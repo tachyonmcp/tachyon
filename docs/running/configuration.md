@@ -154,8 +154,6 @@ Neither needs configuration beyond enabling sessions, which
 
 ### CORS
 
-| Option | Default | Description |
-|---|---|---|
 The [DNS-rebinding guard](#dns-rebinding-protection) runs first and admits only loopback
 origins, on any port. CORS then answers the browser, so a page served from a dev server such
 as `http://localhost:5173` can call a local server.
