@@ -1,8 +1,6 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
 package dev.tachyonmcp.api.server.features.tools;
 
-import static dev.tachyonmcp.api.server.features.HandlerFutures.assumeVirtualThread;
-
 import dev.tachyonmcp.api.annotations.ExperimentalApi;
 import dev.tachyonmcp.api.runtime.InteractionContext;
 import java.util.Objects;
@@ -68,7 +66,8 @@ public abstract class AbstractToolHandler implements ToolHandler {
      * @throws Exception when handling fails
      */
     public ToolResult handle(InteractionContext context, ToolRequest request) throws Exception {
-        assumeVirtualThread(); // don't remove this guardrail!
+        // don't remove this guardrail!
+        assert Thread.currentThread().isVirtual() : "Handler MUST run on virtual thread";
         throw new UnsupportedOperationException("Override handle or handleAsync");
     }
 }

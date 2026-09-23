@@ -3,11 +3,11 @@ package dev.tachyonmcp.core.server.features.resources;
 
 import dev.tachyonmcp.api.server.domain.ResourceContents;
 import dev.tachyonmcp.api.server.domain.ServerError;
-import dev.tachyonmcp.api.server.features.HandlerFutures;
 import dev.tachyonmcp.api.server.features.resources.ResourceRequest;
 import dev.tachyonmcp.core.protocol.ProtocolRequestMapper;
 import dev.tachyonmcp.core.server.RpcMethodHandler;
 import dev.tachyonmcp.core.server.domain.ServerErrors;
+import dev.tachyonmcp.core.server.internal.HandlerFutures;
 import dev.tachyonmcp.core.server.session.DispatchContext;
 import java.util.List;
 import java.util.Map;
@@ -100,7 +100,7 @@ public final class ResourceMethodHandlers {
 
         @Override
         public Object handle(DispatchContext context, ResourceRequest mapped) throws Exception {
-            return HandlerFutures.joinInterruptibly(handleAsync(context, mapped));
+            return HandlerFutures.joinInterruptible(handleAsync(context, mapped));
         }
 
         @Override

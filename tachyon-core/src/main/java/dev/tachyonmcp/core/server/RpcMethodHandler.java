@@ -20,7 +20,7 @@ import org.jspecify.annotations.Nullable;
  * <pre>{@code
  * var future = CompletableFuture.supplyAsync(
  *         () -> heavyWork(), context.engine().executor());
- * return HandlerFutures.joinInterruptibly(future);
+ * return HandlerFutures.joinInterruptible(future);
  * }</pre>
  */
 @InternalApi
