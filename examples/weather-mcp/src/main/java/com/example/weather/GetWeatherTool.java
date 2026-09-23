@@ -18,7 +18,6 @@ import dev.tachyonmcp.api.server.domain.Icon;
 import dev.tachyonmcp.api.server.domain.InvalidArgumentException;
 import dev.tachyonmcp.api.server.domain.ProgressToken;
 import dev.tachyonmcp.api.server.domain.ToolAnnotations;
-import dev.tachyonmcp.api.server.features.HandlerFutures;
 import dev.tachyonmcp.api.server.features.tools.ToolDescriptor;
 import dev.tachyonmcp.api.server.features.tools.ToolFn;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
@@ -80,7 +79,7 @@ class GetWeatherTool {
     }
 
     private static WeatherObservation fetchWithProgress(
-        InteractionContext ctx, ProgressToken progressToken, WeatherService weatherService, String city)
+        InteractionContext ctx, @Nullable ProgressToken progressToken, WeatherService weatherService, String city)
         throws Exception {
         ctx.notifications().progress(progressToken, 0.1, 1.0, "Fetching weather for " + city);
         var weather = weatherService.currentWeather(city);
