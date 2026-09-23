@@ -44,9 +44,8 @@ public record NettyServerConfig(
     private static final HttpMethod[] ALLOWED_METHODS = {HttpMethod.GET, HttpMethod.POST, HttpMethod.DELETE};
 
     /**
-     * Request headers every browser MCP client may send. {@code *} additionally covers the SEP-2243
-     * {@code Mcp-Param-*} mirrors, whose names depend on the tool; Fetch never lets it cover
-     * {@code Authorization}, so that is listed.
+     * Request headers every browser MCP client may send. The SEP-2243 {@code Mcp-Param-*} mirrors,
+     * whose names depend on the tool, are granted per preflight by {@code McpParamPreflightHandler}.
      */
     private static final String[] ALLOWED_HEADERS = {
         HttpHeaderNames.CONTENT_TYPE.toString(),
@@ -55,8 +54,7 @@ public record NettyServerConfig(
         McpHeaderNames.MCP_SESSION_ID,
         McpHeaderNames.LAST_EVENT_ID,
         McpHeaderNames.MCP_METHOD,
-        McpHeaderNames.MCP_NAME,
-        "*"
+        McpHeaderNames.MCP_NAME
     };
 
     /** Response headers a browser MCP client must read from script. */
@@ -73,7 +71,8 @@ public record NettyServerConfig(
      * Access-Control-Allow-Origin: *}: the DNS-rebinding guard ahead of CORS admits only loopback
      * origins, on any port, so a browser page on a dev server such as {@code localhost:5173} works.
      * Credentials are never allowed. The preflight grants the methods and MCP request headers a
-     * browser client sends, plus {@code allowedHeaders}, and responses expose {@code MCP-Session-Id}
+     * browser client sends, plus {@code allowedHeaders}; the transport additionally
+     * grants each {@code Mcp-Param-*} header a preflight requests. Responses expose {@code MCP-Session-Id}
      * and {@code MCP-Protocol-Version} to script.
      *
      * @param allowedOrigins       exact origins to grant, or {@code null} for any origin the guard admits

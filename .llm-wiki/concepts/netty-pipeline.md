@@ -3,7 +3,7 @@ title: Netty pipeline
 tags: [concept, transport, netty]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/http/]
 updated: 2026-09-23
-commit: bf825914
+commit: b2ac69b9
 ---
 
 # 🧪 Netty pipeline
@@ -30,6 +30,7 @@ Verdict: one static-order pipeline per channel. Every registered `Protocol`'s ha
 | – | `session-touch` | `SessionTouchHandler` | added lazily after `http` when session bound; every outbound write `touch()`es session `SessionTouchHandler#install` |
 | 3 | `http-keep-alive` | `HttpServerKeepAliveHandler` | honors `Connection`; responses set keep-alive intent |
 | 4 | `dns-rebinding` | `DnsRebindingProtectionHandler` | 403 → [[security-guards]] |
+| – | `cors-mcp-param` | `McpParamPreflightHandler` | only if CORS config, just before `cors`: appends requested `Mcp-Param-<token>` names to a granted preflight's `Access-Control-Allow-Headers` (no `*`) `McpParamPreflightHandler#write` |
 | 5 | `cors` | `CorsHandler` | only if CORS config; answers preflights itself `NettyServerConfig#buildCorsConfig` |
 | 6 | `mcp-endpoint` | `EndpointValidatorHandler` | 404 path ≠ endpoint (trailing `/`, query ignored) `EndpointValidatorHandler#channelRead` |
 | 7 | `mcp-header-guard` | `McpHeaderGuardHandler` | 400 duplicate singleton MCP header (incl. SEP-2243 mirrors); body-independent, so it runs pre-aggregation `McpHeaderGuardHandler#hasDuplicateSingleton` |

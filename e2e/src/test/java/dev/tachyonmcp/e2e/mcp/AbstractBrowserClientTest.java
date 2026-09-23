@@ -71,15 +71,24 @@ public abstract class AbstractBrowserClientTest<C extends McpClient> extends Abs
             assertThat(allowedMethods).containsAnyOf(method.toLowerCase(Locale.ROOT), "*");
         }
         var allowedHeaders = tokens(response, "access-control-allow-headers");
-        assertThat(clientHeaders())
-                .as("Fetch: '*' covers every header except Authorization, which must be listed")
-                .allSatisfy(header -> assertThat(allowedHeaders.contains(header)
-                                || (allowedHeaders.contains("*") && !header.equals("authorization")))
-                        .as("preflight grants %s (granted: %s)", header, allowedHeaders)
-                        .isTrue());
+        assertThat(allowedHeaders)
+                .as("every header is granted by name, never by wildcard")
+                .containsAll(clientHeaders())
+                .doesNotContain("*");
         assertThat(response.headers().firstValue("access-control-max-age"))
                 .as("a zero max-age forces a preflight before every request")
                 .hasValueSatisfying(v -> assertThat(Long.parseLong(v)).isPositive());
+    }
+
+    @Test
+    void preflightGrantsRequestedMcpParamHeadersOnly() throws Exception {
+        var response = preflight("POST", "content-type, mcp-param-zone, x-evil, mcp-param-, mcp-param-a b", false);
+
+        assertThat(response.statusCode()).isBetween(200, 299);
+        assertThat(tokens(response, "access-control-allow-headers"))
+                .as("only well-formed Mcp-Param-<token> names are granted per preflight")
+                .contains("content-type", "mcp-param-zone")
+                .doesNotContain("*", "x-evil", "mcp-param-", "mcp-param-a b", "mcp-param-a", "b");
     }
 
     @Test

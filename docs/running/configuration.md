@@ -171,8 +171,8 @@ Built in, with no configuration:
 
 - Preflights grant `GET`, `POST` and `DELETE`.
 - Preflights grant `Content-Type`, `Authorization`, `MCP-Protocol-Version`, `MCP-Session-Id`,
-  `Last-Event-ID`, `Mcp-Method`, `Mcp-Name`, and `*`, which covers the per-tool `Mcp-Param-*`
-  headers.
+  `Last-Event-ID`, `Mcp-Method` and `Mcp-Name`, plus each per-tool `Mcp-Param-*` header the
+  preflight asks for, by name. There is no wildcard: any other header needs `allowedHeaders`.
 - Responses expose `MCP-Session-Id` and `MCP-Protocol-Version` to script.
 - Browsers may cache a preflight for up to a day.
 - Credentials are never allowed.

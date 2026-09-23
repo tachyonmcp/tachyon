@@ -10,6 +10,7 @@ import dev.tachyonmcp.core.transport.netty.http.DnsRebindingProtectionHandler;
 import dev.tachyonmcp.core.transport.netty.http.EndpointValidatorHandler;
 import dev.tachyonmcp.core.transport.netty.http.McpHeaderGuardHandler;
 import dev.tachyonmcp.core.transport.netty.http.McpHeaderMatchHandler;
+import dev.tachyonmcp.core.transport.netty.http.McpParamPreflightHandler;
 import dev.tachyonmcp.core.transport.netty.http.StatelessValidatorHandler;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelInitializer;
@@ -151,6 +152,8 @@ public class McpChannelInitializer extends ChannelInitializer<SocketChannel> {
         p.addLast("http-keep-alive", new HttpServerKeepAliveHandler());
         p.addLast("dns-rebinding", dnsRebindingHandler);
         if (corsConfig != null) {
+            // Ahead of "cors" so it sees the preflight response CorsHandler writes.
+            p.addLast("cors-mcp-param", new McpParamPreflightHandler());
             p.addLast("cors", new CorsHandler(corsConfig));
         }
         p.addLast("mcp-endpoint", endpointValidatorHandler);

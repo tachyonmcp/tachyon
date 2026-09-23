@@ -224,7 +224,7 @@ per session, with `INFO` used until the client sends `logging/setLevel`.
 | `.maxContentLength(b)` | 1MB |
 | `.allowedOrigins(...)` | none (any loopback origin, any port; guard rejects the rest) |
 | `.allowNullOrigin(b)` / `.allowPrivateNetworks(b)` | false |
-| `.allowedHeaders(...)` | none (MCP headers + `*` built in) |
+| `.allowedHeaders(...)` | none (MCP headers + requested `Mcp-Param-*` built in) |
 | `.ioEngine(e)` | `NettyIoEngine.AUTO` (io_uring → epoll → kqueue → NIO) |
 
 Native transports need optional runtime jars (`netty-transport-native-epoll` / `-kqueue` / `-io_uring` with `${os.detected.classifier}`); otherwise `AUTO` falls back to NIO. Explicit unavailable engines throw `UnsupportedOperationException`. See `docs/configuration.md`.
