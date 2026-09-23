@@ -2,6 +2,7 @@
 package dev.tachyonmcp.testkit;
 
 import java.net.URI;
+import org.jspecify.annotations.Nullable;
 
 /**
  * {@link McpClient} for MCP protocol version 2025-11-25 (session-based, {@code initialize}
@@ -11,6 +12,8 @@ public final class Mcp20251125Client extends McpClient {
 
     /** The MCP protocol version this client speaks. */
     public static final String PROTOCOL_VERSION = "2025-11-25";
+
+    private volatile @Nullable String sessionId;
 
     /**
      * Creates a client for the given server port.
@@ -28,6 +31,21 @@ public final class Mcp20251125Client extends McpClient {
      */
     public Mcp20251125Client(URI mcpEndpoint) {
         super(mcpEndpoint);
+    }
+
+    @Override
+    public void sendInitialized(@Nullable String sessionId) throws Exception {
+        super.sendInitialized(sessionId);
+        this.sessionId = sessionId;
+    }
+
+    /**
+     * Returns the session id established by {@link #initialize()} or {@link #sendInitialized}.
+     *
+     * @return the current session id, or {@code null} when the server issued none
+     */
+    public @Nullable String sessionId() {
+        return sessionId;
     }
 
     @Override

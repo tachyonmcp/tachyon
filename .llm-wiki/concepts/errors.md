@@ -2,8 +2,8 @@
 title: Errors
 tags: [concept, errors, protocol]
 sources: [tachyon-api/src/main/java/dev/tachyonmcp/api/server/domain/ServerError.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/domain/ServerErrors.java, tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/mcp/v2025_11_25/codecs/McpResponseMapper.java, tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/mcp/v2026_07_28/codecs/McpResponseMapper.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/PeekedBody.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/JsonRpcCodec.java]
-updated: 2026-09-17
-commit: d831e9b1
+updated: 2026-09-23
+commit: 0ac33032
 ---
 
 # 🚨 Errors
@@ -41,7 +41,7 @@ Extension gate: `ServerErrors.missingRequiredExtension(id)` ⇒ `MISSING_REQUIRE
 | `IllegalArgumentException` | INVALID_PARAMS `"Invalid params"` — message **hidden** (may leak lib internals) |
 | anything else | INTERNAL_ERROR with fixed detail (`"Tool handler failed"` …) |
 
-Dispatcher-level `McpDispatcher.handleHandlerError` `McpDispatcher#handleHandlerError`: `CancellationException` ⇒ internal error + `Cancelled`; `RequestMappingException` ⇒ its error; other ⇒ `"Internal error"`. Serialization failure ⇒ `"Failed to encode response"` + `SerializationFailed` outcome `OperationOutcome`.
+Dispatcher-level `McpDispatcher.handleHandlerError` `McpDispatcher#handleHandlerError`: `CancellationException` ⇒ internal error + `Cancelled`; `RequestMappingException` ⇒ its error; other ⇒ `ServerErrors#fromUnhandledException(cause, "Internal error")` (argument exceptions ⇒ invalid params, rest ⇒ internal error). Serialization failure ⇒ `"Failed to encode response"` + `SerializationFailed` outcome `OperationOutcome`.
 
 Subscription transport failures produce `StreamFailed(causeType, cause?)`, with throwable capture gated by `exceptionDetail` [McpDispatcher#handleHandlerError](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java); see [[observability]].
 

@@ -505,7 +505,7 @@ public class McpDispatcher {
                         error, context.responseMapper().error(error).code(), exceptionDetail ? unwrapped : null);
             } else {
                 logger.warn("Handler exception: method={}, id={}: {}", method, id, unwrapped.getMessage(), unwrapped);
-                var error = ServerErrors.internalError("Internal error");
+                var error = ServerErrors.fromUnhandledException(unwrapped, "Internal error");
                 dispatchResult = errorResult(id, error, context);
                 outcome = new OperationOutcome.HandlerFailed(
                         error, context.responseMapper().error(error).code(), exceptionDetail ? unwrapped : null);
