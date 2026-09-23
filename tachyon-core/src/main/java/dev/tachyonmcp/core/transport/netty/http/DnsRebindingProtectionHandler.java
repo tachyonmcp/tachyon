@@ -16,6 +16,7 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Guards against DNS-rebinding attacks by validating the {@code Host} and {@code Origin} headers.
@@ -28,14 +29,17 @@ import java.util.stream.Collectors;
  * Host} is rejected on HTTP/1.1+ (where {@code Host} is mandatory). HTTP/1.0, where {@code Host} is
  * optional, is exempt from the missing-Host rule.
  *
- * <p><b>Origin.</b> When present, {@code Origin} must use one of the loopback hosts accepted above.
- * A request carrying multiple {@code Origin} headers is rejected, and the opaque {@code Origin: null}
- * (sent by sandboxed iframes and some {@code file://}/Electron clients) is rejected — the guard fails
- * closed on any origin it cannot positively identify as loopback.
- * {@code allowedHosts} does <em>not</em> widen this: a browser page whose {@code Origin} is a non-local
- * host (e.g. {@code http://host.docker.internal:3000}) is still rejected. {@code allowedHosts} only
- * helps non-browser clients — which send no {@code Origin} — reach a server whose {@code Host} is
- * non-local (e.g. a container reaching the host via {@code host.docker.internal}).
+ * <p><b>Origin.</b> When present, {@code Origin} must use one of the loopback hosts accepted above
+ * (on any port), or match one of the configured {@link #DnsRebindingProtectionHandler(List, List,
+ * boolean) allowedOrigins} exactly; a {@code "*"} entry admits any origin. The opaque {@code Origin:
+ * null} (sent by sandboxed iframes and some {@code file://}/Electron clients) is admitted only when
+ * {@code allowNullOrigin} is set. A request carrying multiple {@code Origin} headers is rejected —
+ * the guard fails closed on any origin it cannot positively identify. {@code allowedHosts} does
+ * <em>not</em> widen the {@code Origin} check: a browser page whose {@code Origin} is a non-local host
+ * (e.g. {@code http://host.docker.internal:3000}) needs an {@code allowedOrigins} entry.
+ * {@code allowedHosts} alone only helps non-browser clients — which send no {@code Origin} — reach a
+ * server whose {@code Host} is non-local (e.g. a container reaching the host via {@code
+ * host.docker.internal}).
  *
  * <p><b>{@code allowedHosts} semantics.</b> Each entry is a bare <em>authority</em> (a host, or
  * {@code host:port}) — not a URL. Matching is case-insensitive.
@@ -51,9 +55,15 @@ import java.util.stream.Collectors;
 @ChannelHandler.Sharable
 public class DnsRebindingProtectionHandler extends ChannelInboundHandlerAdapter {
 
-    private final Set<String> allowedHosts;
+    private static final String NULL_ORIGIN = "null";
+    private static final String ANY_ORIGIN = "*";
 
-    /** Loopback-only protection (no additional allowed hosts). */
+    private final Set<String> allowedHosts;
+    private final Set<String> allowedOrigins;
+    private final boolean anyOrigin;
+    private final boolean allowNullOrigin;
+
+    /** Loopback-only protection (no additional allowed hosts or origins). */
     public DnsRebindingProtectionHandler() {
         this(List.of());
     }
@@ -64,6 +74,25 @@ public class DnsRebindingProtectionHandler extends ChannelInboundHandlerAdapter 
      * @throws IllegalArgumentException if an entry is not a bare host/{@code host:port} authority
      */
     public DnsRebindingProtectionHandler(List<String> allowedHosts) {
+        this(allowedHosts, null, false);
+    }
+
+    /**
+     * @param allowedHosts    additional {@code Host} authorities to accept beyond the built-in loopback
+     *     hosts (see the class documentation for entry syntax and matching rules)
+     * @param allowedOrigins  additional {@code Origin} values to accept beyond loopback origins, matched
+     *     exactly (e.g. {@code "https://app.example.com"}); {@code "*"} accepts any origin; {@code null}
+     *     or empty accepts loopback origins only
+     * @param allowNullOrigin whether to accept the opaque {@code Origin: null}
+     * @throws IllegalArgumentException if an {@code allowedHosts} entry is not a bare host/{@code
+     *     host:port} authority
+     */
+    public DnsRebindingProtectionHandler(
+            List<String> allowedHosts, @Nullable List<String> allowedOrigins, boolean allowNullOrigin) {
+        var origins = allowedOrigins == null ? List.<String>of() : allowedOrigins;
+        this.allowedOrigins = origins.stream().filter(Objects::nonNull).collect(Collectors.toUnmodifiableSet());
+        this.anyOrigin = this.allowedOrigins.contains(ANY_ORIGIN);
+        this.allowNullOrigin = allowNullOrigin;
         this.allowedHosts = allowedHosts.stream()
                 .filter(Objects::nonNull)
                 .map(String::trim)
@@ -86,7 +115,7 @@ public class DnsRebindingProtectionHandler extends ChannelInboundHandlerAdapter 
                 return;
             }
             var origin = origins.isEmpty() ? null : origins.get(0);
-            if (origin != null && !origin.isEmpty() && !isLocalhostOrigin(origin)) {
+            if (origin != null && !origin.isEmpty() && !isAllowedOrigin(origin)) {
                 reject(ctx, msg);
                 return;
             }
@@ -127,6 +156,14 @@ public class DnsRebindingProtectionHandler extends ChannelInboundHandlerAdapter 
         }
         var lower = authority.toLowerCase(Locale.ROOT);
         return allowedHosts.contains(lower) || allowedHosts.contains(stripPort(lower));
+    }
+
+    /** Returns {@code true} when {@code origin} is loopback, allowlisted, or an admitted {@code null}. */
+    private boolean isAllowedOrigin(String origin) {
+        if (NULL_ORIGIN.equals(origin)) {
+            return allowNullOrigin || anyOrigin;
+        }
+        return anyOrigin || allowedOrigins.contains(origin) || isLocalhostOrigin(origin);
     }
 
     /** Returns {@code true} when the origin's host part is a loopback host accepted by the guard. */

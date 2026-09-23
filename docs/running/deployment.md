@@ -121,9 +121,20 @@ the guard.
 ## Browser clients
 
 `allowedHosts` widens the `Host` check only. A request carrying an `Origin`
-header that is not loopback is still rejected with `403`, so a browser page
-cannot reach a remote Tachyon server. The [CORS options](configuration.md#cors)
-do not change that, because the guard runs before the CORS handler. Clients that
+header that is not loopback is rejected with `403` unless
+[`allowedOrigins`](configuration.md#cors) names that origin exactly. A browser
+page served from `https://app.example.com` that calls a server at
+`mcp.example.com` needs both:
+
+```java
+.network(n -> n
+        .allowedHosts("mcp.example.com")
+        .allowedOrigins("https://app.example.com"))
+```
+
+The same list drives the CORS handler, so the preflight and the response carry
+`Access-Control-Allow-Origin` for that origin. `allowNullOrigin(true)` admits
+sandboxed iframes and `file://` pages, which send `Origin: null`. Clients that
 send no `Origin` are unaffected, which is most MCP clients.
 
 ## More than one instance

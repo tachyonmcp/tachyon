@@ -35,7 +35,7 @@ Ack timestamp publication and stream exception capture: [[observability]].
 
 ## 🛑 Cancellation chain
 
-client `notifications/cancelled` → `inboundRequests.get(key).cancel(true)` → `completion` cancel listener → `FutureTask.cancel(true)` (interrupts VT) + `handlerStage.cancel(true)` `McpDispatcher#invokeHandlerAsync`, `McpDispatcher#handleCancellation`. `HandlerFutures.completeOn` propagates cancel from mapped to source `HandlerFutures#completeOn`. `joinInterruptible` restores interrupt flag `HandlerFutures#joinInterruptibly`.
+client `notifications/cancelled` → `inboundRequests.get(key).cancel(true)` → `completion` cancel listener → `FutureTask.cancel(true)` (interrupts VT) + `handlerStage.cancel(true)` `McpDispatcher#invokeHandlerAsync`, `McpDispatcher#handleCancellation`. `HandlerFutures.completeOn` propagates cancel from mapped to source `HandlerFutures#completeOn`. `joinInterruptible` restores interrupt flag `HandlerFutures#joinInterruptible`.
 
 ## 🧮 Shutdown (graceful)
 

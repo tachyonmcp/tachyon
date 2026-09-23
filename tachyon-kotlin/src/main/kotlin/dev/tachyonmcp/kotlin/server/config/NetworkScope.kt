@@ -23,7 +23,7 @@ public class NetworkScope
         /** Base path for MCP endpoints. */
         public var endpointPath: String? = null
 
-        /** Whether to allow requests with a null Origin header. */
+        /** Whether the DNS-rebinding guard and CORS accept `Origin: null` (sandboxed iframes, `file://`). */
         public var allowNullOrigin: Boolean? = null
 
         /** Whether to allow connections from private networks. */
@@ -44,7 +44,10 @@ public class NetworkScope
         /** Netty I/O engine configuration. */
         public var ioEngine: NettyIoEngine? = null
 
-        /** Allowed CORS origins. */
+        /**
+         * `Origin` values accepted beyond loopback, matched exactly (`"*"` accepts any), by both the
+         * DNS-rebinding guard and the CORS handler.
+         */
         public val allowedOrigins: MutableList<String> = mutableListOf()
 
         /** Allowed CORS headers. */

@@ -31,7 +31,9 @@ import org.jspecify.annotations.Nullable;
  *                           long-running tools stay alive via SSE heartbeats, not a larger value
  * @param writerIdleTimeout  idle timeout for writing (default 5min)
  * @param maxContentLength   maximum HTTP body size in bytes
- * @param allowedOrigins     CORS allowed origins ({@code null} = defaults)
+ * @param allowedOrigins     {@code Origin} values accepted beyond loopback origins (any port), matched
+ *                           exactly, by both the DNS-rebinding guard and CORS; {@code "*"} accepts
+ *                           any origin ({@code null} = loopback only)
  * @param allowNullOrigin    whether to allow {@code Origin: null}
  * @param allowPrivateNetworks whether to allow private network CORS
  * @param allowedHeaders     additional allowed CORS headers
@@ -176,7 +178,10 @@ public record NetworkConfig(
             return this;
         }
 
-        /** Sets the CORS allowed origins. */
+        /**
+         * Sets the {@code Origin} values accepted beyond loopback origins, matched exactly (e.g.
+         * {@code "https://app.example.com"}); {@code "*"} accepts any origin.
+         */
         public Builder allowedOrigins(String... origins) {
             this.allowedOrigins = List.of(origins);
             return this;

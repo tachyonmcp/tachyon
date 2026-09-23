@@ -74,6 +74,36 @@ class DnsRebindingProtectionHandlerTest {
     }
 
     @Test
+    void allowedOriginMatchesExactly() {
+        channel = new EmbeddedChannel(
+                new DnsRebindingProtectionHandler(List.of(), List.of("https://app.example.com"), false));
+        var allowed = requestWithHost("localhost:8096");
+        allowed.headers().set(HttpHeaderNames.ORIGIN, "https://app.example.com");
+        assertThat(channel.writeInbound(allowed)).isTrue();
+        assertThat(rejectionStatus(channel)).isNull();
+
+        var otherPort = requestWithHost("localhost:8096");
+        otherPort.headers().set(HttpHeaderNames.ORIGIN, "https://app.example.com:8443");
+        channel.writeInbound(otherPort);
+        assertThat(rejectionStatus(channel)).isEqualTo(HttpResponseStatus.FORBIDDEN);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"https://anywhere.example.com", "null"})
+    void wildcardOriginAdmitsAnyOriginButStillChecksHost(String origin) {
+        channel = new EmbeddedChannel(new DnsRebindingProtectionHandler(List.of(), List.of("*"), false));
+        var req = requestWithHost("localhost:8096");
+        req.headers().set(HttpHeaderNames.ORIGIN, origin);
+        assertThat(channel.writeInbound(req)).isTrue();
+        assertThat(rejectionStatus(channel)).isNull();
+
+        var rebound = requestWithHost("attacker.example.com");
+        rebound.headers().set(HttpHeaderNames.ORIGIN, origin);
+        channel.writeInbound(rebound);
+        assertThat(rejectionStatus(channel)).isEqualTo(HttpResponseStatus.FORBIDDEN);
+    }
+
+    @Test
     void rejectsNonLocalhostHostByDefault() {
         channel = new EmbeddedChannel(new DnsRebindingProtectionHandler());
         channel.writeInbound(requestWithHost("host.docker.internal:8096"));

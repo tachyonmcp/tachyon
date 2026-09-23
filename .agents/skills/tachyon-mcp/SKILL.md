@@ -222,7 +222,7 @@ per session, with `INFO` used until the client sends `logging/setLevel`.
 | `.readerIdleTimeout(d)` / `.writerIdleTimeout(d)` | 60s / 5min |
 | `.heartbeatInterval(d)` | 15s (`<= 0` disables) |
 | `.maxContentLength(b)` | 1MB |
-| `.allowedOrigins(...)` | none (all denied) |
+| `.allowedOrigins(...)` | none (loopback origins on any port only); exact match, `"*"` = any |
 | `.allowNullOrigin(b)` / `.allowPrivateNetworks(b)` | false |
 | `.allowedHeaders(...)` | none |
 | `.ioEngine(e)` | `NettyIoEngine.AUTO` (io_uring → epoll → kqueue → NIO) |

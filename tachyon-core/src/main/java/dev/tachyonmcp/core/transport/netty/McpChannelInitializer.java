@@ -67,7 +67,7 @@ public class McpChannelInitializer extends ChannelInitializer<SocketChannel> {
     private final EndpointValidatorHandler endpointValidatorHandler;
     private final InteractionHandler interactionHandler;
     private final McpHeaderMatchHandler headerMatchHandler;
-    // Per-server, not static: carries this server's allowedHosts allowlist (DNS-rebinding protection).
+    // Per-server, not static: carries this server's allowedHosts/allowedOrigins allowlists.
     private final DnsRebindingProtectionHandler dnsRebindingHandler;
 
     @Nullable
@@ -98,6 +98,8 @@ public class McpChannelInitializer extends ChannelInitializer<SocketChannel> {
             ChannelGroup childChannels,
             @Nullable CorsConfig corsConfig,
             @Nullable List<String> allowedHosts,
+            @Nullable List<String> allowedOrigins,
+            boolean allowNullOrigin,
             @Nullable Consumer<ChannelPipeline> pipelineCustomizer) {
         this.stateless = stateless;
         this.server = server;
@@ -105,9 +107,8 @@ public class McpChannelInitializer extends ChannelInitializer<SocketChannel> {
         this.writerIdleTimeout = writerIdleTimeout;
         this.maxContentLength = maxContentLength;
         this.corsConfig = corsConfig;
-        this.dnsRebindingHandler = allowedHosts == null
-                ? new DnsRebindingProtectionHandler()
-                : new DnsRebindingProtectionHandler(allowedHosts);
+        this.dnsRebindingHandler = new DnsRebindingProtectionHandler(
+                allowedHosts == null ? List.of() : allowedHosts, allowedOrigins, allowNullOrigin);
         this.pipelineCustomizer = pipelineCustomizer;
         this.childChannels = childChannels;
         this.dispatcher = new McpDispatcher(server, server.executor());

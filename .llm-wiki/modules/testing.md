@@ -3,7 +3,7 @@ title: Testing
 tags: [module, testing, e2e, conformance]
 sources: [e2e/src/test/, conformance/, Makefile, reports/pom.xml, tachyon-core/src/test/, .github/workflows/build.yml, .github/workflows/release.yml]
 updated: 2026-09-23
-commit: bf825914
+commit: 9f0b53c8
 ---
 
 # ✅ Testing
@@ -42,7 +42,7 @@ JaCoCo `prepare-agent` + `report` are bound once in root `pom.xml` `<plugins>`, 
 
 | Dir | Content |
 |---|---|
-| root | version-agnostic + abstract contracts: `AbstractMcpE2eTest`, `AbstractStatelessMcpE2eTest`, `Abstract*ContractTest` (resource, schema validation, string schema, tool capabilities, tool errors), `SharedE2eServer`, `SharedStatelessE2eServer`, `AcceptHeaderValidationTest`, `DnsRebindingTest`, `MaxContentLengthTest`, `ListPaginationE2eTest`, `ProgressKeepAliveTest`, `SseHeartbeatTest`, `ShutdownDrainTest`, `PostStartRegistrationTest`, `TypedToolRegistrationTest`, `DeclarativeFeaturesTest` (`@McpTool/@McpResource/@McpPrompt` over wire; unit edge cases in core `server/annotations/TachyonAnnotationProviderTest`, `server/json/JavaTypeSchemaFactoryTest`), `PayloadSerdeTest`, `NativeTransportDetectionTest`, `McpSdkContract` |
+| root | version-agnostic + abstract contracts: `AbstractMcpE2eTest`, `AbstractStatelessMcpE2eTest`, `Abstract*ContractTest` (resource, schema validation, string schema, tool capabilities, tool errors), `AbstractCorsAllowedOriginsTest` (allowlisted/null origins pass guard + CORS), `SharedE2eServer`, `SharedStatelessE2eServer`, `AcceptHeaderValidationTest`, `DnsRebindingTest` (loopback dev-port preflight, null origin denied), `MaxContentLengthTest`, `ListPaginationE2eTest`, `ProgressKeepAliveTest`, `SseHeartbeatTest`, `ShutdownDrainTest`, `PostStartRegistrationTest`, `TypedToolRegistrationTest`, `DeclarativeFeaturesTest` (`@McpTool/@McpResource/@McpPrompt` over wire; unit edge cases in core `server/annotations/TachyonAnnotationProviderTest`, `server/json/JavaTypeSchemaFactoryTest`), `PayloadSerdeTest`, `NativeTransportDetectionTest`, `McpSdkContract` |
 | `v2025_11_25/` | stateful: sessions lifecycle, janitor, SSE polling/retry/replay-per-stream/POST reconnect redelivery, cancellation, logging, tasks (augmented, core, extension, optional ops), custom session id, extensions, input-required, SDK tests; concrete subclasses of abstract contracts. Stateless exception: `HeaderValidationTest` — SEP-2243 mirrors optional but checked, mcp-remote `initialize` preflight |
 | `v2026_07_28/` | stateless: discover, meta validation, header validation — required + matching (+custom `Mcp-Param`), removed methods, unsupported version, extension negotiation, missing capability, log-level gating, subscriptions/listen, tasks extension, caching hints, structured output schema shape, contracts |
 | `e2e/src/test/kotlin/dev/tachyonmcp/e2e/` | Kotlin DSL e2e |

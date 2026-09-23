@@ -61,7 +61,9 @@ public record TachyonProperties(
      *                            Keep it below the idle timeout of any proxy in front of the server
      *                            and below the session TTL. Zero disables heartbeats.
      * @param maxContentLength    Maximum size of an HTTP request body.
-     * @param allowedOrigins      Origins accepted by the CORS handler.
+     * @param allowedOrigins      Origins accepted beyond loopback, matched exactly, by both the
+     *                            DNS-rebinding guard and the CORS handler. An asterisk accepts any
+     *                            origin.
      * @param allowedHeaders      Request headers accepted by the CORS handler, beyond the built-in
      *                            ones.
      * @param allowedHosts        Host authorities the DNS-rebinding guard accepts beyond its built-in

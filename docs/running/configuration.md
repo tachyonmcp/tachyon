@@ -156,18 +156,19 @@ Neither needs configuration beyond enabling sessions, which
 
 | Option | Default | Description |
 |---|---|---|
-| `allowedOrigins` | — | Allowed `Origin` values; unset disables CORS handling |
+| `allowedOrigins` | — (loopback on any port) | Extra `Origin` values accepted, matched exactly (e.g. `https://app.example.com`); `*` accepts any origin |
 | `allowNullOrigin` | `false` | Allow `Origin: null` |
 | `allowPrivateNetworks` | `false` | Allow private-network CORS preflight |
 | `allowedHeaders` | — | Extra allowed request headers |
 
 ### DNS-rebinding protection
 
-Every request's `Host` (and, when present, `Origin`) header must resolve to
-`localhost`/`127.0.0.1`, or the connection is rejected with `403 Forbidden`. `allowedHosts`
-extends the `Host` check with additional authorities — e.g. a container reaching the server
-via `host.docker.internal`. It does **not** widen the `Origin` check: a browser page on a
-non-local origin is still rejected even if `Host` is allowlisted.
+Every request's `Host` header must resolve to `localhost`/`127.0.0.1`, or the connection is
+rejected with `403 Forbidden`. `Origin`, when present, must be loopback (any port) or accepted
+by `allowedOrigins`/`allowNullOrigin` above. `allowedHosts` extends the `Host` check with
+additional authorities — e.g. a container reaching the server via `host.docker.internal`. It
+does **not** widen the `Origin` check: a browser page on a non-local origin also needs an
+`allowedOrigins` entry.
 
 | Option | Default | Description |
 |---|---|---|

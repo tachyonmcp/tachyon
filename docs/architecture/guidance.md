@@ -285,7 +285,7 @@ Blocking for I/O in `handle`/`read` is intended — handlers run on a server-exe
 
 - `HandlerFutures.assumeVirtualThread()` guardrail at the top of every sync dispatch. Don't remove it.
 - Never `synchronized`/native calls in a handler (pins the carrier thread) — use `ReentrantLock`.
-- `HandlerFutures.joinInterruptibly(stage)` to block on a `CompletionStage` (restores interrupt flag, unwraps `ExecutionException`). Don't hand-roll `.get()`.
+- `HandlerFutures.joinInterruptible(stage)` to block on a `CompletionStage` (restores interrupt flag, unwraps `ExecutionException`). Don't hand-roll `.get()`.
 
 ## 🏹 When to reach for a heavier dispatch structure
 

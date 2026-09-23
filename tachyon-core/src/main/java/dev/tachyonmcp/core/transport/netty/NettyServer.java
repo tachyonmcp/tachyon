@@ -81,6 +81,8 @@ public final class NettyServer implements Closeable {
                         childChannels,
                         config.corsConfig(),
                         config.allowedHosts(),
+                        config.allowedOrigins(),
+                        config.allowNullOrigin(),
                         config.pipelineCustomizer()));
 
         try {

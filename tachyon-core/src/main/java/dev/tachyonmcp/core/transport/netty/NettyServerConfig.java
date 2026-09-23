@@ -22,6 +22,9 @@ import org.jspecify.annotations.Nullable;
  * @param corsConfig         CORS configuration, or {@code null} for defaults
  * @param allowedHosts       additional {@code Host} authorities the DNS-rebinding guard accepts
  *                           beyond localhost, or {@code null} for localhost-only
+ * @param allowedOrigins     additional {@code Origin} values the DNS-rebinding guard accepts beyond
+ *                           loopback origins ({@code "*"} = any), or {@code null} for loopback-only
+ * @param allowNullOrigin    whether the DNS-rebinding guard accepts {@code Origin: null}
  * @param ioEngine           the Netty I/O engine to use
  * @param pipelineCustomizer optional customizer for the Netty channel pipeline
  */
@@ -34,18 +37,27 @@ public record NettyServerConfig(
         int maxContentLength,
         @Nullable CorsConfig corsConfig,
         @Nullable List<String> allowedHosts,
+        @Nullable List<String> allowedOrigins,
+        boolean allowNullOrigin,
         NettyIoEngine ioEngine,
         @Nullable Consumer<ChannelPipeline> pipelineCustomizer) {
 
-    /** Builds a CORS configuration from the given parameters. */
+    /**
+     * Builds a CORS configuration from the given parameters.
+     *
+     * <p>With no {@code allowedOrigins} (or a {@code "*"} entry) the configuration accepts any origin:
+     * the DNS-rebinding guard ahead of the CORS handler already admits only loopback origins (on any
+     * port) and allowlisted ones, so CORS need not repeat that check — and cannot, as it matches
+     * origins exactly and a loopback page's origin carries its port.
+     */
     public static CorsConfig buildCorsConfig(
             @Nullable List<String> allowedOrigins,
             boolean allowNullOrigin,
             boolean allowPrivateNetworks,
             @Nullable List<String> allowedHeaders) {
-        var builder = allowedOrigins != null
-                ? CorsConfigBuilder.forOrigins(allowedOrigins.toArray(String[]::new))
-                : CorsConfigBuilder.forOrigins("http://localhost", "http://127.0.0.1");
+        var builder = allowedOrigins == null || allowedOrigins.contains("*")
+                ? CorsConfigBuilder.forAnyOrigin()
+                : CorsConfigBuilder.forOrigins(allowedOrigins.toArray(String[]::new));
         if (allowNullOrigin) {
             builder.allowNullOrigin();
         }
@@ -72,6 +84,8 @@ public record NettyServerConfig(
                 McpChannelInitializer.DEFAULT_MAX_CONTENT_LENGTH,
                 buildCorsConfig(null, false, false, null),
                 null,
+                null,
+                false,
                 NettyIoEngine.AUTO,
                 null);
     }
