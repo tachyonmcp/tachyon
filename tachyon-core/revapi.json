@@ -1296,6 +1296,33 @@
           "attachments": {
             "since": "1.0.0-beta.31"
           }
+        },
+        {
+          "ignore": true,
+          "code": "java.class.removed",
+          "old": "interface dev.tachyonmcp.core.transport.netty.ProtocolHandlerManager",
+          "justification": "Marked @InternalApi at class level: the package-level annotation never excluded it from the API check",
+          "attachments": {
+            "since": "1.0.0-beta.31"
+          }
+        },
+        {
+          "ignore": true,
+          "code": "java.class.removed",
+          "old": "class dev.tachyonmcp.core.transport.netty.ProtocolVersionHandler",
+          "justification": "Marked @InternalApi at class level: the package-level annotation never excluded it from the API check",
+          "attachments": {
+            "since": "1.0.0-beta.31"
+          }
+        },
+        {
+          "ignore": true,
+          "code": "java.class.removed",
+          "old": "class dev.tachyonmcp.core.transport.netty.SessionTouchHandler",
+          "justification": "Marked @InternalApi at class level: the package-level annotation never excluded it from the API check",
+          "attachments": {
+            "since": "1.0.0-beta.31"
+          }
         }
       ]
     }

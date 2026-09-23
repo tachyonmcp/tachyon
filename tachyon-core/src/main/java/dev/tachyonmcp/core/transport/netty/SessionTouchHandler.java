@@ -1,6 +1,7 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
 package dev.tachyonmcp.core.transport.netty;
 
+import dev.tachyonmcp.api.annotations.InternalApi;
 import dev.tachyonmcp.core.runtime.Session;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
@@ -17,6 +18,7 @@ import io.netty.channel.ChannelPromise;
  * {@link #install(ChannelHandlerContext)} at the point where a session is bound to the channel.
  */
 @ChannelHandler.Sharable
+@InternalApi
 public final class SessionTouchHandler extends ChannelOutboundHandlerAdapter {
 
     private static final String HANDLER_NAME = "session-touch";
