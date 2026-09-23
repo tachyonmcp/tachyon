@@ -1,12 +1,14 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
 package dev.tachyonmcp.core.transport.netty.http;
 
+import dev.tachyonmcp.api.annotations.InternalApi;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpHeaderValues;
 import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.HttpUtil;
 import org.jspecify.annotations.Nullable;
 
+@InternalApi
 public final class HttpHelpers {
 
     /**

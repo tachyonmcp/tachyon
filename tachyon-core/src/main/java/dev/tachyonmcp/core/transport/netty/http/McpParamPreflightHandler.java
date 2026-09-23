@@ -1,6 +1,7 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
 package dev.tachyonmcp.core.transport.netty.http;
 
+import dev.tachyonmcp.api.annotations.InternalApi;
 import dev.tachyonmcp.core.protocol.mcp.McpHeaderNames;
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandlerContext;
@@ -26,6 +27,7 @@ import org.jspecify.annotations.Nullable;
  * synchronously within {@code channelRead}, so the response passes through {@link #write} while the
  * requested names are held. One instance per channel.
  */
+@InternalApi
 public final class McpParamPreflightHandler extends ChannelDuplexHandler {
 
     private @Nullable List<String> requestedParams;

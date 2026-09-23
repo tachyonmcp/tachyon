@@ -15,7 +15,9 @@ import java.util.Comparator;
 import java.util.List;
 
 /**
- * Negotiates the protocol for each MCP POST and binds it to the interaction context. A request
+ * Negotiates the protocol for each MCP POST and binds it to the interaction context. Runs after
+ * {@link dev.tachyonmcp.core.transport.netty.http.EndpointValidatorHandler}, so every request it
+ * sees targets the MCP endpoint. A request
  * naming an unsupported protocol version is flagged via {@link #UNSUPPORTED_VERSION_KEY} instead
  * of being rejected here: the JSON-RPC {@code id} the error response must echo lives in the body,
  * which {@code http-aggregator} hasn't assembled yet at this point in the pipeline. See {@link
@@ -26,7 +28,6 @@ public class ProtocolVersionHandler extends ChannelInboundHandlerAdapter {
 
     static final AttributeKey<String> UNSUPPORTED_VERSION_KEY = AttributeKey.valueOf("unsupportedProtocolVersion");
 
-    private final String mcpEndpoint;
     private final boolean stateless;
     static final Protocol LATEST_PROTOCOL;
     static final List<String> SUPPORTED_VERSIONS;
@@ -42,26 +43,50 @@ public class ProtocolVersionHandler extends ChannelInboundHandlerAdapter {
     }
 
     /** Creates a protocol binder for a server with session support. */
-    public ProtocolVersionHandler(String mcpEndpoint) {
-        this(mcpEndpoint, false);
+    public ProtocolVersionHandler() {
+        this(false);
     }
 
     /**
      * Creates a protocol binder, isolating every POST when the server is stateless.
      *
-     * @param mcpEndpoint the MCP endpoint path
      * @param stateless whether server sessions are disabled
      */
-    public ProtocolVersionHandler(String mcpEndpoint, boolean stateless) {
-        this.mcpEndpoint = mcpEndpoint;
+    public ProtocolVersionHandler(boolean stateless) {
         this.stateless = stateless;
+    }
+
+    /**
+     * Creates a protocol binder for a server with session support; the path is ignored.
+     *
+     * @param mcpEndpoint ignored: the endpoint validator already rejected other paths
+     * @deprecated use {@link #ProtocolVersionHandler()}
+     */
+    @Deprecated(since = "1.0.0-beta.31", forRemoval = true)
+    public ProtocolVersionHandler(String mcpEndpoint) {
+        this(false);
+    }
+
+    /**
+     * Creates a protocol binder; the path is ignored.
+     *
+     * @param mcpEndpoint ignored: the endpoint validator already rejected other paths
+     * @param stateless whether server sessions are disabled
+     * @deprecated use {@link #ProtocolVersionHandler(boolean)}
+     */
+    @Deprecated(since = "1.0.0-beta.31", forRemoval = true)
+    public ProtocolVersionHandler(String mcpEndpoint, boolean stateless) {
+        this(stateless);
     }
 
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) {
-        if (msg instanceof HttpRequest req
-                && req.method() == HttpMethod.POST
-                && req.uri().startsWith(mcpEndpoint)) {
+        if (msg instanceof HttpRequest req) {
+            // A flagged request refused before UnsupportedProtocolVersionHandler (e.g. 413 from the
+            // aggregator on a kept-alive connection) must not leave its verdict for the next one.
+            ctx.channel().attr(UNSUPPORTED_VERSION_KEY).set(null);
+        }
+        if (msg instanceof HttpRequest req && req.method() == HttpMethod.POST) {
             var protoVersion = req.headers().get(McpHeaderNames.MCP_PROTOCOL_VERSION);
             var protocol = Protocols.resolve(req);
             if (protocol.isEmpty()) {

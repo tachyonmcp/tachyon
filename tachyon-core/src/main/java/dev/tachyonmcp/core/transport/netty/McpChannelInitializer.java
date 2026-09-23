@@ -64,7 +64,6 @@ public class McpChannelInitializer extends ChannelInitializer<SocketChannel> {
     private final ProtocolVersionHandler protocolVersionHandler;
     private static final UnsupportedProtocolVersionHandler UNSUPPORTED_PROTOCOL_VERSION_HANDLER =
             new UnsupportedProtocolVersionHandler();
-    private final AcceptValidationHandler acceptHeaderValidator;
     private final boolean stateless;
     private final EndpointValidatorHandler endpointValidatorHandler;
     private final InteractionHandler interactionHandler;
@@ -127,8 +126,7 @@ public class McpChannelInitializer extends ChannelInitializer<SocketChannel> {
         }
         this.protocolRequestHandlers = handlers;
 
-        protocolVersionHandler = new ProtocolVersionHandler(endpointPath, stateless);
-        acceptHeaderValidator = new AcceptValidationHandler(endpointPath);
+        protocolVersionHandler = new ProtocolVersionHandler(stateless);
         endpointValidatorHandler = new EndpointValidatorHandler(endpointPath);
     }
 
@@ -162,7 +160,7 @@ public class McpChannelInitializer extends ChannelInitializer<SocketChannel> {
         // first value while an intermediary routes on the last.
         p.addLast("mcp-header-guard", McpHeaderGuardHandler.INSTANCE);
         p.addLast("protocol-version", protocolVersionHandler);
-        p.addLast("accept-header", acceptHeaderValidator);
+        p.addLast("accept-header", AcceptValidationHandler.INSTANCE);
         // Before the aggregator: a non-JSON POST is a CORS "simple" request that no preflight gated.
         p.addLast("content-type", ContentTypeValidationHandler.INSTANCE);
         if (stateless) {

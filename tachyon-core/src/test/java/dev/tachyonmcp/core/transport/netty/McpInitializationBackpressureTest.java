@@ -96,7 +96,7 @@ class McpInitializationBackpressureTest {
             return result;
         });
         channel = new EmbeddedChannel(
-                new ProtocolVersionHandler("/mcp"),
+                new ProtocolVersionHandler(),
                 new InteractionHandler(),
                 new IdleStateHandler(READER_IDLE.toMillis(), writerIdle.toMillis(), 0, TimeUnit.MILLISECONDS),
                 new McpInitializationHandler(server, new McpDispatcher(server, Runnable::run), Runnable::run));

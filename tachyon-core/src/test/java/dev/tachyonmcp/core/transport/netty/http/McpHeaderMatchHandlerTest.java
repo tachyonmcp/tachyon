@@ -47,7 +47,7 @@ class McpHeaderMatchHandlerTest {
     private static final int HEADER_MISMATCH_2026 = -32020;
 
     private final EmbeddedChannel channel =
-            new EmbeddedChannel(new ProtocolVersionHandler("/mcp"), new McpHeaderMatchHandler(emptyServer()));
+            new EmbeddedChannel(new ProtocolVersionHandler(), new McpHeaderMatchHandler(emptyServer()));
 
     private static ServerEngine emptyServer() {
         var server = mock(ServerEngine.class);

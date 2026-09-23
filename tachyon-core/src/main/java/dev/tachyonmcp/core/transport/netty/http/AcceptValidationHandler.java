@@ -4,6 +4,7 @@ package dev.tachyonmcp.core.transport.netty.http;
 import static dev.tachyonmcp.core.transport.netty.ChannelHandlerUtils.markRejected;
 import static dev.tachyonmcp.core.transport.netty.ChannelHandlerUtils.sendResponseAndClose;
 
+import dev.tachyonmcp.api.annotations.InternalApi;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandler.Sharable;
 import io.netty.channel.ChannelHandlerContext;
@@ -20,22 +21,18 @@ import org.slf4j.LoggerFactory;
 /**
  * Enforces MCP Accept-header rules per spec (`MUST include application/json, text/event-stream`
  * on POST; `MUST include text/event-stream` on GET). Returns 406 Not Acceptable on violation.
+ * Runs after {@link EndpointValidatorHandler}, so every request it sees targets the MCP endpoint.
  */
 @Sharable
+@InternalApi
 public final class AcceptValidationHandler extends ChannelInboundHandlerAdapter {
 
     private static final Logger logger = LoggerFactory.getLogger(AcceptValidationHandler.class);
 
-    private final String mcpEndpoint;
+    /** Shared stateless instance. */
+    public static final AcceptValidationHandler INSTANCE = new AcceptValidationHandler();
 
-    /**
-     * Creates a handler for the given MCP endpoint path.
-     *
-     * @param mcpEndpoint the MCP endpoint path to validate requests against
-     */
-    public AcceptValidationHandler(String mcpEndpoint) {
-        this.mcpEndpoint = mcpEndpoint;
-    }
+    private AcceptValidationHandler() {}
 
     private static final String APPLICATION_JSON = HttpHeaderValues.APPLICATION_JSON.toString();
     private static final String TEXT_EVENT_STREAM = HttpHeaderValues.TEXT_EVENT_STREAM.toString();
@@ -46,7 +43,7 @@ public final class AcceptValidationHandler extends ChannelInboundHandlerAdapter 
 
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) {
-        if (msg instanceof HttpRequest req && req.uri().startsWith(mcpEndpoint)) {
+        if (msg instanceof HttpRequest req) {
             var method = req.method();
             if (method == HttpMethod.POST) {
                 if (!isAcceptable(req, POST_ACCEPT_TYPES)) {

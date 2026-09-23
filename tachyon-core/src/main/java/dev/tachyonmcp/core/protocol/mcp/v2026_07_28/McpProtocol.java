@@ -18,16 +18,10 @@ import java.util.List;
 /** MCP protocol implementation for the modern, per-request 2026-07-28 revision. */
 public final class McpProtocol implements Protocol {
 
-    private static final String ENDPOINT = "/mcp";
     public static final String VERSION = "2026-07-28";
     private static final ProtocolResponseMapper RESPONSE_MAPPER = new McpResponseMapper();
     private static final ProtocolRequestMapper REQUEST_MAPPER =
             new dev.tachyonmcp.core.protocol.mcp.v2026_07_28.codecs.McpRequestMapper();
-
-    @Override
-    public String endpoint() {
-        return ENDPOINT;
-    }
 
     @Override
     public String familyName() {
@@ -42,7 +36,6 @@ public final class McpProtocol implements Protocol {
     @Override
     public boolean matches(HttpRequest request) {
         return request.method() == HttpMethod.POST
-                && request.uri().startsWith(endpoint())
                 && VERSION.equals(request.headers().get(McpHeaderNames.MCP_PROTOCOL_VERSION));
     }
 

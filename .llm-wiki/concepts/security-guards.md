@@ -3,7 +3,7 @@ title: Security guards
 tags: [concept, security, transport]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/http/, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpChannelInitializer.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/NettyServerConfig.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/NetworkConfig.java]
 updated: 2026-09-23
-commit: b2ac69b9
+commit: 67b31b54
 ---
 
 # 🛡️ Security guards
@@ -16,9 +16,10 @@ Verdict: fail-closed HTTP guards, most of them before body aggregation. Loopback
 |---|---|---|
 | DNS rebinding | `Host` must be `localhost`, `localhost.`, `127.0.0.1`, `[::1]` (any port) or allowlisted; missing Host on HTTP/1.1 ⇒ 403; multiple Host/Origin ⇒ 403; `Origin` present ⇒ must be loopback; `Origin: null` ⇒ 403 | `DnsRebindingProtectionHandler` |
 | allowedHosts parse | trimmed, lowercase, rejects whitespace/control/`/ @ ? #` | `DnsRebindingProtectionHandler#DnsRebindingProtectionHandler`, `DnsRebindingProtectionHandler#validateHostEntry` |
-| Endpoint | normalized path ≠ endpoint ⇒ 404 | `EndpointValidatorHandler#channelRead` |
+| Endpoint | normalized path ≠ endpoint ⇒ 404. The pipeline's only path check; guards after it match no path, so a trailing-slash or custom `endpointPath` cannot skip them. No percent-decoding ⇒ encoded spellings 404. A `pipelineCustomizer` that removes `mcp-endpoint` serves MCP on every path | `EndpointValidatorHandler#channelRead`, `ServerBuilder#pipelineCustomizer` |
+| Endpoint config | `endpointPath` must start with `/`, no `?`/`#`/whitespace/control ⇒ IAE at build, value not echoed | `NetworkConfig#NetworkConfig` |
 | Header guard | dup `MCP-Protocol-Version`/`MCP-Session-Id`/`Last-Event-ID`/`Mcp-Method`/`Mcp-Name`/`Mcp-Param-*` ⇒ 400 (even identical values; case variants collapse); header name not echoed | `McpHeaderGuardHandler#isSingleton` |
-| Accept | POST needs both `application/json` and `text/event-stream` (wildcards ok, `q=0` rejects) ; GET needs `text/event-stream` ⇒ 406 | `AcceptValidationHandler` |
+| Accept | POST needs both `application/json` and `text/event-stream` (wildcards ok, `q=0` rejects) ; GET needs `text/event-stream` ⇒ 406 | `AcceptValidationHandler#channelRead` |
 | Stateless guard | session/Last-Event-ID headers ⇒ 404; DELETE ⇒ 405 | `StatelessValidatorHandler#channelRead` |
 | Body limit | 1 MB default, 413 | `McpChannelInitializer#DEFAULT_MAX_CONTENT_LENGTH`, `McpChannelInitializer#initChannel` |
 | Content-Type | POST needs `application/json` (params ok, case-insensitive) ⇒ 415 + JSON-RPC `-32600`, `id: null`, pre-aggregation. No path match of its own: runs after `mcp-endpoint`, so a trailing-slash `endpointPath` cannot skip it. Browsers skip the preflight for `text/plain`/form/multipart, so without it CORS gates nothing | `ContentTypeValidationHandler` |

@@ -3,6 +3,7 @@ package dev.tachyonmcp.core.transport.netty.http;
 
 import static dev.tachyonmcp.core.transport.netty.ChannelHandlerUtils.rejectAndClose;
 
+import dev.tachyonmcp.api.annotations.InternalApi;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
@@ -13,9 +14,12 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Rejects requests whose URI does not match the configured MCP endpoint path
- * with a {@code 404 Not Found} response.
+ * with a {@code 404 Not Found} response. The query string and a trailing {@code /} are ignored on
+ * both sides. This is the pipeline's only path check: every handler after it treats the requests it
+ * sees as MCP endpoint requests.
  */
 @ChannelHandler.Sharable
+@InternalApi
 public class EndpointValidatorHandler extends ChannelInboundHandlerAdapter {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(EndpointValidatorHandler.class);

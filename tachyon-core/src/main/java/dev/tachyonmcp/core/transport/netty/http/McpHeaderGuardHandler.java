@@ -4,6 +4,7 @@ package dev.tachyonmcp.core.transport.netty.http;
 import static dev.tachyonmcp.core.transport.netty.ChannelHandlerUtils.rejectAndClose;
 import static io.netty.util.AsciiString.contentEqualsIgnoreCase;
 
+import dev.tachyonmcp.api.annotations.InternalApi;
 import dev.tachyonmcp.core.protocol.mcp.McpHeaderNames;
 import io.netty.channel.ChannelHandler.Sharable;
 import io.netty.channel.ChannelHandlerContext;
@@ -40,6 +41,7 @@ import io.netty.util.AsciiString;
  * protocol version.
  */
 @Sharable
+@InternalApi
 public final class McpHeaderGuardHandler extends ChannelInboundHandlerAdapter {
 
     /** Shared instance: the handler is stateless. */

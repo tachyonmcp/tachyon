@@ -114,7 +114,11 @@ public interface ServerBuilder {
     @ExperimentalApi
     ServerBuilder annotations(Consumer<AnnotationContext> configurer);
 
-    /** Customizes each Netty channel pipeline. */
+    /**
+     * Customizes each Netty channel pipeline. Runs after every built-in handler is added. The
+     * {@code mcp-endpoint} handler is the pipeline's only path check: removing or replacing it
+     * serves MCP on every path.
+     */
     @ExperimentalApi
     ServerBuilder pipelineCustomizer(@Nullable Consumer<ChannelPipeline> customizer);
 
