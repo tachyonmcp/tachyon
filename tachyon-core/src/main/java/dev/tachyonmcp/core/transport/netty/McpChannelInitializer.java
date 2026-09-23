@@ -5,10 +5,12 @@ import dev.tachyonmcp.core.protocol.Protocols;
 import dev.tachyonmcp.core.server.McpDispatcher;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
 import dev.tachyonmcp.core.transport.netty.http.AcceptValidationHandler;
+import dev.tachyonmcp.core.transport.netty.http.ContentTypeValidationHandler;
 import dev.tachyonmcp.core.transport.netty.http.DnsRebindingProtectionHandler;
 import dev.tachyonmcp.core.transport.netty.http.EndpointValidatorHandler;
 import dev.tachyonmcp.core.transport.netty.http.McpHeaderGuardHandler;
 import dev.tachyonmcp.core.transport.netty.http.McpHeaderMatchHandler;
+import dev.tachyonmcp.core.transport.netty.http.McpParamPreflightHandler;
 import dev.tachyonmcp.core.transport.netty.http.StatelessValidatorHandler;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelInitializer;
@@ -150,6 +152,8 @@ public class McpChannelInitializer extends ChannelInitializer<SocketChannel> {
         p.addLast("http-keep-alive", new HttpServerKeepAliveHandler());
         p.addLast("dns-rebinding", dnsRebindingHandler);
         if (corsConfig != null) {
+            // Ahead of "cors" so it sees the preflight response CorsHandler writes.
+            p.addLast("cors-mcp-param", new McpParamPreflightHandler());
             p.addLast("cors", new CorsHandler(corsConfig));
         }
         p.addLast("mcp-endpoint", endpointValidatorHandler);
@@ -159,6 +163,8 @@ public class McpChannelInitializer extends ChannelInitializer<SocketChannel> {
         p.addLast("mcp-header-guard", McpHeaderGuardHandler.INSTANCE);
         p.addLast("protocol-version", protocolVersionHandler);
         p.addLast("accept-header", acceptHeaderValidator);
+        // Before the aggregator: a non-JSON POST is a CORS "simple" request that no preflight gated.
+        p.addLast("content-type", ContentTypeValidationHandler.INSTANCE);
         if (stateless) {
             p.addLast("stateless-mcp", statelessValidator);
         }

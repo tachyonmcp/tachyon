@@ -31,10 +31,11 @@ import org.jspecify.annotations.Nullable;
  *                           long-running tools stay alive via SSE heartbeats, not a larger value
  * @param writerIdleTimeout  idle timeout for writing (default 5min)
  * @param maxContentLength   maximum HTTP body size in bytes
- * @param allowedOrigins     CORS allowed origins ({@code null} = defaults)
+ * @param allowedOrigins     exact origins CORS grants ({@code null} = any origin the DNS-rebinding
+ *                           guard admits, i.e. loopback on any port, answered with {@code *})
  * @param allowNullOrigin    whether to allow {@code Origin: null}
  * @param allowPrivateNetworks whether to allow private network CORS
- * @param allowedHeaders     additional allowed CORS headers
+ * @param allowedHeaders     CORS request headers granted beyond the built-in MCP ones
  * @param allowedHosts       additional {@code Host} authorities the DNS-rebinding guard accepts
  *                           beyond localhost ({@code null} = localhost-only)
  * @param ioEngine           Netty I/O engine; defaults to {@link NettyIoEngine#AUTO}
@@ -176,7 +177,10 @@ public record NetworkConfig(
             return this;
         }
 
-        /** Sets the CORS allowed origins. */
+        /**
+         * Sets the exact origins CORS grants. Unset grants any origin the DNS-rebinding guard admits
+         * (loopback, any port); the guard still rejects every non-loopback origin.
+         */
         public Builder allowedOrigins(String... origins) {
             this.allowedOrigins = List.of(origins);
             return this;
@@ -194,7 +198,7 @@ public record NetworkConfig(
             return this;
         }
 
-        /** Sets additional allowed CORS headers. */
+        /** Sets CORS request headers granted beyond the built-in MCP ones. */
         public Builder allowedHeaders(String... headers) {
             this.allowedHeaders = List.of(headers);
             return this;

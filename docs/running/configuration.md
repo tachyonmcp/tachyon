@@ -154,12 +154,30 @@ Neither needs configuration beyond enabling sessions, which
 
 ### CORS
 
+The [DNS-rebinding guard](#dns-rebinding-protection) runs first and admits only loopback
+origins, on any port. CORS then answers the browser, so a page served from a dev server such
+as `http://localhost:5173` can call a local server.
+
 | Option | Default | Description |
 |---|---|---|
-| `allowedOrigins` | — | Allowed `Origin` values; unset disables CORS handling |
-| `allowNullOrigin` | `false` | Allow `Origin: null` |
-| `allowPrivateNetworks` | `false` | Allow private-network CORS preflight |
-| `allowedHeaders` | — | Extra allowed request headers |
+| `allowedOrigins` | — (any origin the guard admits, answered `*`) | Exact `Origin` values CORS grants. It cannot admit a non-loopback origin: the guard rejects it first |
+| `allowNullOrigin` | `false` | Grant `Origin: null` in CORS; the guard still rejects it |
+| `allowPrivateNetworks` | `false` | Answer private-network CORS preflights |
+| `allowedHeaders` | — | Request headers granted beyond the built-in ones |
+
+Built in, with no configuration:
+
+- Preflights grant `GET`, `POST` and `DELETE`.
+- Preflights grant `Content-Type`, `Authorization`, `MCP-Protocol-Version`, `MCP-Session-Id`,
+  `Last-Event-ID`, `Mcp-Method` and `Mcp-Name`, plus each per-tool `Mcp-Param-*` header the
+  preflight asks for, by name. There is no wildcard: any other header needs `allowedHeaders`.
+- Responses expose `MCP-Session-Id` and `MCP-Protocol-Version` to script.
+- Browsers may cache a preflight for up to a day.
+- Credentials are never allowed.
+
+A POST must send `Content-Type: application/json`, or the server answers `415 Unsupported
+Media Type` with a JSON-RPC `-32600` error and `"id": null`, since the body is never read. Browsers send `text/plain`, form and multipart bodies without a preflight, so
+this rule keeps every browser request behind CORS.
 
 ### DNS-rebinding protection
 

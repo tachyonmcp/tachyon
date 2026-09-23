@@ -69,7 +69,9 @@ class UnsupportedProtocolVersionTest extends AbstractStatelessMcpE2eTest<McpClie
                 .inPath("$.error.data.supported")
                 .isArray()
                 .contains("2026-07-28", "2025-11-25");
-        assertThat(response.headers().firstValue("Access-Control-Allow-Origin")).contains("http://localhost:3000");
+        assertThat(response.headers().firstValue("Access-Control-Allow-Origin"))
+                .as("error responses stay readable by the admitted page")
+                .contains("*");
     }
 
     @Test

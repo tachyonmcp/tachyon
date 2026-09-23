@@ -44,10 +44,10 @@ public class NetworkScope
         /** Netty I/O engine configuration. */
         public var ioEngine: NettyIoEngine? = null
 
-        /** Allowed CORS origins. */
+        /** Exact origins CORS grants; empty grants any origin the DNS-rebinding guard admits (loopback). */
         public val allowedOrigins: MutableList<String> = mutableListOf()
 
-        /** Allowed CORS headers. */
+        /** CORS request headers granted beyond the built-in MCP ones. */
         public val allowedHeaders: MutableList<String> = mutableListOf()
 
         /**

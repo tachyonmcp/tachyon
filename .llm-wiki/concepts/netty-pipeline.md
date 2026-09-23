@@ -3,7 +3,7 @@ title: Netty pipeline
 tags: [concept, transport, netty]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/http/]
 updated: 2026-09-23
-commit: bf825914
+commit: b2ac69b9
 ---
 
 # 🧪 Netty pipeline
@@ -30,20 +30,22 @@ Verdict: one static-order pipeline per channel. Every registered `Protocol`'s ha
 | – | `session-touch` | `SessionTouchHandler` | added lazily after `http` when session bound; every outbound write `touch()`es session `SessionTouchHandler#install` |
 | 3 | `http-keep-alive` | `HttpServerKeepAliveHandler` | honors `Connection`; responses set keep-alive intent |
 | 4 | `dns-rebinding` | `DnsRebindingProtectionHandler` | 403 → [[security-guards]] |
-| 5 | `cors` | `CorsHandler` | only if CORS config |
+| – | `cors-mcp-param` | `McpParamPreflightHandler` | only if CORS config, just before `cors`: appends requested `Mcp-Param-<token>` names to a granted preflight's `Access-Control-Allow-Headers` (no `*`) `McpParamPreflightHandler#write` |
+| 5 | `cors` | `CorsHandler` | only if CORS config; answers preflights itself `NettyServerConfig#buildCorsConfig` |
 | 6 | `mcp-endpoint` | `EndpointValidatorHandler` | 404 path ≠ endpoint (trailing `/`, query ignored) `EndpointValidatorHandler#channelRead` |
 | 7 | `mcp-header-guard` | `McpHeaderGuardHandler` | 400 duplicate singleton MCP header (incl. SEP-2243 mirrors); body-independent, so it runs pre-aggregation `McpHeaderGuardHandler#hasDuplicateSingleton` |
 | 8 | `protocol-version` | `ProtocolVersionHandler` | POST: resolve protocol, bind ctx, or flag unsupported |
 | 9 | `accept-header` | `AcceptValidationHandler` | 406 |
-| 10 | `stateless-mcp` | `StatelessValidatorHandler` | only stateless server: 404 on session/Last-Event-ID headers, 405 DELETE |
-| 11 | `http-aggregator` | `HttpObjectAggregator(maxContentLength)` | 413/417; owns `Expect: 100-continue` (`EndpointValidatorHandler`) |
-| 12 | `unsupported-protocol-version` | `UnsupportedProtocolVersionHandler` | 400 JSON-RPC error with body `id` + supported list `UnsupportedProtocolVersionHandler#channelRead` |
-| 13 | `interaction` | `InteractionHandler` | fallback protocol resolve for GET/DELETE; lifecycle events → ctx `InteractionHandler#userEventTriggered` |
-| 14 | `idle` | `IdleStateHandler` | if reader/writer idle > 0 |
-| 15 | `mcp-header-match` | `McpHeaderMatchHandler` | SEP-2243 mirror **agreement** vs body, every version, ungated `McpHeaderMatchHandler#channelRead` |
-| 16 | `mcp-<ver>-*` | `Protocol.requestHandlers(server)` for each protocol | 2025: none; 2026: `RequestValidationHandler` (`_meta`/removed methods) → `RequiredHeadersHandler` (mirror **presence**) → `ExtensionNegotiationHandler` |
-| 17 | `mcp-phase-init` | `McpInitializationHandler` (per channel) | first request |
-| 18 | `lifecycle` | `LifecyclePipelineCoordinator` | swaps 17 → `mcp-phase-operations` |
+| 10 | `content-type` | `ContentTypeValidationHandler#INSTANCE` | 415 JSON-RPC `-32600` on POST without `application/json`: a CORS "simple" request no preflight gated. Every POST past `mcp-endpoint`, no path match `ContentTypeValidationHandler#channelRead` |
+| 11 | `stateless-mcp` | `StatelessValidatorHandler` | only stateless server: 404 on session/Last-Event-ID headers, 405 DELETE |
+| 12 | `http-aggregator` | `HttpObjectAggregator(maxContentLength)` | 413/417; owns `Expect: 100-continue` (`EndpointValidatorHandler`) |
+| 13 | `unsupported-protocol-version` | `UnsupportedProtocolVersionHandler` | 400 JSON-RPC error with body `id` + supported list `UnsupportedProtocolVersionHandler#channelRead` |
+| 14 | `interaction` | `InteractionHandler` | fallback protocol resolve for GET/DELETE; lifecycle events → ctx `InteractionHandler#userEventTriggered` |
+| 15 | `idle` | `IdleStateHandler` | if reader/writer idle > 0 |
+| 16 | `mcp-header-match` | `McpHeaderMatchHandler` | SEP-2243 mirror **agreement** vs body, every version, ungated `McpHeaderMatchHandler#channelRead` |
+| 17 | `mcp-<ver>-*` | `Protocol.requestHandlers(server)` for each protocol | 2025: none; 2026: `RequestValidationHandler` (`_meta`/removed methods) → `RequiredHeadersHandler` (mirror **presence**) → `ExtensionNegotiationHandler` |
+| 18 | `mcp-phase-init` | `McpInitializationHandler` (per channel) | first request |
+| 19 | `lifecycle` | `LifecyclePipelineCoordinator` | replaces `mcp-phase-init` (phase 18) → `mcp-phase-operations` |
 | – | customizer | `ServerBuilder.pipelineCustomizer` | user hook, runs last `InteractionHandler` |
 
 ## 🔁 Phase swap

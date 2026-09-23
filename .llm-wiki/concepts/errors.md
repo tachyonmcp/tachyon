@@ -58,6 +58,7 @@ Subscription transport failures produce `StreamFailed(causeType, cause?)`, with 
 | 404 | wrong path; unknown session; stateless + session headers | `EndpointValidatorHandler`, `McpOperationHandler#session`, `StatelessValidatorHandler#channelRead` |
 | 405 | DELETE on stateless; unknown HTTP method | same |
 | 406 | Accept missing `application/json`+`text/event-stream` (POST) / `text/event-stream` (GET) | `AcceptValidationHandler#POST_ACCEPT_TYPES` |
+| 415 | POST `Content-Type` not `application/json` (or missing); JSON-RPC `-32600`, `id: null` (body unread) | `ContentTypeValidationHandler#reject` |
 | 413/417 | body > `maxContentLength` (1 MB) | `HttpObjectAggregator` |
 | 500 | session lookup failure | `McpOperationHandler#session` |
 | 503 | executor rejected (shutting down) | `ChannelHandlerUtils.isRefused` |

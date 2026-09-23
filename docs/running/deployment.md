@@ -120,6 +120,10 @@ the guard.
 
 ## Browser clients
 
+A page served from loopback, on any port, can call a local server directly: the preflight
+grants the MCP methods and headers, and `MCP-Session-Id` is readable from script. Its
+requests must send `Content-Type: application/json`. See [CORS](configuration.md#cors).
+
 `allowedHosts` widens the `Host` check only. A request carrying an `Origin`
 header that is not loopback is still rejected with `403`, so a browser page
 cannot reach a remote Tachyon server. The [CORS options](configuration.md#cors)
