@@ -10,6 +10,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
@@ -85,9 +86,12 @@ public abstract class AbstractBrowserClientTest<C extends McpClient> extends Abs
     void preflightDoesNotGrantPrivateNetworkAccessByDefault() throws Exception {
         var response = preflight("POST", "content-type", true);
 
+        assertThat(response.headers().firstValue("access-control-allow-origin"))
+                .as("the preflight itself is granted, so the private-network answer is what decides")
+                .isPresent();
         assertThat(response.headers().firstValue("access-control-allow-private-network"))
-                .as("allowPrivateNetworks is off by default")
-                .isEmpty();
+                .as("allowPrivateNetworks is off by default; only 'true' grants access")
+                .isNotEqualTo(Optional.of("true"));
     }
 
     @Test

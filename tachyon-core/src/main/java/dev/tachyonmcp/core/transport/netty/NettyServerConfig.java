@@ -1,8 +1,11 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
 package dev.tachyonmcp.core.transport.netty;
 
+import dev.tachyonmcp.core.protocol.mcp.McpHeaderNames;
 import dev.tachyonmcp.core.server.config.NetworkConfig;
 import io.netty.channel.ChannelPipeline;
+import io.netty.handler.codec.http.HttpHeaderNames;
+import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.cors.CorsConfig;
 import io.netty.handler.codec.http.cors.CorsConfigBuilder;
 import java.time.Duration;
@@ -37,15 +40,60 @@ public record NettyServerConfig(
         NettyIoEngine ioEngine,
         @Nullable Consumer<ChannelPipeline> pipelineCustomizer) {
 
-    /** Builds a CORS configuration from the given parameters. */
+    /** Methods a browser MCP client uses: POST for messages, GET for the SSE stream, DELETE to end a session. */
+    private static final HttpMethod[] ALLOWED_METHODS = {HttpMethod.GET, HttpMethod.POST, HttpMethod.DELETE};
+
+    /**
+     * Request headers every browser MCP client may send. {@code *} additionally covers the SEP-2243
+     * {@code Mcp-Param-*} mirrors, whose names depend on the tool; Fetch never lets it cover
+     * {@code Authorization}, so that is listed.
+     */
+    private static final String[] ALLOWED_HEADERS = {
+        HttpHeaderNames.CONTENT_TYPE.toString(),
+        HttpHeaderNames.AUTHORIZATION.toString(),
+        McpHeaderNames.MCP_PROTOCOL_VERSION,
+        McpHeaderNames.MCP_SESSION_ID,
+        McpHeaderNames.LAST_EVENT_ID,
+        McpHeaderNames.MCP_METHOD,
+        McpHeaderNames.MCP_NAME,
+        "*"
+    };
+
+    /** Response headers a browser MCP client must read from script. */
+    private static final String[] EXPOSED_HEADERS = {McpHeaderNames.MCP_SESSION_ID, McpHeaderNames.MCP_PROTOCOL_VERSION
+    };
+
+    /** Seconds a browser may cache a preflight; browsers cap it lower (Chromium: 2h). */
+    private static final long PREFLIGHT_MAX_AGE_SECONDS = 86_400;
+
+    /**
+     * Builds a CORS configuration from the given parameters.
+     *
+     * <p>Without {@code allowedOrigins} every origin is granted, answered with {@code
+     * Access-Control-Allow-Origin: *}: the DNS-rebinding guard ahead of CORS admits only loopback
+     * origins, on any port, so a browser page on a dev server such as {@code localhost:5173} works.
+     * Credentials are never allowed. The preflight grants the methods and MCP request headers a
+     * browser client sends, plus {@code allowedHeaders}, and responses expose {@code MCP-Session-Id}
+     * and {@code MCP-Protocol-Version} to script.
+     *
+     * @param allowedOrigins       exact origins to grant, or {@code null} for any origin the guard admits
+     * @param allowNullOrigin      whether to grant {@code Origin: null}
+     * @param allowPrivateNetworks whether to answer Private Network Access preflights
+     * @param allowedHeaders       request headers to grant beyond the built-in MCP ones
+     * @return the CORS configuration
+     */
     public static CorsConfig buildCorsConfig(
             @Nullable List<String> allowedOrigins,
             boolean allowNullOrigin,
             boolean allowPrivateNetworks,
             @Nullable List<String> allowedHeaders) {
-        var builder = allowedOrigins != null
+        final var builder = allowedOrigins != null
                 ? CorsConfigBuilder.forOrigins(allowedOrigins.toArray(String[]::new))
-                : CorsConfigBuilder.forOrigins("http://localhost", "http://127.0.0.1");
+                : CorsConfigBuilder.forAnyOrigin();
+        builder.allowedRequestMethods(ALLOWED_METHODS)
+                .allowedRequestHeaders(ALLOWED_HEADERS)
+                .exposeHeaders(EXPOSED_HEADERS)
+                .maxAge(PREFLIGHT_MAX_AGE_SECONDS);
         if (allowNullOrigin) {
             builder.allowNullOrigin();
         }

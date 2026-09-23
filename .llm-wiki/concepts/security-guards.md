@@ -1,7 +1,7 @@
 ---
 title: Security guards
 tags: [concept, security, transport]
-sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/http/, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpChannelInitializer.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/NetworkConfig.java]
+sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/http/, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpChannelInitializer.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/NettyServerConfig.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/NetworkConfig.java]
 updated: 2026-09-23
 commit: 58f386e8
 ---
@@ -21,7 +21,8 @@ Verdict: fail-closed HTTP guards, most of them before body aggregation. Loopback
 | Accept | POST needs both `application/json` and `text/event-stream` (wildcards ok, `q=0` rejects) ; GET needs `text/event-stream` ⇒ 406 | `AcceptValidationHandler` |
 | Stateless guard | session/Last-Event-ID headers ⇒ 404; DELETE ⇒ 405 | `StatelessValidatorHandler#channelRead` |
 | Body limit | 1 MB default, 413 | `McpChannelInitializer#DEFAULT_MAX_CONTENT_LENGTH`, `McpChannelInitializer#initChannel` |
-| CORS | Netty `CorsHandler` from `allowedOrigins/allowNullOrigin/allowPrivateNetworks/allowedHeaders` | `NettyServerConfig.buildCorsConfig`, `McpChannelInitializer#initChannel` |
+| Content-Type | POST needs `application/json` (params ok, case-insensitive) ⇒ 415 + JSON-RPC `-32600`, `id: null`, pre-aggregation. No path match of its own: runs after `mcp-endpoint`, so a trailing-slash `endpointPath` cannot skip it. Browsers skip the preflight for `text/plain`/form/multipart, so without it CORS gates nothing | `ContentTypeValidationHandler` |
+| CORS | Netty `CorsHandler` after the guard. Unset `allowedOrigins` ⇒ any origin, `ACAO: *` (guard admits loopback only, any port). Grants GET/POST/DELETE, MCP headers + `*` (covers `Mcp-Param-*`) + `Authorization`, exposes `MCP-Session-Id`/`MCP-Protocol-Version`, max-age 1d, never credentials | `NettyServerConfig#buildCorsConfig`, `McpChannelInitializer#initChannel` |
 | Body/header agreement (**all** versions) | SEP-2243 mirror present ⇒ must match body, whichever version negotiated — a gateway must not route on a header the server never executes | `McpHeaderMatchHandler`, [[protocol-versions]] |
 | Mirror **required** (2026-07-28 only) | the revision that adopted SEP-2243 also demands the mirrors be present; runs after agreement | `RequiredHeadersHandler#requireMirrors` |
 | Pending-request ownership | client response must come from owning session (stateful) / channel (stateless) | `DefaultTachyonServer#failPendingRequest` |
@@ -30,6 +31,6 @@ Verdict: fail-closed HTTP guards, most of them before body aggregation. Loopback
 
 Rejection path: `rejectAndClose` marks channel rejected (drops remaining chunks) + `Connection: close` `ChannelHandlerUtils#rejectAndClose`.
 
-Tests: `DnsRebindingProtectionHandlerTest`, `McpHeaderGuardHandlerTest`, `McpHeaderMatchHandlerTest`, `EndpointValidatorHandlerTest`, e2e `AbstractDnsRebindingTest` (raw-socket `Host` rebinding incl. `0.0.0.0`/`[::]`, look-alike origins, preflight; per version), `AbstractContentTypeValidationTest`, `AbstractBrowserClientTest` (per version; 🔴 red until 415 + CORS preflight fix), `AcceptHeaderValidationTest`, `MaxContentLengthTest`, `v2025_11_25/HeaderValidationTest` (optional mirrors, mcp-remote `initialize` preflight), `v2026_07_28/HeaderValidationTest`, `CustomHeaderValidationTest`.
+Tests: `DnsRebindingProtectionHandlerTest`, `McpHeaderGuardHandlerTest`, `McpHeaderMatchHandlerTest`, `EndpointValidatorHandlerTest`, e2e `AbstractDnsRebindingTest` (raw-socket `Host` rebinding incl. `0.0.0.0`/`[::]`, look-alike origins, preflight; per version), `AbstractContentTypeValidationTest` (tagged tool proves no dispatch; `ContentTypeValidationTrailingSlashEndpointTest` reruns it against `endpointPath("/mcp/")`), `AbstractBrowserClientTest` (per version), `AcceptHeaderValidationTest`, `MaxContentLengthTest`, `v2025_11_25/HeaderValidationTest` (optional mirrors, mcp-remote `initialize` preflight), `v2026_07_28/HeaderValidationTest`, `CustomHeaderValidationTest`.
 
 Related: [[netty-pipeline]], [[errors]].

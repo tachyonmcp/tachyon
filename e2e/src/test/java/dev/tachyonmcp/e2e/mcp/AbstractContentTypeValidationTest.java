@@ -1,6 +1,7 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
 package dev.tachyonmcp.e2e.mcp;
 
+import static net.javacrumbs.jsonunit.assertj.JsonAssertions.assertThatJson;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
@@ -26,11 +27,26 @@ import org.junit.jupiter.params.provider.ValueSource;
  * revisions, supplied by subclasses in {@code v2025_11_25}/{@code v2026_07_28}.
  *
  * <p>Each call carries a unique tag the {@code record} tool remembers, proving whether a request
- * reached dispatch without depending on test ordering.
+ * reached dispatch without depending on test ordering. Requests always go to {@code /mcp}; a
+ * subclass may configure the endpoint differently (e.g. {@code /mcp/}) to prove the rule follows the
+ * endpoint the server actually serves.
  */
 public abstract class AbstractContentTypeValidationTest<C extends McpClient> extends AbstractStatelessMcpE2eTest<C> {
 
     private static final String TOOL = "record";
+
+    /** Before the body is read there is no request id to echo, hence {@code "id": null}. */
+    // language=JSON
+    private static final String UNSUPPORTED_MEDIA_TYPE_ERROR = """
+            {
+              "jsonrpc": "2.0",
+              "id": null,
+              "error": {
+                "code": -32600,
+                "message": "Unsupported Media Type: Content-Type must be application/json"
+              }
+            }
+            """;
 
     private final Set<String> recordedTags = ConcurrentHashMap.newKeySet();
 
@@ -40,10 +56,15 @@ public abstract class AbstractContentTypeValidationTest<C extends McpClient> ext
     /** Returns the protocol headers {@link #toolCallBody(String)} needs. */
     protected abstract Map<String, String> requestHeaders();
 
+    /** Returns the endpoint path the server is configured with; requests always target {@code /mcp}. */
+    protected String configuredEndpointPath() {
+        return "/mcp";
+    }
+
     @Override
     protected void startDefaultServer() {
         startServer(
-                b -> b.capabilities(c -> c.tools()),
+                b -> b.capabilities(c -> c.tools()).network(n -> n.endpointPath(configuredEndpointPath())),
                 s -> s.tools()
                         .register(
                                 d -> d.name(TOOL).description("Records the tag it is called with"), (ctx, request) -> {
@@ -70,6 +91,15 @@ public abstract class AbstractContentTypeValidationTest<C extends McpClient> ext
         return UUID.randomUUID().toString();
     }
 
+    private void assertRejectedBeforeDispatch(HttpResponse<String> response, String tag) {
+        assertThat(response.statusCode()).isEqualTo(415);
+        assertThat(response.headers().firstValue("content-type")).hasValue("application/json");
+        assertThatJson(response.body()).isEqualTo(UNSUPPORTED_MEDIA_TYPE_ERROR);
+        assertThat(response.headers().firstValue("connection"))
+                .hasValueSatisfying(v -> assertThat(v).isEqualToIgnoringCase("close"));
+        assertThat(recordedTags).as("the tool must not have run").doesNotContain(tag);
+    }
+
     @ParameterizedTest
     @ValueSource(
             strings = {
@@ -83,21 +113,14 @@ public abstract class AbstractContentTypeValidationTest<C extends McpClient> ext
     void rejectsNonJsonContentType(String contentType) throws Exception {
         var tag = newTag();
 
-        var response = post(tag, contentType, null);
-
-        assertThat(response.statusCode()).isEqualTo(415);
-        assertThat(response.body()).contains("application/json");
-        assertThat(response.headers().firstValue("connection"))
-                .hasValueSatisfying(v -> assertThat(v).isEqualToIgnoringCase("close"));
-        assertThat(recordedTags).doesNotContain(tag);
+        assertRejectedBeforeDispatch(post(tag, contentType, null), tag);
     }
 
     @Test
     void rejectsMissingContentType() throws Exception {
         var tag = newTag();
 
-        assertThat(post(tag, null, null).statusCode()).isEqualTo(415);
-        assertThat(recordedTags).doesNotContain(tag);
+        assertRejectedBeforeDispatch(post(tag, null, null), tag);
     }
 
     @Test
@@ -106,10 +129,10 @@ public abstract class AbstractContentTypeValidationTest<C extends McpClient> ext
 
         var response = post(tag, "text/plain;charset=UTF-8", "http://localhost:5173");
 
-        assertThat(response.statusCode())
-                .as("a text/plain POST skips the CORS preflight; it must not reach dispatch")
-                .isEqualTo(415);
-        assertThat(recordedTags).as("the tool must not have run").doesNotContain(tag);
+        assertRejectedBeforeDispatch(response, tag);
+        assertThat(response.headers().firstValue("access-control-allow-origin"))
+                .as("the admitted page can read why it was refused")
+                .isPresent();
     }
 
     @ParameterizedTest

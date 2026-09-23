@@ -5,6 +5,7 @@ import dev.tachyonmcp.core.protocol.Protocols;
 import dev.tachyonmcp.core.server.McpDispatcher;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
 import dev.tachyonmcp.core.transport.netty.http.AcceptValidationHandler;
+import dev.tachyonmcp.core.transport.netty.http.ContentTypeValidationHandler;
 import dev.tachyonmcp.core.transport.netty.http.DnsRebindingProtectionHandler;
 import dev.tachyonmcp.core.transport.netty.http.EndpointValidatorHandler;
 import dev.tachyonmcp.core.transport.netty.http.McpHeaderGuardHandler;
@@ -159,6 +160,8 @@ public class McpChannelInitializer extends ChannelInitializer<SocketChannel> {
         p.addLast("mcp-header-guard", McpHeaderGuardHandler.INSTANCE);
         p.addLast("protocol-version", protocolVersionHandler);
         p.addLast("accept-header", acceptHeaderValidator);
+        // Before the aggregator: a non-JSON POST is a CORS "simple" request that no preflight gated.
+        p.addLast("content-type", ContentTypeValidationHandler.INSTANCE);
         if (stateless) {
             p.addLast("stateless-mcp", statelessValidator);
         }
