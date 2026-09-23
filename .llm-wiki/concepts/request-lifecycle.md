@@ -2,8 +2,8 @@
 title: Request lifecycle
 tags: [concept, dispatch]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/ProtocolVersionHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/RpcMethodHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpInitializationHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpOperationHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tools/ToolMethodHandlers.java, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/HandlerFutures.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/PeekedBody.java]
-updated: 2026-09-22
-commit: 58f386e8
+updated: 2026-09-23
+commit: bf825914
 ---
 
 # 🔄 Request lifecycle
@@ -18,7 +18,7 @@ Verdict: event loop parses nothing heavy. Body hop → worker executor (VT) → 
 | 2 | `ProtocolVersionHandler` binds `ChannelContext` for negotiated `Protocol`; fresh per POST on stateless servers | event loop | `ProtocolVersionHandler#channelRead` |
 | 3 | Every version: `McpHeaderMatchHandler` peeks body via `PeekedBody#peek` (first peek parses, the rest reuse it), compares SEP-2243 mirrors to it | event loop | [[protocol-versions]] |
 | 3b | 2026-07-28 only: `RequestValidationHandler` (`_meta`, removed methods) → `RequiredHeadersHandler` (mirror presence) → `ExtensionNegotiationHandler`, same cached peek | event loop | [[protocol-versions]] |
-| 4 | First request on channel hits `McpInitializationHandler`; non-`initialize` → fires `OperationStarted.STATELESS`, forwards to `McpOperationHandler` | event loop | `McpInitializationHandler#handleRequest`, `McpInitializationHandler#forwardToOperationHandler` |
+| 4 | POST without session id stays in init and dispatches directly; session-header POST forwards to operations (steps 5–8 below) | event loop → VT | [McpInitializationHandler#handleRequest](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpInitializationHandler.java), [McpInitializationHandler#dispatchPreSessionRequest](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpInitializationHandler.java) |
 | 5 | `handlePost`: capture interaction ctx **and** `PeekedBody#cached` **synchronously** (pipelined next request may rebind/overwrite), `body.retain()`, `runAsync(parseAndDispatchPost, executor)` | EL → VT | `McpOperationHandler#handlePost` |
 | 6 | Session header ⇒ `server.getSession` (may hydrate from store) → 404 plain text if unknown | VT | `McpOperationHandler#parseAndDispatchPost` |
 | 7 | Reuse the peeked parse if one was made, else parse here via `McpDispatcher#parseBody` → `Request` / `Response` / `Error` / `Notification`. Both routes yield a `JsonRpcCodec.Parse`, so a malformed body earns the same code either way — [[errors]] | VT | `McpOperationHandler#parseAndDispatchPost`, `McpOperationHandler#dispatchPostMessage` |
@@ -31,6 +31,8 @@ Verdict: event loop parses nothing heavy. Body hop → worker executor (VT) → 
 | 14 | `handleSuccessOrError` → `DispatchResult.Response(bytes, sessionId, 200)` | VT | `McpDispatcher#handleSuccessOrError` |
 | 15 | `completePostRequest` on event loop: `Status` ⇒ plain HTTP; stream started ⇒ finalize on VT (append event log, write final SSE event, close); else JSON response | EL (+VT) | `McpOperationHandler`, `McpOperationHandler#finalizePostSseResponse` |
 | 16 | `transportCompletion` completes when write flushes → `OperationTracker` releases | EL | `ChannelHandlerUtils.completeOn` `ChannelHandlerUtils#completeOn` |
+
+Sessionless responses complete through [McpInitializationHandler#completeDispatch](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpInitializationHandler.java). Both init and operation phases preserve SSE while heartbeats are enabled → [[sse-streams]].
 
 ## 🚦 Routing rules in `dispatchTrackedRequestAsync`
 

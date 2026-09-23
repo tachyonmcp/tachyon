@@ -7,6 +7,8 @@ import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.handler.codec.http.DefaultHttpContent;
+import io.netty.handler.timeout.IdleState;
+import io.netty.handler.timeout.IdleStateEvent;
 import io.netty.util.AttributeKey;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -78,6 +80,18 @@ public final class SseHeartbeat {
     /** @return {@code true} if {@code channel} carries an open SSE stream. */
     public static boolean isEnabled(Channel channel) {
         return Boolean.TRUE.equals(channel.attr(ACTIVE).get());
+    }
+
+    /**
+     * Whether an idle handler should leave {@code channel} open on {@code event}. Reader idle is
+     * expected on an SSE stream with heartbeats: the client only listens. Writer idle is not, since
+     * heartbeats write every interval; it means writes stalled (for example, a peer that stopped
+     * reading keeps the channel non-writable, so {@link #send} skips), and the channel should close.
+     *
+     * @return {@code true} if {@code event} is reader idle on a channel with heartbeats enabled
+     */
+    public static boolean ignoresIdle(Channel channel, IdleStateEvent event) {
+        return event.state() == IdleState.READER_IDLE && isEnabled(channel);
     }
 
     /**

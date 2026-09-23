@@ -2,8 +2,8 @@
 title: Findings
 tags: [meta, findings]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/HandlerFutures.java]
-updated: 2026-09-22
-commit: 58f386e8
+updated: 2026-09-23
+commit: bf825914
 ---
 
 # 🔎 Findings

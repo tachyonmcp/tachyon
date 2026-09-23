@@ -1,9 +1,9 @@
 ---
 title: SSE streams
 tags: [concept, transport, sse]
-sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/sse/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/OutboundSseStream.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/OutboundSseStreamMessageRouter.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpOperationHandler.java]
-updated: 2026-09-20
-commit: 04156c98
+sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpInitializationHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/sse/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/OutboundSseStream.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/OutboundSseStreamMessageRouter.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpOperationHandler.java]
+updated: 2026-09-23
+commit: bf825914
 ---
 
 # 📡 SSE streams
@@ -47,7 +47,9 @@ Initial headers and every queued event are aggregated with Netty `PromiseCombine
 
 ## 🫀 Keep-alive math
 
-`NetworkConfig`: `readerIdleTimeout` 60s closes silent non-SSE sockets; heartbeat 15s keeps SSE; keep heartbeat < proxy idle timeouts and < session TTL (30s); heartbeats are outbound and never reset reader idle `NetworkConfig`, `NetworkConfig#DEFAULT_READER_IDLE_TIMEOUT`. Idle tick on SSE channel = no-op only in `McpOperationHandler#userEventTriggered` (requests carrying `MCP-Session-Id`). A POST without one — every 2026-07-28 request, `initialize` — runs under `McpInitializationHandler#userEventTriggered`, which closes on any idle tick, so reader idle still ends an upgraded stream there ([[findings]]).
+`readerIdleTimeout` defaults to 60s; heartbeats default to 15s [NetworkConfig#DEFAULT_READER_IDLE_TIMEOUT](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/NetworkConfig.java). Heartbeats are outbound and never reset reader idle. Both [McpInitializationHandler#userEventTriggered](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpInitializationHandler.java) and [McpOperationHandler#userEventTriggered](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpOperationHandler.java) ignore reader-idle events while heartbeats run [SseHeartbeat#ignoresIdle](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/sse/SseHeartbeat.java). Writer idle still closes: heartbeats write every interval, so writer idle means writes stalled. This covers sessionless POSTs, pending `initialize`, and in-session requests. Zero heartbeat interval leaves idle closure enabled [SseHeartbeat#enable](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/sse/SseHeartbeat.java). Keep heartbeats below proxy idle timeouts, session TTL and `writerIdleTimeout`; no ordering against reader idle is required.
+
+Stalled peer: the channel stays non-writable, [SseHeartbeat#send](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/sse/SseHeartbeat.java) skips, no write completes, and `IdleStateHandler` fires writer idle after `writerIdleTimeout`. Both phases close then. Zero `writerIdleTimeout` disables it.
 
 ## 🧯 Close semantics
 

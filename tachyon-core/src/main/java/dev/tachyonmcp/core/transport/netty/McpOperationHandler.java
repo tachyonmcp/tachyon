@@ -571,12 +571,11 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
 
     @Override
     public void userEventTriggered(ChannelHandlerContext ctx, Object evt) {
-        if (evt instanceof IdleStateEvent) {
-            if (!SseHeartbeat.isEnabled(ctx.channel())) {
+        if (evt instanceof IdleStateEvent idle) {
+            if (!SseHeartbeat.ignoresIdle(ctx.channel(), idle)) {
                 logger.debug("Idle timeout, closing channel: {}", ctx.channel().remoteAddress());
                 ctx.close();
             }
-            // SSE channels: idle tick is a no-op — the scheduler drives heartbeats.
         } else {
             ctx.fireUserEventTriggered(evt);
         }
