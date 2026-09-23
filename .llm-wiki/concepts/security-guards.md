@@ -2,7 +2,7 @@
 title: Security guards
 tags: [concept, security, transport]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/http/, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpChannelInitializer.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/NetworkConfig.java]
-updated: 2026-09-22
+updated: 2026-09-23
 commit: 58f386e8
 ---
 
@@ -30,6 +30,6 @@ Verdict: fail-closed HTTP guards, most of them before body aggregation. Loopback
 
 Rejection path: `rejectAndClose` marks channel rejected (drops remaining chunks) + `Connection: close` `ChannelHandlerUtils#rejectAndClose`.
 
-Tests: `DnsRebindingProtectionHandlerTest`, `McpHeaderGuardHandlerTest`, `McpHeaderMatchHandlerTest`, `EndpointValidatorHandlerTest`, e2e `DnsRebindingTest`, `AcceptHeaderValidationTest`, `MaxContentLengthTest`, `v2025_11_25/HeaderValidationTest` (optional mirrors, mcp-remote `initialize` preflight), `v2026_07_28/HeaderValidationTest`, `CustomHeaderValidationTest`.
+Tests: `DnsRebindingProtectionHandlerTest`, `McpHeaderGuardHandlerTest`, `McpHeaderMatchHandlerTest`, `EndpointValidatorHandlerTest`, e2e `AbstractDnsRebindingTest` (raw-socket `Host` rebinding incl. `0.0.0.0`/`[::]`, look-alike origins, preflight; per version), `AbstractContentTypeValidationTest`, `AbstractBrowserClientTest` (per version; 🔴 red until 415 + CORS preflight fix), `AcceptHeaderValidationTest`, `MaxContentLengthTest`, `v2025_11_25/HeaderValidationTest` (optional mirrors, mcp-remote `initialize` preflight), `v2026_07_28/HeaderValidationTest`, `CustomHeaderValidationTest`.
 
 Related: [[netty-pipeline]], [[errors]].
