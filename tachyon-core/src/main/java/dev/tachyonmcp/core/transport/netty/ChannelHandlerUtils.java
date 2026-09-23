@@ -3,6 +3,7 @@ package dev.tachyonmcp.core.transport.netty;
 
 import static dev.tachyonmcp.core.transport.netty.InteractionHandler.INTERACTION_CONTEXT_KEY;
 
+import dev.tachyonmcp.api.annotations.InternalApi;
 import dev.tachyonmcp.api.server.domain.RequestId;
 import dev.tachyonmcp.api.server.domain.ServerError;
 import dev.tachyonmcp.api.server.session.SessionIdGenerator;
@@ -34,6 +35,7 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.RejectedExecutionException;
 import org.jspecify.annotations.Nullable;
 
+@InternalApi
 public final class ChannelHandlerUtils {
 
     private static final AttributeKey<Session> SESSION_KEY = AttributeKey.valueOf("tachyonSession");
@@ -75,9 +77,8 @@ public final class ChannelHandlerUtils {
         var wireError =
                 requireInteractionContext(ctx).protocol().responseMapper().error(error);
         var body = JsonRpcCodec.serializeError(id, wireError.code(), wireError.message(), wireError.data());
-        var origin = req.headers().get(HttpHeaderNames.ORIGIN);
         markRejected(ctx, req);
-        sendResponseAndClose(ctx, HttpResponseStatus.valueOf(wireError.httpStatus()), "application/json", body, origin);
+        sendResponseAndClose(ctx, HttpResponseStatus.valueOf(wireError.httpStatus()), "application/json", body);
     }
 
     /**
@@ -210,8 +211,8 @@ public final class ChannelHandlerUtils {
         requireInteractionContext(ctx).set(McpDispatcher.ATTR_INIT_REQUEST, snapshot);
     }
 
-    public static void sendAccepted(ChannelHandlerContext ctx, @Nullable String origin) {
-        sendAcceptedAsync(ctx, origin);
+    public static void sendAccepted(ChannelHandlerContext ctx) {
+        sendAcceptedAsync(ctx);
     }
 
     /**
@@ -227,12 +228,9 @@ public final class ChannelHandlerUtils {
     }
 
     /** Writes an accepted response and returns its write completion. */
-    public static ChannelFuture sendAcceptedAsync(ChannelHandlerContext ctx, @Nullable String origin) {
+    public static ChannelFuture sendAcceptedAsync(ChannelHandlerContext ctx) {
         var response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.ACCEPTED);
         response.headers().set(HttpHeaderNames.CONTENT_LENGTH, 0);
-        if (origin != null) {
-            response.headers().set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN, origin);
-        }
         return ctx.writeAndFlush(response);
     }
 
@@ -259,15 +257,7 @@ public final class ChannelHandlerUtils {
      */
     public static ChannelFuture sendPlainTextAndClose(
             ChannelHandlerContext ctx, HttpResponseStatus status, String message) {
-        return sendPlainTextAndClose(ctx, status, message, null);
-    }
-
-    /**
-     * {@link #sendPlainTextAndClose(ChannelHandlerContext, HttpResponseStatus, String)} echoing {@code origin}.
-     */
-    public static ChannelFuture sendPlainTextAndClose(
-            ChannelHandlerContext ctx, HttpResponseStatus status, String message, @Nullable String origin) {
-        return sendResponse(ctx, status, "text/plain", ByteBufUtil.writeUtf8(ctx.alloc(), message), origin);
+        return sendResponse(ctx, status, "text/plain", ByteBufUtil.writeUtf8(ctx.alloc(), message));
     }
 
     /**
@@ -275,36 +265,21 @@ public final class ChannelHandlerUtils {
      * {@code Connection: close} header. See {@link #sendPlainTextAndClose} for why the header matters.
      */
     public static ChannelFuture sendResponseAndClose(
-            ChannelHandlerContext ctx,
-            HttpResponseStatus status,
-            String contentType,
-            ByteBuf body,
-            @Nullable String origin) {
-        return sendResponse(ctx, status, contentType, body, origin);
+            ChannelHandlerContext ctx, HttpResponseStatus status, String contentType, ByteBuf body) {
+        return sendResponse(ctx, status, contentType, body);
     }
 
     /** Zero-copy overload for GC-managed bodies: wraps the byte[] at send time on the event loop. */
     public static ChannelFuture sendResponseAndClose(
-            ChannelHandlerContext ctx,
-            HttpResponseStatus status,
-            String contentType,
-            byte[] body,
-            @Nullable String origin) {
-        return sendResponse(ctx, status, contentType, Unpooled.wrappedBuffer(body), origin);
+            ChannelHandlerContext ctx, HttpResponseStatus status, String contentType, byte[] body) {
+        return sendResponse(ctx, status, contentType, Unpooled.wrappedBuffer(body));
     }
 
     private static ChannelFuture sendResponse(
-            ChannelHandlerContext ctx,
-            HttpResponseStatus status,
-            String contentType,
-            ByteBuf body,
-            @Nullable String origin) {
+            ChannelHandlerContext ctx, HttpResponseStatus status, String contentType, ByteBuf body) {
         var response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, status, body);
         response.headers().set(HttpHeaderNames.CONTENT_TYPE, contentType);
         response.headers().set(HttpHeaderNames.CONTENT_LENGTH, body.readableBytes());
-        if (origin != null) {
-            response.headers().set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN, origin);
-        }
         // Mark the keep-alive intent; HttpServerKeepAliveHandler adds `Connection: close`
         // and closes the channel after this response when keep-alive is disabled.
         HttpUtil.setKeepAlive(response, false);

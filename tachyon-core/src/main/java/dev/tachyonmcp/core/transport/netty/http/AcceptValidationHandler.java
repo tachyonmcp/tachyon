@@ -112,9 +112,7 @@ public final class AcceptValidationHandler extends ChannelInboundHandlerAdapter 
                 String.join(", ", requiredTypes));
         var text = "Accept header must include " + String.join(" or ", requiredTypes) + " on " + method;
         var body = Unpooled.copiedBuffer(text, StandardCharsets.UTF_8);
-        // Read the origin before marking rejected: markRejected releases the request.
-        var origin = req.headers().get(HttpHeaderNames.ORIGIN);
         markRejected(ctx, req);
-        sendResponseAndClose(ctx, HttpResponseStatus.NOT_ACCEPTABLE, TEXT_PLAIN, body, origin);
+        sendResponseAndClose(ctx, HttpResponseStatus.NOT_ACCEPTABLE, TEXT_PLAIN, body);
     }
 }

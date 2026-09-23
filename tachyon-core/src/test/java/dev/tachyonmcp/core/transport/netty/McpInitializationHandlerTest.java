@@ -51,19 +51,22 @@ class McpInitializationHandlerTest {
     }
 
     @Test
-    void optionsReturns204() {
+    void plainOptionsListsAllowedMethods() {
         sendOptions("http://localhost:3000");
         var response = readResponse();
         assertThat(response.status()).isEqualTo(HttpResponseStatus.NO_CONTENT);
+        assertThat(response.headers().get(HttpHeaderNames.ALLOW)).isEqualTo("GET, POST, DELETE, OPTIONS");
+        assertThat(response.headers().contains(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN))
+                .as("CorsHandler owns CORS headers")
+                .isFalse();
         response.release();
-    }
 
-    @Test
-    void optionsRejectsMissingOrigin() {
         sendOptions(null);
-        var response = readResponse();
-        assertThat(response.status()).isEqualTo(HttpResponseStatus.FORBIDDEN);
-        response.release();
+        var withoutOrigin = readResponse();
+        assertThat(withoutOrigin.status())
+                .as("a non-browser client needs no Origin")
+                .isEqualTo(HttpResponseStatus.NO_CONTENT);
+        withoutOrigin.release();
     }
 
     @Test

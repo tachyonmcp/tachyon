@@ -10,6 +10,7 @@ import io.netty.handler.codec.http.cors.CorsConfig;
 import io.netty.handler.codec.http.cors.CorsConfigBuilder;
 import java.time.Duration;
 import java.util.List;
+import java.util.Objects;
 import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 
@@ -22,7 +23,8 @@ import org.jspecify.annotations.Nullable;
  * @param readerIdleTimeout  idle timeout for reading
  * @param writerIdleTimeout  idle timeout for writing
  * @param maxContentLength   maximum HTTP content length in bytes
- * @param corsConfig         CORS configuration, or {@code null} for defaults
+ * @param corsConfig         CORS configuration; also the origin allowlist of the DNS-rebinding guard.
+ *                           See {@link #defaultCorsConfig()} and {@link #buildCorsConfig}
  * @param allowedHosts       additional {@code Host} authorities the DNS-rebinding guard accepts
  *                           beyond localhost, or {@code null} for localhost-only
  * @param ioEngine           the Netty I/O engine to use
@@ -35,7 +37,7 @@ public record NettyServerConfig(
         Duration readerIdleTimeout,
         Duration writerIdleTimeout,
         int maxContentLength,
-        @Nullable CorsConfig corsConfig,
+        CorsConfig corsConfig,
         @Nullable List<String> allowedHosts,
         NettyIoEngine ioEngine,
         @Nullable Consumer<ChannelPipeline> pipelineCustomizer) {
@@ -63,6 +65,20 @@ public record NettyServerConfig(
 
     /** Seconds a browser may cache a preflight; browsers cap it lower (Chromium: 2h). */
     private static final long PREFLIGHT_MAX_AGE_SECONDS = 86_400;
+
+    public NettyServerConfig {
+        Objects.requireNonNull(corsConfig, "corsConfig");
+    }
+
+    /**
+     * Returns the default CORS configuration: any loopback origin the DNS-rebinding guard admits, answered
+     * with {@code Access-Control-Allow-Origin: *}. Same as {@link #buildCorsConfig} with no options.
+     *
+     * @return the default CORS configuration
+     */
+    public static CorsConfig defaultCorsConfig() {
+        return buildCorsConfig(null, false, false, null);
+    }
 
     /**
      * Builds a CORS configuration from the given parameters.
@@ -117,7 +133,7 @@ public record NettyServerConfig(
                 NetworkConfig.DEFAULT_READER_IDLE_TIMEOUT,
                 NetworkConfig.DEFAULT_WRITER_IDLE_TIMEOUT,
                 McpChannelInitializer.DEFAULT_MAX_CONTENT_LENGTH,
-                buildCorsConfig(null, false, false, null),
+                defaultCorsConfig(),
                 null,
                 NettyIoEngine.AUTO,
                 null);

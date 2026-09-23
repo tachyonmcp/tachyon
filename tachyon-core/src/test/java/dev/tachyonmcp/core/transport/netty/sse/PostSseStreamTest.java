@@ -218,7 +218,7 @@ class PostSseStreamTest {
     }
 
     private PostSseStream newStream(Duration heartbeatInterval) {
-        return new PostSseStream(channel, null, eventIds::incrementAndGet, heartbeatInterval);
+        return new PostSseStream(channel, eventIds::incrementAndGet, heartbeatInterval);
     }
 
     /** Records outbound writes and, unless told to fail them, leaves their promises pending. */

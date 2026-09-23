@@ -14,7 +14,6 @@ import io.netty.channel.ChannelHandler.Sharable;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.handler.codec.http.FullHttpRequest;
-import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import java.util.Map;
@@ -42,9 +41,8 @@ public class UnsupportedProtocolVersionHandler extends ChannelInboundHandlerAdap
                 .error(ServerErrors.unsupportedProtocolVersion(
                         "Unsupported protocol version",
                         Map.of("supported", SUPPORTED_VERSIONS, "requested", requestedVersion)));
-        var origin = req.headers().get(HttpHeaderNames.ORIGIN);
         var body = JsonRpcCodec.serializeError(extractId(req), error.code(), error.message(), error.data());
-        sendResponseAndClose(ctx, HttpResponseStatus.BAD_REQUEST, "application/json", body, origin);
+        sendResponseAndClose(ctx, HttpResponseStatus.BAD_REQUEST, "application/json", body);
     }
 
     private static @Nullable RequestId extractId(HttpRequest req) {

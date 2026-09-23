@@ -30,6 +30,7 @@ import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
@@ -97,7 +98,7 @@ public class McpChannelInitializer extends ChannelInitializer<SocketChannel> {
             Duration writerIdleTimeout,
             int maxContentLength,
             ChannelGroup childChannels,
-            @Nullable CorsConfig corsConfig,
+            CorsConfig corsConfig,
             @Nullable List<String> allowedHosts,
             @Nullable Consumer<ChannelPipeline> pipelineCustomizer) {
         this.stateless = stateless;
@@ -106,9 +107,9 @@ public class McpChannelInitializer extends ChannelInitializer<SocketChannel> {
         this.writerIdleTimeout = writerIdleTimeout;
         this.maxContentLength = maxContentLength;
         this.corsConfig = corsConfig;
-        this.dnsRebindingHandler = allowedHosts == null
-                ? new DnsRebindingProtectionHandler()
-                : new DnsRebindingProtectionHandler(allowedHosts);
+        this.dnsRebindingHandler = new DnsRebindingProtectionHandler(
+                allowedHosts == null ? List.of() : allowedHosts,
+                this.corsConfig.isAnyOriginSupported() ? Set.of() : this.corsConfig.origins());
         this.pipelineCustomizer = pipelineCustomizer;
         this.childChannels = childChannels;
         this.dispatcher = new McpDispatcher(server, server.executor());
@@ -149,12 +150,11 @@ public class McpChannelInitializer extends ChannelInitializer<SocketChannel> {
         // (validation handlers write before the aggregator; protocol handlers write after it).
         p.addLast("http-keep-alive", new HttpServerKeepAliveHandler());
         p.addLast("dns-rebinding", dnsRebindingHandler);
-        if (corsConfig != null) {
-            // Ahead of "cors" so it sees the preflight response CorsHandler writes.
-            p.addLast("cors-mcp-param", new McpParamPreflightHandler());
-            p.addLast("cors", new CorsHandler(corsConfig));
-        }
+        // Ahead of "cors", so other paths get a bare 404 and never a CORS grant.
         p.addLast("mcp-endpoint", endpointValidatorHandler);
+        // Ahead of "cors" so it sees the preflight response CorsHandler writes.
+        p.addLast("cors-mcp-param", new McpParamPreflightHandler());
+        p.addLast("cors", new CorsHandler(corsConfig));
 
         // Must precede "protocol-version": a repeated version header would otherwise negotiate on its
         // first value while an intermediary routes on the last.

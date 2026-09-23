@@ -42,7 +42,6 @@ public final class ServerBasic {
                     .serde(JacksonPayloadSerde.INSTANCE)
             )
             .runtime(r -> r.shutdownGracePeriod(ofSeconds(5)))
-            .network(n -> n.allowedOrigins("*").allowNullOrigin(true))
             .port(port)
             .build();
 

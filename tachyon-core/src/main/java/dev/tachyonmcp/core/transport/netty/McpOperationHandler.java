@@ -30,7 +30,6 @@ import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.handler.codec.http.FullHttpRequest;
-import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.timeout.IdleStateEvent;
@@ -91,29 +90,27 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
     }
 
     void handleRequest(ChannelHandlerContext ctx, FullHttpRequest req) {
-        var origin = req.headers().get(HttpHeaderNames.ORIGIN);
         logger.debug("MCP request: {} {}", req.method(), req.uri());
 
         HttpMethod method = req.method();
         if (method == HttpMethod.OPTIONS) {
-            sendOptions(ctx, origin);
+            sendOptions(ctx);
         } else if (method == HttpMethod.POST) {
-            handlePost(ctx, req, origin);
+            handlePost(ctx, req);
         } else if (method == HttpMethod.GET) {
-            handleGet(ctx, req, origin);
+            handleGet(ctx, req);
         } else if (method == HttpMethod.DELETE) {
-            handleDelete(ctx, req, origin);
+            handleDelete(ctx, req);
         } else {
             sendResponseAndClose(
                     ctx,
                     HttpResponseStatus.METHOD_NOT_ALLOWED,
                     "text/plain",
-                    ctx.alloc().buffer(0),
-                    origin);
+                    ctx.alloc().buffer(0));
         }
     }
 
-    private void handlePost(ChannelHandlerContext ctx, FullHttpRequest req, @Nullable String origin) {
+    private void handlePost(ChannelHandlerContext ctx, FullHttpRequest req) {
         var sessionId = req.headers().get(McpHeaderNames.MCP_SESSION_ID);
         if (sessionId == null) {
             // A session-less POST may be an initialize (e.g. on a keep-alive channel already in
@@ -132,7 +129,7 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
         final PeekedBody.@Nullable Parsed peeked = PeekedBody.cached(ctx, req);
         var body = req.content().retain();
         try {
-            CompletableFuture.runAsync(() -> parseAndDispatchPost(ctx, sessionId, body, origin, ic, peeked), executor)
+            CompletableFuture.runAsync(() -> parseAndDispatchPost(ctx, sessionId, body, ic, peeked), executor)
                     .exceptionally(ex -> {
                         logger.debug("Failed to parse POST body", ex);
                         ctx.executor()
@@ -140,13 +137,12 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
                                         ctx,
                                         HttpResponseStatus.BAD_REQUEST,
                                         "application/json",
-                                        dispatcher.parseError(ic),
-                                        origin));
+                                        dispatcher.parseError(ic)));
                         return null;
                     });
         } catch (RejectedExecutionException e) {
             body.release();
-            sendPlainTextAndClose(ctx, HttpResponseStatus.SERVICE_UNAVAILABLE, "Server shutting down", origin);
+            sendPlainTextAndClose(ctx, HttpResponseStatus.SERVICE_UNAVAILABLE, "Server shutting down");
         }
     }
 
@@ -159,7 +155,6 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
             ChannelHandlerContext ctx,
             @Nullable String sessionId,
             ByteBuf body,
-            @Nullable String origin,
             @Nullable ChannelContext ic,
             PeekedBody.@Nullable Parsed peeked) {
         final JsonRpcCodec.Parse parse;
@@ -172,13 +167,12 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
                     logger.warn("Failed to resolve session: {}", sessionId, e);
                     ctx.executor()
                             .execute(() -> sendPlainTextAndClose(
-                                    ctx, HttpResponseStatus.INTERNAL_SERVER_ERROR, "Session lookup failed", origin));
+                                    ctx, HttpResponseStatus.INTERNAL_SERVER_ERROR, "Session lookup failed"));
                     return;
                 }
                 if (session.isEmpty()) {
                     ctx.executor()
-                            .execute(() -> sendPlainTextAndClose(
-                                    ctx, HttpResponseStatus.NOT_FOUND, "Unknown session", origin));
+                            .execute(() -> sendPlainTextAndClose(ctx, HttpResponseStatus.NOT_FOUND, "Unknown session"));
                     return;
                 }
                 bindSession(ctx.channel(), session.orElseThrow());
@@ -188,14 +182,13 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
         } finally {
             body.release();
         }
-        dispatchPostMessage(ctx, sessionId, parse, origin, ic);
+        dispatchPostMessage(ctx, sessionId, parse, ic);
     }
 
     private void dispatchPostMessage(
             ChannelHandlerContext ctx,
             @Nullable String sessionId,
             JsonRpcCodec.Parse parse,
-            @Nullable String origin,
             @Nullable ChannelContext ic) {
         // Named to not shadow the worker `executor` field: every write below must run on the
         // channel's event loop, while `executor` off-loads work away from it.
@@ -206,13 +199,12 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
                     ctx,
                     HttpResponseStatus.BAD_REQUEST,
                     "application/json",
-                    dispatcher.malformedBodyError(parse.invalidRequest(), ic),
-                    origin));
+                    dispatcher.malformedBodyError(parse.invalidRequest(), ic)));
             return;
         }
         if (!server.isStateless() && sessionId == null && !(message instanceof JsonRpcMessage.Request<?>)) {
-            eventLoop.execute(() -> sendPlainTextAndClose(
-                    ctx, HttpResponseStatus.BAD_REQUEST, "Missing MCP-Session-Id header", origin));
+            eventLoop.execute(
+                    () -> sendPlainTextAndClose(ctx, HttpResponseStatus.BAD_REQUEST, "Missing MCP-Session-Id header"));
             return;
         }
         switch (message) {
@@ -221,14 +213,13 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
                         ctx,
                         sessionId,
                         reqMsg,
-                        origin,
                         Objects.requireNonNull(
                                 ic,
                                 "InteractionContext is null. Check if InteractionHandler is configured correctly."));
             case JsonRpcMessage.Response resp ->
-                handlePostResponse(ctx, sessionId, ctx.channel().id().asLongText(), resp, origin);
+                handlePostResponse(ctx, sessionId, ctx.channel().id().asLongText(), resp);
             case JsonRpcMessage.Error err ->
-                handlePostError(ctx, sessionId, ctx.channel().id().asLongText(), err, origin);
+                handlePostError(ctx, sessionId, ctx.channel().id().asLongText(), err);
             case JsonRpcMessage.Notification<?> not -> {
                 // Apply the notification before acking so a client that waits for this 202 observes
                 // its effect on the next request it sends: an ACTIVE session for `initialized`, and
@@ -240,22 +231,18 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
                 } catch (RuntimeException e) {
                     logger.warn("Failed to process {} notification", not.method(), e);
                 }
-                eventLoop.execute(() -> sendAccepted(ctx, origin));
+                eventLoop.execute(() -> sendAccepted(ctx));
             }
             default -> {
                 logger.warn("Unexpected message type: {}", message);
-                eventLoop.execute(() -> sendAccepted(ctx, origin));
+                eventLoop.execute(() -> sendAccepted(ctx));
             }
         }
     }
 
     private void handlePostResponse(
-            ChannelHandlerContext ctx,
-            @Nullable String sessionId,
-            String channelId,
-            JsonRpcMessage.Response resp,
-            @Nullable String origin) {
-        ctx.executor().execute(() -> sendAccepted(ctx, origin));
+            ChannelHandlerContext ctx, @Nullable String sessionId, String channelId, JsonRpcMessage.Response resp) {
+        ctx.executor().execute(() -> sendAccepted(ctx));
         executor.execute(() -> {
             if (!server.completePendingRequest(resp.id(), sessionId, channelId, resp.resultJson())) {
                 logger.debug("No matching pending request for response id: {}", resp.id());
@@ -264,12 +251,8 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
     }
 
     private void handlePostError(
-            ChannelHandlerContext ctx,
-            @Nullable String sessionId,
-            String channelId,
-            JsonRpcMessage.Error err,
-            @Nullable String origin) {
-        ctx.executor().execute(() -> sendAccepted(ctx, origin));
+            ChannelHandlerContext ctx, @Nullable String sessionId, String channelId, JsonRpcMessage.Error err) {
+        ctx.executor().execute(() -> sendAccepted(ctx));
         executor.execute(() -> {
             if (!server.failPendingRequest(err.id(), sessionId, channelId, err.code() + ": " + err.message())) {
                 logger.debug("No matching pending request for error id: {}", err.id());
@@ -278,13 +261,9 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
     }
 
     private void handlePostRequest(
-            ChannelHandlerContext ctx,
-            @Nullable String sessionId,
-            JsonRpcMessage.Request req,
-            @Nullable String origin,
-            ChannelContext ic) {
+            ChannelHandlerContext ctx, @Nullable String sessionId, JsonRpcMessage.Request req, ChannelContext ic) {
         var heartbeatInterval = server.config().network().heartbeatInterval();
-        var postStream = new PostSseStream(ctx.channel(), origin, server::nextEventId, heartbeatInterval);
+        var postStream = new PostSseStream(ctx.channel(), server::nextEventId, heartbeatInterval);
         final var requestId = req.id();
         final var method = req.method();
         final var startNs = System.nanoTime();
@@ -299,7 +278,6 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
                                         requestId,
                                         method,
                                         sessionId,
-                                        origin,
                                         postStream,
                                         startNs,
                                         result,
@@ -321,7 +299,6 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
             RequestId requestId,
             String method,
             @Nullable String sessionId,
-            @Nullable String origin,
             PostSseStream postStream,
             long startNs,
             McpDispatcher.@Nullable DispatchResult result,
@@ -347,12 +324,9 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
                     completeOn(
                             refused
                                     ? sendPlainTextAndClose(
-                                            ctx, HttpResponseStatus.SERVICE_UNAVAILABLE, "Server shutting down", origin)
+                                            ctx, HttpResponseStatus.SERVICE_UNAVAILABLE, "Server shutting down")
                                     : sendInternalError(
-                                            ctx,
-                                            requestId,
-                                            origin,
-                                            ic.protocol().responseMapper()),
+                                            ctx, requestId, ic.protocol().responseMapper()),
                             transportCompletion);
                 }
                 return;
@@ -361,9 +335,7 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
                 // Transport-level signal from the dispatcher — spec ties this condition to a raw HTTP
                 // status, not a JSON-RPC error envelope.
                 postStream.terminate();
-                completeOn(
-                        sendPlainTextAndClose(ctx, HttpResponseStatus.valueOf(code), message, origin),
-                        transportCompletion);
+                completeOn(sendPlainTextAndClose(ctx, HttpResponseStatus.valueOf(code), message), transportCompletion);
                 return;
             }
             if (postStream.started()) {
@@ -389,7 +361,7 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
             // and corrupt the next request's reuse of it.
             postStream.terminate();
             if (result instanceof McpDispatcher.DispatchResult.Accepted) {
-                completeOn(sendAcceptedAsync(ctx, origin), transportCompletion);
+                completeOn(sendAcceptedAsync(ctx), transportCompletion);
                 return;
             }
             if (m.slowRequestLogging() && elapsedMs > m.slowRequestThreshold().toMillis()) {
@@ -403,8 +375,7 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
                             ctx,
                             response.responseBody(),
                             HttpResponseStatus.valueOf(response.httpStatus()),
-                            response.sessionId(),
-                            origin),
+                            response.sessionId()),
                     transportCompletion);
         } catch (RuntimeException e) {
             transportCompletion.completeExceptionally(e);
@@ -467,40 +438,35 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
         });
     }
 
-    private void handleGet(ChannelHandlerContext ctx, FullHttpRequest req, @Nullable String origin) {
+    private void handleGet(ChannelHandlerContext ctx, FullHttpRequest req) {
         if (server.isStateless()) {
-            sseManager.openStatelessStream(ctx, origin);
+            sseManager.openStatelessStream(ctx);
             return;
         }
         var sessionId = req.headers().get(McpHeaderNames.MCP_SESSION_ID);
         if (sessionId == null || sessionId.isEmpty()) {
-            sendPlainTextAndClose(ctx, HttpResponseStatus.BAD_REQUEST, "Missing MCP-Session-Id header", origin);
+            sendPlainTextAndClose(ctx, HttpResponseStatus.BAD_REQUEST, "Missing MCP-Session-Id header");
             return;
         }
         final var lastEventId = req.headers().get(McpHeaderNames.LAST_EVENT_ID);
         final var local = server.getLocalSession(sessionId);
         if (local.isPresent()) {
-            sseManager.openStream(ctx, local.orElseThrow(), lastEventId, origin);
+            sseManager.openStream(ctx, local.orElseThrow(), lastEventId);
             return;
         }
         try {
             CompletableFuture.supplyAsync(() -> server.getSession(sessionId), executor)
                     .whenComplete((session, failure) -> marshalSessionLookup(
-                            ctx,
-                            sessionId,
-                            origin,
-                            session,
-                            failure,
-                            found -> sseManager.openStream(ctx, found, lastEventId, origin)));
+                            ctx, sessionId, session, failure, found -> sseManager.openStream(ctx, found, lastEventId)));
         } catch (RejectedExecutionException e) {
-            sendPlainTextAndClose(ctx, HttpResponseStatus.SERVICE_UNAVAILABLE, "Server shutting down", origin);
+            sendPlainTextAndClose(ctx, HttpResponseStatus.SERVICE_UNAVAILABLE, "Server shutting down");
         }
     }
 
-    private void handleDelete(ChannelHandlerContext ctx, FullHttpRequest req, @Nullable String origin) {
+    private void handleDelete(ChannelHandlerContext ctx, FullHttpRequest req) {
         var sessionId = req.headers().get(McpHeaderNames.MCP_SESSION_ID);
         if (sessionId == null || sessionId.isEmpty()) {
-            sendPlainTextAndClose(ctx, HttpResponseStatus.BAD_REQUEST, "Missing MCP-Session-Id header", origin);
+            sendPlainTextAndClose(ctx, HttpResponseStatus.BAD_REQUEST, "Missing MCP-Session-Id header");
             return;
         }
         try {
@@ -517,26 +483,22 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
                         if (failure != null) {
                             logger.error("Failed to terminate session: {}", sessionId, failure);
                             sendPlainTextAndClose(
-                                    ctx,
-                                    HttpResponseStatus.INTERNAL_SERVER_ERROR,
-                                    "Session termination failed",
-                                    origin);
+                                    ctx, HttpResponseStatus.INTERNAL_SERVER_ERROR, "Session termination failed");
                         } else if (!removed) {
-                            sendPlainTextAndClose(ctx, HttpResponseStatus.NOT_FOUND, "Unknown session", origin);
+                            sendPlainTextAndClose(ctx, HttpResponseStatus.NOT_FOUND, "Unknown session");
                         } else {
-                            sendPlainTextAndClose(ctx, HttpResponseStatus.OK, "", origin);
+                            sendPlainTextAndClose(ctx, HttpResponseStatus.OK, "");
                             logger.info("Session terminated via DELETE: {}", sessionId);
                         }
                     }));
         } catch (RejectedExecutionException e) {
-            sendPlainTextAndClose(ctx, HttpResponseStatus.SERVICE_UNAVAILABLE, "Server shutting down", origin);
+            sendPlainTextAndClose(ctx, HttpResponseStatus.SERVICE_UNAVAILABLE, "Server shutting down");
         }
     }
 
     private static void marshalSessionLookup(
             ChannelHandlerContext ctx,
             String sessionId,
-            @Nullable String origin,
             @Nullable Optional<Session> session,
             @Nullable Throwable failure,
             Consumer<Session> onFound) {
@@ -544,10 +506,9 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
             ctx.executor().execute(() -> {
                 if (failure != null) {
                     logger.error("Failed to resolve session: {}", sessionId, failure);
-                    sendPlainTextAndClose(
-                            ctx, HttpResponseStatus.INTERNAL_SERVER_ERROR, "Session lookup failed", origin);
+                    sendPlainTextAndClose(ctx, HttpResponseStatus.INTERNAL_SERVER_ERROR, "Session lookup failed");
                 } else if (session == null || session.isEmpty()) {
-                    sendPlainTextAndClose(ctx, HttpResponseStatus.NOT_FOUND, "Unknown session", origin);
+                    sendPlainTextAndClose(ctx, HttpResponseStatus.NOT_FOUND, "Unknown session");
                 } else {
                     onFound.accept(session.orElseThrow());
                 }

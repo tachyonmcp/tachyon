@@ -222,8 +222,8 @@ per session, with `INFO` used until the client sends `logging/setLevel`.
 | `.readerIdleTimeout(d)` / `.writerIdleTimeout(d)` | 60s / 5min |
 | `.heartbeatInterval(d)` | 15s (`<= 0` disables) |
 | `.maxContentLength(b)` | 1MB |
-| `.allowedOrigins(...)` | none (any loopback origin, any port; guard rejects the rest) |
-| `.allowNullOrigin(b)` / `.allowPrivateNetworks(b)` | false |
+| `.allowedOrigins(...)` | none (any loopback origin, any port); listed origins pass the guard too, exact match |
+| `.allowNullOrigin(b)` / `.allowPrivateNetworks(b)` | false (`Origin: null` is always rejected by the guard) |
 | `.allowedHeaders(...)` | none (MCP headers + requested `Mcp-Param-*` built in) |
 | `.ioEngine(e)` | `NettyIoEngine.AUTO` (io_uring → epoll → kqueue → NIO) |
 

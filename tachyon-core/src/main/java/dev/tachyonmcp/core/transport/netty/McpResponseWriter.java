@@ -1,6 +1,7 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
 package dev.tachyonmcp.core.transport.netty;
 
+import dev.tachyonmcp.api.annotations.InternalApi;
 import dev.tachyonmcp.api.server.domain.RequestId;
 import dev.tachyonmcp.core.protocol.ProtocolResponseMapper;
 import dev.tachyonmcp.core.protocol.mcp.McpHeaderNames;
@@ -16,47 +17,31 @@ import io.netty.handler.codec.http.HttpUtil;
 import io.netty.handler.codec.http.HttpVersion;
 import org.jspecify.annotations.Nullable;
 
+@InternalApi
 public final class McpResponseWriter {
 
     private McpResponseWriter() {}
 
-    public static void sendOptions(ChannelHandlerContext ctx, @Nullable String origin) {
-        if (origin == null || origin.isEmpty()) {
-            ChannelHandlerUtils.sendPlainTextAndClose(ctx, HttpResponseStatus.FORBIDDEN, "Origin Required");
-            return;
-        }
+    /**
+     * Answers a plain {@code OPTIONS} request with the methods the endpoint serves. CORS preflights
+     * never get here: {@code CorsHandler} answers them, and adds CORS headers to every response.
+     */
+    public static void sendOptions(ChannelHandlerContext ctx) {
         var response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.NO_CONTENT);
-        response.headers()
-                .set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN, origin)
-                .set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_METHODS, "POST, GET, DELETE, OPTIONS")
-                .set(
-                        HttpHeaderNames.ACCESS_CONTROL_ALLOW_HEADERS,
-                        String.join(
-                                ", ",
-                                McpHeaderNames.MCP_PROTOCOL_VERSION,
-                                McpHeaderNames.MCP_SESSION_ID,
-                                McpHeaderNames.LAST_EVENT_ID,
-                                HttpHeaderNames.CONTENT_TYPE.toString(),
-                                HttpHeaderNames.ORIGIN.toString()))
-                .set(HttpHeaderNames.ACCESS_CONTROL_MAX_AGE, "86400");
+        response.headers().set(HttpHeaderNames.ALLOW, "GET, POST, DELETE, OPTIONS");
         // Signal close so the client does not pool this socket; HttpServerKeepAliveHandler
         // appends `Connection: close` and closes the channel after this response.
         HttpUtil.setKeepAlive(response, false);
         ctx.writeAndFlush(response);
     }
 
-    public static ChannelFuture sendJsonResponse(
-            ChannelHandlerContext ctx, byte[] body, @Nullable String sessionId, @Nullable String origin) {
-        return sendJsonResponse(ctx, body, HttpResponseStatus.OK, false, sessionId, origin);
+    public static ChannelFuture sendJsonResponse(ChannelHandlerContext ctx, byte[] body, @Nullable String sessionId) {
+        return sendJsonResponse(ctx, body, HttpResponseStatus.OK, false, sessionId);
     }
 
     public static ChannelFuture sendJsonResponse(
-            ChannelHandlerContext ctx,
-            byte[] body,
-            HttpResponseStatus status,
-            @Nullable String sessionId,
-            @Nullable String origin) {
-        return sendJsonResponse(ctx, body, status, false, sessionId, origin);
+            ChannelHandlerContext ctx, byte[] body, HttpResponseStatus status, @Nullable String sessionId) {
+        return sendJsonResponse(ctx, body, status, false, sessionId);
     }
 
     public static ChannelFuture sendJsonResponse(
@@ -64,8 +49,7 @@ public final class McpResponseWriter {
             byte[] body,
             HttpResponseStatus status,
             boolean close,
-            @Nullable String sessionId,
-            @Nullable String origin) {
+            @Nullable String sessionId) {
         // Zero-copy wrap on the event loop: the byte[] is GC-managed until this point, so a
         // dropped task on the shutdown path is plain garbage, never a pooled-buffer leak.
         var response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, status, Unpooled.wrappedBuffer(body));
@@ -73,9 +57,6 @@ public final class McpResponseWriter {
         response.headers().set(HttpHeaderNames.CONTENT_LENGTH, body.length);
         if (sessionId != null) {
             response.headers().set(McpHeaderNames.MCP_SESSION_ID, sessionId);
-        }
-        if (origin != null) {
-            response.headers().set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN, origin);
         }
         // HttpServerKeepAliveHandler appends `Connection: close` and closes the channel after
         // this response when keep-alive is disabled.
@@ -90,14 +71,13 @@ public final class McpResponseWriter {
      *
      * @param ctx    the channel to write the response on
      * @param id     the id of the request that failed
-     * @param origin the request's {@code Origin} header value, echoed via CORS headers, or {@code null}
      * @param mapper the protocol response mapper used to encode the error
      * @return the future for the write
      */
     public static ChannelFuture sendInternalError(
-            ChannelHandlerContext ctx, RequestId id, @Nullable String origin, ProtocolResponseMapper mapper) {
+            ChannelHandlerContext ctx, RequestId id, ProtocolResponseMapper mapper) {
         var error = mapper.error(ServerErrors.internalError("Internal error"));
         var body = JsonRpcCodec.serializeError(id, error.code(), error.message(), error.data());
-        return sendJsonResponse(ctx, body, HttpResponseStatus.valueOf(error.httpStatus()), true, null, origin);
+        return sendJsonResponse(ctx, body, HttpResponseStatus.valueOf(error.httpStatus()), true, null);
     }
 }

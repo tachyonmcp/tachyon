@@ -125,10 +125,15 @@ grants the MCP methods and headers, and `MCP-Session-Id` is readable from script
 requests must send `Content-Type: application/json`. See [CORS](configuration.md#cors).
 
 `allowedHosts` widens the `Host` check only. A request carrying an `Origin`
-header that is not loopback is still rejected with `403`, so a browser page
-cannot reach a remote Tachyon server. The [CORS options](configuration.md#cors)
-do not change that, because the guard runs before the CORS handler. Clients that
-send no `Origin` are unaffected, which is most MCP clients.
+header that is not loopback is rejected with `403` unless that origin is listed
+in [`allowedOrigins`](configuration.md#cors). A browser page on
+`https://app.example.com` reaching Tachyon at `mcp.example.com` needs both:
+
+```java
+.network(n -> n.allowedHosts("mcp.example.com").allowedOrigins("https://app.example.com"))
+```
+
+Clients that send no `Origin` are unaffected, which is most MCP clients.
 
 ## More than one instance
 

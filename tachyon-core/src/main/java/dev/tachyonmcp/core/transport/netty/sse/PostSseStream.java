@@ -3,6 +3,7 @@ package dev.tachyonmcp.core.transport.netty.sse;
 
 import static dev.tachyonmcp.core.transport.netty.sse.SseManager.SSE_RETRY_DELAY_MS;
 
+import dev.tachyonmcp.api.annotations.InternalApi;
 import dev.tachyonmcp.core.runtime.SseEvent;
 import dev.tachyonmcp.core.server.OutboundSseStream;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
@@ -40,6 +41,7 @@ import org.slf4j.LoggerFactory;
  * {@link io.netty.channel.EventLoop}. The state is volatile only because {@link #started()} may
  * be queried from another thread; only the event loop writes it.
  */
+@InternalApi
 public final class PostSseStream implements OutboundSseStream {
 
     private enum State {
@@ -60,7 +62,6 @@ public final class PostSseStream implements OutboundSseStream {
     private static final Logger logger = LoggerFactory.getLogger(PostSseStream.class);
 
     private final Channel channel;
-    private final @Nullable String origin;
     private final long streamKeyId;
     private final String streamKey;
     private final Duration heartbeatInterval;
@@ -70,10 +71,8 @@ public final class PostSseStream implements OutboundSseStream {
     private @Nullable CompletableFuture<Void> startCompletion;
     private final ChannelFutureListener writeFailureListener = this::closeOnWriteFailure;
 
-    public PostSseStream(
-            Channel channel, @Nullable String origin, LongSupplier eventIdSupplier, Duration heartbeatInterval) {
+    public PostSseStream(Channel channel, LongSupplier eventIdSupplier, Duration heartbeatInterval) {
         this.channel = channel;
-        this.origin = origin;
         this.heartbeatInterval = heartbeatInterval;
         // Session-unique key (one counter draw per POST) tagging this stream's events in the log
         // and suffixing its SSE ids, so Last-Event-ID resolves to THIS stream on replay. Not the
@@ -243,7 +242,7 @@ public final class PostSseStream implements OutboundSseStream {
         });
 
         var response = new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK);
-        HttpHelpers.setSseStreamHeaders(response, origin);
+        HttpHelpers.setSseStreamHeaders(response);
         writes.add(channel.write(response).addListener(writeFailureListener));
         SseHeartbeat.enable(channel, heartbeatInterval);
         if (queued.isEmpty()) {

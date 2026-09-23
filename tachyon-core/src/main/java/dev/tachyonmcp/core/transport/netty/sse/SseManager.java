@@ -1,6 +1,7 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
 package dev.tachyonmcp.core.transport.netty.sse;
 
+import dev.tachyonmcp.api.annotations.InternalApi;
 import dev.tachyonmcp.core.runtime.Session;
 import dev.tachyonmcp.core.runtime.SseEvent;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
@@ -21,6 +22,7 @@ import org.slf4j.LoggerFactory;
  * streams via {@link NettySseConnection}, writes opening frames and priming
  * events, and replays missed events on reconnection.
  */
+@InternalApi
 public class SseManager {
 
     private static final Logger logger = LoggerFactory.getLogger(SseManager.class);
@@ -33,8 +35,7 @@ public class SseManager {
         this.server = server;
     }
 
-    public void openStream(
-            ChannelHandlerContext ctx, Session session, @Nullable String lastEventId, @Nullable String origin) {
+    public void openStream(ChannelHandlerContext ctx, Session session, @Nullable String lastEventId) {
         var holder = new NettySseConnection[1];
         var connection = new NettySseConnection(ctx.channel(), () -> {
             // Only reset the session if THIS connection is still the current one. A reconnect may
@@ -48,7 +49,7 @@ public class SseManager {
         session.connection(connection);
         ChannelHandlerUtils.setSession(ctx, session);
 
-        writeOpeningFrames(ctx, origin, connection);
+        writeOpeningFrames(ctx, connection);
 
         if (lastEventId != null && !lastEventId.isEmpty()) {
             var hash = lastEventId.indexOf('#');
@@ -63,20 +64,20 @@ public class SseManager {
         logger.debug("SSE stream opened for session={}", session.id());
     }
 
-    public void openStatelessStream(ChannelHandlerContext ctx, @Nullable String origin) {
+    public void openStatelessStream(ChannelHandlerContext ctx) {
         var connection = new NettySseConnection(
                 ctx.channel(),
                 () -> logger.debug(
                         "Stateless SSE connection closed: {}", ctx.channel().remoteAddress()));
 
-        writeOpeningFrames(ctx, origin, connection);
+        writeOpeningFrames(ctx, connection);
 
         logger.debug("Stateless SSE stream opened: {}", ctx.channel().remoteAddress());
     }
 
-    private void writeOpeningFrames(ChannelHandlerContext ctx, @Nullable String origin, NettySseConnection connection) {
+    private void writeOpeningFrames(ChannelHandlerContext ctx, NettySseConnection connection) {
         var response = new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK);
-        HttpHelpers.setSseStreamHeaders(response, origin);
+        HttpHelpers.setSseStreamHeaders(response);
         ctx.write(response);
         ctx.writeAndFlush(
                 new DefaultHttpContent(ByteBufUtil.writeUtf8(ctx.alloc(), "retry: " + SSE_RETRY_DELAY_MS + "\n")));

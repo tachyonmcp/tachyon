@@ -29,14 +29,17 @@ import java.util.stream.Collectors;
  * Host} is rejected on HTTP/1.1+ (where {@code Host} is mandatory). HTTP/1.0, where {@code Host} is
  * optional, is exempt from the missing-Host rule.
  *
- * <p><b>Origin.</b> When present, {@code Origin} must use one of the loopback hosts accepted above.
- * A request carrying multiple {@code Origin} headers is rejected, and the opaque {@code Origin: null}
- * (sent by sandboxed iframes and some {@code file://}/Electron clients) is rejected — the guard fails
- * closed on any origin it cannot positively identify as loopback.
+ * <p><b>Origin.</b> When present, {@code Origin} must use one of the loopback hosts accepted above,
+ * or equal one of the configured {@link #DnsRebindingProtectionHandler(List, Set) allowedOrigins}
+ * exactly. A request carrying multiple {@code Origin} headers is rejected, and the opaque {@code
+ * Origin: null} is always rejected, even when listed: any web page can send it from a sandboxed
+ * iframe or through a cross-origin redirect, so admitting it would admit every site. The guard fails
+ * closed on any origin it cannot positively identify as loopback or allowed.
  * {@code allowedHosts} does <em>not</em> widen this: a browser page whose {@code Origin} is a non-local
- * host (e.g. {@code http://host.docker.internal:3000}) is still rejected. {@code allowedHosts} only
- * helps non-browser clients — which send no {@code Origin} — reach a server whose {@code Host} is
- * non-local (e.g. a container reaching the host via {@code host.docker.internal}).
+ * host (e.g. {@code http://host.docker.internal:3000}) is still rejected unless that origin is in
+ * {@code allowedOrigins}. {@code allowedHosts} helps clients reach a server whose {@code Host} is
+ * non-local (e.g. a container reaching the host via {@code host.docker.internal}); a remote browser
+ * page reaching such a server needs both lists.
  *
  * <p><b>{@code allowedHosts} semantics.</b> Each entry is a bare <em>authority</em> (a host, or
  * {@code host:port}) — not a URL. Matching is case-insensitive.
@@ -53,7 +56,10 @@ import java.util.stream.Collectors;
 @InternalApi
 public class DnsRebindingProtectionHandler extends ChannelInboundHandlerAdapter {
 
+    private static final String NULL_ORIGIN = "null";
+
     private final Set<String> allowedHosts;
+    private final Set<String> allowedOrigins;
 
     /** Loopback-only protection (no additional allowed hosts). */
     public DnsRebindingProtectionHandler() {
@@ -66,6 +72,18 @@ public class DnsRebindingProtectionHandler extends ChannelInboundHandlerAdapter 
      * @throws IllegalArgumentException if an entry is not a bare host/{@code host:port} authority
      */
     public DnsRebindingProtectionHandler(List<String> allowedHosts) {
+        this(allowedHosts, Set.of());
+    }
+
+    /**
+     * @param allowedHosts   additional {@code Host} authorities to accept beyond the built-in loopback
+     *     hosts (see the class documentation for entry syntax and matching rules)
+     * @param allowedOrigins additional {@code Origin} values to accept beyond loopback, matched exactly;
+     *     {@code "null"} is ignored
+     * @throws IllegalArgumentException if an {@code allowedHosts} entry is not a bare host/{@code
+     *     host:port} authority
+     */
+    public DnsRebindingProtectionHandler(List<String> allowedHosts, Set<String> allowedOrigins) {
         this.allowedHosts = allowedHosts.stream()
                 .filter(Objects::nonNull)
                 .map(String::trim)
@@ -73,6 +91,7 @@ public class DnsRebindingProtectionHandler extends ChannelInboundHandlerAdapter 
                 .map(DnsRebindingProtectionHandler::validateHostEntry)
                 .map(h -> h.toLowerCase(Locale.ROOT))
                 .collect(Collectors.toUnmodifiableSet());
+        this.allowedOrigins = Set.copyOf(allowedOrigins);
     }
 
     @Override
@@ -88,7 +107,7 @@ public class DnsRebindingProtectionHandler extends ChannelInboundHandlerAdapter 
                 return;
             }
             var origin = origins.isEmpty() ? null : origins.get(0);
-            if (origin != null && !origin.isEmpty() && !isLocalhostOrigin(origin)) {
+            if (origin != null && !origin.isEmpty() && !isAllowedOrigin(origin)) {
                 reject(ctx, msg);
                 return;
             }
@@ -120,6 +139,14 @@ public class DnsRebindingProtectionHandler extends ChannelInboundHandlerAdapter 
      */
     private static void reject(ChannelHandlerContext ctx, Object msg) {
         rejectAndClose(ctx, msg, HttpResponseStatus.FORBIDDEN, "Forbidden");
+    }
+
+    /** Returns {@code true} when {@code origin} is loopback or configured; never for the opaque origin. */
+    private boolean isAllowedOrigin(String origin) {
+        if (NULL_ORIGIN.equals(origin)) {
+            return false;
+        }
+        return isLocalhostOrigin(origin) || allowedOrigins.contains(origin);
     }
 
     /** Returns {@code true} when {@code authority} matches a configured allowed host. */

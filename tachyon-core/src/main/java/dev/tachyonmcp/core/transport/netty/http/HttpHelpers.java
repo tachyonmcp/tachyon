@@ -6,7 +6,6 @@ import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpHeaderValues;
 import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.HttpUtil;
-import org.jspecify.annotations.Nullable;
 
 @InternalApi
 public final class HttpHelpers {
@@ -31,15 +30,12 @@ public final class HttpHelpers {
      * ends ({@code PostSseStream}/{@code NettySseConnection}); advertising keep-alive lets
      * clients pool the socket and race the server's FIN with the next request.
      */
-    public static void setSseStreamHeaders(HttpResponse response, @Nullable String origin) {
+    public static void setSseStreamHeaders(HttpResponse response) {
         response.headers()
                 .set(HttpHeaderNames.CONTENT_TYPE, "text/event-stream")
                 .set(HttpHeaderNames.TRANSFER_ENCODING, HttpHeaderValues.CHUNKED)
                 .set(HttpHeaderNames.CACHE_CONTROL, "no-cache")
                 .set(X_ACCEL_BUFFERING, "no");
         HttpUtil.setKeepAlive(response, false);
-        if (origin != null) {
-            response.headers().set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN, origin);
-        }
     }
 }

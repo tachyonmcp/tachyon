@@ -33,9 +33,10 @@ import org.jspecify.annotations.Nullable;
  *                           long-running tools stay alive via SSE heartbeats, not a larger value
  * @param writerIdleTimeout  idle timeout for writing (default 5min)
  * @param maxContentLength   maximum HTTP body size in bytes
- * @param allowedOrigins     exact origins CORS grants ({@code null} = any origin the DNS-rebinding
- *                           guard admits, i.e. loopback on any port, answered with {@code *})
- * @param allowNullOrigin    whether to allow {@code Origin: null}
+ * @param allowedOrigins     exact origins the DNS-rebinding guard admits and CORS grants, beyond
+ *                           loopback ({@code null} = loopback on any port, answered with {@code *})
+ * @param allowNullOrigin    whether CORS grants {@code Origin: null}; the DNS-rebinding guard
+ *                           still rejects it, since any web page can send it
  * @param allowPrivateNetworks whether to allow private network CORS
  * @param allowedHeaders     CORS request headers granted beyond the built-in MCP ones
  * @param allowedHosts       additional {@code Host} authorities the DNS-rebinding guard accepts
@@ -191,15 +192,21 @@ public record NetworkConfig(
         }
 
         /**
-         * Sets the exact origins CORS grants. Unset grants any origin the DNS-rebinding guard admits
-         * (loopback, any port); the guard still rejects every non-loopback origin.
+         * Sets the exact origins the DNS-rebinding guard admits and CORS grants. Unset grants any
+         * loopback origin, on any port. Once set, loopback origins outside the list are still
+         * admitted but get no CORS grant. A remote page reaching a non-loopback {@code Host} also
+         * needs {@link #allowedHosts(String...)}.
          */
         public Builder allowedOrigins(String... origins) {
             this.allowedOrigins = List.of(origins);
             return this;
         }
 
-        /** Sets whether to allow {@code Origin: null}. */
+        /**
+         * Sets whether CORS grants the opaque {@code Origin: null}. The DNS-rebinding guard still
+         * rejects it: any web page can send it from a sandboxed iframe, so admitting it would admit
+         * every site.
+         */
         public Builder allowNullOrigin(boolean allow) {
             this.allowNullOrigin = allow;
             return this;

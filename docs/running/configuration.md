@@ -154,14 +154,15 @@ Neither needs configuration beyond enabling sessions, which
 
 ### CORS
 
-The [DNS-rebinding guard](#dns-rebinding-protection) runs first and admits only loopback
-origins, on any port. CORS then answers the browser, so a page served from a dev server such
-as `http://localhost:5173` can call a local server.
+The [DNS-rebinding guard](#dns-rebinding-protection) runs first and admits loopback origins,
+on any port, plus any listed in `allowedOrigins`. CORS then answers the browser, so a page
+served from a dev server such as `http://localhost:5173` can call a local server. Only the
+MCP endpoint answers: a preflight to any other path gets `404` and no CORS grant.
 
 | Option | Default | Description |
 |---|---|---|
-| `allowedOrigins` | — (any origin the guard admits, answered `*`) | Exact `Origin` values CORS grants. It cannot admit a non-loopback origin: the guard rejects it first |
-| `allowNullOrigin` | `false` | Grant `Origin: null` in CORS; the guard still rejects it |
+| `allowedOrigins` | — (any loopback origin, answered `*`) | Exact `Origin` values the guard admits and CORS grants, answered with the origin and `Vary: Origin`. Once set, loopback origins not in the list are still admitted but get no CORS grant |
+| `allowNullOrigin` | `false` | Grant `Origin: null` in CORS; the guard still rejects it, because any web page can send it from a sandboxed iframe |
 | `allowPrivateNetworks` | `false` | Answer private-network CORS preflights |
 | `allowedHeaders` | — | Request headers granted beyond the built-in ones |
 
@@ -185,7 +186,7 @@ Every request's `Host` (and, when present, `Origin`) header must resolve to
 `localhost`/`127.0.0.1`, or the connection is rejected with `403 Forbidden`. `allowedHosts`
 extends the `Host` check with additional authorities — e.g. a container reaching the server
 via `host.docker.internal`. It does **not** widen the `Origin` check: a browser page on a
-non-local origin is still rejected even if `Host` is allowlisted.
+non-local origin is rejected unless that origin is in [`allowedOrigins`](#cors).
 
 | Option | Default | Description |
 |---|---|---|
