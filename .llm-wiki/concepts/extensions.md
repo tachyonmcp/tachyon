@@ -2,8 +2,8 @@
 title: Extensions
 tags: [concept, extensions, spi]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/ProtocolVersionHandler.java, tachyon-api/src/main/java/dev/tachyonmcp/api/server/extensions/, tachyon-api/src/main/java/dev/tachyonmcp/api/runtime/Extension.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/handlers/ExtensionNegotiator.java, tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/mcp/v2026_07_28/transport/ExtensionNegotiationHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java, tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/mcp/v2026_07_28/transport/RequestValidationHandler.java]
-updated: 2026-09-22
-commit: cedec4fd
+updated: 2026-09-23
+commit: 0ac33032
 ---
 
 # 🧩 Extensions
@@ -29,7 +29,7 @@ Verdict: `ServerExtension` = bootstrap hook (register features + custom JSON-RPC
 
 `ExtensionMethodHandler.handle(InteractionContext, JsonObject params)` → `Object` (null ⇒ protocol empty result) [ExtensionMethodHandler](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/extensions/ExtensionMethodHandler.java), adapter [DefaultTachyonServer#getHandler](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java).
 - `params` typed `@Nullable`, but adapter never passes null: absent/non-object ⇒ `JsonObject.empty()` `DefaultTachyonServer#toJsonObject`.
-- Handler exception ⇒ always `-32603 Internal error`, HTTP 200 (generic dispatcher path, not `ServerErrors#fromUnhandledException`) `McpDispatcher#handleHandlerError`. See [[findings]].
+- Handler exception ⇒ `ServerErrors#fromUnhandledException`, same as tools/prompts/resources/completions: `InvalidArgumentException` ⇒ `-32602` with message, other `IllegalArgumentException` ⇒ redacted `-32602 Invalid params`, rest ⇒ `-32603 Internal error`. HTTP status per revision (2026-07-28 invalid params ⇒ 400) `McpDispatcher#handleHandlerError`.
 - 2026-07-28 call = normal request: `Mcp-Method` header MUST mirror body `method` (else `-32020`), `_meta` protocolVersion + clientCapabilities required `RequestValidationHandler#validate`.
 
 ## 🔁 Lifecycle

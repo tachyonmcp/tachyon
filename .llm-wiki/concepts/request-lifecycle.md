@@ -3,7 +3,7 @@ title: Request lifecycle
 tags: [concept, dispatch]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/ProtocolVersionHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/RpcMethodHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpInitializationHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpOperationHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tools/ToolMethodHandlers.java, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/HandlerFutures.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/PeekedBody.java]
 updated: 2026-09-23
-commit: bf825914
+commit: 0ac33032
 ---
 
 # 🔄 Request lifecycle
@@ -54,7 +54,7 @@ Sessionless responses complete through [McpInitializationHandler#completeDispatc
 | `Response(bytes, sessionId, httpStatus)` | JSON-RPC envelope; `httpStatus` from protocol mapper (2026-07-28 uses 400/404) |
 | `Status(code, msg)` | raw HTTP, not JSON-RPC (missing/unknown session) |
 
-Handler return value `ServerError` ⇒ error envelope (not exception) `ServerError`. Exceptions ⇒ `handleHandlerError`: `CancellationException` → internal error + `Cancelled` outcome; `RequestMappingException` → its error; else `internalError("Internal error")` `RequestMappingException`. Mapping table [[errors]].
+Handler return value `ServerError` ⇒ error envelope (not exception) `ServerError`. Exceptions ⇒ `handleHandlerError`: `CancellationException` → internal error + `Cancelled` outcome; `RequestMappingException` → its error; else `ServerErrors#fromUnhandledException(cause, "Internal error")` `RequestMappingException`. Mapping table [[errors]].
 
 ## 🔔 Notifications & client responses
 

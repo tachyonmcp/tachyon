@@ -25,7 +25,12 @@ public interface ExtensionMethodHandler {
      * @param params the method params as an immutable JSON object, or {@code null} when absent
      * @return the result to serialize with the server's configured serde, or {@code null} for an
      *     empty result
-     * @throws Exception on handler failure; surfaced to the client as an {@code internal-error}
+     * @throws Exception on handler failure; an {@link
+     *     dev.tachyonmcp.api.server.domain.InvalidArgumentException} surfaces as {@code invalid-params}
+     *     with its message, a {@code MissingRequiredClientCapabilityException} as
+     *     {@code missing-required-client-capability} with its required capabilities, any other
+     *     {@link IllegalArgumentException} as a redacted {@code invalid-params}, everything else as
+     *     {@code internal-error}
      */
     @Nullable
     Object handle(InteractionContext interaction, @Nullable JsonObject params) throws Exception;
