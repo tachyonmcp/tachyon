@@ -3,6 +3,7 @@ package dev.tachyonmcp.testkit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.URI;
@@ -15,11 +16,15 @@ class SseStreamTest {
 
     @Test
     void joinsMultiLineDataIntoOneFrameDispatchedOnBlankLine() throws Exception {
-        try (var server = new ServerSocket(0)) {
-            var endpoint = URI.create("http://localhost:" + server.getLocalPort() + "/mcp");
+        // Bind and dial the same IPv4 literal: `new ServerSocket(0)` binds the IPv6 wildcard, and on
+        // macOS `localhost` then reaches another fork's server holding 127.0.0.1 on that port.
+        try (var server = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"))) {
+            server.setSoTimeout(5_000);
+            var endpoint = URI.create("http://127.0.0.1:" + server.getLocalPort() + "/mcp");
             try (var stream = new SseStream(endpoint, "session-1", null, "2025-11-25")) {
                 stream.start();
                 try (var accepted = server.accept()) {
+                    accepted.setSoTimeout(5_000);
                     consumeRequestHeaders(accepted);
                     var out = accepted.getOutputStream();
                     out.write(("""
