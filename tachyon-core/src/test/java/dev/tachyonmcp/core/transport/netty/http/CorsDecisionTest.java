@@ -92,14 +92,27 @@ class CorsDecisionTest {
     }
 
     @Test
-    void nullOriginFollowsTheConfig() {
-        var granted = decorate(CorsConfigBuilder.forOrigins(APP).allowNullOrigin(), "null");
-        assertThat(granted.headers().get(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN))
-                .isEqualTo("null");
-
-        var refused = decorate(CorsConfigBuilder.forOrigins(APP), "null");
-        assertThat(refused.headers().contains(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN))
-                .isFalse();
+    void malformedOriginsNeverReceiveAGrantEvenWhenNettyAllowsNull() {
+        for (var config : new CorsConfig[] {
+            CorsConfigBuilder.forOrigins(APP)
+                    .allowNullOrigin()
+                    .allowCredentials()
+                    .build(),
+            CorsConfigBuilder.forAnyOrigin()
+                    .allowNullOrigin()
+                    .allowCredentials()
+                    .build()
+        }) {
+            for (var origin : new String[] {"null", "", "*", "http://localhost/", "http://user@localhost"}) {
+                var response = decorate(config, origin);
+                assertThat(response.headers().contains(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN))
+                        .isFalse();
+                assertThat(response.headers().contains(HttpHeaderNames.ACCESS_CONTROL_ALLOW_CREDENTIALS))
+                        .isFalse();
+                assertThat(response.headers().contains(HttpHeaderNames.ACCESS_CONTROL_EXPOSE_HEADERS))
+                        .isFalse();
+            }
+        }
     }
 
     @Test

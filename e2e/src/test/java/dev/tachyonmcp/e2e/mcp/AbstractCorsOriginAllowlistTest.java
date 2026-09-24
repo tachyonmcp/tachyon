@@ -13,6 +13,8 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 /**
  * A server configured with {@code allowedOrigins}: the DNS-rebinding guard admits those origins on
@@ -53,13 +55,18 @@ public abstract class AbstractCorsOriginAllowlistTest<C extends McpClient> exten
         }
     }
 
-    @Test
-    void grantsPreflightFromListedRemoteOrigin() throws Exception {
-        var response = preflight(APP_ORIGIN);
+    @ParameterizedTest
+    @ValueSource(strings = {APP_ORIGIN, "HTTPS://App.Example.com:443"})
+    void grantsPreflightFromListedRemoteOrigin(String origin) throws Exception {
+        var response = preflight(origin);
 
         assertThat(response.statusCode()).isBetween(200, 299);
-        assertThat(response.headers().firstValue("access-control-allow-origin")).contains(APP_ORIGIN);
-        assertThat(tokens(response, "access-control-allow-headers")).contains("content-type");
+        assertThat(response.headers().firstValue("access-control-allow-origin")).contains(origin);
+        assertThat(tokens(response, "vary")).contains("origin");
+        assertThat(tokens(response, "access-control-allow-methods")).contains("get", "post", "delete");
+        assertThat(response.headers().firstValue("access-control-allow-credentials"))
+                .isEmpty();
+        assertThat(tokens(response, "access-control-allow-headers")).contains("content-type", "mcp-param-city");
     }
 
     @Test
@@ -77,8 +84,10 @@ public abstract class AbstractCorsOriginAllowlistTest<C extends McpClient> exten
                     .as("with an origin list the response depends on Origin even without a grant")
                     .contains("origin");
         }
-        assertThat(preflight(LOOPBACK_ORIGIN).headers().firstValue("access-control-allow-origin"))
-                .isEmpty();
+        var denied = preflight(LOOPBACK_ORIGIN);
+        assertThat(denied.headers().firstValue("access-control-allow-origin")).isEmpty();
+        assertThat(denied.headers().firstValue("access-control-allow-headers")).isEmpty();
+        assertThat(tokens(denied, "vary")).contains("origin");
     }
 
     @Test
@@ -140,7 +149,7 @@ public abstract class AbstractCorsOriginAllowlistTest<C extends McpClient> exten
                 .uri(URI.create("http://localhost:" + port + "/mcp"))
                 .header("Origin", origin)
                 .header("Access-Control-Request-Method", "POST")
-                .header("Access-Control-Request-Headers", "content-type")
+                .header("Access-Control-Request-Headers", "content-type, Mcp-Param-City")
                 .method("OPTIONS", HttpRequest.BodyPublishers.noBody())
                 .build();
         try (var http = HttpClient.newHttpClient()) {

@@ -79,6 +79,15 @@ public abstract class AbstractDnsRebindingTest<C extends McpClient> extends Abst
         assertRejected(origin);
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"", " ", "\t"})
+    void rejectsPresentEmptyOrigin(String origin) throws Exception {
+        var response = rawPost("localhost:" + port, Map.of("Origin", origin));
+        assertThat(response.status()).isEqualTo(403);
+        assertThat(response.header("access-control-allow-origin")).isNull();
+        assertThat(response.header("connection")).isEqualToIgnoringCase("close");
+    }
+
     /** {@code Origin} is a serialized origin, {@code scheme://host[:port]}: anything else is malformed. */
     @ParameterizedTest
     @ValueSource(

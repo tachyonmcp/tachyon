@@ -13,7 +13,8 @@ import io.netty.handler.codec.http.cors.CorsHandler;
  *
  * <p>{@code CorsHandler} keeps the request it read last in a per-channel field. Answering a preflight
  * reads that field in the same {@code channelRead} call, so preflights stay correct and are served by
- * Netty's logic unchanged. Decorating a response in {@code write()} reads the field later: on a
+ * Netty's method/header/expectation logic; {@link CorsPreflightHandler} applies the request's
+ * origin decision synchronously. Decorating a response in {@code write()} reads the field later: on a
  * keep-alive connection that has meanwhile read another request, an asynchronous response would get
  * the other request's grant. So {@link #write} passes responses through untouched, and each response
  * carries the {@link CorsDecision} of its own request instead, from {@link #decide}.

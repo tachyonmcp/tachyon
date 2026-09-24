@@ -7,11 +7,11 @@ import dev.tachyonmcp.core.server.internal.ServerEngine;
 import dev.tachyonmcp.core.transport.netty.http.AcceptValidationHandler;
 import dev.tachyonmcp.core.transport.netty.http.ContentTypeValidationHandler;
 import dev.tachyonmcp.core.transport.netty.http.CorsHttpObjectAggregator;
+import dev.tachyonmcp.core.transport.netty.http.CorsPreflightHandler;
 import dev.tachyonmcp.core.transport.netty.http.DnsRebindingProtectionHandler;
 import dev.tachyonmcp.core.transport.netty.http.EndpointValidatorHandler;
 import dev.tachyonmcp.core.transport.netty.http.McpHeaderGuardHandler;
 import dev.tachyonmcp.core.transport.netty.http.McpHeaderMatchHandler;
-import dev.tachyonmcp.core.transport.netty.http.McpParamPreflightHandler;
 import dev.tachyonmcp.core.transport.netty.http.StatelessValidatorHandler;
 import dev.tachyonmcp.core.transport.netty.http.TachyonCorsHandler;
 import io.netty.channel.ChannelHandler;
@@ -153,7 +153,7 @@ public class McpChannelInitializer extends ChannelInitializer<SocketChannel> {
         // Ahead of "cors", so other paths get a bare 404 and never a CORS grant.
         p.addLast("mcp-endpoint", endpointValidatorHandler);
         // Ahead of "cors" so it sees the preflight response CorsHandler writes.
-        p.addLast("cors-mcp-param", new McpParamPreflightHandler());
+        p.addLast("cors-mcp-param", new CorsPreflightHandler());
         p.addLast("cors", new TachyonCorsHandler(corsConfig));
 
         // Must precede "protocol-version": a repeated version header would otherwise negotiate on its

@@ -2,8 +2,8 @@
 title: tachyon-core
 tags: [module, core]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/, tachyon-core/src/main/resources/, tachyon-core/pom.xml]
-updated: 2026-09-23
-commit: bf825914
+updated: 2026-09-24
+commit: 505ad196
 ---
 
 # ⚙️ tachyon-core
@@ -29,7 +29,7 @@ Verdict: the runtime. ~190 main files. Deps: `slf4j-api`, `netty-codec-http`, `n
 | `protocol.mcp` | `McpHeaderNames`, `McpHeaderValue` (SEP-2243 Base64 sentinel), `MirroredArgument` (`x-mcp-header` ↔ argument), `AbstractMcpRequestMapper` (shared request mapping); `v2025_11_25`, `v2026_07_28` (`McpProtocol`, `codecs/`, `transport/`, generated `models/`) | [[protocol-versions]] |
 | `transport.jsonrpc` | `JsonRpcCodec`, `JsonRpcMessage`, `JsonRpcError`, `ValueSerializer` | [[json-layer]] |
 | `transport.netty` | `NettyServer`, `NettyServerConfig`, `NettyIoEngine`, `McpChannelInitializer`, init/operation handlers, `InteractionHandler`, lifecycle coordinator, `ChannelHandlerUtils` | [[netty-pipeline]] |
-| `transport.netty.http` | guards | [[security-guards]] |
+| `transport.netty.http` | guards, request-scoped CORS decisions, synchronous preflight handling, body/expectation rejection headers | [[security-guards]] |
 | `transport.netty.sse` | `PostSseStream`, `SseManager`, `SseHeartbeat`, `SseSerializer`, `NettySseConnection` | [[sse-streams]] |
 
 ## 🧠 Who holds what

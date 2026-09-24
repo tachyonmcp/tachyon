@@ -25,7 +25,6 @@ public record CorsDecision(
         @Nullable String allowOrigin, boolean varyOrigin, Set<String> exposeHeaders, boolean allowCredentials) {
 
     private static final String ANY_ORIGIN = "*";
-    private static final String NULL_ORIGIN = "null";
 
     /** No CORS headers at all: the request carried no {@code Origin}, or CORS is not managed. */
     public static final CorsDecision NONE = new CorsDecision(null, false, Set.of(), false);
@@ -38,8 +37,7 @@ public record CorsDecision(
      * Decides the CORS headers for {@code request}, with the semantics of Netty's {@code CorsHandler}
      * for a single {@code CorsConfig}, plus one deliberate difference: with a finite origin list, every
      * request carrying {@code Origin} gets {@code Vary: Origin}, grant or not, since the response then
-     * depends on the origin. A listed origin matches in its raw or {@linkplain Origins#canonical
-     * canonical} form; the grant echoes the request's own value.
+     * depends on the origin. A listed origin matches in its {@linkplain Origins#canonical canonical} form; the grant echoes the request's own value.
      *
      * @param config  the CORS configuration
      * @param request the request being answered
@@ -53,17 +51,16 @@ public record CorsDecision(
         var credentials = config.isCredentialsAllowed();
         var exposed = config.exposedHeaders();
         var list = !config.isAnyOriginSupported();
-        if (NULL_ORIGIN.equals(origin) && config.isNullOriginAllowed()) {
-            return new CorsDecision(NULL_ORIGIN, list, exposed, credentials);
+        var canonical = Origins.canonical(origin);
+        if (canonical == null) {
+            return new CorsDecision(null, list, Set.of(), false);
         }
         if (!list) {
             return credentials
                     ? new CorsDecision(origin, true, exposed, true)
                     : new CorsDecision(ANY_ORIGIN, false, exposed, false);
         }
-        var canonical = Origins.canonical(origin);
-        if (config.origins().contains(origin)
-                || (canonical != null && config.origins().contains(canonical))) {
+        if (config.origins().contains(canonical)) {
             return new CorsDecision(origin, true, exposed, credentials);
         }
         return new CorsDecision(null, true, Set.of(), false);

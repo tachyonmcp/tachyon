@@ -173,7 +173,13 @@ different port or scheme is a different origin.
 
 The guard applies the same rule to the request's `Origin`: anything that is not a serialized
 `http`/`https` origin gets `403`. `Origin: null` always gets `403`, because any web page can send
-it from a sandboxed iframe.
+it from a sandboxed iframe. An empty `Origin` is also rejected; an absent `Origin` remains valid
+for non-browser clients.
+
+Preflights and application responses use the same origin matching rules. With a finite
+allowlist, admitted requests carrying an Origin receive `Vary: Origin` even when CORS does
+not grant that origin. Body-limit and expectation errors (`413`/`417`) retain the request's
+CORS decision, including when the connection is reused.
 
 Built in, with no configuration:
 

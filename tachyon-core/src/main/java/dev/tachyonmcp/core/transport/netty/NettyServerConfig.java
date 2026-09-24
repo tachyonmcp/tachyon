@@ -48,7 +48,7 @@ public record NettyServerConfig(
 
     /**
      * Request headers every browser MCP client may send. The SEP-2243 {@code Mcp-Param-*} mirrors,
-     * whose names depend on the tool, are granted per preflight by {@code McpParamPreflightHandler}.
+     * whose names depend on the tool, are granted per preflight by {@code CorsPreflightHandler}.
      */
     private static final String[] ALLOWED_HEADERS = {
         HttpHeaderNames.CONTENT_TYPE.toString(),

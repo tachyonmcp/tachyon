@@ -111,7 +111,7 @@ public class DnsRebindingProtectionHandler extends ChannelInboundHandlerAdapter 
                 return;
             }
             var origin = origins.isEmpty() ? null : origins.get(0);
-            if (origin != null && !origin.isEmpty() && !isAllowedOrigin(origin)) {
+            if (origin != null && !isAllowedOrigin(origin)) {
                 reject(ctx, msg);
                 return;
             }
