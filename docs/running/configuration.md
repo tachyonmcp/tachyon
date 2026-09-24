@@ -139,11 +139,14 @@ Set `writerIdleTimeout` to `Duration.ZERO` to disable that close.
 
 POST-SSE streams also limit pending output. Each stream holds at most 1 MiB of encoded, unsent
 output (or the channel's high write watermark, if larger). One oversized event may exceed this
-budget so large tool results can still be delivered. When the budget is full, a tool sending
-progress, log messages or comments waits until the client catches up, so a fast tool runs at the
-client's pace instead of buffering. A client that stops reading is closed after `writerIdleTimeout`,
-which also releases the waiting tool. With `writerIdleTimeout` set to `Duration.ZERO`, the tool
-waits until the client disconnects. `subscriptions/listen` never waits: a subscriber that falls a
+budget so large tool results can still be delivered, and the final tool result is always
+accepted, even when the budget is full. When the budget is full, a tool sending progress, log
+messages or comments waits until the client catches up, so a fast tool runs at the client's pace
+instead of buffering. A client that stops reading is closed after `writerIdleTimeout`, which also
+releases the waiting tool. With `writerIdleTimeout` set to `Duration.ZERO`, the tool waits until
+the client disconnects. If the waiting tool thread is interrupted (for example, the request is
+cancelled), the stream ends with a reconnect hint instead of skipping the event. Each waiting tool
+holds its thread: with a platform `threadFactory`, that is one OS thread per slow client. `subscriptions/listen` never waits: a subscriber that falls a
 full budget behind is disconnected, so it cannot delay notifications to other subscribers. Stateful
 clients can reconnect for retained events as described below; stateless clients must open a new
 stream.

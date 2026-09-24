@@ -11,6 +11,7 @@ import dev.tachyonmcp.testkit.Mcp20251125Client;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelOption;
 import io.netty.util.concurrent.SingleThreadEventExecutor;
+import java.io.ByteArrayOutputStream;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
@@ -19,12 +20,16 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.regex.Pattern;
+import java.util.stream.IntStream;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class PostSseSlowReaderTest {
+
+    private static final Pattern PROGRESS = Pattern.compile("\"progress\":(\\d+)");
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
@@ -143,6 +148,124 @@ class PostSseSlowReaderTest {
                         .isNull();
             }
         }
+    }
+
+    @Test
+    void deliversLargeFinalResponseToSlowReaderAfterBurst() throws Exception {
+        final var channel = new AtomicReference<@Nullable Channel>();
+        final var result = "y".repeat(256 * 1024);
+        try (final var server = TachyonServer.builder()
+                .network(n -> n.port(0))
+                .pipelineCustomizer(p -> {
+                    p.channel().config().setOption(ChannelOption.SO_SNDBUF, 1024);
+                    channel.compareAndSet(null, p.channel());
+                })
+                .build()) {
+            server.tools().register(b -> b.name("stream"), (context, request) -> {
+                final var message = "x".repeat(8192);
+                for (int i = 0; i < 512; i++) {
+                    context.notifications().progress(request.progressToken(), i, 512, message);
+                }
+                return ToolResult.text(result);
+            });
+            server.start();
+            try (final var socket = new Socket()) {
+                socket.setSoTimeout(20_000);
+                socket.setReceiveBufferSize(8192);
+                socket.connect(new InetSocketAddress("127.0.0.1", server.port()));
+                socket.getOutputStream().write(toolCall().getBytes(StandardCharsets.UTF_8));
+                socket.getOutputStream().flush();
+
+                final var response = readSlowly(socket);
+
+                final var slowChannel = channel.get();
+                assertThat(slowChannel.closeFuture().await(5, TimeUnit.SECONDS)).isTrue();
+                assertThat(ChannelHandlerUtils.closeFailure(slowChannel))
+                        .as("the final response lands on a full budget; it must not trip the limit")
+                        .isNull();
+                assertThat(countOf(response, "notifications/progress")).isEqualTo(512);
+                assertThat(response)
+                        .as("a slow client still reading gets the tool result")
+                        .contains(result)
+                        .endsWith("0\r\n\r\n");
+            }
+        }
+    }
+
+    @Test
+    void interruptedProducerEndsStreamWithoutAGap() throws Exception {
+        final var channel = new AtomicReference<@Nullable Channel>();
+        final var producer = new AtomicReference<@Nullable Thread>();
+        final var emitted = new CountDownLatch(1);
+        final var interrupted = new AtomicReference<@Nullable Boolean>();
+        final var total = 4096;
+        try (final var server = TachyonServer.builder()
+                .network(n -> n.port(0))
+                .pipelineCustomizer(p -> {
+                    p.channel().config().setOption(ChannelOption.SO_SNDBUF, 1024);
+                    channel.compareAndSet(null, p.channel());
+                })
+                .build()) {
+            server.tools().register(b -> b.name("stream"), (context, request) -> {
+                producer.set(Thread.currentThread());
+                final var message = "x".repeat(8192);
+                for (int i = 0; i < total; i++) {
+                    context.notifications().progress(request.progressToken(), i, total, message);
+                }
+                interrupted.set(Thread.currentThread().isInterrupted());
+                emitted.countDown();
+                return ToolResult.text("done");
+            });
+            server.start();
+            try (final var socket = new Socket()) {
+                socket.setSoTimeout(20_000);
+                socket.setReceiveBufferSize(1024);
+                socket.connect(new InetSocketAddress("127.0.0.1", server.port()));
+                socket.getOutputStream().write(toolCall().getBytes(StandardCharsets.UTF_8));
+                socket.getOutputStream().flush();
+                await().atMost(Duration.ofSeconds(10))
+                        .until(() -> producer.get() != null && producer.get().getState() == Thread.State.WAITING);
+
+                producer.get().interrupt();
+
+                assertThat(emitted.await(5, TimeUnit.SECONDS))
+                        .as("an interrupted producer stops waiting; later writes are refused at once")
+                        .isTrue();
+                assertThat(interrupted.get())
+                        .as("the interrupt status is preserved")
+                        .isTrue();
+                final var response = new String(socket.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+                final var progress = PROGRESS.matcher(response)
+                        .results()
+                        .map(m -> Integer.parseInt(m.group(1)))
+                        .toList();
+                assertThat(progress)
+                        .as("delivered events are a gap-free prefix: nothing after the dropped one")
+                        .isNotEmpty()
+                        .hasSizeLessThan(total)
+                        .containsExactlyElementsOf(
+                                IntStream.range(0, progress.size()).boxed().toList());
+                assertThat(response)
+                        .as("the stream ends with a reconnect hint, not the tool result")
+                        .contains("retry: ")
+                        .doesNotContain("\"text\":\"done\"")
+                        .endsWith("0\r\n\r\n");
+                final var closed = channel.get();
+                assertThat(closed.closeFuture().await(5, TimeUnit.SECONDS)).isTrue();
+                assertThat(ChannelHandlerUtils.closeFailure(closed)).isNull();
+            }
+        }
+    }
+
+    private static String readSlowly(Socket socket) throws Exception {
+        final var out = new ByteArrayOutputStream();
+        final var buf = new byte[4096];
+        int n;
+        while ((n = socket.getInputStream().read(buf)) >= 0) {
+            out.write(buf, 0, n);
+            TimeUnit.MILLISECONDS.sleep(1);
+        }
+        return out.toString(StandardCharsets.UTF_8);
     }
 
     private static String toolCall() {

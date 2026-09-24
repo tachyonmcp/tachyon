@@ -70,7 +70,8 @@ public interface OutboundSseStream {
     /**
      * Writes an SSE event like {@link #writeEvent}, but never blocks the caller: when the client is
      * too far behind, the stream closes instead. For fan-out producers, where one slow client must
-     * not stall the others. Defaults to {@link #writeEvent}.
+     * not stall the others. Defaults to {@link #writeEvent}, which may block: an implementation
+     * whose writes can block must override this method.
      *
      * @param event the SSE event to write
      */

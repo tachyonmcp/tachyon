@@ -3,7 +3,7 @@ title: Testing
 tags: [module, testing, e2e, conformance]
 sources: [e2e/src/test/, conformance/, Makefile, reports/pom.xml, tachyon-core/src/test/, .github/workflows/build.yml, .github/workflows/release.yml]
 updated: 2026-09-24
-commit: 85184ff0
+commit: 1e0a4d3b
 ---
 
 # ✅ Testing
@@ -88,4 +88,4 @@ Explicit-name fixtures use Java parameter `arg0` with a different `@McpParam` na
 
 Stateless 2025 extension isolation has real-HTTP coverage for reused/fresh connections and a request pipelined behind a blocked `initialize` on one socket (held until `initialize` answers, then sees its own context, not the initializer's) ([StatelessExtensionNegotiationTest](../../e2e/src/test/java/dev/tachyonmcp/e2e/mcp/v2025_11_25/StatelessExtensionNegotiationTest.java)). Stateful declarations survive reconnect ([ExtensionNegotiationPolicyTest#requiredDeclarationSurvivesConnectionChange](../../e2e/src/test/java/dev/tachyonmcp/e2e/mcp/v2025_11_25/ExtensionNegotiationPolicyTest.java)).
 
-Slow-reader regression: `PostSseSlowReaderTest` (real TCP: non-reading client parks producer until writer idle close, event-loop barrier, client isolation; reading client gets full burst) and `PostSseStreamTest` (pending-flush accounting, buffer release via tracking allocator) → [[sse-streams]].
+Slow-reader regression: `PostSseSlowReaderTest` (real TCP: non-reading client parks producer until writer idle close, event-loop barrier, client isolation; reading client gets full burst; slow reader behind a full budget still gets the final result; interrupted producer ends the stream with a gap-free prefix) and `PostSseStreamTest` (pending-flush accounting, deferred overflow close, final response past a full budget, buffer release via tracking allocator) → [[sse-streams]].

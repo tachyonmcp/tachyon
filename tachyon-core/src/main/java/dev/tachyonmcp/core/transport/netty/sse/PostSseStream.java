@@ -53,8 +53,10 @@ import org.slf4j.LoggerFactory;
  * ready buffer. The budget is at least 1 MiB (or the channel's high watermark, if larger). One
  * larger event may exceed that budget. A producer off the event loop waits for capacity, so a
  * fast tool slows to the client's pace; a stalled client is closed by the writer idle timeout,
- * which wakes it. A write without capacity from the event loop or {@link #offerEvent} closes the
- * connection instead. The event loop never blocks, and the task queue stays bounded.
+ * which wakes it. An interrupted producer closes the stream rather than drop its event silently.
+ * A write without capacity from the event loop or {@link #offerEvent} closes the connection
+ * instead. The final response skips the budget: it is the last write, so it adds at most one
+ * event. The event loop never blocks, and the task queue stays bounded.
  */
 @InternalApi
 public final class PostSseStream implements OutboundSseStream {
@@ -83,6 +85,16 @@ public final class PostSseStream implements OutboundSseStream {
     private final Duration heartbeatInterval;
 
     private static final int TASK_OVERHEAD_BYTES = 128;
+
+    /** How a write that finds the budget full is admitted. */
+    private enum Admission {
+        /** Park the producer until capacity frees up; overflow-close on the event loop. */
+        WAIT,
+        /** Never park: overflow-close instead. */
+        OFFER,
+        /** Always admitted: the final response is the stream's last write. */
+        FINAL
+    }
 
     private record PendingWrite(ByteBuf buf, ChannelPromise promise) {}
 
@@ -147,19 +159,21 @@ public final class PostSseStream implements OutboundSseStream {
         if (logger.isTraceEnabled()) {
             logger.trace("POST-SSE writing event, id={}, data={}", event.id(), abbreviate(event.data()));
         }
-        submitWrite(SseSerializer.encode(channel.alloc(), event), false, true, null);
+        submitWrite(SseSerializer.encode(channel.alloc(), event), false, Admission.WAIT, null);
     }
 
     @Override
     public void offerEvent(@Nullable SseEvent event) {
         if (event == null || !admitting()) return;
-        submitWrite(SseSerializer.encode(channel.alloc(), event), false, false, null);
+        submitWrite(SseSerializer.encode(channel.alloc(), event), false, Admission.OFFER, null);
     }
 
     /**
      * Writes a final response event, invoking {@code onDropped} if admission or delivery fails,
      * so the caller can re-deliver the buffered response to a reconnected stream. The callback may
      * run on the caller's thread when admission fails, or on the event loop after a failed write.
+     * The response is admitted past a full budget without waiting: it is the stream's last write,
+     * so it adds at most one event, and a slow client still reading must not lose it.
      */
     public void writeEvent(long sseEventId, byte[] body, @Nullable Runnable onDropped) {
         if (!admitting()) {
@@ -169,7 +183,7 @@ public final class PostSseStream implements OutboundSseStream {
         submitWrite(
                 SseSerializer.encode(channel.alloc(), ServerEngine.wireEventId(sseEventId, streamKey), body),
                 false,
-                true,
+                Admission.FINAL,
                 onDropped);
     }
 
@@ -183,7 +197,7 @@ public final class PostSseStream implements OutboundSseStream {
                 : ": " + message.replace('\r', ' ').replace('\n', ' ') + "\r\n";
         // Self-starting: a comment upgrades the buffered POST to SSE even when no event was written
         // yet — this is the token-free keep-alive path.
-        submitWrite(ByteBufUtil.writeUtf8(channel.alloc(), line), true, true, null);
+        submitWrite(ByteBufUtil.writeUtf8(channel.alloc(), line), true, Admission.WAIT, null);
     }
 
     @Override
@@ -244,6 +258,14 @@ public final class PostSseStream implements OutboundSseStream {
         }
     }
 
+    private void executeLater(Runnable task, String what) {
+        try {
+            channel.eventLoop().execute(task);
+        } catch (RejectedExecutionException e) {
+            logger.debug("POST-SSE {} dropped, event loop shutting down: channel={}", what, channel.id());
+        }
+    }
+
     private void runOnEventLoop(Runnable task) {
         var eventLoop = channel.eventLoop();
         if (eventLoop.inEventLoop()) {
@@ -257,16 +279,28 @@ public final class PostSseStream implements OutboundSseStream {
         return pendingBytes.get() >= 0 && !state.closed && channel.isActive();
     }
 
-    private boolean reserve(long bytes, boolean mayBlock) {
+    private boolean reserve(long bytes, Admission admission) {
         while (channel.isActive() && !state.closed) {
             final var pending = pendingBytes.get();
             if (pending < 0) return false;
-            if (pending <= maxPendingBytes && (bytes > maxPendingBytes || bytes <= maxPendingBytes - pending)) {
+            if (admission == Admission.FINAL
+                    || (pending <= maxPendingBytes
+                            && (bytes > maxPendingBytes || bytes <= maxPendingBytes - pending))) {
                 if (pendingBytes.compareAndSet(pending, pending + bytes)) return true;
-            } else if (mayBlock && !channel.eventLoop().inEventLoop()) {
-                if (!awaitCapacity(pending)) return false;
+            } else if (admission == Admission.WAIT && !channel.eventLoop().inEventLoop()) {
+                if (!awaitCapacity(pending)) {
+                    // Interrupted (e.g. a cancelled tool): end the stream instead of leaving a
+                    // silent gap. Admission stops first so no later event lands past the gap.
+                    pendingBytes.set(-1);
+                    signalCapacity();
+                    close();
+                    return false;
+                }
             } else if (pendingBytes.compareAndSet(pending, -1)) {
-                runOnEventLoopQuietly(
+                signalCapacity();
+                // Deferred even on the event loop: closing inline would run close listeners
+                // inside the caller's write.
+                executeLater(
                         () -> {
                             ChannelHandlerUtils.markCloseFailure(
                                     channel, new IOException("SSE pending write limit exceeded"));
@@ -310,9 +344,9 @@ public final class PostSseStream implements OutboundSseStream {
         }
     }
 
-    private void submitWrite(ByteBuf buf, boolean startsStream, boolean mayBlock, @Nullable Runnable onDropped) {
+    private void submitWrite(ByteBuf buf, boolean startsStream, Admission admission, @Nullable Runnable onDropped) {
         final long bytes = buf.readableBytes() + TASK_OVERHEAD_BYTES;
-        if (!reserve(bytes, mayBlock)) {
+        if (!reserve(bytes, admission)) {
             buf.release();
             if (onDropped != null) onDropped.run();
             return;

@@ -228,10 +228,9 @@ class PostSseStreamTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"event", "offer", "comment", "response", "before-start"})
+    @ValueSource(strings = {"event", "offer", "comment", "before-start"})
     void pendingWritesAreBoundedUntilFlushCompletes(String kind) {
         final var stream = newStream(Duration.ZERO);
-        final var dropped = new AtomicInteger();
         if (!kind.equals("before-start")) stream.start();
         final var payload = "x".repeat(8192);
         for (int i = 0; i < 256; i++) {
@@ -239,11 +238,13 @@ class PostSseStreamTest {
                 case "event", "before-start" -> stream.writeEvent(new SseEvent("1", "message", payload));
                 case "offer" -> stream.offerEvent(new SseEvent("1", "message", payload));
                 case "comment" -> stream.comment(payload);
-                case "response" ->
-                    stream.writeEvent(i, payload.getBytes(StandardCharsets.UTF_8), dropped::incrementAndGet);
                 default -> throw new AssertionError(kind);
             }
         }
+        assertThat(channel.isActive())
+                .as("the overflow close is a loop task, never run inside the caller's write")
+                .isTrue();
+        channel.runPendingTasks();
         assertThat(channel.isActive()).isFalse();
         assertThat(ChannelHandlerUtils.closeFailure(channel))
                 .isInstanceOf(IOException.class)
@@ -251,7 +252,6 @@ class PostSseStreamTest {
         assertThat(sink.writes)
                 .as("about 1 MiB of 8 KiB writes, never the whole 2 MiB burst")
                 .hasSizeBetween(kind.equals("before-start") ? 0 : 100, 130);
-        if (kind.equals("response")) assertThat(dropped.get()).isBetween(126, 156);
         assertThat(allocator.leaked())
                 .as("rejected and discarded buffers are released")
                 .isEmpty();
@@ -261,6 +261,36 @@ class PostSseStreamTest {
             assertThat(stream.start().toCompletableFuture().exceptionNow())
                     .isSameAs(ChannelHandlerUtils.closeFailure(channel));
         }
+    }
+
+    @Test
+    void finalResponseIsAdmittedPastAFullBudgetWithoutClosingTheStream() {
+        final var stream = newStream(Duration.ZERO);
+        stream.start();
+        final var payload = "x".repeat(8192);
+        for (int i = 0; i < 125; i++) {
+            stream.writeEvent(new SseEvent(String.valueOf(i), "message", payload));
+        }
+        final var writesBefore = sink.writes.size();
+        final var dropped = new AtomicInteger();
+        final var body = "y".repeat(64 * 1024).getBytes(StandardCharsets.UTF_8);
+
+        stream.writeEvent(200, body, dropped::incrementAndGet);
+        channel.runPendingTasks();
+
+        assertThat(channel.isActive())
+                .as("a slow client still reading must get the result, not a pending-limit close")
+                .isTrue();
+        assertThat(ChannelHandlerUtils.closeFailure(channel)).isNull();
+        assertThat(dropped).hasValue(0);
+        assertThat(sink.writes).hasSize(writesBefore + 1);
+        assertThat(sink.writes.getLast()).contains("data: " + new String(body, StandardCharsets.UTF_8));
+        stream.writeEvent(new SseEvent("late", "message", payload));
+        channel.runPendingTasks();
+        assertThat(channel.isActive())
+                .as("the final response does not lift the budget for later writes")
+                .isFalse();
+        assertThat(allocator.leaked()).isEmpty();
     }
 
     @Test
