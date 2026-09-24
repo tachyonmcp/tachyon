@@ -79,10 +79,8 @@ fun assembleServer(port: Int = NetworkConfig.UNSET_PORT): TachyonServer =
             host = NetworkConfig.DEFAULT_HOST
             this.port = port
             endpointPath = NetworkConfig.DEFAULT_ENDPOINT_PATH
-            allowedOrigins.add("*")
             allowedHeaders.add("Authorization")
             allowedHosts.add("host.docker.internal")
-            allowNullOrigin = true
             allowPrivateNetworks = true
             readerIdleTimeout = NetworkConfig.DEFAULT_READER_IDLE_TIMEOUT.toKotlinDuration()
             writerIdleTimeout = NetworkConfig.DEFAULT_WRITER_IDLE_TIMEOUT.toKotlinDuration()

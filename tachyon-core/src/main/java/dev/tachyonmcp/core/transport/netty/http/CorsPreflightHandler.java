@@ -15,7 +15,8 @@ import java.util.List;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Grants the SEP-2243 {@code Mcp-Param-*} request headers a CORS preflight asks for, by name.
+ * Applies the request's CORS decision to synchronous preflight responses and grants the SEP-2243
+ * {@code Mcp-Param-*} request headers a preflight asks for, by name.
  *
  * <p>{@code Mcp-Param-*} names depend on the tool, so the static CORS configuration cannot list
  * them, and a wildcard {@code *} would grant every other header too. This handler appends only the
@@ -25,34 +26,51 @@ import org.jspecify.annotations.Nullable;
  *
  * <p>Install it directly before Netty's {@code CorsHandler}: that handler answers a preflight
  * synchronously within {@code channelRead}, so the response passes through {@link #write} while the
- * requested names are held. One instance per channel.
+ * requested names and immutable decision are held only for that call. Origin normalization for
+ * Netty is also scoped to that call. No asynchronous response reads this state. One instance per channel.
  */
 @InternalApi
-public final class McpParamPreflightHandler extends ChannelDuplexHandler {
+public final class CorsPreflightHandler extends ChannelDuplexHandler {
 
     private @Nullable List<String> requestedParams;
+    private @Nullable CorsDecision decision;
 
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
-        if (!(msg instanceof HttpRequest request) || !isPreflight(request)) {
+        if (!(msg instanceof HttpRequest request)
+                || !isPreflight(request)
+                || ctx.pipeline().get(TachyonCorsHandler.class) == null) {
             ctx.fireChannelRead(msg);
             return;
         }
+        final var origin = request.headers().get(HttpHeaderNames.ORIGIN);
+        final var canonical = Origins.canonical(origin);
+        decision = TachyonCorsHandler.decide(ctx, request);
         requestedParams = requestedParamHeaders(request);
+        // Netty matches exact strings; the decision keeps the original value for the response.
+        if (canonical != null) {
+            request.headers().set(HttpHeaderNames.ORIGIN, canonical);
+        }
         try {
             ctx.fireChannelRead(msg);
         } finally {
+            request.headers().set(HttpHeaderNames.ORIGIN, origin);
             requestedParams = null;
+            decision = null;
         }
     }
 
     @Override
     public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
-        final var params = requestedParams;
-        if (params != null && !params.isEmpty() && msg instanceof HttpResponse response) {
+        final var cors = decision;
+        if (cors != null && msg instanceof HttpResponse response) {
             final var headers = response.headers();
-            if (headers.contains(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN)) {
-                // One value per name: CorsHandler's combining headers CSV-quote a value holding a comma.
+            headers.remove(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN);
+            headers.remove(HttpHeaderNames.ACCESS_CONTROL_ALLOW_CREDENTIALS);
+            headers.remove(HttpHeaderNames.ACCESS_CONTROL_EXPOSE_HEADERS);
+            cors.applyTo(response);
+            final var params = requestedParams;
+            if (cors.allowOrigin() != null && params != null && !params.isEmpty()) {
                 headers.add(HttpHeaderNames.ACCESS_CONTROL_ALLOW_HEADERS, params);
             }
         }

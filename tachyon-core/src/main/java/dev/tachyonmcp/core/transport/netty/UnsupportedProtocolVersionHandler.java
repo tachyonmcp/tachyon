@@ -10,11 +10,11 @@ import dev.tachyonmcp.api.server.domain.RequestId;
 import dev.tachyonmcp.core.server.domain.ServerErrors;
 import dev.tachyonmcp.core.transport.jsonrpc.JsonRpcCodec;
 import dev.tachyonmcp.core.transport.jsonrpc.JsonRpcMessage;
+import dev.tachyonmcp.core.transport.netty.http.TachyonCorsHandler;
 import io.netty.channel.ChannelHandler.Sharable;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.handler.codec.http.FullHttpRequest;
-import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import java.util.Map;
@@ -42,9 +42,9 @@ public class UnsupportedProtocolVersionHandler extends ChannelInboundHandlerAdap
                 .error(ServerErrors.unsupportedProtocolVersion(
                         "Unsupported protocol version",
                         Map.of("supported", SUPPORTED_VERSIONS, "requested", requestedVersion)));
-        var origin = req.headers().get(HttpHeaderNames.ORIGIN);
+        var cors = TachyonCorsHandler.decide(ctx, req);
         var body = JsonRpcCodec.serializeError(extractId(req), error.code(), error.message(), error.data());
-        sendResponseAndClose(ctx, HttpResponseStatus.BAD_REQUEST, "application/json", body, origin);
+        sendResponseAndClose(ctx, HttpResponseStatus.BAD_REQUEST, "application/json", body, cors);
     }
 
     private static @Nullable RequestId extractId(HttpRequest req) {

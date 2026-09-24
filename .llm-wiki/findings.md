@@ -2,20 +2,18 @@
 title: Findings
 tags: [meta, findings]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/HandlerFutures.java]
-updated: 2026-09-23
-commit: 67b31b54
+updated: 2026-09-24
+commit: 0b232fb4
 ---
 
 # 🔎 Findings
 
-Spotted while reading code. Not verified by tests. Fixed in code ⇒ 🗑️ remove row.
+Spotted while reading code. Runtime verification noted per finding. Fixed in code ⇒ 🗑️ remove row.
 
+- 🐛 **Release blocker:** HTTP/1.1 pipelining order. PR #390 audit reproduced this with a raw socket and two explicitly completed futures: fast B's HTTP response arrives before slow A's, each with its own CORS grant. RFC 9112 §9.3.2 requires request order; JSON-RPC IDs do not repair HTTP response association. The default CORS regression uses a latch and controlled futures to release A before B; it proves request-scoped headers, not correct transport ordering for B-before-A completion. Fix separately: preserve HTTP response order, including errors and SSE. [McpInitializationHandler#dispatchPreSessionRequest](../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpInitializationHandler.java), [CorsPipeliningTest#eachPipelinedResponseCarriesItsOwnRequestsCorsGrant](../e2e/src/test/java/dev/tachyonmcp/e2e/mcp/CorsPipeliningTest.java).
 - ⚠️ Notifications route onto the POST-SSE stream only from the dispatching thread (ThreadLocal). A handler continuing on another thread ⇒ event goes to the GET stream, or is dropped when there is none (stateful) — surprising for async tools. `OutboundSseStreamMessageRouter#currentSessionId`, `McpDispatcher#invokeHandlerAsync`
 - ⚠️ `UnsupportedProtocolVersionHandler` encodes the rejection with `ProtocolVersionHandler#LATEST_PROTOCOL` (not `Protocols#baseline`) + HTTP 400, even for legacy-looking clients. Intentional per SEP-2575? `UnsupportedProtocolVersionHandler#channelRead`
-- 🐛 dns-rebinding is installed before cors, and DnsRebindingProtectionHandler rejects every non-loopback Origin (and Origin: null`) with 403 without consulting `allowedOrigins`/`allowNullOrigin. So those two options cannot admit a remote browser origin; allowedOrigins("https://app.example.com") still gets 403 on POST and preflight. Decide: let the guard honour the CORS allowlist, or drop the options. McpChannelInitializer#initChannel, DnsRebindingProtectionHandler#channelRead, NettyServerConfig#buildCorsConfig  
-- 🐛 Tachyon's own writers echo the request `Origin` into `Access-Control-Allow-Origin` without `Vary: Origin` (`McpResponseWriter#sendJsonResponse`, `ChannelHandlerUtils#sendAcceptedAsync`, `HttpHelpers#setSseStreamHeaders`). Netty `CorsHandler` overwrites it only for origins it grants, so with an `allowedOrigins` list an admitted loopback origin outside the list still gets its origin echoed — the list does not narrow CORS. Fix: let `CorsHandler` own CORS headers (null `corsConfig` ⇒ defaults) and drop the echo.
 - ⚠️ Absolute-form request-target (`POST http://host/mcp HTTP/1.1`) ⇒ 404: `EndpointValidatorHandler#channelRead` compares the raw URI. RFC 9112 §3.2.2: servers MUST accept absolute-form. Fails closed. Fix must also check the authority against `Host` and the DNS-rebinding guard, or an authority-less check becomes a bypass.
-- ⚠️ `CorsHandler` sits before `mcp-endpoint`, so a preflight to **any** path is answered with CORS grants (`McpChannelInitializer#initChannel`). Discloses allowed headers only; no dispatch.
 
 ## 🪶 Polish
 

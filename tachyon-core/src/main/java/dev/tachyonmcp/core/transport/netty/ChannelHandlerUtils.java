@@ -3,6 +3,7 @@ package dev.tachyonmcp.core.transport.netty;
 
 import static dev.tachyonmcp.core.transport.netty.InteractionHandler.INTERACTION_CONTEXT_KEY;
 
+import dev.tachyonmcp.api.annotations.InternalApi;
 import dev.tachyonmcp.api.server.domain.RequestId;
 import dev.tachyonmcp.api.server.domain.ServerError;
 import dev.tachyonmcp.api.server.session.SessionIdGenerator;
@@ -11,6 +12,8 @@ import dev.tachyonmcp.core.runtime.Session;
 import dev.tachyonmcp.core.server.McpDispatcher;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
 import dev.tachyonmcp.core.transport.jsonrpc.JsonRpcCodec;
+import dev.tachyonmcp.core.transport.netty.http.CorsDecision;
+import dev.tachyonmcp.core.transport.netty.http.TachyonCorsHandler;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.Unpooled;
@@ -34,6 +37,7 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.RejectedExecutionException;
 import org.jspecify.annotations.Nullable;
 
+@InternalApi
 public final class ChannelHandlerUtils {
 
     private static final AttributeKey<Session> SESSION_KEY = AttributeKey.valueOf("tachyonSession");
@@ -54,8 +58,24 @@ public final class ChannelHandlerUtils {
      */
     public static void rejectAndClose(
             ChannelHandlerContext ctx, Object msg, HttpResponseStatus status, String message) {
+        rejectAndClose(ctx, msg, status, message, CorsDecision.NONE);
+    }
+
+    /**
+     * {@link #rejectAndClose(ChannelHandlerContext, Object, HttpResponseStatus, String)} with the CORS
+     * headers of the rejected request, so a browser page can read why it was refused. Handlers ahead of
+     * CORS in the pipeline (DNS-rebinding guard, endpoint check) reject without them.
+     *
+     * @param ctx     the channel handler context
+     * @param msg     the inbound message being rejected
+     * @param status  the HTTP status to respond with
+     * @param message the plain-text response body; must not echo client-controlled input
+     * @param cors    the rejected request's CORS decision
+     */
+    public static void rejectAndClose(
+            ChannelHandlerContext ctx, Object msg, HttpResponseStatus status, String message, CorsDecision cors) {
         markRejected(ctx, msg);
-        sendPlainTextAndClose(ctx, status, message);
+        sendPlainTextAndClose(ctx, status, message, cors);
     }
 
     /**
@@ -75,9 +95,9 @@ public final class ChannelHandlerUtils {
         var wireError =
                 requireInteractionContext(ctx).protocol().responseMapper().error(error);
         var body = JsonRpcCodec.serializeError(id, wireError.code(), wireError.message(), wireError.data());
-        var origin = req.headers().get(HttpHeaderNames.ORIGIN);
+        var cors = TachyonCorsHandler.decide(ctx, req);
         markRejected(ctx, req);
-        sendResponseAndClose(ctx, HttpResponseStatus.valueOf(wireError.httpStatus()), "application/json", body, origin);
+        sendResponseAndClose(ctx, HttpResponseStatus.valueOf(wireError.httpStatus()), "application/json", body, cors);
     }
 
     /**
@@ -210,8 +230,8 @@ public final class ChannelHandlerUtils {
         requireInteractionContext(ctx).set(McpDispatcher.ATTR_INIT_REQUEST, snapshot);
     }
 
-    public static void sendAccepted(ChannelHandlerContext ctx, @Nullable String origin) {
-        sendAcceptedAsync(ctx, origin);
+    public static void sendAccepted(ChannelHandlerContext ctx, CorsDecision cors) {
+        sendAcceptedAsync(ctx, cors);
     }
 
     /**
@@ -227,12 +247,10 @@ public final class ChannelHandlerUtils {
     }
 
     /** Writes an accepted response and returns its write completion. */
-    public static ChannelFuture sendAcceptedAsync(ChannelHandlerContext ctx, @Nullable String origin) {
+    public static ChannelFuture sendAcceptedAsync(ChannelHandlerContext ctx, CorsDecision cors) {
         var response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.ACCEPTED);
         response.headers().set(HttpHeaderNames.CONTENT_LENGTH, 0);
-        if (origin != null) {
-            response.headers().set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN, origin);
-        }
+        cors.applyTo(response);
         return ctx.writeAndFlush(response);
     }
 
@@ -259,15 +277,15 @@ public final class ChannelHandlerUtils {
      */
     public static ChannelFuture sendPlainTextAndClose(
             ChannelHandlerContext ctx, HttpResponseStatus status, String message) {
-        return sendPlainTextAndClose(ctx, status, message, null);
+        return sendPlainTextAndClose(ctx, status, message, CorsDecision.NONE);
     }
 
     /**
-     * {@link #sendPlainTextAndClose(ChannelHandlerContext, HttpResponseStatus, String)} echoing {@code origin}.
+     * {@link #sendPlainTextAndClose(ChannelHandlerContext, HttpResponseStatus, String)} with the request's CORS headers.
      */
     public static ChannelFuture sendPlainTextAndClose(
-            ChannelHandlerContext ctx, HttpResponseStatus status, String message, @Nullable String origin) {
-        return sendResponse(ctx, status, "text/plain", ByteBufUtil.writeUtf8(ctx.alloc(), message), origin);
+            ChannelHandlerContext ctx, HttpResponseStatus status, String message, CorsDecision cors) {
+        return sendResponse(ctx, status, "text/plain", ByteBufUtil.writeUtf8(ctx.alloc(), message), cors);
     }
 
     /**
@@ -275,36 +293,22 @@ public final class ChannelHandlerUtils {
      * {@code Connection: close} header. See {@link #sendPlainTextAndClose} for why the header matters.
      */
     public static ChannelFuture sendResponseAndClose(
-            ChannelHandlerContext ctx,
-            HttpResponseStatus status,
-            String contentType,
-            ByteBuf body,
-            @Nullable String origin) {
-        return sendResponse(ctx, status, contentType, body, origin);
+            ChannelHandlerContext ctx, HttpResponseStatus status, String contentType, ByteBuf body, CorsDecision cors) {
+        return sendResponse(ctx, status, contentType, body, cors);
     }
 
     /** Zero-copy overload for GC-managed bodies: wraps the byte[] at send time on the event loop. */
     public static ChannelFuture sendResponseAndClose(
-            ChannelHandlerContext ctx,
-            HttpResponseStatus status,
-            String contentType,
-            byte[] body,
-            @Nullable String origin) {
-        return sendResponse(ctx, status, contentType, Unpooled.wrappedBuffer(body), origin);
+            ChannelHandlerContext ctx, HttpResponseStatus status, String contentType, byte[] body, CorsDecision cors) {
+        return sendResponse(ctx, status, contentType, Unpooled.wrappedBuffer(body), cors);
     }
 
     private static ChannelFuture sendResponse(
-            ChannelHandlerContext ctx,
-            HttpResponseStatus status,
-            String contentType,
-            ByteBuf body,
-            @Nullable String origin) {
+            ChannelHandlerContext ctx, HttpResponseStatus status, String contentType, ByteBuf body, CorsDecision cors) {
         var response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, status, body);
         response.headers().set(HttpHeaderNames.CONTENT_TYPE, contentType);
         response.headers().set(HttpHeaderNames.CONTENT_LENGTH, body.readableBytes());
-        if (origin != null) {
-            response.headers().set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN, origin);
-        }
+        cors.applyTo(response);
         // Mark the keep-alive intent; HttpServerKeepAliveHandler adds `Connection: close`
         // and closes the channel after this response when keep-alive is disabled.
         HttpUtil.setKeepAlive(response, false);

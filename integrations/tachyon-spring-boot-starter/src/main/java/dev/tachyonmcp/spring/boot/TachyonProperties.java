@@ -61,13 +61,13 @@ public record TachyonProperties(
      *                            Keep it below the idle timeout of any proxy in front of the server
      *                            and below the session TTL. Zero disables heartbeats.
      * @param maxContentLength    Maximum size of an HTTP request body.
-     * @param allowedOrigins      Exact origins the CORS handler grants. Unset grants any origin the
-     *                            DNS-rebinding guard admits (loopback, any port).
+     * @param allowedOrigins      Origins the DNS-rebinding guard admits and the CORS handler grants,
+     *                            each http(s)://host[:port] with no path. Unset grants any loopback
+     *                            origin, on any port.
      * @param allowedHeaders      Request headers accepted by the CORS handler, beyond the built-in
      *                            ones.
      * @param allowedHosts        Host authorities the DNS-rebinding guard accepts beyond its built-in
      *                            loopback hosts, each either a host or a host:port.
-     * @param allowNullOrigin     Whether to accept requests carrying an Origin header of null.
      * @param allowPrivateNetworks Whether to accept CORS preflights from the private network address
      *                            space.
      * @param ioEngine            Netty I/O engine; AUTO picks the best native transport available.
@@ -81,7 +81,6 @@ public record TachyonProperties(
             @Nullable List<String> allowedOrigins,
             @Nullable List<String> allowedHeaders,
             @Nullable List<String> allowedHosts,
-            @Nullable Boolean allowNullOrigin,
             @Nullable Boolean allowPrivateNetworks,
             @Nullable NettyIoEngine ioEngine) {}
 

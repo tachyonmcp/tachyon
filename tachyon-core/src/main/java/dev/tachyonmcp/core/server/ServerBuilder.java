@@ -118,6 +118,11 @@ public interface ServerBuilder {
      * Customizes each Netty channel pipeline. Runs after every built-in handler is added. The
      * {@code mcp-endpoint} handler is the pipeline's only path check: removing or replacing it
      * serves MCP on every path.
+     *
+     * <p>Removing or replacing Tachyon-provided transport or security handlers may disable CORS,
+     * DNS-rebinding protection, protocol validation, or other transport guarantees. Custom pipeline
+     * configurations are responsible for preserving equivalent protections. Removing the {@code cors}
+     * handler opts out of Tachyon's CORS handling entirely: no response gets CORS headers.
      */
     @ExperimentalApi
     ServerBuilder pipelineCustomizer(@Nullable Consumer<ChannelPipeline> customizer);

@@ -23,9 +23,6 @@ public class NetworkScope
         /** Base path for MCP endpoints. */
         public var endpointPath: String? = null
 
-        /** Whether to allow requests with a null Origin header. */
-        public var allowNullOrigin: Boolean? = null
-
         /** Whether to allow connections from private networks. */
         public var allowPrivateNetworks: Boolean? = null
 
@@ -44,7 +41,7 @@ public class NetworkScope
         /** Netty I/O engine configuration. */
         public var ioEngine: NettyIoEngine? = null
 
-        /** Exact origins CORS grants; empty grants any origin the DNS-rebinding guard admits (loopback). */
+        /** Exact origins the DNS-rebinding guard admits and CORS grants; empty grants any loopback origin. */
         public val allowedOrigins: MutableList<String> = mutableListOf()
 
         /** CORS request headers granted beyond the built-in MCP ones. */
@@ -67,7 +64,6 @@ public class NetworkScope
             }
             endpointPath?.let(builder::endpointPath)
             if (allowedOrigins.isNotEmpty()) builder.allowedOrigins(*allowedOrigins.toTypedArray())
-            allowNullOrigin?.let(builder::allowNullOrigin)
             allowPrivateNetworks?.let(builder::allowPrivateNetworks)
             if (allowedHeaders.isNotEmpty()) builder.allowedHeaders(*allowedHeaders.toTypedArray())
             if (allowedHosts.isNotEmpty()) builder.allowedHosts(*allowedHosts.toTypedArray())

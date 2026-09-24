@@ -66,7 +66,6 @@ class TachyonPropertiesBindingTest {
                         "tachyon.network.allowed-origins[1]=https://admin.example.com",
                         "tachyon.network.allowed-headers[0]=X-Trace-Id",
                         "tachyon.network.allowed-hosts[0]=mcp.example.com:8096",
-                        "tachyon.network.allow-null-origin=true",
                         "tachyon.network.allow-private-networks=true",
                         "tachyon.network.io-engine=nio")
                 .run(context -> {
@@ -81,7 +80,6 @@ class TachyonPropertiesBindingTest {
                             .containsExactly("https://app.example.com", "https://admin.example.com");
                     assertThat(network.allowedHeaders()).containsExactly("X-Trace-Id");
                     assertThat(network.allowedHosts()).containsExactly("mcp.example.com:8096");
-                    assertThat(network.allowNullOrigin()).isTrue();
                     assertThat(network.allowPrivateNetworks()).isTrue();
                     assertThat(network.ioEngine()).isEqualTo(NettyIoEngine.NIO);
                 });
@@ -180,6 +178,30 @@ class TachyonPropertiesBindingTest {
                     .satisfies(
                             failure -> assertThat(failure.getName()).isEqualTo("tachyon.network.max-content-length"));
         });
+    }
+
+    /** An {@code Origin} is {@code http(s)://host[:port]}; anything else never matches a browser. */
+    @ParameterizedTest
+    @ValueSource(strings = {"https://app.example.com/", "*", "null", "ftp://app.example.com"})
+    void malformedAllowedOriginIsRejectedByName(String value) {
+        runner.withPropertyValues("tachyon.network.allowed-origins[0]=" + value).run(context -> {
+            assertThat(context).hasFailed();
+            assertThat(context.getStartupFailure())
+                    .rootCause()
+                    .isInstanceOf(InvalidConfigurationPropertyValueException.class)
+                    .asInstanceOf(throwable(InvalidConfigurationPropertyValueException.class))
+                    .satisfies(failure -> assertThat(failure.getName()).isEqualTo("tachyon.network.allowed-origins"));
+        });
+    }
+
+    @Test
+    void allowedOriginsBindCanonical() {
+        runner.withPropertyValues("tachyon.network.allowed-origins[0]=HTTPS://App.Example.com:443")
+                .run(context -> assertThat(context.getBean(TachyonServer.class)
+                                .config()
+                                .network()
+                                .allowedOrigins())
+                        .containsExactly("https://app.example.com"));
     }
 
     @Test

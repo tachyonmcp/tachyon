@@ -76,6 +76,51 @@ public abstract class AbstractDnsRebindingTest<C extends McpClient> extends Abst
                 "http://localhost:80@evil.example.com"
             })
     void rejectsNonLoopbackLookalikeOrigin(String origin) throws Exception {
+        assertRejected(origin);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", " ", "\t"})
+    void rejectsPresentEmptyOrigin(String origin) throws Exception {
+        var response = rawPost("localhost:" + port, Map.of("Origin", origin));
+        assertThat(response.status()).isEqualTo(403);
+        assertThat(response.header("access-control-allow-origin")).isNull();
+        assertThat(response.header("connection")).isEqualToIgnoringCase("close");
+    }
+
+    /** {@code Origin} is a serialized origin, {@code scheme://host[:port]}: anything else is malformed. */
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "http://localhost/",
+                "http://localhost/path",
+                "http://localhost?x",
+                "http://localhost#x",
+                "http://user@localhost",
+                "localhost:3000",
+                "ftp://localhost",
+                "http:///x",
+                "http://localhost:0",
+                "http://localhost:65536",
+                "http://[::1",
+                "http://[::1]/",
+                "http://[::1%lo]",
+                "http://[::1%25lo]"
+            })
+    void rejectsMalformedLoopbackOrigin(String origin) throws Exception {
+        assertRejected(origin);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"http://localhost", "http://[::1]", "http://[::1]:3000", "HTTP://LOCALHOST:3000"})
+    void acceptsLoopbackOriginSpellings(String origin) throws Exception {
+        try (var client = createTestClient()) {
+            assertThat(client.postWithOrigin(origin, requestBody()).statusCode())
+                    .isEqualTo(200);
+        }
+    }
+
+    private void assertRejected(String origin) throws Exception {
         try (var client = createTestClient()) {
             var response = client.postWithOrigin(origin, requestBody());
 
@@ -129,6 +174,16 @@ public abstract class AbstractDnsRebindingTest<C extends McpClient> extends Abst
         }
     }
 
+    @Test
+    void preflightToOtherPathIsNotGranted() throws Exception {
+        var response = preflight("http://localhost:3000", "/other");
+
+        assertThat(response.statusCode())
+                .as("only the MCP endpoint answers, so CORS grants never leak from other paths")
+                .isEqualTo(404);
+        assertThat(response.headers().firstValue("access-control-allow-origin")).isEmpty();
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"localhost:%d", "127.0.0.1:%d", "[::1]:%d"})
     void acceptsLoopbackHostOverRawSocket(String hostTemplate) throws Exception {
@@ -176,6 +231,19 @@ public abstract class AbstractDnsRebindingTest<C extends McpClient> extends Abst
 
         assertThat(response.status()).isEqualTo(403);
         assertThat(response.header("access-control-allow-origin")).isNull();
+    }
+
+    private HttpResponse<String> preflight(String origin, String path) throws Exception {
+        var request = HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:" + port + path))
+                .header("Origin", origin)
+                .header("Access-Control-Request-Method", "POST")
+                .header("Access-Control-Request-Headers", "content-type")
+                .method("OPTIONS", HttpRequest.BodyPublishers.noBody())
+                .build();
+        try (var http = HttpClient.newHttpClient()) {
+            return http.send(request, HttpResponse.BodyHandlers.ofString());
+        }
     }
 
     private RawResponse rawPost(String host, Map<String, String> headers) throws IOException {

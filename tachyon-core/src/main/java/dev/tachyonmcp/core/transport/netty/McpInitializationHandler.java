@@ -19,13 +19,14 @@ import dev.tachyonmcp.core.server.McpDispatcher;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
 import dev.tachyonmcp.core.transport.jsonrpc.JsonRpcCodec;
 import dev.tachyonmcp.core.transport.jsonrpc.JsonRpcMessage;
+import dev.tachyonmcp.core.transport.netty.http.CorsDecision;
+import dev.tachyonmcp.core.transport.netty.http.TachyonCorsHandler;
 import dev.tachyonmcp.core.transport.netty.sse.PostSseStream;
 import dev.tachyonmcp.core.transport.netty.sse.SseHeartbeat;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.handler.codec.http.FullHttpRequest;
-import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.timeout.IdleStateEvent;
@@ -85,10 +86,10 @@ public class McpInitializationHandler extends ChannelInboundHandlerAdapter {
 
     private void handleRequest(ChannelHandlerContext ctx, FullHttpRequest req) {
         var httpMethod = req.method();
-        var origin = req.headers().get(HttpHeaderNames.ORIGIN);
+        var cors = TachyonCorsHandler.decide(ctx, req);
 
         if (httpMethod == HttpMethod.OPTIONS) {
-            sendOptions(ctx, origin);
+            sendOptions(ctx);
             return;
         }
 
@@ -96,7 +97,7 @@ public class McpInitializationHandler extends ChannelInboundHandlerAdapter {
             var sessionId = req.headers().get(McpHeaderNames.MCP_SESSION_ID);
             if (sessionId == null) {
                 captureInitRequest(ctx, req, server);
-                handlePostWithoutSession(ctx, req, origin);
+                handlePostWithoutSession(ctx, req, cors);
                 return;
             }
         }
@@ -104,7 +105,7 @@ public class McpInitializationHandler extends ChannelInboundHandlerAdapter {
         forwardToOperationHandler(ctx, req);
     }
 
-    private void handlePostWithoutSession(ChannelHandlerContext ctx, FullHttpRequest req, @Nullable String origin) {
+    private void handlePostWithoutSession(ChannelHandlerContext ctx, FullHttpRequest req, CorsDecision cors) {
         // Read on the event loop, before the async hop: a pipelined next request must not be able
         // to overwrite the entry between the hop and the read.
         final PeekedBody.@Nullable Parsed peeked = PeekedBody.cached(ctx, req);
@@ -120,25 +121,21 @@ public class McpInitializationHandler extends ChannelInboundHandlerAdapter {
                             } finally {
                                 body.release();
                             }
-                            dispatchNoSessionMessage(ctx, parse.message(), parse.invalidRequest(), origin);
+                            dispatchNoSessionMessage(ctx, parse.message(), parse.invalidRequest(), cors);
                         },
                         executor)
                 .exceptionally(ex -> {
                     logger.error("Failed to parse POST body during initialization", ex);
                     ctx.executor().execute(() -> {
                         var errorBytes = dispatcher.parseError(ChannelHandlerUtils.getInteractionContext(ctx));
-                        sendResponseAndClose(
-                                ctx, HttpResponseStatus.BAD_REQUEST, "application/json", errorBytes, origin);
+                        sendResponseAndClose(ctx, HttpResponseStatus.BAD_REQUEST, "application/json", errorBytes, cors);
                     });
                     return null;
                 });
     }
 
     private void dispatchNoSessionMessage(
-            ChannelHandlerContext ctx,
-            @Nullable JsonRpcMessage message,
-            boolean invalidRequest,
-            @Nullable String origin) {
+            ChannelHandlerContext ctx, @Nullable JsonRpcMessage message, boolean invalidRequest, CorsDecision cors) {
         switch (message) {
             case null ->
                 ctx.executor()
@@ -148,29 +145,29 @@ public class McpInitializationHandler extends ChannelInboundHandlerAdapter {
                                 "application/json",
                                 dispatcher.malformedBodyError(
                                         invalidRequest, ChannelHandlerUtils.getInteractionContext(ctx)),
-                                origin));
+                                cors));
             case JsonRpcMessage.Request<?> req
-            when METHOD_INITIALIZE.equals(req.method()) -> handleInitialize(ctx, req.id(), req.params(), origin);
+            when METHOD_INITIALIZE.equals(req.method()) -> handleInitialize(ctx, req.id(), req.params(), cors);
             default ->
                 // Non-initialize request without session-id: dispatch via operation handler
                 // (which will return "Missing MCP-Session-Id" or stateless ping etc.)
-                dispatchPreSessionRequest(ctx, message, origin);
+                dispatchPreSessionRequest(ctx, message, cors);
         }
     }
 
-    private void dispatchPreSessionRequest(ChannelHandlerContext ctx, JsonRpcMessage message, @Nullable String origin) {
+    private void dispatchPreSessionRequest(ChannelHandlerContext ctx, JsonRpcMessage message, CorsDecision cors) {
         if (!(message instanceof JsonRpcMessage.Request(RequestId id, String method, Object params))) {
             ctx.executor().execute(() -> {
                 if (server.isStateless()) {
-                    sendAccepted(ctx, origin);
+                    sendAccepted(ctx, cors);
                 } else {
-                    sendPlainTextAndClose(ctx, HttpResponseStatus.BAD_REQUEST, "Missing MCP-Session-Id header", origin);
+                    sendPlainTextAndClose(ctx, HttpResponseStatus.BAD_REQUEST, "Missing MCP-Session-Id header", cors);
                 }
             });
             return;
         }
         var heartbeatInterval = server.config().network().heartbeatInterval();
-        var postStream = new PostSseStream(ctx.channel(), origin, server::nextEventId, heartbeatInterval);
+        var postStream = new PostSseStream(ctx.channel(), cors, server::nextEventId, heartbeatInterval);
         final var transportCompletion = new CompletableFuture<Void>();
         dispatcher
                 .dispatchRequestAsync(
@@ -188,10 +185,7 @@ public class McpInitializationHandler extends ChannelInboundHandlerAdapter {
                             logger.debug("Pre-session request refused: method={}", method);
                             completeOn(
                                     sendPlainTextAndClose(
-                                            ctx,
-                                            HttpResponseStatus.SERVICE_UNAVAILABLE,
-                                            "Server shutting down",
-                                            origin),
+                                            ctx, HttpResponseStatus.SERVICE_UNAVAILABLE, "Server shutting down", cors),
                                     transportCompletion);
                             return;
                         }
@@ -202,11 +196,11 @@ public class McpInitializationHandler extends ChannelInboundHandlerAdapter {
                                         HttpResponseStatus.INTERNAL_SERVER_ERROR,
                                         "application/json",
                                         dispatcher.parseError(ChannelHandlerUtils.requireInteractionContext(ctx)),
-                                        origin),
+                                        cors),
                                 transportCompletion);
                         return;
                     }
-                    completeOn(completeDispatch(ctx, postStream, result, origin, null), transportCompletion);
+                    completeOn(completeDispatch(ctx, postStream, result, cors, null), transportCompletion);
                 }));
     }
 
@@ -222,15 +216,15 @@ public class McpInitializationHandler extends ChannelInboundHandlerAdapter {
             ChannelHandlerContext ctx,
             PostSseStream postStream,
             McpDispatcher.DispatchResult result,
-            @Nullable String origin,
+            CorsDecision cors,
             @Nullable Consumer<McpDispatcher.DispatchResult.Response> onResponseReady) {
         if (result instanceof McpDispatcher.DispatchResult.Accepted) {
             postStream.terminate();
-            return sendAcceptedAsync(ctx, origin);
+            return sendAcceptedAsync(ctx, cors);
         }
         if (result instanceof McpDispatcher.DispatchResult.Status(int code, String statusMessage)) {
             postStream.terminate();
-            return sendPlainTextAndClose(ctx, HttpResponseStatus.valueOf(code), statusMessage, origin);
+            return sendPlainTextAndClose(ctx, HttpResponseStatus.valueOf(code), statusMessage, cors);
         }
         var response = (McpDispatcher.DispatchResult.Response) result;
         if (onResponseReady != null) {
@@ -246,7 +240,7 @@ public class McpInitializationHandler extends ChannelInboundHandlerAdapter {
                 response.responseBody(),
                 HttpResponseStatus.valueOf(response.httpStatus()),
                 response.sessionId(),
-                origin);
+                cors);
     }
 
     private static void marshalResponse(
@@ -260,9 +254,9 @@ public class McpInitializationHandler extends ChannelInboundHandlerAdapter {
         }
     }
 
-    private void handleInitialize(ChannelHandlerContext ctx, RequestId id, Object params, @Nullable String origin) {
+    private void handleInitialize(ChannelHandlerContext ctx, RequestId id, Object params, CorsDecision cors) {
         var heartbeatInterval = server.config().network().heartbeatInterval();
-        var postStream = new PostSseStream(ctx.channel(), origin, server::nextEventId, heartbeatInterval);
+        var postStream = new PostSseStream(ctx.channel(), cors, server::nextEventId, heartbeatInterval);
         final var startNs = System.nanoTime();
         logger.debug("Initialize request: id={}", id);
 
@@ -284,10 +278,7 @@ public class McpInitializationHandler extends ChannelInboundHandlerAdapter {
                             logger.debug("Initialize refused: id={}, elapsed={}ms", id, elapsedMs);
                             completeOn(
                                     sendPlainTextAndClose(
-                                            ctx,
-                                            HttpResponseStatus.SERVICE_UNAVAILABLE,
-                                            "Server shutting down",
-                                            origin),
+                                            ctx, HttpResponseStatus.SERVICE_UNAVAILABLE, "Server shutting down", cors),
                                     transportCompletion);
                             return;
                         }
@@ -298,13 +289,13 @@ public class McpInitializationHandler extends ChannelInboundHandlerAdapter {
                                         HttpResponseStatus.INTERNAL_SERVER_ERROR,
                                         "application/json",
                                         dispatcher.parseError(ChannelHandlerUtils.requireInteractionContext(ctx)),
-                                        origin),
+                                        cors),
                                 transportCompletion);
                         return;
                     }
                     logger.debug("Initialize response: id={}, elapsed={}ms", id, elapsedMs);
                     completeOn(
-                            completeDispatch(ctx, postStream, result, origin, response -> {
+                            completeDispatch(ctx, postStream, result, cors, response -> {
                                 var resultSessionId = response.sessionId();
                                 // Fire event with the live Session — InteractionHandler binds it into
                                 // InteractionContext, and LifecyclePipelineCoordinator replaces this handler

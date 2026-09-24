@@ -2,7 +2,9 @@
 package dev.tachyonmcp.spring.boot;
 
 import dev.tachyonmcp.core.server.ServerBuilder;
+import dev.tachyonmcp.core.transport.netty.http.Origins;
 import java.util.ArrayList;
+import java.util.List;
 import org.springframework.boot.context.properties.PropertyMapper;
 import org.springframework.boot.context.properties.source.InvalidConfigurationPropertyValueException;
 import org.springframework.util.StringUtils;
@@ -25,6 +27,7 @@ final class TachyonPropertiesApplier {
     private static final String SESSION_TTL = "tachyon.session.session-ttl";
     private static final String JANITOR_INTERVAL = "tachyon.session.janitor-interval";
     private static final String MAX_CONTENT_LENGTH = "tachyon.network.max-content-length";
+    private static final String ALLOWED_ORIGINS = "tachyon.network.allowed-origins";
 
     private static final PropertyMapper MAP = PropertyMapper.get();
 
@@ -49,10 +52,11 @@ final class TachyonPropertiesApplier {
             MAP.from(network.maxContentLength())
                     .as(TachyonPropertiesApplier::toPositiveIntBytes)
                     .to(config::maxContentLength);
-            MAP.from(network.allowedOrigins()).as(StringUtils::toStringArray).to(config::allowedOrigins);
+            MAP.from(network.allowedOrigins())
+                    .as(TachyonPropertiesApplier::toServedOrigins)
+                    .to(config::allowedOrigins);
             MAP.from(network.allowedHeaders()).as(StringUtils::toStringArray).to(config::allowedHeaders);
             MAP.from(network.allowedHosts()).as(StringUtils::toStringArray).to(config::allowedHosts);
-            MAP.from(network.allowNullOrigin()).to(config::allowNullOrigin);
             MAP.from(network.allowPrivateNetworks()).to(config::allowPrivateNetworks);
             MAP.from(network.ioEngine()).to(config::ioEngine);
         });
@@ -94,6 +98,25 @@ final class TachyonPropertiesApplier {
                 false,
                 "Session options are set on a stateless server: %s. Remove them, or set %s to true."
                         .formatted(String.join(", ", configured), SESSION_ENABLED));
+    }
+
+    /**
+     * Each allowed origin must be a serialized origin, {@code http(s)://host[:port]} with no path, as
+     * the core requires. A trailing {@code /}, {@code *} or {@code null} is refused by name here.
+     */
+    private static String[] toServedOrigins(List<String> origins) {
+        for (final var origin : origins) {
+            try {
+                Origins.requireConfigured(origin);
+            } catch (IllegalArgumentException e) {
+                throw new InvalidConfigurationPropertyValueException(
+                        ALLOWED_ORIGINS,
+                        origin,
+                        "Each allowed origin must be a serialized origin, http(s)://host[:port] with no path,"
+                                + " as a browser sends it in the Origin header.");
+            }
+        }
+        return StringUtils.toStringArray(origins);
     }
 
     /**

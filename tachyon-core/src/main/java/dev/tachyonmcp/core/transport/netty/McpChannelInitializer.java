@@ -6,22 +6,22 @@ import dev.tachyonmcp.core.server.McpDispatcher;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
 import dev.tachyonmcp.core.transport.netty.http.AcceptValidationHandler;
 import dev.tachyonmcp.core.transport.netty.http.ContentTypeValidationHandler;
+import dev.tachyonmcp.core.transport.netty.http.CorsHttpObjectAggregator;
+import dev.tachyonmcp.core.transport.netty.http.CorsPreflightHandler;
 import dev.tachyonmcp.core.transport.netty.http.DnsRebindingProtectionHandler;
 import dev.tachyonmcp.core.transport.netty.http.EndpointValidatorHandler;
 import dev.tachyonmcp.core.transport.netty.http.McpHeaderGuardHandler;
 import dev.tachyonmcp.core.transport.netty.http.McpHeaderMatchHandler;
-import dev.tachyonmcp.core.transport.netty.http.McpParamPreflightHandler;
 import dev.tachyonmcp.core.transport.netty.http.StatelessValidatorHandler;
+import dev.tachyonmcp.core.transport.netty.http.TachyonCorsHandler;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.group.ChannelGroup;
 import io.netty.channel.socket.SocketChannel;
-import io.netty.handler.codec.http.HttpObjectAggregator;
 import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.handler.codec.http.HttpServerKeepAliveHandler;
 import io.netty.handler.codec.http.cors.CorsConfig;
-import io.netty.handler.codec.http.cors.CorsHandler;
 import io.netty.handler.flush.FlushConsolidationHandler;
 import io.netty.handler.logging.LogLevel;
 import io.netty.handler.logging.LoggingHandler;
@@ -30,6 +30,7 @@ import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
@@ -71,7 +72,6 @@ public class McpChannelInitializer extends ChannelInitializer<SocketChannel> {
     // Per-server, not static: carries this server's allowedHosts allowlist (DNS-rebinding protection).
     private final DnsRebindingProtectionHandler dnsRebindingHandler;
 
-    @Nullable
     private final CorsConfig corsConfig;
 
     private static final ChannelHandler statelessValidator = new StatelessValidatorHandler();
@@ -97,7 +97,7 @@ public class McpChannelInitializer extends ChannelInitializer<SocketChannel> {
             Duration writerIdleTimeout,
             int maxContentLength,
             ChannelGroup childChannels,
-            @Nullable CorsConfig corsConfig,
+            CorsConfig corsConfig,
             @Nullable List<String> allowedHosts,
             @Nullable Consumer<ChannelPipeline> pipelineCustomizer) {
         this.stateless = stateless;
@@ -106,9 +106,9 @@ public class McpChannelInitializer extends ChannelInitializer<SocketChannel> {
         this.writerIdleTimeout = writerIdleTimeout;
         this.maxContentLength = maxContentLength;
         this.corsConfig = corsConfig;
-        this.dnsRebindingHandler = allowedHosts == null
-                ? new DnsRebindingProtectionHandler()
-                : new DnsRebindingProtectionHandler(allowedHosts);
+        this.dnsRebindingHandler = new DnsRebindingProtectionHandler(
+                allowedHosts == null ? List.of() : allowedHosts,
+                this.corsConfig.isAnyOriginSupported() ? Set.of() : this.corsConfig.origins());
         this.pipelineCustomizer = pipelineCustomizer;
         this.childChannels = childChannels;
         this.dispatcher = new McpDispatcher(server, server.executor());
@@ -149,12 +149,11 @@ public class McpChannelInitializer extends ChannelInitializer<SocketChannel> {
         // (validation handlers write before the aggregator; protocol handlers write after it).
         p.addLast("http-keep-alive", new HttpServerKeepAliveHandler());
         p.addLast("dns-rebinding", dnsRebindingHandler);
-        if (corsConfig != null) {
-            // Ahead of "cors" so it sees the preflight response CorsHandler writes.
-            p.addLast("cors-mcp-param", new McpParamPreflightHandler());
-            p.addLast("cors", new CorsHandler(corsConfig));
-        }
+        // Ahead of "cors", so other paths get a bare 404 and never a CORS grant.
         p.addLast("mcp-endpoint", endpointValidatorHandler);
+        // Ahead of "cors" so it sees the preflight response CorsHandler writes.
+        p.addLast("cors-mcp-param", new CorsPreflightHandler());
+        p.addLast("cors", new TachyonCorsHandler(corsConfig));
 
         // Must precede "protocol-version": a repeated version header would otherwise negotiate on its
         // first value while an intermediary routes on the last.
@@ -171,7 +170,7 @@ public class McpChannelInitializer extends ChannelInitializer<SocketChannel> {
         // acceptable requests and rejects oversized ones (413/417) before the body is
         // transferred. A separate HttpServerExpectContinueHandler would defeat that by
         // always acking 100 Continue upstream of the aggregator.
-        p.addLast("http-aggregator", new HttpObjectAggregator(maxContentLength));
+        p.addLast("http-aggregator", new CorsHttpObjectAggregator(maxContentLength));
 
         // Rejects requests ProtocolVersionHandler flagged as an unsupported protocol version, now
         // that the body (and its JSON-RPC id) is available. Placed before "interaction" so a

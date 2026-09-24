@@ -154,16 +154,33 @@ Neither needs configuration beyond enabling sessions, which
 
 ### CORS
 
-The [DNS-rebinding guard](#dns-rebinding-protection) runs first and admits only loopback
-origins, on any port. CORS then answers the browser, so a page served from a dev server such
-as `http://localhost:5173` can call a local server.
+The [DNS-rebinding guard](#dns-rebinding-protection) runs first and admits loopback origins,
+on any port, plus any listed in `allowedOrigins`. CORS then answers the browser, so a page
+served from a dev server such as `http://localhost:5173` can call a local server. Only the
+MCP endpoint answers: a preflight to any other path gets `404` and no CORS grant.
 
 | Option | Default | Description |
 |---|---|---|
-| `allowedOrigins` | — (any origin the guard admits, answered `*`) | Exact `Origin` values CORS grants. It cannot admit a non-loopback origin: the guard rejects it first |
-| `allowNullOrigin` | `false` | Grant `Origin: null` in CORS; the guard still rejects it |
+| `allowedOrigins` | — (any loopback origin, answered `*`) | Origins the guard admits and CORS grants, answered with the origin and `Vary: Origin`. Once set, loopback origins not in the list are still admitted but get no CORS grant |
 | `allowPrivateNetworks` | `false` | Answer private-network CORS preflights |
 | `allowedHeaders` | — | Request headers granted beyond the built-in ones |
+
+Each `allowedOrigins` entry is a serialized origin, exactly as a browser sends it in `Origin`:
+`http(s)://host[:port]`. A path (even a trailing `/`), query, fragment, user info, `*` or `null`
+is rejected when the server is built. Entries are stored canonical: scheme and host lower-cased,
+default port dropped, so `https://App.Example.com:443` matches `https://app.example.com`. A
+different port or scheme is a different origin. IPv6 literals use compressed lowercase notation,
+so `http://[2001:0db8:0:0:0:0:0:1]` matches `http://[2001:db8::1]`. IPv6 zone IDs are rejected.
+
+The guard applies the same rule to the request's `Origin`: anything that is not a serialized
+`http`/`https` origin gets `403`. `Origin: null` always gets `403`, because any web page can send
+it from a sandboxed iframe. An empty `Origin` is also rejected; an absent `Origin` remains valid
+for non-browser clients.
+
+Preflights and application responses use the same origin matching rules. With a finite
+allowlist, admitted requests carrying an Origin receive `Vary: Origin` even when CORS does
+not grant that origin. Body-limit and expectation errors (`413`/`417`) retain the request's
+CORS decision, including when the connection is reused.
 
 Built in, with no configuration:
 
@@ -185,7 +202,7 @@ Every request's `Host` (and, when present, `Origin`) header must resolve to
 `localhost`/`127.0.0.1`, or the connection is rejected with `403 Forbidden`. `allowedHosts`
 extends the `Host` check with additional authorities — e.g. a container reaching the server
 via `host.docker.internal`. It does **not** widen the `Origin` check: a browser page on a
-non-local origin is still rejected even if `Host` is allowlisted.
+non-local origin is rejected unless that origin is in [`allowedOrigins`](#cors).
 
 | Option | Default | Description |
 |---|---|---|

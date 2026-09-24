@@ -1,6 +1,7 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
 package dev.tachyonmcp.core.transport.netty;
 
+import dev.tachyonmcp.api.annotations.InternalApi;
 import dev.tachyonmcp.core.protocol.Protocol;
 import dev.tachyonmcp.core.protocol.Protocols;
 import dev.tachyonmcp.core.protocol.mcp.McpHeaderNames;
@@ -24,6 +25,7 @@ import java.util.List;
  * UnsupportedProtocolVersionHandler}, which runs after aggregation and does the actual rejection.
  */
 @Sharable
+@InternalApi
 public class ProtocolVersionHandler extends ChannelInboundHandlerAdapter {
 
     static final AttributeKey<String> UNSUPPORTED_VERSION_KEY = AttributeKey.valueOf("unsupportedProtocolVersion");
@@ -54,29 +56,6 @@ public class ProtocolVersionHandler extends ChannelInboundHandlerAdapter {
      */
     public ProtocolVersionHandler(boolean stateless) {
         this.stateless = stateless;
-    }
-
-    /**
-     * Creates a protocol binder for a server with session support; the path is ignored.
-     *
-     * @param mcpEndpoint ignored: the endpoint validator already rejected other paths
-     * @deprecated use {@link #ProtocolVersionHandler()}
-     */
-    @Deprecated(since = "1.0.0-beta.31", forRemoval = true)
-    public ProtocolVersionHandler(String mcpEndpoint) {
-        this(false);
-    }
-
-    /**
-     * Creates a protocol binder; the path is ignored.
-     *
-     * @param mcpEndpoint ignored: the endpoint validator already rejected other paths
-     * @param stateless whether server sessions are disabled
-     * @deprecated use {@link #ProtocolVersionHandler(boolean)}
-     */
-    @Deprecated(since = "1.0.0-beta.31", forRemoval = true)
-    public ProtocolVersionHandler(String mcpEndpoint, boolean stateless) {
-        this(stateless);
     }
 
     @Override

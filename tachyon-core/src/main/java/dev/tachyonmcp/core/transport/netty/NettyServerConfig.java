@@ -3,6 +3,7 @@ package dev.tachyonmcp.core.transport.netty;
 
 import dev.tachyonmcp.core.protocol.mcp.McpHeaderNames;
 import dev.tachyonmcp.core.server.config.NetworkConfig;
+import dev.tachyonmcp.core.transport.netty.http.Origins;
 import io.netty.channel.ChannelPipeline;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpMethod;
@@ -10,6 +11,7 @@ import io.netty.handler.codec.http.cors.CorsConfig;
 import io.netty.handler.codec.http.cors.CorsConfigBuilder;
 import java.time.Duration;
 import java.util.List;
+import java.util.Objects;
 import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 
@@ -22,7 +24,10 @@ import org.jspecify.annotations.Nullable;
  * @param readerIdleTimeout  idle timeout for reading
  * @param writerIdleTimeout  idle timeout for writing
  * @param maxContentLength   maximum HTTP content length in bytes
- * @param corsConfig         CORS configuration, or {@code null} for defaults
+ * @param corsConfig         CORS configuration; also the origin allowlist of the DNS-rebinding guard.
+ *                           A finite origin list must hold canonical serialized origins, as
+ *                           {@link #buildCorsConfig} stores them, else {@link IllegalArgumentException}.
+ *                           See {@link #defaultCorsConfig()}
  * @param allowedHosts       additional {@code Host} authorities the DNS-rebinding guard accepts
  *                           beyond localhost, or {@code null} for localhost-only
  * @param ioEngine           the Netty I/O engine to use
@@ -35,7 +40,7 @@ public record NettyServerConfig(
         Duration readerIdleTimeout,
         Duration writerIdleTimeout,
         int maxContentLength,
-        @Nullable CorsConfig corsConfig,
+        CorsConfig corsConfig,
         @Nullable List<String> allowedHosts,
         NettyIoEngine ioEngine,
         @Nullable Consumer<ChannelPipeline> pipelineCustomizer) {
@@ -45,7 +50,7 @@ public record NettyServerConfig(
 
     /**
      * Request headers every browser MCP client may send. The SEP-2243 {@code Mcp-Param-*} mirrors,
-     * whose names depend on the tool, are granted per preflight by {@code McpParamPreflightHandler}.
+     * whose names depend on the tool, are granted per preflight by {@code CorsPreflightHandler}.
      */
     private static final String[] ALLOWED_HEADERS = {
         HttpHeaderNames.CONTENT_TYPE.toString(),
@@ -64,6 +69,28 @@ public record NettyServerConfig(
     /** Seconds a browser may cache a preflight; browsers cap it lower (Chromium: 2h). */
     private static final long PREFLIGHT_MAX_AGE_SECONDS = 86_400;
 
+    public NettyServerConfig {
+        Objects.requireNonNull(corsConfig, "corsConfig");
+        if (!corsConfig.isAnyOriginSupported()) {
+            for (var origin : corsConfig.origins()) {
+                if (!origin.equals(Origins.canonical(origin))) {
+                    throw new IllegalArgumentException("corsConfig origin must be a canonical serialized origin, "
+                            + "http(s)://host[:port] as buildCorsConfig stores it: '" + origin + "'");
+                }
+            }
+        }
+    }
+
+    /**
+     * Returns the default CORS configuration: any loopback origin the DNS-rebinding guard admits, answered
+     * with {@code Access-Control-Allow-Origin: *}. Same as {@link #buildCorsConfig} with no options.
+     *
+     * @return the default CORS configuration
+     */
+    public static CorsConfig defaultCorsConfig() {
+        return buildCorsConfig(null, false, null);
+    }
+
     /**
      * Builds a CORS configuration from the given parameters.
      *
@@ -75,27 +102,25 @@ public record NettyServerConfig(
      * grants each {@code Mcp-Param-*} header a preflight requests. Responses expose {@code MCP-Session-Id}
      * and {@code MCP-Protocol-Version} to script.
      *
-     * @param allowedOrigins       exact origins to grant, or {@code null} for any origin the guard admits
-     * @param allowNullOrigin      whether to grant {@code Origin: null}
+     * @param allowedOrigins       origins to grant, or {@code null} for any origin the guard admits;
+     *                             each a serialized origin, stored canonical
      * @param allowPrivateNetworks whether to answer Private Network Access preflights
      * @param allowedHeaders       request headers to grant beyond the built-in MCP ones
      * @return the CORS configuration
+     * @throws IllegalArgumentException if an {@code allowedOrigins} entry is not a serialized origin
      */
     public static CorsConfig buildCorsConfig(
             @Nullable List<String> allowedOrigins,
-            boolean allowNullOrigin,
             boolean allowPrivateNetworks,
             @Nullable List<String> allowedHeaders) {
         final var builder = allowedOrigins != null
-                ? CorsConfigBuilder.forOrigins(allowedOrigins.toArray(String[]::new))
+                ? CorsConfigBuilder.forOrigins(
+                        allowedOrigins.stream().map(Origins::requireConfigured).toArray(String[]::new))
                 : CorsConfigBuilder.forAnyOrigin();
         builder.allowedRequestMethods(ALLOWED_METHODS)
                 .allowedRequestHeaders(ALLOWED_HEADERS)
                 .exposeHeaders(EXPOSED_HEADERS)
                 .maxAge(PREFLIGHT_MAX_AGE_SECONDS);
-        if (allowNullOrigin) {
-            builder.allowNullOrigin();
-        }
         if (allowPrivateNetworks) {
             builder.allowPrivateNetwork();
         }
@@ -117,7 +142,7 @@ public record NettyServerConfig(
                 NetworkConfig.DEFAULT_READER_IDLE_TIMEOUT,
                 NetworkConfig.DEFAULT_WRITER_IDLE_TIMEOUT,
                 McpChannelInitializer.DEFAULT_MAX_CONTENT_LENGTH,
-                buildCorsConfig(null, false, false, null),
+                defaultCorsConfig(),
                 null,
                 NettyIoEngine.AUTO,
                 null);

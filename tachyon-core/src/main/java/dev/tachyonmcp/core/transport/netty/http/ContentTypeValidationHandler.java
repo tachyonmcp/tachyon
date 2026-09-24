@@ -73,9 +73,9 @@ public final class ContentTypeValidationHandler extends ChannelInboundHandlerAda
                 req.headers().get(HttpHeaderNames.CONTENT_TYPE),
                 APPLICATION_JSON);
         final var body = JsonRpcCodec.serializeError(null, INVALID_REQUEST, MESSAGE, null);
-        // Read the origin before marking rejected: markRejected releases the request.
-        final var origin = req.headers().get(HttpHeaderNames.ORIGIN);
+        // Decide CORS before marking rejected: markRejected releases the request.
+        var cors = TachyonCorsHandler.decide(ctx, req);
         markRejected(ctx, req);
-        sendResponseAndClose(ctx, HttpResponseStatus.UNSUPPORTED_MEDIA_TYPE, APPLICATION_JSON, body, origin);
+        sendResponseAndClose(ctx, HttpResponseStatus.UNSUPPORTED_MEDIA_TYPE, APPLICATION_JSON, body, cors);
     }
 }
