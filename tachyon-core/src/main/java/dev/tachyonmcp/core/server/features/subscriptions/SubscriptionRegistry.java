@@ -155,7 +155,8 @@ public final class SubscriptionRegistry {
         var notificationJson = JsonRpcCodec.serializeNotificationAsString(method, responseMapper.encode(params));
         var sseEvent = new SseEvent(
                 ServerEngine.wireEventId(server.nextEventId(), stream.streamKey()), "message", notificationJson);
-        stream.writeEvent(sseEvent);
+        // Fan-out under the registry lock: a slow subscriber is closed, never waited on.
+        stream.offerEvent(sseEvent);
     }
 
     /**

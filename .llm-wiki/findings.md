@@ -3,7 +3,7 @@ title: Findings
 tags: [meta, findings]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/HandlerFutures.java]
 updated: 2026-09-24
-commit: d2a0bdba
+commit: 85184ff0
 ---
 
 # 🔎 Findings
@@ -12,6 +12,8 @@ Spotted while reading code. Runtime verification noted per finding. Fixed in cod
 
 - ⚠️ Notifications route onto the POST-SSE stream only from the dispatching thread (ThreadLocal). A handler continuing on another thread ⇒ event goes to the GET stream, or is dropped when there is none (stateful) — surprising for async tools. `OutboundSseStreamMessageRouter#currentSessionId`, `McpDispatcher#invokeHandlerAsync`
 - ⚠️ `UnsupportedProtocolVersionHandler` encodes the rejection with `ProtocolVersionHandler#LATEST_PROTOCOL` (not `Protocols#baseline`) + HTTP 400, even for legacy-looking clients. Intentional per SEP-2575? `UnsupportedProtocolVersionHandler#channelRead`
+- ⚠️ GET-SSE has no byte budget: `Session#send` checks `isWritable` on the caller thread, then `NettySseConnection#send` queues a loop task. Busy/blocked loop ⇒ writability never flips ⇒ loop task queue grows with the producer. Same class as the fixed POST-SSE bug, lower risk. `Session#send`, `NettySseConnection#send`
+- ⚠️ POST-SSE budget is per stream (`PostSseStream#reserve`); no global outbound cap or connection limit. N slow streams ⇒ N × 1 MiB.
 - ⚠️ Absolute-form request-target (`POST http://host/mcp HTTP/1.1`) ⇒ 404: `EndpointValidatorHandler#channelRead` compares the raw URI. RFC 9112 §3.2.2: servers MUST accept absolute-form. Fails closed. Fix must also check the authority against `Host` and the DNS-rebinding guard, or an authority-less check becomes a bypass.
 
 ## 🪶 Polish
