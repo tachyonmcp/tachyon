@@ -4,6 +4,7 @@ package dev.tachyonmcp.e2e.mcp;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.tachyonmcp.core.server.TachyonServer;
+import dev.tachyonmcp.core.server.config.NetworkConfig;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
 import dev.tachyonmcp.core.transport.netty.McpChannelInitializer;
 import dev.tachyonmcp.core.transport.netty.NettyIoEngine;
@@ -45,6 +46,7 @@ class SseHeartbeatTest {
                 Duration.ofMinutes(5),
                 Duration.ofMinutes(5),
                 McpChannelInitializer.DEFAULT_MAX_CONTENT_LENGTH,
+                NetworkConfig.DEFAULT_MAX_PIPELINED_REQUESTS,
                 NettyServerConfig.defaultCorsConfig(),
                 null,
                 NettyIoEngine.AUTO,

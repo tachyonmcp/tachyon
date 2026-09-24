@@ -27,6 +27,7 @@ final class TachyonPropertiesApplier {
     private static final String SESSION_TTL = "tachyon.session.session-ttl";
     private static final String JANITOR_INTERVAL = "tachyon.session.janitor-interval";
     private static final String MAX_CONTENT_LENGTH = "tachyon.network.max-content-length";
+    private static final String MAX_PIPELINED_REQUESTS = "tachyon.network.max-pipelined-requests";
     private static final String ALLOWED_ORIGINS = "tachyon.network.allowed-origins";
 
     private static final PropertyMapper MAP = PropertyMapper.get();
@@ -52,6 +53,9 @@ final class TachyonPropertiesApplier {
             MAP.from(network.maxContentLength())
                     .as(TachyonPropertiesApplier::toPositiveIntBytes)
                     .to(config::maxContentLength);
+            MAP.from(network.maxPipelinedRequests())
+                    .as(TachyonPropertiesApplier::toNonNegativeRequests)
+                    .to(config::maxPipelinedRequests);
             MAP.from(network.allowedOrigins())
                     .as(TachyonPropertiesApplier::toServedOrigins)
                     .to(config::allowedOrigins);
@@ -134,5 +138,15 @@ final class TachyonPropertiesApplier {
                             .formatted(Integer.MAX_VALUE));
         }
         return (int) bytes;
+    }
+
+    private static int toNonNegativeRequests(Integer maxPipelinedRequests) {
+        if (maxPipelinedRequests < 0) {
+            throw new InvalidConfigurationPropertyValueException(
+                    MAX_PIPELINED_REQUESTS,
+                    maxPipelinedRequests,
+                    "Pipelined request limit must not be negative; 0 disables pipelining.");
+        }
+        return maxPipelinedRequests;
     }
 }

@@ -1369,6 +1369,35 @@
           "attachments": {
             "since": "1.0.0-beta.31"
           }
+        },
+        {
+          "ignore": true,
+          "code": "java.method.numberOfParametersChanged",
+          "old": "method void dev.tachyonmcp.core.transport.netty.McpChannelInitializer::<init>(java.lang.String, boolean, dev.tachyonmcp.core.server.internal.ServerEngine, java.time.Duration, java.time.Duration, int, io.netty.channel.group.ChannelGroup, io.netty.handler.codec.http.cors.CorsConfig, java.util.List<java.lang.String>, java.util.function.Consumer<io.netty.channel.ChannelPipeline>)",
+          "new": "method void dev.tachyonmcp.core.transport.netty.McpChannelInitializer::<init>(java.lang.String, boolean, dev.tachyonmcp.core.server.internal.ServerEngine, java.time.Duration, java.time.Duration, int, int, io.netty.channel.group.ChannelGroup, io.netty.handler.codec.http.cors.CorsConfig, java.util.List<java.lang.String>, java.util.function.Consumer<io.netty.channel.ChannelPipeline>)",
+          "justification": "maxPipelinedRequests added: each channel's HttpPipeliningGate caps how many HTTP/1.1 pipelined requests wait behind the one in flight (RFC 9112 response order)",
+          "attachments": {
+            "since": "1.0.0-beta.31"
+          }
+        },
+        {
+          "ignore": true,
+          "code": "java.method.removed",
+          "old": "method void dev.tachyonmcp.core.transport.netty.McpOperationHandler::channelWritabilityChanged(io.netty.channel.ChannelHandlerContext)",
+          "justification": "autoRead moved to HttpPipeliningGate, its single owner: writability alone would re-enable reads while pipelined requests are queued",
+          "attachments": {
+            "since": "1.0.0-beta.31"
+          }
+        },
+        {
+          "ignore": true,
+          "code": "java.method.numberOfParametersChanged",
+          "old": "method void dev.tachyonmcp.core.transport.netty.NettyServerConfig::<init>(java.lang.String, int, java.lang.String, java.time.Duration, java.time.Duration, int, io.netty.handler.codec.http.cors.CorsConfig, java.util.List<java.lang.String>, dev.tachyonmcp.core.transport.netty.NettyIoEngine, java.util.function.Consumer<io.netty.channel.ChannelPipeline>)",
+          "new": "method void dev.tachyonmcp.core.transport.netty.NettyServerConfig::<init>(java.lang.String, int, java.lang.String, java.time.Duration, java.time.Duration, int, int, io.netty.handler.codec.http.cors.CorsConfig, java.util.List<java.lang.String>, dev.tachyonmcp.core.transport.netty.NettyIoEngine, java.util.function.Consumer<io.netty.channel.ChannelPipeline>)",
+          "justification": "maxPipelinedRequests record component carries NetworkConfig#maxPipelinedRequests to the Netty transport (HTTP/1.1 pipelining cap)",
+          "attachments": {
+            "since": "1.0.0-beta.31"
+          }
         }
       ]
     }

@@ -45,6 +45,7 @@ class TachyonPropertiesBindingTest {
             assertThat(config.network().writerIdleTimeout()).isEqualTo(NetworkConfig.DEFAULT_WRITER_IDLE_TIMEOUT);
             assertThat(config.network().heartbeatInterval()).isEqualTo(NetworkConfig.DEFAULT_HEARTBEAT_INTERVAL);
             assertThat(config.network().maxContentLength()).isEqualTo(McpChannelInitializer.DEFAULT_MAX_CONTENT_LENGTH);
+            assertThat(config.network().maxPipelinedRequests()).isEqualTo(NetworkConfig.DEFAULT_MAX_PIPELINED_REQUESTS);
             assertThat(config.network().allowedOrigins()).isNull();
             assertThat(config.network().allowedHosts()).isNull();
             assertThat(config.network().ioEngine()).isEqualTo(NettyIoEngine.AUTO);
@@ -62,6 +63,7 @@ class TachyonPropertiesBindingTest {
                         "tachyon.network.writer-idle-timeout=2m",
                         "tachyon.network.heartbeat-interval=5s",
                         "tachyon.network.max-content-length=2MB",
+                        "tachyon.network.max-pipelined-requests=4",
                         "tachyon.network.allowed-origins[0]=https://app.example.com",
                         "tachyon.network.allowed-origins[1]=https://admin.example.com",
                         "tachyon.network.allowed-headers[0]=X-Trace-Id",
@@ -76,6 +78,7 @@ class TachyonPropertiesBindingTest {
                     assertThat(network.writerIdleTimeout()).isEqualTo(Duration.ofMinutes(2));
                     assertThat(network.heartbeatInterval()).isEqualTo(Duration.ofSeconds(5));
                     assertThat(network.maxContentLength()).isEqualTo(2 * 1024 * 1024);
+                    assertThat(network.maxPipelinedRequests()).isEqualTo(4);
                     assertThat(network.allowedOrigins())
                             .containsExactly("https://app.example.com", "https://admin.example.com");
                     assertThat(network.allowedHeaders()).containsExactly("X-Trace-Id");
@@ -177,6 +180,19 @@ class TachyonPropertiesBindingTest {
                     .asInstanceOf(throwable(InvalidConfigurationPropertyValueException.class))
                     .satisfies(
                             failure -> assertThat(failure.getName()).isEqualTo("tachyon.network.max-content-length"));
+        });
+    }
+
+    @Test
+    void negativeMaxPipelinedRequestsIsRejectedByName() {
+        runner.withPropertyValues("tachyon.network.max-pipelined-requests=-1").run(context -> {
+            assertThat(context).hasFailed();
+            assertThat(context.getStartupFailure())
+                    .rootCause()
+                    .isInstanceOf(InvalidConfigurationPropertyValueException.class)
+                    .asInstanceOf(throwable(InvalidConfigurationPropertyValueException.class))
+                    .satisfies(failure ->
+                            assertThat(failure.getName()).isEqualTo("tachyon.network.max-pipelined-requests"));
         });
     }
 

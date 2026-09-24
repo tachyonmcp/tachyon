@@ -3,6 +3,7 @@ package dev.tachyonmcp.e2e.mcp.v2025_11_25;
 
 import static dev.tachyonmcp.testkit.JsonRpcResponseAssert.assertThat;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 import dev.tachyonmcp.api.runtime.InteractionContext;
 import dev.tachyonmcp.api.server.extensions.AdvertiseMode;
@@ -17,6 +18,7 @@ import java.io.InputStreamReader;
 import java.net.Socket;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -128,18 +130,23 @@ class StatelessExtensionNegotiationTest {
                     """);
             assertThat(defaulted.initializationStarted.await(10, TimeUnit.SECONDS))
                     .isTrue();
-            try {
-                send(socket, """
-                        {"jsonrpc":"2.0","id":2,"method":"defaulted/call","params":{}}
-                        """);
-                assertThat(readResponse(reader)).isSuccess().hasId(2).hasResult("""
-                        {"handled":"defaulted/call"}
-                        """);
-                assertThat(defaulted.declaredSeenByHandler).containsExactly(false);
-            } finally {
-                defaulted.finishInitialization.countDown();
-            }
+            send(socket, """
+                    {"jsonrpc":"2.0","id":2,"method":"defaulted/call","params":{}}
+                    """);
+            await().during(Duration.ofMillis(300))
+                    .atMost(Duration.ofSeconds(1))
+                    .untilAsserted(() -> assertThat(defaulted.declaredSeenByHandler)
+                            .as("a pipelined request waits for the response ahead of it (RFC 9112 §9.3.2)")
+                            .isEmpty());
+            defaulted.finishInitialization.countDown();
+
             assertThat(readResponse(reader)).isSuccess().hasId(1);
+            assertThat(readResponse(reader)).isSuccess().hasId(2).hasResult("""
+                    {"handled":"defaulted/call"}
+                    """);
+            assertThat(defaulted.declaredSeenByHandler)
+                    .as("a stateless request does not inherit the connection's earlier initialize")
+                    .containsExactly(false);
             assertThat(defaulted.initializationContexts)
                     .singleElement()
                     .satisfies(context ->

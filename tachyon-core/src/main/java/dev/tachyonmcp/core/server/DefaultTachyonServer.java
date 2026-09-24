@@ -388,6 +388,7 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
                             network.readerIdleTimeout(),
                             network.writerIdleTimeout(),
                             network.maxContentLength(),
+                            network.maxPipelinedRequests(),
                             NettyServerConfig.buildCorsConfig(
                                     network.allowedOrigins(), network.allowPrivateNetworks(), network.allowedHeaders()),
                             network.allowedHosts(),

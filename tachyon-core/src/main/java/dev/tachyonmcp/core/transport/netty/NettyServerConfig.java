@@ -24,6 +24,8 @@ import org.jspecify.annotations.Nullable;
  * @param readerIdleTimeout  idle timeout for reading
  * @param writerIdleTimeout  idle timeout for writing
  * @param maxContentLength   maximum HTTP content length in bytes
+ * @param maxPipelinedRequests HTTP/1.1 pipelined requests that may wait behind the one in flight;
+ *                           {@code 0} disables pipelining
  * @param corsConfig         CORS configuration; also the origin allowlist of the DNS-rebinding guard.
  *                           A finite origin list must hold canonical serialized origins, as
  *                           {@link #buildCorsConfig} stores them, else {@link IllegalArgumentException}.
@@ -40,6 +42,7 @@ public record NettyServerConfig(
         Duration readerIdleTimeout,
         Duration writerIdleTimeout,
         int maxContentLength,
+        int maxPipelinedRequests,
         CorsConfig corsConfig,
         @Nullable List<String> allowedHosts,
         NettyIoEngine ioEngine,
@@ -71,6 +74,9 @@ public record NettyServerConfig(
 
     public NettyServerConfig {
         Objects.requireNonNull(corsConfig, "corsConfig");
+        if (maxPipelinedRequests < 0) {
+            throw new IllegalArgumentException("maxPipelinedRequests must not be negative");
+        }
         if (!corsConfig.isAnyOriginSupported()) {
             for (var origin : corsConfig.origins()) {
                 if (!origin.equals(Origins.canonical(origin))) {
@@ -142,6 +148,7 @@ public record NettyServerConfig(
                 NetworkConfig.DEFAULT_READER_IDLE_TIMEOUT,
                 NetworkConfig.DEFAULT_WRITER_IDLE_TIMEOUT,
                 McpChannelInitializer.DEFAULT_MAX_CONTENT_LENGTH,
+                NetworkConfig.DEFAULT_MAX_PIPELINED_REQUESTS,
                 defaultCorsConfig(),
                 null,
                 NettyIoEngine.AUTO,

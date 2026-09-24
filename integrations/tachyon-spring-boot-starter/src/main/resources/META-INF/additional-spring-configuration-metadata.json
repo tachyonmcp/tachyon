@@ -25,6 +25,10 @@
       "defaultValue": "1MB"
     },
     {
+      "name": "tachyon.network.max-pipelined-requests",
+      "defaultValue": 16
+    },
+    {
       "name": "tachyon.network.allowed-origins",
       "defaultValue": []
     },

@@ -90,6 +90,7 @@ final class ConfigReference {
             // at this interval so the stream never looks idle. Keep < readerIdleTimeout. <= 0 disables.
             .heartbeatInterval(Duration.ofSeconds(15))
             .maxContentLength(65536) // 64KB
+            .maxPipelinedRequests(16) // HTTP/1.1 requests queued behind the one in flight; over => 429 + close
             .allowedOrigins("https://app.example.com") // serialized origin: no path, no "*", no "null"
             .allowPrivateNetworks(true)
             .allowedHeaders("X-Custom-Header")

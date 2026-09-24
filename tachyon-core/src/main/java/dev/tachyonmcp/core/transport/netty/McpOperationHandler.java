@@ -552,13 +552,6 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
     }
 
     @Override
-    public void channelWritabilityChanged(ChannelHandlerContext ctx) {
-        var writable = ctx.channel().isWritable();
-        ctx.channel().config().setAutoRead(writable);
-        ctx.fireChannelWritabilityChanged();
-    }
-
-    @Override
     public void channelInactive(ChannelHandlerContext ctx) {
         ctx.fireChannelInactive();
     }
