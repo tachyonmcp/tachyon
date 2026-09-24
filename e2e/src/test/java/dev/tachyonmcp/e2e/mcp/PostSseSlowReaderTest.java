@@ -92,7 +92,7 @@ class PostSseSlowReaderTest {
                 final var slowChannel = channel.get();
                 if (blockEventLoop) {
                     assertThat(((SingleThreadEventExecutor) slowChannel.eventLoop()).pendingTasks())
-                            .as("about 1 MiB of 8 KiB events, not thousands of tasks")
+                            .as("buffering is off by default: one write in flight, not thousands of tasks")
                             .isLessThan(160);
                     releaseEventLoop.countDown();
                 }

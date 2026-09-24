@@ -39,6 +39,7 @@ class NetworkConfigTest {
         assertThat(config.allowedHeaders()).isNull();
         assertThat(config.ioEngine()).isEqualTo(NettyIoEngine.AUTO);
         assertThat(config.heartbeatInterval()).isEqualTo(Duration.ofSeconds(15));
+        assertThat(config.maxPendingSseBytes()).as("buffering off by default").isZero();
     }
 
     @Test
@@ -123,7 +124,8 @@ class NetworkConfigTest {
                 headers,
                 hosts,
                 NettyIoEngine.AUTO,
-                Duration.ofSeconds(15));
+                Duration.ofSeconds(15),
+                NetworkConfig.DEFAULT_MAX_PENDING_SSE_BYTES);
 
         // Mutating the original lists must not affect the config
         origins.add("http://evil.com");
@@ -156,6 +158,18 @@ class NetworkConfigTest {
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> NetworkConfig.builder().maxPipelinedRequests(-1))
                 .withMessage("maxPipelinedRequests must not be negative");
+    }
+
+    @Test
+    void maxPendingSseBytesAcceptsZeroAndRejectsNegative() {
+        assertThat(NetworkConfig.builder().maxPendingSseBytes(64 * 1024).build().maxPendingSseBytes())
+                .isEqualTo(64 * 1024);
+        assertThat(NetworkConfig.builder().maxPendingSseBytes(0).build().maxPendingSseBytes())
+                .as("0 disables buffering")
+                .isZero();
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> NetworkConfig.builder().maxPendingSseBytes(-1))
+                .withMessage("maxPendingSseBytes must not be negative");
     }
 
     @Test

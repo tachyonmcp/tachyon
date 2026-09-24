@@ -4,6 +4,7 @@ package dev.tachyonmcp.core.transport.netty.sse;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.tachyonmcp.core.runtime.SseEvent;
+import dev.tachyonmcp.core.server.config.NetworkConfig;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
 import dev.tachyonmcp.core.transport.netty.ChannelHandlerUtils;
 import dev.tachyonmcp.core.transport.netty.http.CorsDecision;
@@ -41,6 +42,7 @@ import org.junit.jupiter.params.provider.ValueSource;
  */
 class PostSseStreamTest {
 
+    private static final int ONE_MIB = 1024 * 1024;
     private static final Pattern SSE_ID = Pattern.compile("id: (\\d+)#(\\S+)");
 
     private CapturingSink sink;
@@ -264,6 +266,75 @@ class PostSseStreamTest {
     }
 
     @Test
+    void configuredBudgetIsReservedBeforeEncodingSoARejectedWriteNeverAllocates() {
+        final var stream = newStream(Duration.ZERO, 64 * 1024);
+        stream.start();
+        final var payload = "x".repeat(8192);
+        final var allocationsBefore = allocator.allocated.size();
+
+        for (int i = 0; i < 16; i++) {
+            stream.offerEvent(new SseEvent("1", "message", payload));
+        }
+        channel.runPendingTasks();
+
+        final var delivered =
+                sink.writes.stream().filter(w -> w.contains(payload)).count();
+        assertThat(delivered)
+                .as("64 KiB budget: 7 writes of 8,221 encoded + 128 task bytes fit, the 8th overflows")
+                .isEqualTo(7);
+        assertThat(allocator.allocated.size() - allocationsBefore)
+                .as("only admitted writes are encoded; the rejected one never allocates a buffer")
+                .isEqualTo(7);
+        assertThat(ChannelHandlerUtils.closeFailure(channel)).hasMessageContaining("SSE pending write limit");
+        assertThat(allocator.leaked()).isEmpty();
+    }
+
+    @Test
+    void zeroBudgetAllowsOneWriteInFlightAndFailsFastOnTheLoop() {
+        final var stream = newStream(Duration.ZERO, NetworkConfig.DEFAULT_MAX_PENDING_SSE_BYTES);
+        stream.start();
+        sink.completePending();
+        final var payload = "x".repeat(8192);
+
+        stream.writeEvent(new SseEvent("1", "message", payload));
+        sink.completePending();
+        stream.writeEvent(new SseEvent("2", "message", payload));
+        channel.runPendingTasks();
+        assertThat(channel.isActive())
+                .as("each write went out before the next: nothing was buffered")
+                .isTrue();
+
+        stream.writeEvent(new SseEvent("3", "message", payload));
+        channel.runPendingTasks();
+
+        assertThat(channel.isActive())
+                .as("a second write while one is in flight would buffer; on the loop it cannot wait")
+                .isFalse();
+        assertThat(ChannelHandlerUtils.closeFailure(channel)).hasMessageContaining("SSE pending write limit");
+        assertThat(sink.writes.stream().filter(w -> w.contains(payload))).hasSize(2);
+        assertThat(allocator.leaked()).isEmpty();
+    }
+
+    @Test
+    void zeroBudgetOffersFallBackToTheChannelHighWatermark() {
+        channel.config().setWriteBufferHighWaterMark(64 * 1024);
+        final var stream = newStream(Duration.ZERO, 0);
+        stream.start();
+        final var payload = "x".repeat(8192);
+
+        for (int i = 0; i < 16; i++) {
+            stream.offerEvent(new SseEvent("1", "message", payload));
+        }
+        channel.runPendingTasks();
+
+        assertThat(sink.writes.stream().filter(w -> w.contains(payload)))
+                .as("a notification burst fills the 64 KiB watermark before the subscriber is dropped")
+                .hasSize(7);
+        assertThat(ChannelHandlerUtils.closeFailure(channel)).hasMessageContaining("SSE pending write limit");
+        assertThat(allocator.leaked()).isEmpty();
+    }
+
+    @Test
     void finalResponseIsAdmittedPastAFullBudgetWithoutClosingTheStream() {
         final var stream = newStream(Duration.ZERO);
         stream.start();
@@ -335,7 +406,12 @@ class PostSseStreamTest {
     }
 
     private PostSseStream newStream(Duration heartbeatInterval) {
-        return new PostSseStream(channel, CorsDecision.NONE, eventIds::incrementAndGet, heartbeatInterval);
+        return newStream(heartbeatInterval, ONE_MIB);
+    }
+
+    private PostSseStream newStream(Duration heartbeatInterval, int maxPendingBytes) {
+        return new PostSseStream(
+                channel, CorsDecision.NONE, eventIds::incrementAndGet, heartbeatInterval, maxPendingBytes);
     }
 
     /** Hands out unpooled heap buffers and remembers them, so a test can spot one never released. */

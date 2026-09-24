@@ -60,7 +60,7 @@ Verdict: `ServerBuilder` exposes grouped `Consumer<X.Builder>` configurers + sho
 - `build()` takes its session stores from the `ServerConfig` it publishes, so `TachyonServer#config` and the running server share one `SessionConfig` `DefaultServerBuilder#build`. Stateless ⇒ no stores at all → [[sessions]].
 - `NetworkConfig.Builder`: `address()` XOR `host()/port()` ⇒ ISE `Builder#Builder`.
 - `CapabilitiesConfig`: tasks enabled w/o connector ⇒ ISE `Builder#validateTaskConnector`.
-- page sizes must be > 0; `maxContentLength` > 0; `maxPipelinedRequests` >= 0 (`0` disables pipelining) `NetworkConfig.Builder#maxPipelinedRequests`; `pollInterval` > 0.
+- page sizes must be > 0; `maxContentLength` > 0; `maxPipelinedRequests` >= 0 (`0` disables pipelining) `NetworkConfig.Builder#maxPipelinedRequests`; `maxPendingSseBytes` >= 0 (`0` disables buffering; per POST-SSE stream budget → [[sse-streams]]) `NetworkConfig.Builder#maxPendingSseBytes`; `pollInterval` > 0.
 - `allowedHosts` entries: bare authority only, no URL syntax ⇒ IAE at pipeline construction → [[security-guards]].
 
 Kotlin mirrors: `info { }`, `capabilities { }`, `network { }`, `session { }` scopes → [[tachyon-kotlin]].

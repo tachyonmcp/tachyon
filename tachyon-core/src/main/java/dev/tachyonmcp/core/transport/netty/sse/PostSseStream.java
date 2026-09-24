@@ -48,15 +48,18 @@ import org.slf4j.LoggerFactory;
  * {@link io.netty.channel.EventLoop}. The lifecycle state is volatile for producer admission and
  * {@link #started()}; only the event loop writes it.
  *
- * <p>Producers encode each write on their own thread and reserve its encoded size before
- * event-loop submission, held until the write completes; the event loop only queues or writes the
- * ready buffer. The budget is at least 1 MiB (or the channel's high watermark, if larger). One
- * larger event may exceed that budget. A producer off the event loop waits for capacity, so a
- * fast tool slows to the client's pace; a stalled client is closed by the writer idle timeout,
- * which wakes it. An interrupted producer closes the stream rather than drop its event silently.
- * A write without capacity from the event loop or {@link #offerEvent} closes the connection
- * instead. The final response skips the budget: it is the last write, so it adds at most one
- * event. The event loop never blocks, and the task queue stays bounded.
+ * <p>Producers measure each write's exact encoded size, reserve it, then encode it on their own
+ * thread; the reservation is held until the write completes, and the event loop only queues or
+ * writes the ready buffer. A producer waiting for capacity holds no buffer. The budget is {@code
+ * NetworkConfig#maxPendingSseBytes}; one larger event may exceed it, so a budget of {@code 0}
+ * allows exactly one write in flight. {@link #offerEvent} uses the channel's write high watermark
+ * instead when the budget is {@code 0}. A producer off the event loop
+ * waits for capacity, so a fast tool slows to the client's pace; a stalled client is closed by the
+ * writer idle timeout, which wakes it. An interrupted producer closes the stream rather than drop
+ * its event silently. A write without capacity from the event loop or {@link #offerEvent} closes
+ * the connection instead. The final response skips the budget and is encoded before reserving: it
+ * is the last write and never waits, so it adds at most one event. The event loop never blocks,
+ * and the task queue stays bounded.
  */
 @InternalApi
 public final class PostSseStream implements OutboundSseStream {
@@ -90,7 +93,7 @@ public final class PostSseStream implements OutboundSseStream {
     private enum Admission {
         /** Park the producer until capacity frees up; overflow-close on the event loop. */
         WAIT,
-        /** Never park: overflow-close instead. */
+        /** Never park: overflow-close instead. Limited by the high watermark when the budget is 0. */
         OFFER,
         /** Always admitted: the final response is the stream's last write. */
         FINAL
@@ -105,17 +108,27 @@ public final class PostSseStream implements OutboundSseStream {
     private final AtomicInteger capacityWaiters = new AtomicInteger();
     private final AtomicBoolean startRequested = new AtomicBoolean();
     private final long maxPendingBytes;
+    private final long maxOfferedBytes;
     private final CompletableFuture<Void> startCompletion = new CompletableFuture<>();
     private final ChannelFutureListener channelClosed = ignored -> discardQueued();
     private volatile State state = State.NEW;
     private @Nullable ChannelFuture closeWrite;
     private final ChannelFutureListener writeFailureListener = this::closeOnWriteFailure;
 
-    public PostSseStream(Channel channel, CorsDecision cors, LongSupplier eventIdSupplier, Duration heartbeatInterval) {
+    public PostSseStream(
+            Channel channel,
+            CorsDecision cors,
+            LongSupplier eventIdSupplier,
+            Duration heartbeatInterval,
+            int maxPendingBytes) {
         this.channel = channel;
         this.cors = cors;
         this.heartbeatInterval = heartbeatInterval;
-        this.maxPendingBytes = Math.max(1024 * 1024, channel.config().getWriteBufferHighWaterMark());
+        this.maxPendingBytes = maxPendingBytes;
+        // Offers never wait, so with buffering off they fall back to the channel's own writability
+        // limit: a burst of notifications to a healthy subscriber must not disconnect it.
+        this.maxOfferedBytes =
+                maxPendingBytes > 0 ? maxPendingBytes : channel.config().getWriteBufferHighWaterMark();
         channel.closeFuture().addListener(channelClosed);
         // Session-unique key (one counter draw per POST) tagging this stream's events in the log
         // and suffixing its SSE ids, so Last-Event-ID resolves to THIS stream on replay. Not the
@@ -159,13 +172,13 @@ public final class PostSseStream implements OutboundSseStream {
         if (logger.isTraceEnabled()) {
             logger.trace("POST-SSE writing event, id={}, data={}", event.id(), abbreviate(event.data()));
         }
-        submitWrite(SseSerializer.encode(channel.alloc(), event), false, Admission.WAIT, null);
+        writeMeasured(event, Admission.WAIT);
     }
 
     @Override
     public void offerEvent(@Nullable SseEvent event) {
         if (event == null || !admitting()) return;
-        submitWrite(SseSerializer.encode(channel.alloc(), event), false, Admission.OFFER, null);
+        writeMeasured(event, Admission.OFFER);
     }
 
     /**
@@ -180,11 +193,15 @@ public final class PostSseStream implements OutboundSseStream {
             if (onDropped != null) onDropped.run();
             return;
         }
-        submitWrite(
-                SseSerializer.encode(channel.alloc(), ServerEngine.wireEventId(sseEventId, streamKey), body),
-                false,
-                Admission.FINAL,
-                onDropped);
+        // Never waits for capacity, so there is nothing to measure first: encode, then reserve its size.
+        final var buf = SseSerializer.encode(channel.alloc(), ServerEngine.wireEventId(sseEventId, streamKey), body);
+        final long bytes = buf.readableBytes() + TASK_OVERHEAD_BYTES;
+        if (!reserve(bytes, Admission.FINAL)) {
+            buf.release();
+            if (onDropped != null) onDropped.run();
+            return;
+        }
+        dispatch(buf, bytes, false, onDropped);
     }
 
     @Override
@@ -197,7 +214,12 @@ public final class PostSseStream implements OutboundSseStream {
                 : ": " + message.replace('\r', ' ').replace('\n', ' ') + "\r\n";
         // Self-starting: a comment upgrades the buffered POST to SSE even when no event was written
         // yet — this is the token-free keep-alive path.
-        submitWrite(ByteBufUtil.writeUtf8(channel.alloc(), line), true, Admission.WAIT, null);
+        final var length = ByteBufUtil.utf8Bytes(line);
+        final long bytes = length + TASK_OVERHEAD_BYTES;
+        if (!reserve(bytes, Admission.WAIT)) return;
+        final var buf = allocateReserved(length, bytes);
+        ByteBufUtil.reserveAndWriteUtf8(buf, line, length);
+        dispatch(buf, bytes, true, null);
     }
 
     @Override
@@ -283,9 +305,8 @@ public final class PostSseStream implements OutboundSseStream {
         while (channel.isActive() && !state.closed) {
             final var pending = pendingBytes.get();
             if (pending < 0) return false;
-            if (admission == Admission.FINAL
-                    || (pending <= maxPendingBytes
-                            && (bytes > maxPendingBytes || bytes <= maxPendingBytes - pending))) {
+            final var limit = admission == Admission.OFFER ? maxOfferedBytes : maxPendingBytes;
+            if (admission == Admission.FINAL || (pending <= limit && (bytes > limit || bytes <= limit - pending))) {
                 if (pendingBytes.compareAndSet(pending, pending + bytes)) return true;
             } else if (admission == Admission.WAIT && !channel.eventLoop().inEventLoop()) {
                 if (!awaitCapacity(pending)) {
@@ -344,17 +365,39 @@ public final class PostSseStream implements OutboundSseStream {
         }
     }
 
-    private void submitWrite(ByteBuf buf, boolean startsStream, Admission admission, @Nullable Runnable onDropped) {
-        final long bytes = buf.readableBytes() + TASK_OVERHEAD_BYTES;
-        if (!reserve(bytes, admission)) {
-            buf.release();
-            if (onDropped != null) onDropped.run();
-            return;
+    /**
+     * Measures {@code event}, reserves its size, then encodes it: a producer parked for capacity
+     * holds no buffer, and a refused write never allocates one.
+     */
+    private void writeMeasured(SseEvent event, Admission admission) {
+        final var measured = SseSerializer.measure(event);
+        final long bytes = SseSerializer.measuredLength(measured) + TASK_OVERHEAD_BYTES;
+        if (!reserve(bytes, admission)) return;
+        final ByteBuf buf;
+        try {
+            buf = SseSerializer.encode(channel.alloc(), event, measured);
+        } catch (Throwable t) {
+            releaseCapacity(bytes);
+            throw t;
         }
+        dispatch(buf, bytes, false, null);
+    }
+
+    /** Allocates a buffer for a reserved write, returning the reservation if allocation fails. */
+    private ByteBuf allocateReserved(int length, long bytes) {
+        try {
+            return channel.alloc().buffer(length);
+        } catch (Throwable t) {
+            releaseCapacity(bytes);
+            throw t;
+        }
+    }
+
+    /** Hands a reserved, encoded write to the event loop; its completion releases {@code bytes}. */
+    private void dispatch(ByteBuf buf, long bytes, boolean startsStream, @Nullable Runnable onDropped) {
         final var promise = channel.newPromise();
         promise.addListener(f -> {
-            pendingBytes.updateAndGet(pending -> pending < 0 ? -1 : pending - bytes);
-            signalCapacity();
+            releaseCapacity(bytes);
             if (!f.isSuccess() && onDropped != null) onDropped.run();
         });
         try {
@@ -363,6 +406,11 @@ public final class PostSseStream implements OutboundSseStream {
             buf.release();
             promise.tryFailure(e);
         }
+    }
+
+    private void releaseCapacity(long bytes) {
+        pendingBytes.updateAndGet(pending -> pending < 0 ? -1 : pending - bytes);
+        signalCapacity();
     }
 
     private void discardQueued() {

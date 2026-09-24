@@ -166,8 +166,9 @@ public class McpInitializationHandler extends ChannelInboundHandlerAdapter {
             });
             return;
         }
-        var heartbeatInterval = server.config().network().heartbeatInterval();
-        var postStream = new PostSseStream(ctx.channel(), cors, server::nextEventId, heartbeatInterval);
+        var network = server.config().network();
+        var postStream = new PostSseStream(
+                ctx.channel(), cors, server::nextEventId, network.heartbeatInterval(), network.maxPendingSseBytes());
         final var transportCompletion = new CompletableFuture<Void>();
         dispatcher
                 .dispatchRequestAsync(
@@ -255,8 +256,9 @@ public class McpInitializationHandler extends ChannelInboundHandlerAdapter {
     }
 
     private void handleInitialize(ChannelHandlerContext ctx, RequestId id, Object params, CorsDecision cors) {
-        var heartbeatInterval = server.config().network().heartbeatInterval();
-        var postStream = new PostSseStream(ctx.channel(), cors, server::nextEventId, heartbeatInterval);
+        var network = server.config().network();
+        var postStream = new PostSseStream(
+                ctx.channel(), cors, server::nextEventId, network.heartbeatInterval(), network.maxPendingSseBytes());
         final var startNs = System.nanoTime();
         logger.debug("Initialize request: id={}", id);
 
