@@ -33,6 +33,7 @@ For an ephemeral port, inject `TachyonServer` and read `server.port()` after sta
 | `tachyon.network.writer-idle-timeout` | `5m` | Close connections with no outbound traffic for this long. |
 | `tachyon.network.heartbeat-interval` | `15s` | SSE heartbeat that keeps an upgraded stream alive. Keep it below proxy idle timeouts and, with sessions, below the session TTL; `0` disables it. |
 | `tachyon.network.max-content-length` | `1MB` | Maximum HTTP request body size. Takes a `DataSize`, such as `512KB`. |
+| `tachyon.network.max-pipelined-requests` | `16` | Pipelined HTTP/1.1 requests that may wait behind the one in flight on a connection; the next gets `429` and the connection closes. `0` disables pipelining. |
 | `tachyon.network.allowed-origins` | none | Origins the DNS-rebinding guard admits and the CORS handler grants, each `http(s)://host[:port]` with no path. Unset grants any loopback origin, on any port. Set, loopback origins outside the list get no CORS grant. A malformed entry fails startup naming this property. |
 | `tachyon.network.allowed-headers` | none | Request headers accepted by the CORS handler, beyond the built-in ones. |
 | `tachyon.network.allowed-hosts` | none | `Host` authorities the DNS-rebinding guard accepts beyond loopback, each a host or `host:port`. |

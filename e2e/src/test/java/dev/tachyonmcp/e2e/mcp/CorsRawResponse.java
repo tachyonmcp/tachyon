@@ -38,8 +38,32 @@ record CorsRawResponse(int status, Map<String, String> headers, String body) {
                         (x, y) -> x + ", " + y);
             }
         }
-        var length = Integer.parseInt(headers.getOrDefault("content-length", "0"));
-        var body = in.readNBytes(length);
+        var body = headers.getOrDefault("transfer-encoding", "").contains("chunked")
+                ? readChunked(in)
+                : in.readNBytes(Integer.parseInt(headers.getOrDefault("content-length", "0")));
         return new CorsRawResponse(status, headers, new String(body, StandardCharsets.UTF_8));
+    }
+
+    private static byte[] readChunked(InputStream in) throws IOException {
+        var body = new ByteArrayOutputStream();
+        int size;
+        while ((size = Integer.parseInt(readLine(in).split(";")[0].trim(), 16)) > 0) {
+            body.write(in.readNBytes(size));
+            readLine(in);
+        }
+        var trailer = readLine(in);
+        while (!trailer.isEmpty()) {
+            trailer = readLine(in);
+        }
+        return body.toByteArray();
+    }
+
+    private static String readLine(InputStream in) throws IOException {
+        var line = new ByteArrayOutputStream();
+        int b;
+        while ((b = in.read()) != -1 && b != '\n') {
+            if (b != '\r') line.write(b);
+        }
+        return line.toString(StandardCharsets.US_ASCII);
     }
 }

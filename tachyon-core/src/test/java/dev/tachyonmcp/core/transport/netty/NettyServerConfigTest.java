@@ -89,6 +89,7 @@ class NettyServerConfigTest {
                 defaults.readerIdleTimeout(),
                 defaults.writerIdleTimeout(),
                 defaults.maxContentLength(),
+                defaults.maxPipelinedRequests(),
                 cors,
                 defaults.allowedHosts(),
                 defaults.ioEngine(),

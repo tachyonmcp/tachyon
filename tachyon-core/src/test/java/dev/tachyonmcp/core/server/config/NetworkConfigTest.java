@@ -33,6 +33,7 @@ class NetworkConfigTest {
         assertThat(config.readerIdleTimeout()).isEqualTo(Duration.ofSeconds(60));
         assertThat(config.writerIdleTimeout()).isEqualTo(Duration.ofMinutes(5));
         assertThat(config.maxContentLength()).isEqualTo(McpChannelInitializer.DEFAULT_MAX_CONTENT_LENGTH);
+        assertThat(config.maxPipelinedRequests()).isEqualTo(16);
         assertThat(config.allowedOrigins()).isNull();
         assertThat(config.allowPrivateNetworks()).isFalse();
         assertThat(config.allowedHeaders()).isNull();
@@ -116,6 +117,7 @@ class NetworkConfigTest {
                 Duration.ofSeconds(60),
                 Duration.ofMinutes(5),
                 McpChannelInitializer.DEFAULT_MAX_CONTENT_LENGTH,
+                NetworkConfig.DEFAULT_MAX_PIPELINED_REQUESTS,
                 origins,
                 false,
                 headers,
@@ -142,6 +144,18 @@ class NetworkConfigTest {
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> NetworkConfig.builder().maxContentLength(-1))
                 .withMessage("maxContentLength must be positive");
+    }
+
+    @Test
+    void maxPipelinedRequestsAcceptsZeroAndRejectsNegative() {
+        assertThat(NetworkConfig.builder().maxPipelinedRequests(0).build().maxPipelinedRequests())
+                .as("0 disables pipelining")
+                .isZero();
+        assertThat(NetworkConfig.builder().maxPipelinedRequests(4).build().maxPipelinedRequests())
+                .isEqualTo(4);
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> NetworkConfig.builder().maxPipelinedRequests(-1))
+                .withMessage("maxPipelinedRequests must not be negative");
     }
 
     @Test

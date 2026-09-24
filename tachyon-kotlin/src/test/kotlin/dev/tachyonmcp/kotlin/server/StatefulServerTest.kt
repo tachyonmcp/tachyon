@@ -138,6 +138,7 @@ internal class StatefulServerTest {
                 readerIdleTimeout = 124.seconds
                 writerIdleTimeout = 60.seconds
                 maxContentLength = 1_000_000
+                maxPipelinedRequests = 4
             }
             session {
                 enable()
@@ -216,6 +217,7 @@ internal class StatefulServerTest {
                 readerIdleTimeout shouldBe 124.seconds.toJavaDuration()
                 writerIdleTimeout shouldBe 60.seconds.toJavaDuration()
                 maxContentLength shouldBe 1_000_000
+                maxPipelinedRequests shouldBe 4
                 allowPrivateNetworks shouldBe true
             }
 

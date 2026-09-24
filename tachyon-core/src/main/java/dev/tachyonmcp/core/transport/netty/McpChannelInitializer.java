@@ -10,6 +10,7 @@ import dev.tachyonmcp.core.transport.netty.http.CorsHttpObjectAggregator;
 import dev.tachyonmcp.core.transport.netty.http.CorsPreflightHandler;
 import dev.tachyonmcp.core.transport.netty.http.DnsRebindingProtectionHandler;
 import dev.tachyonmcp.core.transport.netty.http.EndpointValidatorHandler;
+import dev.tachyonmcp.core.transport.netty.http.HttpPipeliningGate;
 import dev.tachyonmcp.core.transport.netty.http.McpHeaderGuardHandler;
 import dev.tachyonmcp.core.transport.netty.http.McpHeaderMatchHandler;
 import dev.tachyonmcp.core.transport.netty.http.StatelessValidatorHandler;
@@ -62,6 +63,7 @@ public class McpChannelInitializer extends ChannelInitializer<SocketChannel> {
     private final Duration readerIdleTimeout;
     private final Duration writerIdleTimeout;
     private final int maxContentLength;
+    private final int maxPipelinedRequests;
     private final ProtocolVersionHandler protocolVersionHandler;
     private static final UnsupportedProtocolVersionHandler UNSUPPORTED_PROTOCOL_VERSION_HANDLER =
             new UnsupportedProtocolVersionHandler();
@@ -96,6 +98,7 @@ public class McpChannelInitializer extends ChannelInitializer<SocketChannel> {
             Duration readerIdleTimeout,
             Duration writerIdleTimeout,
             int maxContentLength,
+            int maxPipelinedRequests,
             ChannelGroup childChannels,
             CorsConfig corsConfig,
             @Nullable List<String> allowedHosts,
@@ -105,6 +108,7 @@ public class McpChannelInitializer extends ChannelInitializer<SocketChannel> {
         this.readerIdleTimeout = readerIdleTimeout;
         this.writerIdleTimeout = writerIdleTimeout;
         this.maxContentLength = maxContentLength;
+        this.maxPipelinedRequests = maxPipelinedRequests;
         this.corsConfig = corsConfig;
         this.dnsRebindingHandler = new DnsRebindingProtectionHandler(
                 allowedHosts == null ? List.of() : allowedHosts,
@@ -139,6 +143,8 @@ public class McpChannelInitializer extends ChannelInitializer<SocketChannel> {
             p.addLast("logger", CHANNEL_LOGGER);
         }
         p.addLast("http", new HttpServerCodec());
+        // Right after the codec, so every response any handler below writes is ordered by it.
+        p.addLast("http-pipelining", new HttpPipeliningGate(maxPipelinedRequests));
 
         // SessionTouchHandler is installed lazily at session-bind time (see SessionTouchHandler#install).
         // During initialization, no session is bound to the channel, so no touch is needed.

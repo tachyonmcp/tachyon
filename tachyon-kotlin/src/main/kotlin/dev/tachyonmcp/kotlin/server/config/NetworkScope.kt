@@ -38,6 +38,12 @@ public class NetworkScope
         /** Maximum allowed content length for incoming requests. */
         public var maxContentLength: Int? = null
 
+        /**
+         * Pipelined HTTP/1.1 requests that may wait behind the one in flight on a connection. The next
+         * one gets `429 Too Many Requests` and the connection closes; `0` disables pipelining.
+         */
+        public var maxPipelinedRequests: Int? = null
+
         /** Netty I/O engine configuration. */
         public var ioEngine: NettyIoEngine? = null
 
@@ -71,6 +77,7 @@ public class NetworkScope
             writerIdleTimeout?.let { builder.writerIdleTimeout(it.toJavaDuration()) }
             heartbeatInterval?.let { builder.heartbeatInterval(it.toJavaDuration()) }
             maxContentLength?.let(builder::maxContentLength)
+            maxPipelinedRequests?.let(builder::maxPipelinedRequests)
             ioEngine?.let(builder::ioEngine)
         }
     }

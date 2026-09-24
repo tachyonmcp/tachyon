@@ -3,14 +3,13 @@ title: Findings
 tags: [meta, findings]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/HandlerFutures.java]
 updated: 2026-09-24
-commit: 0b232fb4
+commit: d2a0bdba
 ---
 
 # 🔎 Findings
 
 Spotted while reading code. Runtime verification noted per finding. Fixed in code ⇒ 🗑️ remove row.
 
-- 🐛 **Release blocker:** HTTP/1.1 pipelining order. PR #390 audit reproduced this with a raw socket and two explicitly completed futures: fast B's HTTP response arrives before slow A's, each with its own CORS grant. RFC 9112 §9.3.2 requires request order; JSON-RPC IDs do not repair HTTP response association. The default CORS regression uses a latch and controlled futures to release A before B; it proves request-scoped headers, not correct transport ordering for B-before-A completion. Fix separately: preserve HTTP response order, including errors and SSE. [McpInitializationHandler#dispatchPreSessionRequest](../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpInitializationHandler.java), [CorsPipeliningTest#eachPipelinedResponseCarriesItsOwnRequestsCorsGrant](../e2e/src/test/java/dev/tachyonmcp/e2e/mcp/CorsPipeliningTest.java).
 - ⚠️ Notifications route onto the POST-SSE stream only from the dispatching thread (ThreadLocal). A handler continuing on another thread ⇒ event goes to the GET stream, or is dropped when there is none (stateful) — surprising for async tools. `OutboundSseStreamMessageRouter#currentSessionId`, `McpDispatcher#invokeHandlerAsync`
 - ⚠️ `UnsupportedProtocolVersionHandler` encodes the rejection with `ProtocolVersionHandler#LATEST_PROTOCOL` (not `Protocols#baseline`) + HTTP 400, even for legacy-looking clients. Intentional per SEP-2575? `UnsupportedProtocolVersionHandler#channelRead`
 - ⚠️ Absolute-form request-target (`POST http://host/mcp HTTP/1.1`) ⇒ 404: `EndpointValidatorHandler#channelRead` compares the raw URI. RFC 9112 §3.2.2: servers MUST accept absolute-form. Fails closed. Fix must also check the authority against `Host` and the DNS-rebinding guard, or an authority-less check becomes a bypass.

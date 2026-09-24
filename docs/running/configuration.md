@@ -42,6 +42,7 @@ Configured via `network { }` / `NetworkConfig.Builder`.
 | `writerIdleTimeout` | `5m` | Close connections with no outbound traffic for this long |
 | `heartbeatInterval` | `15s` | SSE heartbeat interval for silent listening streams; `<= 0` disables |
 | `maxContentLength` | `1 MB` | Max aggregated HTTP request body |
+| `maxPipelinedRequests` | `16` | HTTP/1.1 pipelined requests that may wait behind the one in flight on a connection. Responses always follow request order; the next request gets `429 Too Many Requests` once the ones ahead are answered, and the connection closes. `0` disables pipelining |
 | `ioEngine` | `AUTO` | Netty I/O transport, see below |
 
 `.port(int)` is also available as a top-level `ServerBuilder` shortcut.

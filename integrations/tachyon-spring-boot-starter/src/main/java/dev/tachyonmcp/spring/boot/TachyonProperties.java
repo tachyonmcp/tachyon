@@ -61,6 +61,9 @@ public record TachyonProperties(
      *                            Keep it below the idle timeout of any proxy in front of the server
      *                            and below the session TTL. Zero disables heartbeats.
      * @param maxContentLength    Maximum size of an HTTP request body.
+     * @param maxPipelinedRequests Pipelined HTTP/1.1 requests that may wait behind the one in flight on
+     *                            a connection. The next one gets 429 Too Many Requests and the
+     *                            connection closes. Zero disables pipelining.
      * @param allowedOrigins      Origins the DNS-rebinding guard admits and the CORS handler grants,
      *                            each http(s)://host[:port] with no path. Unset grants any loopback
      *                            origin, on any port.
@@ -78,6 +81,7 @@ public record TachyonProperties(
             @DurationUnit(ChronoUnit.SECONDS) @Nullable Duration writerIdleTimeout,
             @DurationUnit(ChronoUnit.SECONDS) @Nullable Duration heartbeatInterval,
             @Nullable DataSize maxContentLength,
+            @Nullable Integer maxPipelinedRequests,
             @Nullable List<String> allowedOrigins,
             @Nullable List<String> allowedHeaders,
             @Nullable List<String> allowedHosts,

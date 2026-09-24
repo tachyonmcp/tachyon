@@ -222,6 +222,7 @@ per session, with `INFO` used until the client sends `logging/setLevel`.
 | `.readerIdleTimeout(d)` / `.writerIdleTimeout(d)` | 60s / 5min |
 | `.heartbeatInterval(d)` | 15s (`<= 0` disables) |
 | `.maxContentLength(b)` | 1MB |
+| `.maxPipelinedRequests(n)` | 16 (over ⇒ in-order `429` + close; `0` disables pipelining) |
 | `.allowedOrigins(...)` | none (any loopback origin, any port); listed origins pass the guard too. Each `http(s)://host[:port]`, no path/`*`/`null`; stored canonical |
 | `.allowPrivateNetworks(b)` | false (`Origin: null` is always rejected by the guard) |
 | `.allowedHeaders(...)` | none (MCP headers + requested `Mcp-Param-*` built in) |

@@ -34,6 +34,9 @@ import org.jspecify.annotations.Nullable;
  *                           long-running tools stay alive via SSE heartbeats, not a larger value
  * @param writerIdleTimeout  idle timeout for writing (default 5min)
  * @param maxContentLength   maximum HTTP body size in bytes
+ * @param maxPipelinedRequests HTTP/1.1 pipelined requests that may wait behind the one in flight on a
+ *                           connection (default 16); the next one gets {@code 429} and the connection
+ *                           closes; {@code 0} disables pipelining
  * @param allowedOrigins     origins the DNS-rebinding guard admits and CORS grants, beyond loopback
  *                           ({@code null} = loopback on any port, answered with {@code *}); each a
  *                           serialized origin {@code http(s)://host[:port]}, stored canonical
@@ -54,6 +57,7 @@ public record NetworkConfig(
         Duration readerIdleTimeout,
         Duration writerIdleTimeout,
         int maxContentLength,
+        int maxPipelinedRequests,
         @Nullable List<String> allowedOrigins,
         boolean allowPrivateNetworks,
         @Nullable List<String> allowedHeaders,
@@ -62,6 +66,9 @@ public record NetworkConfig(
         Duration heartbeatInterval) {
 
     public NetworkConfig {
+        if (maxPipelinedRequests < 0) {
+            throw new IllegalArgumentException("maxPipelinedRequests must not be negative");
+        }
         Objects.requireNonNull(endpointPath, "endpointPath");
         if (!isServablePath(endpointPath)) {
             throw new IllegalArgumentException("endpointPath must start with '/' and contain no query, fragment,"
@@ -91,6 +98,7 @@ public record NetworkConfig(
     public static final Duration DEFAULT_READER_IDLE_TIMEOUT = Duration.ofSeconds(60);
     public static final Duration DEFAULT_WRITER_IDLE_TIMEOUT = Duration.ofMinutes(5);
     public static final Duration DEFAULT_HEARTBEAT_INTERVAL = Duration.ofSeconds(15);
+    public static final int DEFAULT_MAX_PIPELINED_REQUESTS = 16;
 
     static final NetworkConfig DEFAULT = new NetworkConfig(
             DEFAULT_HOST,
@@ -99,6 +107,7 @@ public record NetworkConfig(
             DEFAULT_READER_IDLE_TIMEOUT,
             DEFAULT_WRITER_IDLE_TIMEOUT,
             McpChannelInitializer.DEFAULT_MAX_CONTENT_LENGTH,
+            DEFAULT_MAX_PIPELINED_REQUESTS,
             null,
             false,
             null,
@@ -118,6 +127,7 @@ public record NetworkConfig(
         private Duration readerIdleTimeout = DEFAULT.readerIdleTimeout;
         private Duration writerIdleTimeout = DEFAULT.writerIdleTimeout;
         private int maxContentLength = DEFAULT.maxContentLength;
+        private int maxPipelinedRequests = DEFAULT.maxPipelinedRequests;
         private @Nullable List<String> allowedOrigins = DEFAULT.allowedOrigins;
         private boolean allowPrivateNetworks = DEFAULT.allowPrivateNetworks;
         private @Nullable List<String> allowedHeaders = DEFAULT.allowedHeaders;
@@ -190,6 +200,20 @@ public record NetworkConfig(
         }
 
         /**
+         * Sets how many HTTP/1.1 pipelined requests may wait behind the one in flight on a connection
+         * (default {@value NetworkConfig#DEFAULT_MAX_PIPELINED_REQUESTS}). Responses always follow
+         * request order; the request over the limit gets {@code 429 Too Many Requests} once the ones
+         * ahead of it are answered, and the connection closes. {@code 0} disables pipelining.
+         */
+        public Builder maxPipelinedRequests(int requests) {
+            if (requests < 0) {
+                throw new IllegalArgumentException("maxPipelinedRequests must not be negative");
+            }
+            this.maxPipelinedRequests = requests;
+            return this;
+        }
+
+        /**
          * Sets the origins the DNS-rebinding guard admits and CORS grants. Unset grants any loopback
          * origin, on any port. Once set, loopback origins outside the list are still admitted but get
          * no CORS grant. A remote page reaching a non-loopback {@code Host} also needs {@link
@@ -257,6 +281,7 @@ public record NetworkConfig(
                     readerIdleTimeout,
                     writerIdleTimeout,
                     maxContentLength,
+                    maxPipelinedRequests,
                     allowedOrigins,
                     allowPrivateNetworks,
                     allowedHeaders,

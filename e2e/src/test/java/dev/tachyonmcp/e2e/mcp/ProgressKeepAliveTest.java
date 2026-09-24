@@ -13,6 +13,7 @@ import dev.tachyonmcp.api.server.features.tools.ToolDescriptor;
 import dev.tachyonmcp.api.server.features.tools.ToolRequest;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
 import dev.tachyonmcp.core.server.TachyonServer;
+import dev.tachyonmcp.core.server.config.NetworkConfig;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
 import dev.tachyonmcp.core.transport.netty.McpChannelInitializer;
 import dev.tachyonmcp.core.transport.netty.NettyIoEngine;
@@ -109,6 +110,7 @@ class ProgressKeepAliveTest {
                 READER_IDLE,
                 Duration.ofMinutes(5),
                 McpChannelInitializer.DEFAULT_MAX_CONTENT_LENGTH,
+                NetworkConfig.DEFAULT_MAX_PIPELINED_REQUESTS,
                 NettyServerConfig.defaultCorsConfig(),
                 null,
                 NettyIoEngine.AUTO,

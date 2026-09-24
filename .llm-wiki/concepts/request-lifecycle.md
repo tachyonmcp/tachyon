@@ -1,9 +1,9 @@
 ---
 title: Request lifecycle
 tags: [concept, dispatch]
-sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/ProtocolVersionHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/RpcMethodHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpInitializationHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpOperationHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tools/ToolMethodHandlers.java, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/HandlerFutures.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/PeekedBody.java]
-updated: 2026-09-23
-commit: 0ac33032
+sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/http/HttpPipeliningGate.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/ProtocolVersionHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/RpcMethodHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpInitializationHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpOperationHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tools/ToolMethodHandlers.java, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/HandlerFutures.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/PeekedBody.java]
+updated: 2026-09-24
+commit: d2a0bdba
 ---
 
 # 🔄 Request lifecycle
@@ -14,12 +14,12 @@ Verdict: event loop parses nothing heavy. Body hop → worker executor (VT) → 
 
 | # | Step | Thread | Proof |
 |---|---|---|---|
-| 1 | Pipeline guards (host, endpoint, headers, Accept, aggregate) | event loop | [[netty-pipeline]] |
+| 1 | `HttpPipeliningGate` admits one request per connection at a time (pipelined ones wait for the previous response), then guards (host, endpoint, headers, Accept, aggregate) | event loop | [[netty-pipeline]] |
 | 2 | `ProtocolVersionHandler` binds `ChannelContext` for negotiated `Protocol`; fresh per POST on stateless servers | event loop | `ProtocolVersionHandler#channelRead` |
 | 3 | Every version: `McpHeaderMatchHandler` peeks body via `PeekedBody#peek` (first peek parses, the rest reuse it), compares SEP-2243 mirrors to it | event loop | [[protocol-versions]] |
 | 3b | 2026-07-28 only: `RequestValidationHandler` (`_meta`, removed methods) → `RequiredHeadersHandler` (mirror presence) → `ExtensionNegotiationHandler`, same cached peek | event loop | [[protocol-versions]] |
 | 4 | POST without session id stays in init and dispatches directly; session-header POST forwards to operations (steps 5–8 below) | event loop → VT | [McpInitializationHandler#handleRequest](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpInitializationHandler.java), [McpInitializationHandler#dispatchPreSessionRequest](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpInitializationHandler.java) |
-| 5 | `handlePost`: capture interaction ctx **and** `PeekedBody#cached` **synchronously** (pipelined next request may rebind/overwrite), `body.retain()`, `runAsync(parseAndDispatchPost, executor)` | EL → VT | `McpOperationHandler#handlePost` |
+| 5 | `handlePost`: capture interaction ctx **and** `PeekedBody#cached` **synchronously** (defensive: `HttpPipeliningGate` already holds a pipelined next request until this response is written), `body.retain()`, `runAsync(parseAndDispatchPost, executor)` | EL → VT | `McpOperationHandler#handlePost` |
 | 6 | Session header ⇒ `server.getSession` (may hydrate from store) → 404 plain text if unknown | VT | `McpOperationHandler#parseAndDispatchPost` |
 | 7 | Reuse the peeked parse if one was made, else parse here via `McpDispatcher#parseBody` → `Request` / `Response` / `Error` / `Notification`. Both routes yield a `JsonRpcCodec.Parse`, so a malformed body earns the same code either way — [[errors]] | VT | `McpOperationHandler#parseAndDispatchPost`, `McpOperationHandler#dispatchPostMessage` |
 | 8 | New `PostSseStream` per request, `dispatchRequestAsync(... transportCompletion)` | VT | `McpOperationHandler#handlePostRequest` |
