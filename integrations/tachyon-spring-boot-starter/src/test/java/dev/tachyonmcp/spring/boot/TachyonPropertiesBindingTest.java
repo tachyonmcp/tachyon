@@ -15,6 +15,7 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
@@ -46,6 +47,7 @@ class TachyonPropertiesBindingTest {
             assertThat(config.network().heartbeatInterval()).isEqualTo(NetworkConfig.DEFAULT_HEARTBEAT_INTERVAL);
             assertThat(config.network().maxContentLength()).isEqualTo(McpChannelInitializer.DEFAULT_MAX_CONTENT_LENGTH);
             assertThat(config.network().maxPipelinedRequests()).isEqualTo(NetworkConfig.DEFAULT_MAX_PIPELINED_REQUESTS);
+            assertThat(config.network().maxPendingSseBytes()).isEqualTo(NetworkConfig.DEFAULT_MAX_PENDING_SSE_BYTES);
             assertThat(config.network().allowedOrigins()).isNull();
             assertThat(config.network().allowedHosts()).isNull();
             assertThat(config.network().ioEngine()).isEqualTo(NettyIoEngine.AUTO);
@@ -64,6 +66,7 @@ class TachyonPropertiesBindingTest {
                         "tachyon.network.heartbeat-interval=5s",
                         "tachyon.network.max-content-length=2MB",
                         "tachyon.network.max-pipelined-requests=4",
+                        "tachyon.network.max-pending-sse-bytes=256KB",
                         "tachyon.network.allowed-origins[0]=https://app.example.com",
                         "tachyon.network.allowed-origins[1]=https://admin.example.com",
                         "tachyon.network.allowed-headers[0]=X-Trace-Id",
@@ -79,6 +82,7 @@ class TachyonPropertiesBindingTest {
                     assertThat(network.heartbeatInterval()).isEqualTo(Duration.ofSeconds(5));
                     assertThat(network.maxContentLength()).isEqualTo(2 * 1024 * 1024);
                     assertThat(network.maxPipelinedRequests()).isEqualTo(4);
+                    assertThat(network.maxPendingSseBytes()).isEqualTo(256 * 1024);
                     assertThat(network.allowedOrigins())
                             .containsExactly("https://app.example.com", "https://admin.example.com");
                     assertThat(network.allowedHeaders()).containsExactly("X-Trace-Id");
@@ -165,21 +169,26 @@ class TachyonPropertiesBindingTest {
     }
 
     /**
-     * The core takes the body limit as a positive {@code int}, so both edges have to be refused
-     * before narrowing — otherwise an oversized value dies as an {@code ArithmeticException} that
-     * names no property.
+     * The core takes byte limits as a positive {@code int}, so both edges have to be refused before
+     * narrowing — otherwise an oversized value dies as an {@code ArithmeticException} that names no
+     * property.
      */
     @ParameterizedTest
-    @ValueSource(strings = {"3GB", "0", "-1B"})
-    void unrepresentableMaxContentLengthIsRejectedByName(String value) {
-        runner.withPropertyValues("tachyon.network.max-content-length=" + value).run(context -> {
+    @CsvSource({
+        "tachyon.network.max-content-length, 3GB",
+        "tachyon.network.max-content-length, 0",
+        "tachyon.network.max-content-length, -1B",
+        "tachyon.network.max-pending-sse-bytes, 3GB",
+        "tachyon.network.max-pending-sse-bytes, -1B"
+    })
+    void unrepresentableByteSizeIsRejectedByName(String property, String value) {
+        runner.withPropertyValues(property + "=" + value).run(context -> {
             assertThat(context).hasFailed();
             assertThat(context.getStartupFailure())
                     .rootCause()
                     .isInstanceOf(InvalidConfigurationPropertyValueException.class)
                     .asInstanceOf(throwable(InvalidConfigurationPropertyValueException.class))
-                    .satisfies(
-                            failure -> assertThat(failure.getName()).isEqualTo("tachyon.network.max-content-length"));
+                    .satisfies(failure -> assertThat(failure.getName()).isEqualTo(property));
         });
     }
 

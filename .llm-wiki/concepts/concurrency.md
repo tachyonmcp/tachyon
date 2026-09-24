@@ -1,9 +1,9 @@
 ---
 title: Concurrency & shutdown
 tags: [concept, concurrency, virtual-threads]
-sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/internal/OperationTracker.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/NettyServer.java, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/HandlerFutures.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/OutboundSseStreamMessageRouter.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/PeekedBody.java]
-updated: 2026-09-17
-commit: 1011a627
+sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/sse/PostSseStream.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/internal/OperationTracker.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/NettyServer.java, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/HandlerFutures.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/OutboundSseStreamMessageRouter.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/PeekedBody.java]
+updated: 2026-09-24
+commit: b1099e37
 ---
 
 # 🧵 Concurrency & shutdown
@@ -27,7 +27,7 @@ Ack timestamp publication and stream exception capture: [[observability]].
 
 ## 🔒 Lock inventory (all `ReentrantLock`)
 
-`DefaultTachyonServer.lifecycleLock` (start/close) `DefaultTachyonServer#lifecycleLock`, `OperationTracker.lock` `OperationTracker#lock`, `SessionManager.LifecycleLock` per id, `InMemorySessionEventStore.lock`, `DefaultResourceRegistry.writeLock`, `SubscriptionRegistry.lock` (ack-first atomicity), `TaskEntry.lock`. Comments cite JEP 491 (fixed Java 24) as reason. Commit `6edcabf3` "get rid of synchronized".
+`DefaultTachyonServer.lifecycleLock` (start/close) `DefaultTachyonServer#lifecycleLock`, `OperationTracker.lock` `OperationTracker#lock`, `SessionManager.LifecycleLock` per id, `InMemorySessionEventStore.lock`, `DefaultResourceRegistry.writeLock`, `SubscriptionRegistry.lock` (ack-first atomicity), `TaskEntry.lock`, `PostSseStream.capacityLock` (producers park for POST-SSE budget; event loop only signals, only with waiters `PostSseStream#signalCapacity`; interrupted park closes the stream `PostSseStream#reserve`). Comments cite JEP 491 (fixed Java 24) as reason. Commit `6edcabf3` "get rid of synchronized".
 
 ## 🧶 ThreadLocal dispatch context
 

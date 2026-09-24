@@ -284,8 +284,9 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
             JsonRpcMessage.Request req,
             CorsDecision cors,
             ChannelContext ic) {
-        var heartbeatInterval = server.config().network().heartbeatInterval();
-        var postStream = new PostSseStream(ctx.channel(), cors, server::nextEventId, heartbeatInterval);
+        var network = server.config().network();
+        var postStream = new PostSseStream(
+                ctx.channel(), cors, server::nextEventId, network.heartbeatInterval(), network.maxPendingSseBytes());
         final var requestId = req.id();
         final var method = req.method();
         final var startNs = System.nanoTime();

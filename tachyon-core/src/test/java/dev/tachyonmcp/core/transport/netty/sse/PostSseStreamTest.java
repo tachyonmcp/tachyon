@@ -7,6 +7,9 @@ import dev.tachyonmcp.core.runtime.SseEvent;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
 import dev.tachyonmcp.core.transport.netty.ChannelHandlerUtils;
 import dev.tachyonmcp.core.transport.netty.http.CorsDecision;
+import io.netty.buffer.AbstractByteBufAllocator;
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.UnpooledHeapByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelOutboundHandlerAdapter;
 import io.netty.channel.ChannelPromise;
@@ -21,11 +24,14 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 /**
  * Unit tests for the parts of {@link PostSseStream} an E2E run cannot pin down: wire-id ordering
@@ -35,16 +41,20 @@ import org.junit.jupiter.api.Test;
  */
 class PostSseStreamTest {
 
+    private static final int ONE_MIB = 1024 * 1024;
     private static final Pattern SSE_ID = Pattern.compile("id: (\\d+)#(\\S+)");
 
     private CapturingSink sink;
     private EmbeddedChannel channel;
     private AtomicLong eventIds;
+    private TrackingAllocator allocator;
 
     @BeforeEach
     void setUp() {
         sink = new CapturingSink();
         channel = new EmbeddedChannel(sink);
+        allocator = new TrackingAllocator();
+        channel.config().setAllocator(allocator);
         eventIds = new AtomicLong();
     }
 
@@ -218,8 +228,197 @@ class PostSseStreamTest {
                 .hasMessage("write failed");
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"event", "offer", "comment", "before-start"})
+    void pendingWritesAreBoundedUntilFlushCompletes(String kind) {
+        final var stream = newStream(Duration.ZERO);
+        if (!kind.equals("before-start")) stream.start();
+        final var payload = "x".repeat(8192);
+        for (int i = 0; i < 256; i++) {
+            switch (kind) {
+                case "event", "before-start" -> stream.writeEvent(new SseEvent("1", "message", payload));
+                case "offer" -> stream.offerEvent(new SseEvent("1", "message", payload));
+                case "comment" -> stream.comment(payload);
+                default -> throw new AssertionError(kind);
+            }
+        }
+        assertThat(channel.isActive())
+                .as("the overflow close is a loop task, never run inside the caller's write")
+                .isTrue();
+        channel.runPendingTasks();
+        assertThat(channel.isActive()).isFalse();
+        assertThat(ChannelHandlerUtils.closeFailure(channel))
+                .isInstanceOf(IOException.class)
+                .hasMessageContaining("SSE pending write limit");
+        assertThat(sink.writes)
+                .as("about 1 MiB of 8 KiB writes, never the whole 2 MiB burst")
+                .hasSizeBetween(kind.equals("before-start") ? 0 : 100, 130);
+        assertThat(allocator.leaked())
+                .as("rejected and discarded buffers are released")
+                .isEmpty();
+        if (kind.equals("before-start")) {
+            assertThat(sink.writes).isEmpty();
+            assertThat(stream.start().toCompletableFuture()).isCompletedExceptionally();
+            assertThat(stream.start().toCompletableFuture().exceptionNow())
+                    .isSameAs(ChannelHandlerUtils.closeFailure(channel));
+        }
+    }
+
+    @Test
+    void configuredBudgetIsReservedBeforeEncodingSoARejectedWriteNeverAllocates() {
+        final var stream = newStream(Duration.ZERO, 64 * 1024);
+        stream.start();
+        final var payload = "x".repeat(8192);
+        final var allocationsBefore = allocator.allocated.size();
+
+        for (int i = 0; i < 16; i++) {
+            stream.offerEvent(new SseEvent("1", "message", payload));
+        }
+        channel.runPendingTasks();
+
+        final var delivered =
+                sink.writes.stream().filter(w -> w.contains(payload)).count();
+        assertThat(delivered)
+                .as("64 KiB budget: 7 writes of 8,221 encoded + 128 task bytes fit, the 8th overflows")
+                .isEqualTo(7);
+        assertThat(allocator.allocated.size() - allocationsBefore)
+                .as("only admitted writes are encoded; the rejected one never allocates a buffer")
+                .isEqualTo(7);
+        assertThat(ChannelHandlerUtils.closeFailure(channel)).hasMessageContaining("SSE pending write limit");
+        assertThat(allocator.leaked()).isEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"event", "offer", "comment"})
+    void zeroBudgetWritesThatCannotWaitFallBackToTheChannelHighWatermark(String kind) {
+        channel.config().setWriteBufferHighWaterMark(64 * 1024);
+        final var stream = newStream(Duration.ZERO, 0);
+        stream.start();
+        final var payload = "x".repeat(8192);
+
+        for (int i = 0; i < 16; i++) {
+            switch (kind) {
+                case "event" -> stream.writeEvent(new SseEvent("1", "message", payload));
+                case "offer" -> stream.offerEvent(new SseEvent("1", "message", payload));
+                case "comment" -> stream.comment(payload);
+                default -> throw new AssertionError(kind);
+            }
+        }
+        channel.runPendingTasks();
+
+        assertThat(sink.writes.stream().filter(w -> w.contains(payload)))
+                .as("on the loop, a burst fills the 64 KiB watermark before the client is dropped,"
+                        + " not the second write in flight")
+                .hasSize(7);
+        assertThat(ChannelHandlerUtils.closeFailure(channel)).hasMessageContaining("SSE pending write limit");
+        assertThat(allocator.leaked()).isEmpty();
+    }
+
+    @Test
+    void finalResponseIsAdmittedPastAFullBudgetWithoutClosingTheStream() {
+        final var stream = newStream(Duration.ZERO);
+        stream.start();
+        final var payload = "x".repeat(8192);
+        for (int i = 0; i < 125; i++) {
+            stream.writeEvent(new SseEvent(String.valueOf(i), "message", payload));
+        }
+        final var writesBefore = sink.writes.size();
+        final var dropped = new AtomicInteger();
+        final var body = "y".repeat(64 * 1024).getBytes(StandardCharsets.UTF_8);
+
+        stream.writeEvent(200, body, dropped::incrementAndGet);
+        channel.runPendingTasks();
+
+        assertThat(channel.isActive())
+                .as("a slow client still reading must get the result, not a pending-limit close")
+                .isTrue();
+        assertThat(ChannelHandlerUtils.closeFailure(channel)).isNull();
+        assertThat(dropped).hasValue(0);
+        assertThat(sink.writes).hasSize(writesBefore + 1);
+        assertThat(sink.writes.getLast()).contains("data: " + new String(body, StandardCharsets.UTF_8));
+        stream.writeEvent(new SseEvent("late", "message", payload));
+        channel.runPendingTasks();
+        assertThat(channel.isActive())
+                .as("the final response does not lift the budget for later writes")
+                .isFalse();
+        assertThat(allocator.leaked()).isEmpty();
+    }
+
+    @Test
+    void completingWritesRestoresCapacityAndAllowsALargeFinalResponse() {
+        final var stream = newStream(Duration.ZERO);
+        stream.start();
+        sink.completePending();
+        for (int i = 0; i < 128; i++) {
+            stream.writeEvent(new SseEvent(String.valueOf(i), "message", "x".repeat(8192)));
+            stream.comment("still working");
+            sink.completePending();
+            assertThat(channel.isActive()).isTrue();
+        }
+        stream.comment("done");
+        final var dropped = new AtomicInteger();
+        final var body = "x".repeat(2 * 1024 * 1024).getBytes(StandardCharsets.UTF_8);
+        stream.writeEvent(200, body, dropped::incrementAndGet);
+        sink.completePending();
+
+        assertThat(channel.isActive()).isTrue();
+        assertThat(dropped).hasValue(0);
+        assertThat(sink.writes.getLast()).contains("data: " + new String(body, StandardCharsets.UTF_8));
+        assertThat(ChannelHandlerUtils.closeFailure(channel)).isNull();
+        assertThat(allocator.leaked()).isEmpty();
+    }
+
+    @Test
+    void closingBeforeStartDropsQueuedFinalResponseExactlyOnce() {
+        final var stream = newStream(Duration.ZERO);
+        final var dropped = new AtomicInteger();
+        stream.writeEvent(1, "{}".getBytes(StandardCharsets.UTF_8), dropped::incrementAndGet);
+
+        stream.terminate();
+        channel.close();
+
+        assertThat(dropped).hasValue(1);
+        assertThat(stream.start().toCompletableFuture()).isCompletedExceptionally();
+        assertThat(sink.writes).isEmpty();
+        assertThat(allocator.leaked())
+                .as("the queued response buffer is released")
+                .isEmpty();
+    }
+
     private PostSseStream newStream(Duration heartbeatInterval) {
-        return new PostSseStream(channel, CorsDecision.NONE, eventIds::incrementAndGet, heartbeatInterval);
+        return newStream(heartbeatInterval, ONE_MIB);
+    }
+
+    private PostSseStream newStream(Duration heartbeatInterval, int maxPendingBytes) {
+        return new PostSseStream(
+                channel, CorsDecision.NONE, eventIds::incrementAndGet, heartbeatInterval, maxPendingBytes);
+    }
+
+    /** Hands out unpooled heap buffers and remembers them, so a test can spot one never released. */
+    private static final class TrackingAllocator extends AbstractByteBufAllocator {
+
+        private final List<ByteBuf> allocated = new ArrayList<>();
+
+        @Override
+        protected ByteBuf newHeapBuffer(int initialCapacity, int maxCapacity) {
+            var buf = new UnpooledHeapByteBuf(this, initialCapacity, maxCapacity);
+            allocated.add(buf);
+            return buf;
+        }
+
+        @Override
+        protected ByteBuf newDirectBuffer(int initialCapacity, int maxCapacity) {
+            return newHeapBuffer(initialCapacity, maxCapacity);
+        }
+
+        @Override
+        public boolean isDirectBufferPooled() {
+            return false;
+        }
+
+        List<ByteBuf> leaked() {
+            return allocated.stream().filter(buf -> buf.refCnt() > 0).toList();
+        }
     }
 
     /** Records outbound writes and, unless told to fail them, leaves their promises pending. */

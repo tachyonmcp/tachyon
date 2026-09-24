@@ -75,6 +75,7 @@ class TachyonConfigurationMetadataTest {
                         "tachyon.network.heartbeat-interval",
                         "tachyon.network.max-content-length",
                         "tachyon.network.max-pipelined-requests",
+                        "tachyon.network.max-pending-sse-bytes",
                         "tachyon.network.allowed-origins",
                         "tachyon.network.allowed-headers",
                         "tachyon.network.allowed-hosts",
@@ -158,6 +159,9 @@ class TachyonConfigurationMetadataTest {
                         "tachyon.network.max-content-length",
                         DataSize.ofBytes(McpChannelInitializer.DEFAULT_MAX_CONTENT_LENGTH)),
                 Arguments.of("tachyon.network.max-pipelined-requests", NetworkConfig.DEFAULT_MAX_PIPELINED_REQUESTS),
+                Arguments.of(
+                        "tachyon.network.max-pending-sse-bytes",
+                        DataSize.ofBytes(NetworkConfig.DEFAULT_MAX_PENDING_SSE_BYTES)),
                 Arguments.of(
                         "tachyon.network.io-engine", NettyIoEngine.AUTO.name().toLowerCase(Locale.ROOT)),
                 Arguments.of("tachyon.session.session-ttl", SessionConfig.DEFAULT_SESSION_TTL),

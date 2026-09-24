@@ -2,8 +2,8 @@
 title: SSE streams
 tags: [concept, transport, sse]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpInitializationHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/sse/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/OutboundSseStream.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/OutboundSseStreamMessageRouter.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpOperationHandler.java]
-updated: 2026-09-23
-commit: bf825914
+updated: 2026-09-24
+commit: fcb51799
 ---
 
 # 📡 SSE streams
@@ -14,8 +14,8 @@ Verdict: two stream kinds. **POST-SSE** = per-request, lazy: JSON response unles
 
 | Type | Role | Proof |
 |---|---|---|
-| `OutboundSseStream` | transport-neutral: `start`, `started`, `writeEvent`, `comment`, `close`, `onClose`, `streamKey`, `channelId` | `OutboundSseStream` |
-| `PostSseStream` | Netty impl, state machine `NEW/OPEN/CLOSED_UNOPENED/CLOSED_OPENED`, all mutations on event loop | `PostSseStream` |
+| `OutboundSseStream` | transport-neutral: `start`, `started`, `writeEvent` (may block off I/O thread), `offerEvent` (never blocks), `comment`, `close`, `onClose`, `streamKey`, `channelId` | `OutboundSseStream` |
+| `PostSseStream` | Netty impl, state machine `NEW/OPEN/CLOSED_UNOPENED/CLOSED_OPENED`, lifecycle on event loop, producer-side encode + byte budget | `PostSseStream` |
 | `NettySseConnection` | `SseConnection` for GET stream, close listener | `NettySseConnection` |
 | `SseManager` | open GET streams, priming, replay | `SseManager` |
 | `SseHeartbeat` | `:\r\n` comment every interval on EL; skip when unwritable; failed tick stashes the cause then closes | `SseHeartbeat#enable`, `SseHeartbeat#send` |
@@ -30,6 +30,21 @@ Verdict: two stream kinds. **POST-SSE** = per-request, lazy: JSON response unles
 4. Handler done, stream started ⇒ final response finalized on VT: append `ResponseEvent` to log (stateful), write, `terminateAsync()` (last chunk + close) `McpOperationHandler#finalizePostSseResponse`.
 5. Stream never started ⇒ `terminate()` (neutralize so late message can't open a second response on pooled socket) then plain JSON `McpOperationHandler#completePostRequest`.
 6. Final write dropped (client gone) ⇒ `redeliverOnReconnect`: if session's current GET connection resumed **this** stream key, send live; else wait for replay `McpOperationHandler#redeliverOnReconnect`.
+
+## 🧯 Slow readers
+
+Producer measures the event once ([SseSerializer#measure](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/sse/SseSerializer.java): one allocation-free `long` = exact size + UTF-8 size of a single-line data field; multi-line data recounts per line), [PostSseStream#reserve](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/sse/PostSseStream.java) admits it (+128 B task overhead), only then encodes into a buffer of exactly that size, reusing the measured data size as the UTF-8 reserve (Netty's `writeUtf8` reserves 3× per char and would grow it; short `id`/`event` are recounted; a reserve is never derived from the total, since Netty's fast path writes it without bounds checks) — a parked producer holds no buffer; a rejected write never allocates. The final response never waits, so it is encoded first and reserves `readableBytes`. Plain `SseSerializer#encode` (GET-SSE, priming) keeps Netty's single-pass `writeUtf8`. Event loop only queues or `writeAndFlush`es the ready buffer. Budget = `NetworkConfig#maxPendingSseBytes`, default 64 KiB (≈ 190–240 progress notifications of 150–220 B wire + 128 B overhead; ≈ 140 log messages with 200-char data; 7 × 8 KiB events); `0` = no buffering. One oversized event permitted beyond it, so `0` ⇒ exactly one write in flight (stop-and-wait). Non-parking limit (`OFFER`, and `WAIT` on an I/O thread) falls back to the channel write high watermark when the budget is `0` (`PostSseStream#maxOfferedBytes`): two back-to-back loop writes must not close a healthy client. [PostSseStream#dispatch](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/sse/PostSseStream.java) releases capacity on write-promise completion — covers pre-start queue, loop tasks, outbound buffer.
+
+Budget full — admission mode `PostSseStream.Admission`:
+- `WAIT` (`writeEvent`/`comment`) off Netty I/O threads ⇒ producer parks ([PostSseStream#awaitCapacity](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/sse/PostSseStream.java)) until a write completes or the channel closes. Fast tool slows to the client's pace. Stalled client ⇒ writer idle timeout closes channel ⇒ producer wakes, later writes drop. Loop signals the `Condition` only when `capacityWaiters > 0`. Interrupted park (e.g. `cancel(true)`) ⇒ sentinel `-1` stops admission, graceful `close()` (`retry:` + last chunk): no silent gap, later events never land past the dropped one.
+- `WAIT` on any Netty I/O thread (this channel's loop, or a `FastThreadLocalThread` of another client, e.g. an async tool continuing on a WebClient callback — `PostSseStream#onIoThread`), or `OFFER` (`offerEvent`) ⇒ never parks, limit = `maxOfferedBytes`; past it, sentinel `-1` stops admission, wakes parked producers, one abnormal close (`SSE pending write limit exceeded`) queued as a loop task — never run inside the caller's write.
+- `FINAL` (`writeEvent(long, byte[], Runnable)`) ⇒ always admitted, never parks: last write, bounded by one event. No-session POSTs write it on the event loop (`McpInitializationHandler#completeDispatch`); a slow reader must not lose the result to the limit. `SubscriptionRegistry#push` uses `offerEvent`: fan-out under the registry lock must never wait on one slow subscriber.
+
+Failed final writes invoke the re-delivery callback (caller thread on admission failure, loop on write failure).
+
+[PostSseStream#start](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/sse/PostSseStream.java) shares one future and submits at most one start task: repeated notifications cannot bypass the byte budget with start tasks. Close discards pre-start events; terminating an unopened stream removes its close listener so plain HTTP keep-alive requests do not accumulate listeners.
+
+Tests: `PostSseSlowReaderTest` — non-reading TCP client parks the producer (also with the event loop held at a barrier: loop tasks stay < 160) until writer idle closes it, another client still pings; a reading client receives a 4096 × 8 KiB burst in full, no close; a slow reader behind a full budget still gets a 256 KiB result; an interrupted producer ends the stream with a gap-free prefix + `retry:`; a producer on a foreign Netty loop never parks, the slow client is closed at once and that loop stays responsive. `PostSseStreamTest` pins fail-fast accounting on the loop (deferred close), configured budget + no allocation for a rejected write, high-watermark fallback at budget `0` for loop writes and `offerEvent`, final response past a full budget, budget recovery, one large final response, pre-start cleanup, and buffer release.
 
 Initial headers and every queued event are aggregated with Netty `PromiseCombiner`; a successful final write cannot hide an earlier failure [PostSseStream#doStart](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/sse/PostSseStream.java). The close attribute preserves the first failure with `setIfAbsent` [ChannelHandlerUtils#markCloseFailure](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/ChannelHandlerUtils.java).
 
@@ -56,7 +71,7 @@ Stalled peer: the channel stays non-writable, [SseHeartbeat#send](../../tachyon-
 - `close()` writes `retry: 3000` then last chunk + close (client should reconnect) vs `terminate()` no retry `PostSseStream#doClose`, `NettySseConnection#doClose`.
 - `terminateAsync` also completes on channel close so shutdown drain never hangs — but consults the recorded close cause first, because a failed terminating write closes the channel from its own listener and that fallback would otherwise report success for it `PostSseStream#terminateAsync`.
 - `doClose` cancels heartbeats before the terminating chunk: the scheduled tick is otherwise cancelled only on channel close and could emit a comment the HTTP encoder no longer accepts `SseHeartbeat#cancel`, `NettySseConnection#doClose`.
-- Fire-and-forget calls (`writeEvent`, `comment`, `close`, `terminate`) swallow a shutting-down loop's rejection; `start` fails its stage and `writeEvent(long, byte[], Runnable)` runs `onDropped` instead `PostSseStream#runOnEventLoopQuietly`.
+- Fire-and-forget calls (`writeEvent`, `comment`, `close`, `terminate`) swallow a shutting-down loop's rejection; `start` fails its stage and `writeEvent(long, byte[], Runnable)` runs `onDropped` instead `PostSseStream#submitWrite`, `PostSseStream#runOnEventLoopQuietly`.
 - Every write (headers, priming/queued, events, comments, retry, last chunk) shares one failure listener: stash cause via `ChannelHandlerUtils#markCloseFailure`, then close — so `onClose` reports a transport failure, not an ordinary disconnect `PostSseStream#closeOnWriteFailure`. A heartbeat is written by the scheduler, not that listener, and does the same for itself — it is how an idle stream finds a dead peer `SseHeartbeat#send`.
 - SSE responses always `Connection: close` — server hard-closes on end; advertising keep-alive raced FIN vs next request `HttpHelpers#HttpHelpers`.
 

@@ -60,11 +60,24 @@ public interface OutboundSseStream {
 
     /**
      * Writes an SSE event. If {@link #start()} has not been called yet, the event is buffered
-     * and emitted when the stream upgrades. May be called from any thread.
+     * and emitted when the stream upgrades. May be called from any thread. A caller off the
+     * transport's I/O thread may block while a slow client drains earlier writes.
      *
      * @param event the SSE event to write
      */
     void writeEvent(@Nullable SseEvent event);
+
+    /**
+     * Writes an SSE event like {@link #writeEvent}, but never blocks the caller: when the client is
+     * too far behind, the stream closes instead. For fan-out producers, where one slow client must
+     * not stall the others. Defaults to {@link #writeEvent}, which may block: an implementation
+     * whose writes can block must override this method.
+     *
+     * @param event the SSE event to write
+     */
+    default void offerEvent(@Nullable SseEvent event) {
+        writeEvent(event);
+    }
 
     /**
      * Writes an SSE comment line ({@code : message\r\n}), upgrading the stream via {@link #start()}

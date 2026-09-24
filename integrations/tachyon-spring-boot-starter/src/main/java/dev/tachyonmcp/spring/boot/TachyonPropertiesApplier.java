@@ -28,6 +28,7 @@ final class TachyonPropertiesApplier {
     private static final String JANITOR_INTERVAL = "tachyon.session.janitor-interval";
     private static final String MAX_CONTENT_LENGTH = "tachyon.network.max-content-length";
     private static final String MAX_PIPELINED_REQUESTS = "tachyon.network.max-pipelined-requests";
+    private static final String MAX_PENDING_SSE_BYTES = "tachyon.network.max-pending-sse-bytes";
     private static final String ALLOWED_ORIGINS = "tachyon.network.allowed-origins";
 
     private static final PropertyMapper MAP = PropertyMapper.get();
@@ -51,8 +52,11 @@ final class TachyonPropertiesApplier {
             MAP.from(network.writerIdleTimeout()).to(config::writerIdleTimeout);
             MAP.from(network.heartbeatInterval()).to(config::heartbeatInterval);
             MAP.from(network.maxContentLength())
-                    .as(TachyonPropertiesApplier::toPositiveIntBytes)
+                    .as(size -> toIntBytes(MAX_CONTENT_LENGTH, size, 1))
                     .to(config::maxContentLength);
+            MAP.from(network.maxPendingSseBytes())
+                    .as(size -> toIntBytes(MAX_PENDING_SSE_BYTES, size, 0))
+                    .to(config::maxPendingSseBytes);
             MAP.from(network.maxPipelinedRequests())
                     .as(TachyonPropertiesApplier::toNonNegativeRequests)
                     .to(config::maxPipelinedRequests);
@@ -124,18 +128,15 @@ final class TachyonPropertiesApplier {
     }
 
     /**
-     * The core takes the body limit as a positive {@code int} of bytes. Narrowing without this check
-     * fails as an {@code ArithmeticException} naming no property, and {@code Source#asInt} would
-     * truncate silently.
+     * The core takes byte limits as an {@code int} of at least {@code min}. Narrowing without this
+     * check fails as an {@code ArithmeticException} naming no property, and {@code Source#asInt}
+     * would truncate silently.
      */
-    private static int toPositiveIntBytes(DataSize maxContentLength) {
-        final var bytes = maxContentLength.toBytes();
-        if (bytes <= 0 || bytes > Integer.MAX_VALUE) {
+    private static int toIntBytes(String property, DataSize size, int min) {
+        final var bytes = size.toBytes();
+        if (bytes < min || bytes > Integer.MAX_VALUE) {
             throw new InvalidConfigurationPropertyValueException(
-                    MAX_CONTENT_LENGTH,
-                    maxContentLength,
-                    "Maximum request body size must be positive and no larger than %d bytes."
-                            .formatted(Integer.MAX_VALUE));
+                    property, size, "Size must be between %d and %d bytes.".formatted(min, Integer.MAX_VALUE));
         }
         return (int) bytes;
     }

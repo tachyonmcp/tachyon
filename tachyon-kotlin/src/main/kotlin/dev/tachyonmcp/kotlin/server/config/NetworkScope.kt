@@ -44,6 +44,13 @@ public class NetworkScope
          */
         public var maxPipelinedRequests: Int? = null
 
+        /**
+         * Encoded, unsent output one POST-SSE stream may buffer (default 64 KiB; `0`: none, a tool
+         * waits until each event reaches the socket). Past it, a tool sending progress, logs or comments waits for
+         * the client; the final response is always accepted.
+         */
+        public var maxPendingSseBytes: Int? = null
+
         /** Netty I/O engine configuration. */
         public var ioEngine: NettyIoEngine? = null
 
@@ -78,6 +85,7 @@ public class NetworkScope
             heartbeatInterval?.let { builder.heartbeatInterval(it.toJavaDuration()) }
             maxContentLength?.let(builder::maxContentLength)
             maxPipelinedRequests?.let(builder::maxPipelinedRequests)
+            maxPendingSseBytes?.let(builder::maxPendingSseBytes)
             ioEngine?.let(builder::ioEngine)
         }
     }

@@ -91,6 +91,7 @@ final class ConfigReference {
             .heartbeatInterval(Duration.ofSeconds(15))
             .maxContentLength(65536) // 64KB
             .maxPipelinedRequests(16) // HTTP/1.1 requests queued behind the one in flight; over => 429 + close
+            .maxPendingSseBytes(1024 * 1024) // unsent output per POST-SSE stream (default 64 KiB; 0 = none); full => tool waits
             .allowedOrigins("https://app.example.com") // serialized origin: no path, no "*", no "null"
             .allowPrivateNetworks(true)
             .allowedHeaders("X-Custom-Header")
