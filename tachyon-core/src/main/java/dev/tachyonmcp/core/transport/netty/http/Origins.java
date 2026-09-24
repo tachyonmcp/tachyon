@@ -2,8 +2,10 @@
 package dev.tachyonmcp.core.transport.netty.http;
 
 import dev.tachyonmcp.api.annotations.InternalApi;
+import io.netty.util.NetUtil;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.HexFormat;
 import java.util.Locale;
 import org.jspecify.annotations.Nullable;
 
@@ -19,9 +21,10 @@ public final class Origins {
 
     /**
      * Returns the canonical form of a serialized origin: scheme and host lower-cased, the default port
-     * (80 for {@code http}, 443 for {@code https}) dropped. Anything that is not a serialized origin —
+     * (80 for {@code http}, 443 for {@code https}) dropped, IPv6 literals compressed to browser notation.
+     * Anything that is not a serialized origin —
      * another scheme, user info, any path including a bare {@code /}, a query, a fragment, a port
-     * outside 1..65535 or not in plain decimal, or the opaque {@code null} — yields {@code null}.
+     * outside 1..65535 or not in plain decimal, an IPv6 zone ID, or the opaque {@code null} — yields {@code null}.
      * Malformed input is never repaired into a valid origin.
      *
      * @param origin the header or configuration value
@@ -56,6 +59,27 @@ public final class Origins {
         int port = uri.getPort();
         if (!hasCanonicalPortSpelling(authority, port) || port == 0 || port > 65535) {
             return null;
+        }
+        if (host.startsWith("[")) {
+            if (host.indexOf('%') >= 0) {
+                return null;
+            }
+            if (host.indexOf('.') >= 0) {
+                final var colon = host.lastIndexOf(':');
+                final var ipv4 =
+                        NetUtil.createByteArrayFromIpAddressString(host.substring(colon + 1, host.length() - 1));
+                if (ipv4 == null || ipv4.length != 4) {
+                    return null;
+                }
+                // Netty maps dotted IPv4 tails to ::ffff; preserve the original IPv6 prefix instead.
+                host = host.substring(0, colon + 1) + HexFormat.of().formatHex(ipv4, 0, 2) + ":"
+                        + HexFormat.of().formatHex(ipv4, 2, 4) + "]";
+            }
+            final var address = NetUtil.createByteArrayFromIpAddressString(host);
+            if (address == null || address.length != 16) {
+                return null;
+            }
+            host = "[" + NetUtil.bytesToIpAddress(address) + "]";
         }
         var canonical = scheme + "://" + host.toLowerCase(Locale.ROOT);
         var defaultPort = scheme.equals("http") ? 80 : 443;

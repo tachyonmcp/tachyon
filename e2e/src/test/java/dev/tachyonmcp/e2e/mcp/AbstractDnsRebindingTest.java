@@ -103,7 +103,9 @@ public abstract class AbstractDnsRebindingTest<C extends McpClient> extends Abst
                 "http://localhost:0",
                 "http://localhost:65536",
                 "http://[::1",
-                "http://[::1]/"
+                "http://[::1]/",
+                "http://[::1%lo]",
+                "http://[::1%25lo]"
             })
     void rejectsMalformedLoopbackOrigin(String origin) throws Exception {
         assertRejected(origin);

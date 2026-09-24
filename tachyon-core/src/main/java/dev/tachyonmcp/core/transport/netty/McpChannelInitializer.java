@@ -72,7 +72,6 @@ public class McpChannelInitializer extends ChannelInitializer<SocketChannel> {
     // Per-server, not static: carries this server's allowedHosts allowlist (DNS-rebinding protection).
     private final DnsRebindingProtectionHandler dnsRebindingHandler;
 
-    @Nullable
     private final CorsConfig corsConfig;
 
     private static final ChannelHandler statelessValidator = new StatelessValidatorHandler();

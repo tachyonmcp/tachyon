@@ -29,6 +29,7 @@ public abstract class AbstractCorsOriginAllowlistTest<C extends McpClient> exten
 
     private static final String APP_ORIGIN = "https://app.example.com";
     private static final String IPV6_ORIGIN = "http://[2001:db8::1]:8080";
+    private static final String EXPANDED_IPV6_ORIGIN = "http://[2001:0db8:0:0:0:0:0:1]:8080";
     private static final String LOOPBACK_ORIGIN = "http://localhost:3000";
 
     /** Returns a JSON-RPC request this protocol revision accepts on a fresh stateless server. */
@@ -36,7 +37,8 @@ public abstract class AbstractCorsOriginAllowlistTest<C extends McpClient> exten
 
     @Override
     protected void startDefaultServer() {
-        startServer(b -> b.network(n -> n.allowedOrigins("https://App.Example.com:443", IPV6_ORIGIN)));
+        startServer(b -> b.network(n ->
+                n.allowedOrigins("https://App.Example.com:443", EXPANDED_IPV6_ORIGIN, "http://[::ffff:192.0.2.1]")));
     }
 
     @Test
@@ -90,15 +92,22 @@ public abstract class AbstractCorsOriginAllowlistTest<C extends McpClient> exten
         assertThat(tokens(denied, "vary")).contains("origin");
     }
 
-    @Test
-    void admitsListedIpv6Origin() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {IPV6_ORIGIN, EXPANDED_IPV6_ORIGIN, "http://[::ffff:c000:201]", "http://[::ffff:192.0.2.1]"})
+    void admitsEquivalentIpv6Origins(String origin) throws Exception {
         try (var client = createTestClient()) {
-            var response = client.postWithOrigin(IPV6_ORIGIN, requestBody());
+            var response = client.postWithOrigin(origin, requestBody());
 
             assertThat(response.statusCode()).isEqualTo(200);
             assertThat(response.headers().firstValue("access-control-allow-origin"))
-                    .contains(IPV6_ORIGIN);
+                    .contains(origin);
+            assertThat(tokens(response, "vary")).contains("origin");
         }
+        var preflight = preflight(origin);
+        assertThat(preflight.statusCode()).isEqualTo(200);
+        assertThat(preflight.headers().firstValue("access-control-allow-origin"))
+                .contains(origin);
+        assertThat(tokens(preflight, "vary")).contains("origin");
     }
 
     @Test
@@ -113,6 +122,14 @@ public abstract class AbstractCorsOriginAllowlistTest<C extends McpClient> exten
             assertThat(client.postWithOrigin("http://app.example.com", requestBody())
                             .statusCode())
                     .as("a different scheme is a different origin")
+                    .isEqualTo(403);
+            assertThat(client.postWithOrigin("http://[::192.0.2.1]", requestBody())
+                            .statusCode())
+                    .as("IPv4-compatible and IPv4-mapped IPv6 addresses must remain distinct")
+                    .isEqualTo(403);
+            assertThat(client.postWithOrigin("http://[2001:db8::2]:8080", requestBody())
+                            .statusCode())
+                    .as("a different IPv6 address is a different origin")
                     .isEqualTo(403);
             assertThat(client.postWithOrigin("http://[2001:db8::1]", requestBody())
                             .statusCode())

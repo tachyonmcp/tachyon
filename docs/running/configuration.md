@@ -169,7 +169,8 @@ Each `allowedOrigins` entry is a serialized origin, exactly as a browser sends i
 `http(s)://host[:port]`. A path (even a trailing `/`), query, fragment, user info, `*` or `null`
 is rejected when the server is built. Entries are stored canonical: scheme and host lower-cased,
 default port dropped, so `https://App.Example.com:443` matches `https://app.example.com`. A
-different port or scheme is a different origin.
+different port or scheme is a different origin. IPv6 literals use compressed lowercase notation,
+so `http://[2001:0db8:0:0:0:0:0:1]` matches `http://[2001:db8::1]`. IPv6 zone IDs are rejected.
 
 The guard applies the same rule to the request's `Origin`: anything that is not a serialized
 `http`/`https` origin gets `403`. `Origin: null` always gets `403`, because any web page can send

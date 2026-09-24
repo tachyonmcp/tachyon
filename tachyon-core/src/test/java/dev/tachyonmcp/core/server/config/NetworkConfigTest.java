@@ -54,11 +54,16 @@ class NetworkConfigTest {
     @Test
     void allowedOriginsAreStoredCanonical() {
         var config = NetworkConfig.builder()
-                .allowedOrigins("HTTPS://App.Example.com:443", "http://Localhost:80", "http://[::1]:3000")
+                .allowedOrigins(
+                        "HTTPS://App.Example.com:443",
+                        "http://Localhost:80",
+                        "http://[::1]:3000",
+                        "http://[2001:0db8:0:0:0:0:0:1]:80")
                 .build();
 
         assertThat(config.allowedOrigins())
-                .containsExactly("https://app.example.com", "http://localhost", "http://[::1]:3000");
+                .containsExactly(
+                        "https://app.example.com", "http://localhost", "http://[::1]:3000", "http://[2001:db8::1]");
     }
 
     @ParameterizedTest
@@ -77,7 +82,9 @@ class NetworkConfigTest {
                 "https://x:",
                 "https://x?q",
                 "https://x#f",
-                "x.example.com"
+                "x.example.com",
+                "http://[::1%lo]",
+                "http://[::1%25lo]"
             })
     void rejectsAllowedOriginThatIsNotASerializedOrigin(String origin) {
         var builder = NetworkConfig.builder().allowedOrigins(origin);
