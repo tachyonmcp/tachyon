@@ -161,10 +161,19 @@ MCP endpoint answers: a preflight to any other path gets `404` and no CORS grant
 
 | Option | Default | Description |
 |---|---|---|
-| `allowedOrigins` | — (any loopback origin, answered `*`) | Exact `Origin` values the guard admits and CORS grants, answered with the origin and `Vary: Origin`. Once set, loopback origins not in the list are still admitted but get no CORS grant |
-| `allowNullOrigin` | `false` | Grant `Origin: null` in CORS; the guard still rejects it, because any web page can send it from a sandboxed iframe |
+| `allowedOrigins` | — (any loopback origin, answered `*`) | Origins the guard admits and CORS grants, answered with the origin and `Vary: Origin`. Once set, loopback origins not in the list are still admitted but get no CORS grant |
 | `allowPrivateNetworks` | `false` | Answer private-network CORS preflights |
 | `allowedHeaders` | — | Request headers granted beyond the built-in ones |
+
+Each `allowedOrigins` entry is a serialized origin, exactly as a browser sends it in `Origin`:
+`http(s)://host[:port]`. A path (even a trailing `/`), query, fragment, user info, `*` or `null`
+is rejected when the server is built. Entries are stored canonical: scheme and host lower-cased,
+default port dropped, so `https://App.Example.com:443` matches `https://app.example.com`. A
+different port or scheme is a different origin.
+
+The guard applies the same rule to the request's `Origin`: anything that is not a serialized
+`http`/`https` origin gets `403`. `Origin: null` always gets `403`, because any web page can send
+it from a sandboxed iframe.
 
 Built in, with no configuration:
 

@@ -6,22 +6,22 @@ import dev.tachyonmcp.core.server.McpDispatcher;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
 import dev.tachyonmcp.core.transport.netty.http.AcceptValidationHandler;
 import dev.tachyonmcp.core.transport.netty.http.ContentTypeValidationHandler;
+import dev.tachyonmcp.core.transport.netty.http.CorsHttpObjectAggregator;
 import dev.tachyonmcp.core.transport.netty.http.DnsRebindingProtectionHandler;
 import dev.tachyonmcp.core.transport.netty.http.EndpointValidatorHandler;
 import dev.tachyonmcp.core.transport.netty.http.McpHeaderGuardHandler;
 import dev.tachyonmcp.core.transport.netty.http.McpHeaderMatchHandler;
 import dev.tachyonmcp.core.transport.netty.http.McpParamPreflightHandler;
 import dev.tachyonmcp.core.transport.netty.http.StatelessValidatorHandler;
+import dev.tachyonmcp.core.transport.netty.http.TachyonCorsHandler;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.group.ChannelGroup;
 import io.netty.channel.socket.SocketChannel;
-import io.netty.handler.codec.http.HttpObjectAggregator;
 import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.handler.codec.http.HttpServerKeepAliveHandler;
 import io.netty.handler.codec.http.cors.CorsConfig;
-import io.netty.handler.codec.http.cors.CorsHandler;
 import io.netty.handler.flush.FlushConsolidationHandler;
 import io.netty.handler.logging.LogLevel;
 import io.netty.handler.logging.LoggingHandler;
@@ -154,7 +154,7 @@ public class McpChannelInitializer extends ChannelInitializer<SocketChannel> {
         p.addLast("mcp-endpoint", endpointValidatorHandler);
         // Ahead of "cors" so it sees the preflight response CorsHandler writes.
         p.addLast("cors-mcp-param", new McpParamPreflightHandler());
-        p.addLast("cors", new CorsHandler(corsConfig));
+        p.addLast("cors", new TachyonCorsHandler(corsConfig));
 
         // Must precede "protocol-version": a repeated version header would otherwise negotiate on its
         // first value while an intermediary routes on the last.
@@ -171,7 +171,7 @@ public class McpChannelInitializer extends ChannelInitializer<SocketChannel> {
         // acceptable requests and rejects oversized ones (413/417) before the body is
         // transferred. A separate HttpServerExpectContinueHandler would defeat that by
         // always acking 100 Continue upstream of the aggregator.
-        p.addLast("http-aggregator", new HttpObjectAggregator(maxContentLength));
+        p.addLast("http-aggregator", new CorsHttpObjectAggregator(maxContentLength));
 
         // Rejects requests ProtocolVersionHandler flagged as an unsupported protocol version, now
         // that the body (and its JSON-RPC id) is available. Placed before "interaction" so a

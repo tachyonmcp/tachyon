@@ -90,8 +90,7 @@ final class ConfigReference {
             // at this interval so the stream never looks idle. Keep < readerIdleTimeout. <= 0 disables.
             .heartbeatInterval(Duration.ofSeconds(15))
             .maxContentLength(65536) // 64KB
-            .allowedOrigins("https://app.example.com")
-            .allowNullOrigin(false)
+            .allowedOrigins("https://app.example.com") // serialized origin: no path, no "*", no "null"
             .allowPrivateNetworks(true)
             .allowedHeaders("X-Custom-Header")
             .ioEngine(NettyIoEngine.AUTO) // io_uring > epoll > kqueue > NIO; native jars optional

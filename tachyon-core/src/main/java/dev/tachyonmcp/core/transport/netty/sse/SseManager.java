@@ -6,6 +6,7 @@ import dev.tachyonmcp.core.runtime.Session;
 import dev.tachyonmcp.core.runtime.SseEvent;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
 import dev.tachyonmcp.core.transport.netty.ChannelHandlerUtils;
+import dev.tachyonmcp.core.transport.netty.http.CorsDecision;
 import dev.tachyonmcp.core.transport.netty.http.HttpHelpers;
 import io.netty.buffer.ByteBufUtil;
 import io.netty.channel.ChannelHandlerContext;
@@ -35,7 +36,8 @@ public class SseManager {
         this.server = server;
     }
 
-    public void openStream(ChannelHandlerContext ctx, Session session, @Nullable String lastEventId) {
+    public void openStream(
+            ChannelHandlerContext ctx, Session session, @Nullable String lastEventId, CorsDecision cors) {
         var holder = new NettySseConnection[1];
         var connection = new NettySseConnection(ctx.channel(), () -> {
             // Only reset the session if THIS connection is still the current one. A reconnect may
@@ -49,7 +51,7 @@ public class SseManager {
         session.connection(connection);
         ChannelHandlerUtils.setSession(ctx, session);
 
-        writeOpeningFrames(ctx, connection);
+        writeOpeningFrames(ctx, cors, connection);
 
         if (lastEventId != null && !lastEventId.isEmpty()) {
             var hash = lastEventId.indexOf('#');
@@ -64,20 +66,20 @@ public class SseManager {
         logger.debug("SSE stream opened for session={}", session.id());
     }
 
-    public void openStatelessStream(ChannelHandlerContext ctx) {
+    public void openStatelessStream(ChannelHandlerContext ctx, CorsDecision cors) {
         var connection = new NettySseConnection(
                 ctx.channel(),
                 () -> logger.debug(
                         "Stateless SSE connection closed: {}", ctx.channel().remoteAddress()));
 
-        writeOpeningFrames(ctx, connection);
+        writeOpeningFrames(ctx, cors, connection);
 
         logger.debug("Stateless SSE stream opened: {}", ctx.channel().remoteAddress());
     }
 
-    private void writeOpeningFrames(ChannelHandlerContext ctx, NettySseConnection connection) {
+    private void writeOpeningFrames(ChannelHandlerContext ctx, CorsDecision cors, NettySseConnection connection) {
         var response = new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK);
-        HttpHelpers.setSseStreamHeaders(response);
+        HttpHelpers.setSseStreamHeaders(response, cors);
         ctx.write(response);
         ctx.writeAndFlush(
                 new DefaultHttpContent(ByteBufUtil.writeUtf8(ctx.alloc(), "retry: " + SSE_RETRY_DELAY_MS + "\n")));

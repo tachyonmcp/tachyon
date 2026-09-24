@@ -132,9 +132,8 @@ internal class StatefulServerTest {
                 host = "127.0.0.1"
                 port = 0
                 endpointPath = "/mcp"
-                allowedOrigins.add("*")
+                allowedOrigins.add("https://App.Example.com:443")
                 allowedHosts.add("host.docker.internal:8096")
-                allowNullOrigin = true
                 allowPrivateNetworks = true
                 readerIdleTimeout = 124.seconds
                 writerIdleTimeout = 60.seconds
@@ -213,7 +212,7 @@ internal class StatefulServerTest {
                 host shouldBe "127.0.0.1"
                 endpointPath shouldBe "/mcp"
                 allowedHosts shouldBe listOf("host.docker.internal:8096")
-                allowNullOrigin shouldBe true
+                allowedOrigins shouldBe listOf("https://app.example.com")
                 readerIdleTimeout shouldBe 124.seconds.toJavaDuration()
                 writerIdleTimeout shouldBe 60.seconds.toJavaDuration()
                 maxContentLength shouldBe 1_000_000

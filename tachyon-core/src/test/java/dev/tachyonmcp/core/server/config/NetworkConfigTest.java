@@ -34,7 +34,6 @@ class NetworkConfigTest {
         assertThat(config.writerIdleTimeout()).isEqualTo(Duration.ofMinutes(5));
         assertThat(config.maxContentLength()).isEqualTo(McpChannelInitializer.DEFAULT_MAX_CONTENT_LENGTH);
         assertThat(config.allowedOrigins()).isNull();
-        assertThat(config.allowNullOrigin()).isFalse();
         assertThat(config.allowPrivateNetworks()).isFalse();
         assertThat(config.allowedHeaders()).isNull();
         assertThat(config.ioEngine()).isEqualTo(NettyIoEngine.AUTO);
@@ -50,6 +49,43 @@ class NetworkConfigTest {
         assertThat(config.allowedOrigins()).containsExactly("http://localhost", "http://127.0.0.1");
         assertThatThrownBy(() -> config.allowedOrigins().add("http://evil.com"))
                 .isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    void allowedOriginsAreStoredCanonical() {
+        var config = NetworkConfig.builder()
+                .allowedOrigins("HTTPS://App.Example.com:443", "http://Localhost:80", "http://[::1]:3000")
+                .build();
+
+        assertThat(config.allowedOrigins())
+                .containsExactly("https://app.example.com", "http://localhost", "http://[::1]:3000");
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "http://localhost/",
+                "http://localhost/path",
+                "null",
+                "*",
+                "",
+                " ",
+                "ftp://x",
+                "http://user@x",
+                "https://x:0",
+                "https://x:65536",
+                "https://x:",
+                "https://x?q",
+                "https://x#f",
+                "x.example.com"
+            })
+    void rejectsAllowedOriginThatIsNotASerializedOrigin(String origin) {
+        var builder = NetworkConfig.builder().allowedOrigins(origin);
+
+        assertThatIllegalArgumentException()
+                .isThrownBy(builder::build)
+                .withMessageStartingWith("allowedOrigins entry must be a serialized origin")
+                .withMessageContaining("'" + origin + "'");
     }
 
     @Test
@@ -74,7 +110,6 @@ class NetworkConfigTest {
                 Duration.ofMinutes(5),
                 McpChannelInitializer.DEFAULT_MAX_CONTENT_LENGTH,
                 origins,
-                false,
                 false,
                 headers,
                 hosts,

@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import dev.tachyonmcp.core.runtime.SseEvent;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
 import dev.tachyonmcp.core.transport.netty.ChannelHandlerUtils;
+import dev.tachyonmcp.core.transport.netty.http.CorsDecision;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelOutboundHandlerAdapter;
 import io.netty.channel.ChannelPromise;
@@ -218,7 +219,7 @@ class PostSseStreamTest {
     }
 
     private PostSseStream newStream(Duration heartbeatInterval) {
-        return new PostSseStream(channel, eventIds::incrementAndGet, heartbeatInterval);
+        return new PostSseStream(channel, CorsDecision.NONE, eventIds::incrementAndGet, heartbeatInterval);
     }
 
     /** Records outbound writes and, unless told to fail them, leaves their promises pending. */

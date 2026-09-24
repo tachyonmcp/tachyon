@@ -59,7 +59,8 @@ public final class McpHeaderGuardHandler extends ChannelInboundHandlerAdapter {
     public void channelRead(ChannelHandlerContext ctx, Object msg) {
         if (msg instanceof HttpRequest req && hasDuplicateSingleton(req.headers())) {
             // The offending header name is deliberately not echoed: it is client-controlled input.
-            rejectAndClose(ctx, msg, HttpResponseStatus.BAD_REQUEST, DUPLICATE_MESSAGE);
+            rejectAndClose(
+                    ctx, msg, HttpResponseStatus.BAD_REQUEST, DUPLICATE_MESSAGE, TachyonCorsHandler.decide(ctx, req));
             return;
         }
         ctx.fireChannelRead(msg);

@@ -77,7 +77,6 @@ class TachyonConfigurationMetadataTest {
                         "tachyon.network.allowed-origins",
                         "tachyon.network.allowed-headers",
                         "tachyon.network.allowed-hosts",
-                        "tachyon.network.allow-null-origin",
                         "tachyon.network.allow-private-networks",
                         "tachyon.network.io-engine",
                         "tachyon.session.enabled",

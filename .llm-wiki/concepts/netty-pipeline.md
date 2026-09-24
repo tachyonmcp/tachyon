@@ -2,8 +2,8 @@
 title: Netty pipeline
 tags: [concept, transport, netty]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/http/]
-updated: 2026-09-23
-commit: 26a32aa6
+updated: 2026-09-24
+commit: 70f05aa6
 ---
 
 # 🧪 Netty pipeline
@@ -32,13 +32,13 @@ Verdict: one static-order pipeline per channel. Every registered `Protocol`'s ha
 | 4 | `dns-rebinding` | `DnsRebindingProtectionHandler` | 403 → [[security-guards]] |
 | 5 | `mcp-endpoint` | `EndpointValidatorHandler` | 404 path ≠ endpoint (trailing `/`, query ignored) `EndpointValidatorHandler#channelRead`. **Only** path check: every later handler and `Protocol#matches` trust it, so a custom `endpointPath` works end to end. Ahead of CORS ⇒ other paths get no CORS grant |
 | – | `cors-mcp-param` | `McpParamPreflightHandler` | just before `cors`: appends requested `Mcp-Param-<token>` names to a granted preflight's `Access-Control-Allow-Headers` (no `*`) `McpParamPreflightHandler#write` |
-| 6 | `cors` | `CorsHandler` | always (non-null `NettyServerConfig#corsConfig`, default `NettyServerConfig#defaultCorsConfig`); answers preflights, sets every CORS response header `NettyServerConfig#buildCorsConfig` |
+| 6 | `cors` | `TachyonCorsHandler` | always (non-null `NettyServerConfig#corsConfig`, default `NettyServerConfig#defaultCorsConfig`); answers preflights with Netty's logic; `write()` is a pass-through — writers apply the request's own `CorsDecision` (`TachyonCorsHandler#decide`) → [[security-guards]] |
 | 7 | `mcp-header-guard` | `McpHeaderGuardHandler` | 400 duplicate singleton MCP header (incl. SEP-2243 mirrors); body-independent, so it runs pre-aggregation `McpHeaderGuardHandler#hasDuplicateSingleton` |
 | 8 | `protocol-version` | `ProtocolVersionHandler` | every POST: resolve protocol, bind ctx, or flag unsupported. Flag is a channel attr, cleared on **every** request: a flagged request refused before #13 (aggregator 413 keeps keep-alive open) must not reject the next one on the connection `ProtocolVersionHandler#channelRead` |
 | 9 | `accept-header` | `AcceptValidationHandler#INSTANCE` | 406 |
 | 10 | `content-type` | `ContentTypeValidationHandler#INSTANCE` | 415 JSON-RPC `-32600` on POST without `application/json`: a CORS "simple" request no preflight gated. Every POST past `mcp-endpoint`, no path match `ContentTypeValidationHandler#channelRead` |
 | 11 | `stateless-mcp` | `StatelessValidatorHandler` | only stateless server: 404 on session/Last-Event-ID headers, 405 DELETE |
-| 12 | `http-aggregator` | `HttpObjectAggregator(maxContentLength)` | 413/417; owns `Expect: 100-continue` (`EndpointValidatorHandler`) |
+| 12 | `http-aggregator` | `CorsHttpObjectAggregator(maxContentLength)` | 413 (with the request's CORS decision, Netty's close rule kept `CorsHttpObjectAggregator#handleOversizedMessage`)/417; owns `Expect: 100-continue` (`EndpointValidatorHandler`) |
 | 13 | `unsupported-protocol-version` | `UnsupportedProtocolVersionHandler` | 400 JSON-RPC error with body `id` + supported list `UnsupportedProtocolVersionHandler#channelRead` |
 | 14 | `interaction` | `InteractionHandler` | fallback protocol resolve for GET/DELETE; lifecycle events → ctx `InteractionHandler#userEventTriggered` |
 | 15 | `idle` | `IdleStateHandler` | if reader/writer idle > 0 |

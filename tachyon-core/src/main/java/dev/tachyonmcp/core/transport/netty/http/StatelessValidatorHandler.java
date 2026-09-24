@@ -25,7 +25,12 @@ public class StatelessValidatorHandler extends ChannelInboundHandlerAdapter {
             var sessionId = req.headers().get("MCP-Session-Id");
             var lastEventId = req.headers().get("Last-Event-ID");
             if (sessionId != null || lastEventId != null) {
-                rejectAndClose(ctx, msg, HttpResponseStatus.NOT_FOUND, "Stateless server does not support sessions");
+                rejectAndClose(
+                        ctx,
+                        msg,
+                        HttpResponseStatus.NOT_FOUND,
+                        "Stateless server does not support sessions",
+                        TachyonCorsHandler.decide(ctx, req));
                 return;
             }
 
@@ -34,7 +39,8 @@ public class StatelessValidatorHandler extends ChannelInboundHandlerAdapter {
                         ctx,
                         msg,
                         HttpResponseStatus.METHOD_NOT_ALLOWED,
-                        "Session management not available in stateless mode");
+                        "Session management not available in stateless mode",
+                        TachyonCorsHandler.decide(ctx, req));
                 return;
             }
         }

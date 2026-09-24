@@ -7,6 +7,7 @@ import dev.tachyonmcp.core.protocol.ProtocolResponseMapper;
 import dev.tachyonmcp.core.protocol.mcp.McpHeaderNames;
 import dev.tachyonmcp.core.server.domain.ServerErrors;
 import dev.tachyonmcp.core.transport.jsonrpc.JsonRpcCodec;
+import dev.tachyonmcp.core.transport.netty.http.CorsDecision;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandlerContext;
@@ -23,8 +24,8 @@ public final class McpResponseWriter {
     private McpResponseWriter() {}
 
     /**
-     * Answers a plain {@code OPTIONS} request with the methods the endpoint serves. CORS preflights
-     * never get here: {@code CorsHandler} answers them, and adds CORS headers to every response.
+     * Answers a plain {@code OPTIONS} request with the methods the endpoint serves, without CORS
+     * headers. CORS preflights never get here: {@code TachyonCorsHandler} answers them.
      */
     public static void sendOptions(ChannelHandlerContext ctx) {
         var response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.NO_CONTENT);
@@ -35,13 +36,18 @@ public final class McpResponseWriter {
         ctx.writeAndFlush(response);
     }
 
-    public static ChannelFuture sendJsonResponse(ChannelHandlerContext ctx, byte[] body, @Nullable String sessionId) {
-        return sendJsonResponse(ctx, body, HttpResponseStatus.OK, false, sessionId);
+    public static ChannelFuture sendJsonResponse(
+            ChannelHandlerContext ctx, byte[] body, @Nullable String sessionId, CorsDecision cors) {
+        return sendJsonResponse(ctx, body, HttpResponseStatus.OK, false, sessionId, cors);
     }
 
     public static ChannelFuture sendJsonResponse(
-            ChannelHandlerContext ctx, byte[] body, HttpResponseStatus status, @Nullable String sessionId) {
-        return sendJsonResponse(ctx, body, status, false, sessionId);
+            ChannelHandlerContext ctx,
+            byte[] body,
+            HttpResponseStatus status,
+            @Nullable String sessionId,
+            CorsDecision cors) {
+        return sendJsonResponse(ctx, body, status, false, sessionId, cors);
     }
 
     public static ChannelFuture sendJsonResponse(
@@ -49,7 +55,8 @@ public final class McpResponseWriter {
             byte[] body,
             HttpResponseStatus status,
             boolean close,
-            @Nullable String sessionId) {
+            @Nullable String sessionId,
+            CorsDecision cors) {
         // Zero-copy wrap on the event loop: the byte[] is GC-managed until this point, so a
         // dropped task on the shutdown path is plain garbage, never a pooled-buffer leak.
         var response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, status, Unpooled.wrappedBuffer(body));
@@ -58,6 +65,7 @@ public final class McpResponseWriter {
         if (sessionId != null) {
             response.headers().set(McpHeaderNames.MCP_SESSION_ID, sessionId);
         }
+        cors.applyTo(response);
         // HttpServerKeepAliveHandler appends `Connection: close` and closes the channel after
         // this response when keep-alive is disabled.
         HttpUtil.setKeepAlive(response, !close);
@@ -71,13 +79,14 @@ public final class McpResponseWriter {
      *
      * @param ctx    the channel to write the response on
      * @param id     the id of the request that failed
+     * @param cors   the failed request's CORS decision
      * @param mapper the protocol response mapper used to encode the error
      * @return the future for the write
      */
     public static ChannelFuture sendInternalError(
-            ChannelHandlerContext ctx, RequestId id, ProtocolResponseMapper mapper) {
+            ChannelHandlerContext ctx, RequestId id, CorsDecision cors, ProtocolResponseMapper mapper) {
         var error = mapper.error(ServerErrors.internalError("Internal error"));
         var body = JsonRpcCodec.serializeError(id, error.code(), error.message(), error.data());
-        return sendJsonResponse(ctx, body, HttpResponseStatus.valueOf(error.httpStatus()), true, null);
+        return sendJsonResponse(ctx, body, HttpResponseStatus.valueOf(error.httpStatus()), true, null, cors);
     }
 }

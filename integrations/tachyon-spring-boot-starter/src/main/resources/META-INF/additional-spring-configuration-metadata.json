@@ -37,10 +37,6 @@
       "defaultValue": []
     },
     {
-      "name": "tachyon.network.allow-null-origin",
-      "defaultValue": false
-    },
-    {
       "name": "tachyon.network.allow-private-networks",
       "defaultValue": false
     },

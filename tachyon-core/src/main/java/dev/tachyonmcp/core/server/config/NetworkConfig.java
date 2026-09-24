@@ -4,6 +4,7 @@ package dev.tachyonmcp.core.server.config;
 import dev.tachyonmcp.api.annotations.ExperimentalApi;
 import dev.tachyonmcp.core.transport.netty.McpChannelInitializer;
 import dev.tachyonmcp.core.transport.netty.NettyIoEngine;
+import dev.tachyonmcp.core.transport.netty.http.Origins;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.time.Duration;
@@ -33,10 +34,9 @@ import org.jspecify.annotations.Nullable;
  *                           long-running tools stay alive via SSE heartbeats, not a larger value
  * @param writerIdleTimeout  idle timeout for writing (default 5min)
  * @param maxContentLength   maximum HTTP body size in bytes
- * @param allowedOrigins     exact origins the DNS-rebinding guard admits and CORS grants, beyond
- *                           loopback ({@code null} = loopback on any port, answered with {@code *})
- * @param allowNullOrigin    whether CORS grants {@code Origin: null}; the DNS-rebinding guard
- *                           still rejects it, since any web page can send it
+ * @param allowedOrigins     origins the DNS-rebinding guard admits and CORS grants, beyond loopback
+ *                           ({@code null} = loopback on any port, answered with {@code *}); each a
+ *                           serialized origin {@code http(s)://host[:port]}, stored canonical
  * @param allowPrivateNetworks whether to allow private network CORS
  * @param allowedHeaders     CORS request headers granted beyond the built-in MCP ones
  * @param allowedHosts       additional {@code Host} authorities the DNS-rebinding guard accepts
@@ -55,7 +55,6 @@ public record NetworkConfig(
         Duration writerIdleTimeout,
         int maxContentLength,
         @Nullable List<String> allowedOrigins,
-        boolean allowNullOrigin,
         boolean allowPrivateNetworks,
         @Nullable List<String> allowedHeaders,
         @Nullable List<String> allowedHosts,
@@ -69,7 +68,8 @@ public record NetworkConfig(
                     + " whitespace or control characters");
         }
         if (allowedOrigins != null) {
-            allowedOrigins = List.copyOf(allowedOrigins);
+            allowedOrigins =
+                    allowedOrigins.stream().map(Origins::requireConfigured).toList();
         }
         if (allowedHeaders != null) {
             allowedHeaders = List.copyOf(allowedHeaders);
@@ -101,7 +101,6 @@ public record NetworkConfig(
             McpChannelInitializer.DEFAULT_MAX_CONTENT_LENGTH,
             null,
             false,
-            false,
             null,
             null,
             NettyIoEngine.AUTO,
@@ -120,7 +119,6 @@ public record NetworkConfig(
         private Duration writerIdleTimeout = DEFAULT.writerIdleTimeout;
         private int maxContentLength = DEFAULT.maxContentLength;
         private @Nullable List<String> allowedOrigins = DEFAULT.allowedOrigins;
-        private boolean allowNullOrigin = DEFAULT.allowNullOrigin;
         private boolean allowPrivateNetworks = DEFAULT.allowPrivateNetworks;
         private @Nullable List<String> allowedHeaders = DEFAULT.allowedHeaders;
         private @Nullable List<String> allowedHosts = DEFAULT.allowedHosts;
@@ -192,23 +190,21 @@ public record NetworkConfig(
         }
 
         /**
-         * Sets the exact origins the DNS-rebinding guard admits and CORS grants. Unset grants any
-         * loopback origin, on any port. Once set, loopback origins outside the list are still
-         * admitted but get no CORS grant. A remote page reaching a non-loopback {@code Host} also
-         * needs {@link #allowedHosts(String...)}.
+         * Sets the origins the DNS-rebinding guard admits and CORS grants. Unset grants any loopback
+         * origin, on any port. Once set, loopback origins outside the list are still admitted but get
+         * no CORS grant. A remote page reaching a non-loopback {@code Host} also needs {@link
+         * #allowedHosts(String...)}.
+         *
+         * <p>Each entry is a serialized origin, {@code http(s)://host[:port]}, as a browser sends it:
+         * no path (not even {@code /}), query, fragment or user info; {@code null} and {@code *} are
+         * not origins. Entries are canonicalized, so {@code https://App.Example.com:443} matches the
+         * browser's {@code https://app.example.com}. The opaque {@code Origin: null} is always
+         * rejected: any web page can send it from a sandboxed iframe.
+         *
+         * @throws IllegalArgumentException at {@link #build()} if an entry is not a serialized origin
          */
         public Builder allowedOrigins(String... origins) {
             this.allowedOrigins = List.of(origins);
-            return this;
-        }
-
-        /**
-         * Sets whether CORS grants the opaque {@code Origin: null}. The DNS-rebinding guard still
-         * rejects it: any web page can send it from a sandboxed iframe, so admitting it would admit
-         * every site.
-         */
-        public Builder allowNullOrigin(boolean allow) {
-            this.allowNullOrigin = allow;
             return this;
         }
 
@@ -262,7 +258,6 @@ public record NetworkConfig(
                     writerIdleTimeout,
                     maxContentLength,
                     allowedOrigins,
-                    allowNullOrigin,
                     allowPrivateNetworks,
                     allowedHeaders,
                     allowedHosts,

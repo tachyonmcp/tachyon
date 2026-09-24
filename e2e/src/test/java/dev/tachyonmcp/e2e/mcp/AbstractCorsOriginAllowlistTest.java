@@ -16,14 +16,17 @@ import org.junit.jupiter.api.Test;
 
 /**
  * A server configured with {@code allowedOrigins}: the DNS-rebinding guard admits those origins on
- * top of loopback, and CORS grants only them. {@code Origin: null} stays rejected even when listed
- * and {@code allowNullOrigin} is set. Only the request shape
+ * top of loopback, and CORS grants only them. Entries are canonicalized (lower case, default port
+ * dropped), so a configured {@code https://App.Example.com:443} matches the browser's {@code
+ * https://app.example.com}; any other port is a different origin. {@code Origin: null} is never
+ * admitted. Only the request shape
  * differs between protocol revisions, supplied by subclasses in {@code v2025_11_25}/{@code
  * v2026_07_28}.
  */
 public abstract class AbstractCorsOriginAllowlistTest<C extends McpClient> extends AbstractStatelessMcpE2eTest<C> {
 
     private static final String APP_ORIGIN = "https://app.example.com";
+    private static final String IPV6_ORIGIN = "http://[2001:db8::1]:8080";
     private static final String LOOPBACK_ORIGIN = "http://localhost:3000";
 
     /** Returns a JSON-RPC request this protocol revision accepts on a fresh stateless server. */
@@ -31,7 +34,7 @@ public abstract class AbstractCorsOriginAllowlistTest<C extends McpClient> exten
 
     @Override
     protected void startDefaultServer() {
-        startServer(b -> b.network(n -> n.allowedOrigins(APP_ORIGIN, "null").allowNullOrigin(true)));
+        startServer(b -> b.network(n -> n.allowedOrigins("https://App.Example.com:443", IPV6_ORIGIN)));
     }
 
     @Test
@@ -70,9 +73,23 @@ public abstract class AbstractCorsOriginAllowlistTest<C extends McpClient> exten
             assertThat(response.headers().firstValue("access-control-allow-origin"))
                     .as("an origin outside allowedOrigins must not be echoed")
                     .isEmpty();
+            assertThat(tokens(response, "vary"))
+                    .as("with an origin list the response depends on Origin even without a grant")
+                    .contains("origin");
         }
         assertThat(preflight(LOOPBACK_ORIGIN).headers().firstValue("access-control-allow-origin"))
                 .isEmpty();
+    }
+
+    @Test
+    void admitsListedIpv6Origin() throws Exception {
+        try (var client = createTestClient()) {
+            var response = client.postWithOrigin(IPV6_ORIGIN, requestBody());
+
+            assertThat(response.statusCode()).isEqualTo(200);
+            assertThat(response.headers().firstValue("access-control-allow-origin"))
+                    .contains(IPV6_ORIGIN);
+        }
     }
 
     @Test
@@ -81,11 +98,18 @@ public abstract class AbstractCorsOriginAllowlistTest<C extends McpClient> exten
             assertThat(client.postWithOrigin("http://evil.example.com", requestBody())
                             .statusCode())
                     .isEqualTo(403);
-            assertThat(client.postWithOrigin("https://APP.example.com", requestBody())
-                            .statusCode())
-                    .as("origins match exactly, as CORS compares them")
+            assertThat(client.postWithOrigin(APP_ORIGIN + ":444", requestBody()).statusCode())
+                    .as("a different port is a different origin")
                     .isEqualTo(403);
-            assertThat(client.postWithOrigin(APP_ORIGIN + ":443", requestBody()).statusCode())
+            assertThat(client.postWithOrigin("http://app.example.com", requestBody())
+                            .statusCode())
+                    .as("a different scheme is a different origin")
+                    .isEqualTo(403);
+            assertThat(client.postWithOrigin("http://[2001:db8::1]", requestBody())
+                            .statusCode())
+                    .isEqualTo(403);
+            assertThat(client.postWithOrigin(APP_ORIGIN + "/", requestBody()).statusCode())
+                    .as("a path makes the value malformed, even for a listed origin")
                     .isEqualTo(403);
         }
         var preflight = preflight("http://evil.example.com");
@@ -95,7 +119,7 @@ public abstract class AbstractCorsOriginAllowlistTest<C extends McpClient> exten
     }
 
     @Test
-    void rejectsNullOriginEvenWhenListedAndGranted() throws Exception {
+    void rejectsNullOrigin() throws Exception {
         try (var client = createTestClient()) {
             var response = client.postWithOrigin("null", requestBody());
 

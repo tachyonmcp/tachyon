@@ -3,6 +3,7 @@ package dev.tachyonmcp.core.transport.netty;
 
 import dev.tachyonmcp.core.protocol.mcp.McpHeaderNames;
 import dev.tachyonmcp.core.server.config.NetworkConfig;
+import dev.tachyonmcp.core.transport.netty.http.Origins;
 import io.netty.channel.ChannelPipeline;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpMethod;
@@ -77,7 +78,7 @@ public record NettyServerConfig(
      * @return the default CORS configuration
      */
     public static CorsConfig defaultCorsConfig() {
-        return buildCorsConfig(null, false, false, null);
+        return buildCorsConfig(null, false, null);
     }
 
     /**
@@ -91,27 +92,25 @@ public record NettyServerConfig(
      * grants each {@code Mcp-Param-*} header a preflight requests. Responses expose {@code MCP-Session-Id}
      * and {@code MCP-Protocol-Version} to script.
      *
-     * @param allowedOrigins       exact origins to grant, or {@code null} for any origin the guard admits
-     * @param allowNullOrigin      whether to grant {@code Origin: null}
+     * @param allowedOrigins       origins to grant, or {@code null} for any origin the guard admits;
+     *                             each a serialized origin, stored canonical
      * @param allowPrivateNetworks whether to answer Private Network Access preflights
      * @param allowedHeaders       request headers to grant beyond the built-in MCP ones
      * @return the CORS configuration
+     * @throws IllegalArgumentException if an {@code allowedOrigins} entry is not a serialized origin
      */
     public static CorsConfig buildCorsConfig(
             @Nullable List<String> allowedOrigins,
-            boolean allowNullOrigin,
             boolean allowPrivateNetworks,
             @Nullable List<String> allowedHeaders) {
         final var builder = allowedOrigins != null
-                ? CorsConfigBuilder.forOrigins(allowedOrigins.toArray(String[]::new))
+                ? CorsConfigBuilder.forOrigins(
+                        allowedOrigins.stream().map(Origins::requireConfigured).toArray(String[]::new))
                 : CorsConfigBuilder.forAnyOrigin();
         builder.allowedRequestMethods(ALLOWED_METHODS)
                 .allowedRequestHeaders(ALLOWED_HEADERS)
                 .exposeHeaders(EXPOSED_HEADERS)
                 .maxAge(PREFLIGHT_MAX_AGE_SECONDS);
-        if (allowNullOrigin) {
-            builder.allowNullOrigin();
-        }
         if (allowPrivateNetworks) {
             builder.allowPrivateNetwork();
         }

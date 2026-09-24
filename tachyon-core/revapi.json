@@ -1328,7 +1328,7 @@
           "ignore": true,
           "code": "java.class.removed",
           "old": "class dev.tachyonmcp.core.transport.netty.ChannelHandlerUtils",
-          "justification": "Marked @InternalApi at class level: the package-level annotation never excluded it from the API check; response writers no longer echo Origin (CorsHandler owns CORS headers)",
+          "justification": "Marked @InternalApi at class level: the package-level annotation never excluded it from the API check; response writers take the request's CorsDecision instead of its raw Origin",
           "attachments": {
             "since": "1.0.0-beta.31"
           }
@@ -1337,7 +1337,7 @@
           "ignore": true,
           "code": "java.class.removed",
           "old": "class dev.tachyonmcp.core.transport.netty.McpResponseWriter",
-          "justification": "Marked @InternalApi at class level: the package-level annotation never excluded it from the API check; response writers no longer echo Origin (CorsHandler owns CORS headers)",
+          "justification": "Marked @InternalApi at class level: the package-level annotation never excluded it from the API check; response writers take the request's CorsDecision instead of its raw Origin",
           "attachments": {
             "since": "1.0.0-beta.31"
           }
@@ -1346,7 +1346,7 @@
           "ignore": true,
           "code": "java.class.removed",
           "old": "class dev.tachyonmcp.core.transport.netty.sse.PostSseStream",
-          "justification": "Marked @InternalApi at class level: the package-level annotation never excluded it from the API check; response writers no longer echo Origin (CorsHandler owns CORS headers)",
+          "justification": "Marked @InternalApi at class level: the package-level annotation never excluded it from the API check; response writers take the request's CorsDecision instead of its raw Origin",
           "attachments": {
             "since": "1.0.0-beta.31"
           }
@@ -1355,7 +1355,17 @@
           "ignore": true,
           "code": "java.class.removed",
           "old": "class dev.tachyonmcp.core.transport.netty.sse.SseManager",
-          "justification": "Marked @InternalApi at class level: the package-level annotation never excluded it from the API check; response writers no longer echo Origin (CorsHandler owns CORS headers)",
+          "justification": "Marked @InternalApi at class level: the package-level annotation never excluded it from the API check; response writers take the request's CorsDecision instead of its raw Origin",
+          "attachments": {
+            "since": "1.0.0-beta.31"
+          }
+        },
+        {
+          "ignore": true,
+          "code": "java.method.numberOfParametersChanged",
+          "old": "method io.netty.handler.codec.http.cors.CorsConfig dev.tachyonmcp.core.transport.netty.NettyServerConfig::buildCorsConfig(java.util.List<java.lang.String>, boolean, boolean, java.util.List<java.lang.String>)",
+          "new": "method io.netty.handler.codec.http.cors.CorsConfig dev.tachyonmcp.core.transport.netty.NettyServerConfig::buildCorsConfig(java.util.List<java.lang.String>, boolean, java.util.List<java.lang.String>)",
+          "justification": "allowNullOrigin removed: the DNS-rebinding guard always rejects Origin: null, since any web page can send it from a sandboxed iframe",
           "attachments": {
             "since": "1.0.0-beta.31"
           }

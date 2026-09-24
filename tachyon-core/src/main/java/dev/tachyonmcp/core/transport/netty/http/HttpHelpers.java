@@ -30,12 +30,13 @@ public final class HttpHelpers {
      * ends ({@code PostSseStream}/{@code NettySseConnection}); advertising keep-alive lets
      * clients pool the socket and race the server's FIN with the next request.
      */
-    public static void setSseStreamHeaders(HttpResponse response) {
+    public static void setSseStreamHeaders(HttpResponse response, CorsDecision cors) {
         response.headers()
                 .set(HttpHeaderNames.CONTENT_TYPE, "text/event-stream")
                 .set(HttpHeaderNames.TRANSFER_ENCODING, HttpHeaderValues.CHUNKED)
                 .set(HttpHeaderNames.CACHE_CONTROL, "no-cache")
                 .set(X_ACCEL_BUFFERING, "no");
         HttpUtil.setKeepAlive(response, false);
+        cors.applyTo(response);
     }
 }

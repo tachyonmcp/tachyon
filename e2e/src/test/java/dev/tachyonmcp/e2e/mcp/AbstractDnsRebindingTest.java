@@ -76,6 +76,40 @@ public abstract class AbstractDnsRebindingTest<C extends McpClient> extends Abst
                 "http://localhost:80@evil.example.com"
             })
     void rejectsNonLoopbackLookalikeOrigin(String origin) throws Exception {
+        assertRejected(origin);
+    }
+
+    /** {@code Origin} is a serialized origin, {@code scheme://host[:port]}: anything else is malformed. */
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "http://localhost/",
+                "http://localhost/path",
+                "http://localhost?x",
+                "http://localhost#x",
+                "http://user@localhost",
+                "localhost:3000",
+                "ftp://localhost",
+                "http:///x",
+                "http://localhost:0",
+                "http://localhost:65536",
+                "http://[::1",
+                "http://[::1]/"
+            })
+    void rejectsMalformedLoopbackOrigin(String origin) throws Exception {
+        assertRejected(origin);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"http://localhost", "http://[::1]", "http://[::1]:3000", "HTTP://LOCALHOST:3000"})
+    void acceptsLoopbackOriginSpellings(String origin) throws Exception {
+        try (var client = createTestClient()) {
+            assertThat(client.postWithOrigin(origin, requestBody()).statusCode())
+                    .isEqualTo(200);
+        }
+    }
+
+    private void assertRejected(String origin) throws Exception {
         try (var client = createTestClient()) {
             var response = client.postWithOrigin(origin, requestBody());
 

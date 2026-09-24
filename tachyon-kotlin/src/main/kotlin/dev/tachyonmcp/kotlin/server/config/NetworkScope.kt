@@ -23,9 +23,6 @@ public class NetworkScope
         /** Base path for MCP endpoints. */
         public var endpointPath: String? = null
 
-        /** Whether CORS grants `Origin: null`; the DNS-rebinding guard still rejects it. */
-        public var allowNullOrigin: Boolean? = null
-
         /** Whether to allow connections from private networks. */
         public var allowPrivateNetworks: Boolean? = null
 
@@ -67,7 +64,6 @@ public class NetworkScope
             }
             endpointPath?.let(builder::endpointPath)
             if (allowedOrigins.isNotEmpty()) builder.allowedOrigins(*allowedOrigins.toTypedArray())
-            allowNullOrigin?.let(builder::allowNullOrigin)
             allowPrivateNetworks?.let(builder::allowPrivateNetworks)
             if (allowedHeaders.isNotEmpty()) builder.allowedHeaders(*allowedHeaders.toTypedArray())
             if (allowedHosts.isNotEmpty()) builder.allowedHosts(*allowedHosts.toTypedArray())
