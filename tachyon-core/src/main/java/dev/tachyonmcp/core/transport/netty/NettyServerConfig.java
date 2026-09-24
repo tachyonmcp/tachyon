@@ -25,7 +25,9 @@ import org.jspecify.annotations.Nullable;
  * @param writerIdleTimeout  idle timeout for writing
  * @param maxContentLength   maximum HTTP content length in bytes
  * @param corsConfig         CORS configuration; also the origin allowlist of the DNS-rebinding guard.
- *                           See {@link #defaultCorsConfig()} and {@link #buildCorsConfig}
+ *                           A finite origin list must hold canonical serialized origins, as
+ *                           {@link #buildCorsConfig} stores them, else {@link IllegalArgumentException}.
+ *                           See {@link #defaultCorsConfig()}
  * @param allowedHosts       additional {@code Host} authorities the DNS-rebinding guard accepts
  *                           beyond localhost, or {@code null} for localhost-only
  * @param ioEngine           the Netty I/O engine to use
@@ -69,6 +71,14 @@ public record NettyServerConfig(
 
     public NettyServerConfig {
         Objects.requireNonNull(corsConfig, "corsConfig");
+        if (!corsConfig.isAnyOriginSupported()) {
+            for (var origin : corsConfig.origins()) {
+                if (!origin.equals(Origins.canonical(origin))) {
+                    throw new IllegalArgumentException("corsConfig origin must be a canonical serialized origin, "
+                            + "http(s)://host[:port] as buildCorsConfig stores it: '" + origin + "'");
+                }
+            }
+        }
     }
 
     /**
