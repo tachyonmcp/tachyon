@@ -223,7 +223,7 @@ per session, with `INFO` used until the client sends `logging/setLevel`.
 | `.heartbeatInterval(d)` | 15s (`<= 0` disables) |
 | `.maxContentLength(b)` | 1MB |
 | `.maxPipelinedRequests(n)` | 16 (over ⇒ in-order `429` + close; `0` disables pipelining) |
-| `.maxPendingSseBytes(b)` | 0 = no buffering: tool waits until each event reaches the socket. Raise (e.g. 1 MiB) to run ahead of the client. Subscriber past it (or past the 64 KiB high watermark at 0) disconnected; final response always sent |
+| `.maxPendingSseBytes(b)` | Default 64 KiB (~200 progress events). 0 = no buffering: tool waits until each event reaches the socket. Raise (e.g. 1 MiB) to run further ahead of the client. Subscriber past it (or past the 64 KiB high watermark at 0) disconnected; final response always sent |
 | `.allowedOrigins(...)` | none (any loopback origin, any port); listed origins pass the guard too. Each `http(s)://host[:port]`, no path/`*`/`null`; stored canonical |
 | `.allowPrivateNetworks(b)` | false (`Origin: null` is always rejected by the guard) |
 | `.allowedHeaders(...)` | none (MCP headers + requested `Mcp-Param-*` built in) |

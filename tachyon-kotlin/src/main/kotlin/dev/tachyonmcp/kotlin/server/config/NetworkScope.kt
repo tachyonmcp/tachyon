@@ -45,8 +45,8 @@ public class NetworkScope
         public var maxPipelinedRequests: Int? = null
 
         /**
-         * Encoded, unsent output one POST-SSE stream may buffer (default `0`: none, a tool waits until
-         * each event reaches the socket). Past it, a tool sending progress, logs or comments waits for
+         * Encoded, unsent output one POST-SSE stream may buffer (default 64 KiB; `0`: none, a tool
+         * waits until each event reaches the socket). Past it, a tool sending progress, logs or comments waits for
          * the client; the final response is always accepted.
          */
         public var maxPendingSseBytes: Int? = null

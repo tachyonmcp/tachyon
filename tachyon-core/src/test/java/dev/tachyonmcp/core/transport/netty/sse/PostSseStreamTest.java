@@ -4,7 +4,6 @@ package dev.tachyonmcp.core.transport.netty.sse;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.tachyonmcp.core.runtime.SseEvent;
-import dev.tachyonmcp.core.server.config.NetworkConfig;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
 import dev.tachyonmcp.core.transport.netty.ChannelHandlerUtils;
 import dev.tachyonmcp.core.transport.netty.http.CorsDecision;
@@ -289,46 +288,27 @@ class PostSseStreamTest {
         assertThat(allocator.leaked()).isEmpty();
     }
 
-    @Test
-    void zeroBudgetAllowsOneWriteInFlightAndFailsFastOnTheLoop() {
-        final var stream = newStream(Duration.ZERO, NetworkConfig.DEFAULT_MAX_PENDING_SSE_BYTES);
-        stream.start();
-        sink.completePending();
-        final var payload = "x".repeat(8192);
-
-        stream.writeEvent(new SseEvent("1", "message", payload));
-        sink.completePending();
-        stream.writeEvent(new SseEvent("2", "message", payload));
-        channel.runPendingTasks();
-        assertThat(channel.isActive())
-                .as("each write went out before the next: nothing was buffered")
-                .isTrue();
-
-        stream.writeEvent(new SseEvent("3", "message", payload));
-        channel.runPendingTasks();
-
-        assertThat(channel.isActive())
-                .as("a second write while one is in flight would buffer; on the loop it cannot wait")
-                .isFalse();
-        assertThat(ChannelHandlerUtils.closeFailure(channel)).hasMessageContaining("SSE pending write limit");
-        assertThat(sink.writes.stream().filter(w -> w.contains(payload))).hasSize(2);
-        assertThat(allocator.leaked()).isEmpty();
-    }
-
-    @Test
-    void zeroBudgetOffersFallBackToTheChannelHighWatermark() {
+    @ParameterizedTest
+    @ValueSource(strings = {"event", "offer", "comment"})
+    void zeroBudgetWritesThatCannotWaitFallBackToTheChannelHighWatermark(String kind) {
         channel.config().setWriteBufferHighWaterMark(64 * 1024);
         final var stream = newStream(Duration.ZERO, 0);
         stream.start();
         final var payload = "x".repeat(8192);
 
         for (int i = 0; i < 16; i++) {
-            stream.offerEvent(new SseEvent("1", "message", payload));
+            switch (kind) {
+                case "event" -> stream.writeEvent(new SseEvent("1", "message", payload));
+                case "offer" -> stream.offerEvent(new SseEvent("1", "message", payload));
+                case "comment" -> stream.comment(payload);
+                default -> throw new AssertionError(kind);
+            }
         }
         channel.runPendingTasks();
 
         assertThat(sink.writes.stream().filter(w -> w.contains(payload)))
-                .as("a notification burst fills the 64 KiB watermark before the subscriber is dropped")
+                .as("on the loop, a burst fills the 64 KiB watermark before the client is dropped,"
+                        + " not the second write in flight")
                 .hasSize(7);
         assertThat(ChannelHandlerUtils.closeFailure(channel)).hasMessageContaining("SSE pending write limit");
         assertThat(allocator.leaked()).isEmpty();

@@ -43,7 +43,7 @@ Configured via `network { }` / `NetworkConfig.Builder`.
 | `heartbeatInterval` | `15s` | SSE heartbeat interval for silent listening streams; `<= 0` disables |
 | `maxContentLength` | `1 MB` | Max aggregated HTTP request body |
 | `maxPipelinedRequests` | `16` | HTTP/1.1 pipelined requests that may wait behind the one in flight on a connection. Responses always follow request order; the next request gets `429 Too Many Requests` once the ones ahead are answered, and the connection closes. `0` disables pipelining |
-| `maxPendingSseBytes` | `0` | Encoded, unsent output one POST-SSE stream may buffer before tools wait for the client; `0` disables buffering, see below |
+| `maxPendingSseBytes` | `64 * 1024` | Encoded, unsent output one POST-SSE stream may buffer before tools wait for the client; `0` disables buffering, see below |
 | `ioEngine` | `AUTO` | Netty I/O transport, see below |
 
 `.port(int)` is also available as a top-level `ServerBuilder` shortcut.
@@ -139,12 +139,15 @@ so no write completes and the stream closes after `writerIdleTimeout`, with or w
 Set `writerIdleTimeout` to `Duration.ZERO` to disable that close.
 
 POST-SSE streams also limit pending output. Each stream buffers at most `maxPendingSseBytes` of
-encoded, unsent output. The default, `0`, disables buffering: a tool sending progress, log
-messages or comments waits until its previous event has reached the socket, so a fast tool runs at
-the client's pace. Raise the limit (for example to `1024 * 1024`) to let a tool run ahead of the
-client, at the cost of up to that much memory per slow client. A waiting tool has not encoded its
-next event yet, so it holds no extra buffer. The final tool result is always accepted, and one
-event larger than the limit may still be sent, so large results are delivered.
+encoded, unsent output. The default, 64 KiB, lets a tool run ahead of its client by roughly 200
+progress notifications (150–220 bytes on the wire each, plus 128 bytes of accounting overhead),
+about 140 log messages with a 200-character payload, or 7 events of 8 KiB. Past it, a tool
+sending progress, log messages or comments waits until the client catches up, so a fast tool runs
+at the client's pace. Raise the limit (for example to `1024 * 1024`) to run further ahead, at the cost of up to that much memory
+per slow client. Set it to `0` to disable buffering: the tool then waits until each event has
+reached the socket. A waiting tool has not encoded its next event yet, so it holds no extra
+buffer. The final tool result is always accepted, and one event larger than the limit may still
+be sent, so large results are delivered.
 
 A client that stops reading is closed after `writerIdleTimeout`, which also releases the waiting
 tool. With `writerIdleTimeout` set to `Duration.ZERO`, the tool waits until the client
@@ -152,10 +155,12 @@ disconnects. If the waiting tool thread is interrupted (for example, the request
 the stream ends with a reconnect hint instead of skipping the event. Each waiting tool holds its
 thread: with a platform `threadFactory`, that is one OS thread per slow client.
 `subscriptions/listen` never waits: a subscriber that falls a full budget behind is disconnected,
-so it cannot delay notifications to other subscribers. With the default `0`, that budget is the
+so it cannot delay notifications to other subscribers. With the limit at `0`, that budget is the
 channel's write high watermark (64 KiB unless changed), so a burst of notifications to a healthy
-subscriber still goes through. Stateful clients can reconnect for retained
-events as described below; stateless clients must open a new stream.
+subscriber still goes through. A tool writing from a Netty I/O thread, such as an async tool
+continuing on a Netty-based HTTP client's callback, never waits either: it gets the same limit,
+and the slow client is disconnected rather than stalling that client's connections. Stateful
+clients can reconnect for retained events as described below; stateless clients must open a new stream.
 
 ### Reconnecting to an SSE stream
 

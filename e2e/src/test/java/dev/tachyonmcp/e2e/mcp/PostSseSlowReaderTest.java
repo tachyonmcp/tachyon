@@ -10,8 +10,10 @@ import dev.tachyonmcp.core.transport.netty.ChannelHandlerUtils;
 import dev.tachyonmcp.testkit.Mcp20251125Client;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelOption;
+import io.netty.channel.DefaultEventLoopGroup;
 import io.netty.util.concurrent.SingleThreadEventExecutor;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
@@ -92,7 +94,7 @@ class PostSseSlowReaderTest {
                 final var slowChannel = channel.get();
                 if (blockEventLoop) {
                     assertThat(((SingleThreadEventExecutor) slowChannel.eventLoop()).pendingTasks())
-                            .as("buffering is off by default: one write in flight, not thousands of tasks")
+                            .as("the default 64 KiB budget holds a few 8 KiB writes, not thousands of tasks")
                             .isLessThan(160);
                     releaseEventLoop.countDown();
                 }
@@ -109,6 +111,64 @@ class PostSseSlowReaderTest {
                 releaseEventLoop.countDown();
                 result.complete(ToolResult.empty());
             }
+        }
+    }
+
+    @Test
+    void neverParksAForeignNettyLoopProducerAndClosesTheSlowClientInstead() throws Exception {
+        final var channel = new AtomicReference<@Nullable Channel>();
+        final var emitted = new CountDownLatch(1);
+        final var foreignLoop = new DefaultEventLoopGroup(1);
+        try (final var server = TachyonServer.builder()
+                .network(n -> n.port(0).writerIdleTimeout(Duration.ofSeconds(30)))
+                .runtime(r -> r.shutdownGracePeriod(Duration.ofMillis(100)))
+                .pipelineCustomizer(p -> {
+                    p.channel().config().setOption(ChannelOption.SO_SNDBUF, 1024);
+                    channel.compareAndSet(null, p.channel());
+                })
+                .build()) {
+            server.tools().registerAsync(b -> b.name("stream"), (context, request) -> {
+                // An async tool continuing on another Netty client's I/O thread, e.g. a WebClient callback.
+                final var result = new CompletableFuture<ToolResult>();
+                foreignLoop.execute(() -> {
+                    try {
+                        final var message = "x".repeat(8192);
+                        for (int i = 0; i < 4096; i++) {
+                            context.notifications().progress(request.progressToken(), i, 4096, message);
+                        }
+                    } finally {
+                        emitted.countDown();
+                    }
+                    result.complete(ToolResult.text("done"));
+                });
+                return result;
+            });
+            server.start();
+            try (final var socket = new Socket()) {
+                socket.setReceiveBufferSize(1024);
+                socket.connect(new InetSocketAddress("127.0.0.1", server.port()));
+                socket.getOutputStream().write(toolCall().getBytes(StandardCharsets.UTF_8));
+                socket.getOutputStream().flush();
+
+                assertThat(emitted.await(5, TimeUnit.SECONDS))
+                        .as("a Netty I/O thread never parks for a client that stopped reading")
+                        .isTrue();
+                assertThat(foreignLoop.submit(() -> true).get(1, TimeUnit.SECONDS))
+                        .as("the foreign loop keeps serving its own channels")
+                        .isTrue();
+                final var slowChannel = channel.get();
+                assertThat(slowChannel.closeFuture().await(5, TimeUnit.SECONDS))
+                        .as("the slow client is closed at once, not after the writer idle timeout")
+                        .isTrue();
+                assertThat(ChannelHandlerUtils.closeFailure(slowChannel))
+                        .isInstanceOf(IOException.class)
+                        .hasMessageContaining("SSE pending write limit");
+                try (final var client = new Mcp20251125Client(server.port())) {
+                    assertThat(client.ping(null, 2).statusCode()).isEqualTo(200);
+                }
+            }
+        } finally {
+            foreignLoop.shutdownGracefully(0, 0, TimeUnit.SECONDS);
         }
     }
 

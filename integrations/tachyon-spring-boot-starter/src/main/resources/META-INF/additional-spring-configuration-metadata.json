@@ -30,7 +30,7 @@
     },
     {
       "name": "tachyon.network.max-pending-sse-bytes",
-      "defaultValue": "0B"
+      "defaultValue": "64KB"
     },
     {
       "name": "tachyon.network.allowed-origins",

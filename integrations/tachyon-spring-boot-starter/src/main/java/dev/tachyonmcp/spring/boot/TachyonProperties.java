@@ -64,8 +64,9 @@ public record TachyonProperties(
      * @param maxPipelinedRequests Pipelined HTTP/1.1 requests that may wait behind the one in flight on
      *                            a connection. The next one gets 429 Too Many Requests and the
      *                            connection closes. Zero disables pipelining.
-     * @param maxPendingSseBytes  Encoded, unsent output one POST-SSE stream may buffer. Zero disables
-     *                            buffering: a tool waits until each event reaches the socket. Past
+     * @param maxPendingSseBytes  Encoded, unsent output one POST-SSE stream may buffer (default
+     *                            64KB). Zero disables buffering: a tool waits until each event
+     *                            reaches the socket. Past
      *                            it, a tool sending progress, logs or comments waits for the client.
      *                            The final response is always accepted.
      * @param allowedOrigins      Origins the DNS-rebinding guard admits and the CORS handler grants,

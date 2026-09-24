@@ -21,6 +21,7 @@ import io.netty.handler.codec.http.DefaultHttpResponse;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http.LastHttpContent;
+import io.netty.util.concurrent.FastThreadLocalThread;
 import io.netty.util.concurrent.PromiseCombiner;
 import java.io.IOException;
 import java.nio.channels.ClosedChannelException;
@@ -52,13 +53,13 @@ import org.slf4j.LoggerFactory;
  * thread; the reservation is held until the write completes, and the event loop only queues or
  * writes the ready buffer. A producer waiting for capacity holds no buffer. The budget is {@code
  * NetworkConfig#maxPendingSseBytes}; one larger event may exceed it, so a budget of {@code 0}
- * allows exactly one write in flight. {@link #offerEvent} uses the channel's write high watermark
- * instead when the budget is {@code 0}. A producer off the event loop
- * waits for capacity, so a fast tool slows to the client's pace; a stalled client is closed by the
- * writer idle timeout, which wakes it. An interrupted producer closes the stream rather than drop
- * its event silently. A write without capacity from the event loop or {@link #offerEvent} closes
- * the connection instead. The final response skips the budget and is encoded before reserving: it
- * is the last write and never waits, so it adds at most one event. The event loop never blocks,
+ * allows exactly one write in flight. A producer off Netty's I/O threads waits for capacity, so a
+ * fast tool slows to the client's pace; a stalled client is closed by the writer idle timeout,
+ * which wakes it. An interrupted producer closes the stream rather than drop its event silently.
+ * {@link #offerEvent} and any write from a Netty I/O thread (this channel's loop or another
+ * client's) never wait: past the budget, or the channel's write high watermark when the budget is
+ * {@code 0}, they close the connection instead. The final response skips the budget and is
+ * encoded before reserving: it is the last write and never waits, so it adds at most one event. The event loop never blocks,
  * and the task queue stays bounded.
  */
 @InternalApi
@@ -91,7 +92,7 @@ public final class PostSseStream implements OutboundSseStream {
 
     /** How a write that finds the budget full is admitted. */
     private enum Admission {
-        /** Park the producer until capacity frees up; overflow-close on the event loop. */
+        /** Park the producer until capacity frees up; on a Netty I/O thread, admitted like {@link #OFFER}. */
         WAIT,
         /** Never park: overflow-close instead. Limited by the high watermark when the budget is 0. */
         OFFER,
@@ -302,13 +303,14 @@ public final class PostSseStream implements OutboundSseStream {
     }
 
     private boolean reserve(long bytes, Admission admission) {
+        final var parks = admission == Admission.WAIT && !onIoThread();
+        final var limit = parks ? maxPendingBytes : maxOfferedBytes;
         while (channel.isActive() && !state.closed) {
             final var pending = pendingBytes.get();
             if (pending < 0) return false;
-            final var limit = admission == Admission.OFFER ? maxOfferedBytes : maxPendingBytes;
             if (admission == Admission.FINAL || (pending <= limit && (bytes > limit || bytes <= limit - pending))) {
                 if (pendingBytes.compareAndSet(pending, pending + bytes)) return true;
-            } else if (admission == Admission.WAIT && !channel.eventLoop().inEventLoop()) {
+            } else if (parks) {
                 if (!awaitCapacity(pending)) {
                     // Interrupted (e.g. a cancelled tool): end the stream instead of leaving a
                     // silent gap. Admission stops first so no later event lands past the gap.
@@ -332,6 +334,14 @@ public final class PostSseStream implements OutboundSseStream {
             }
         }
         return false;
+    }
+
+    /**
+     * Whether the caller is a Netty I/O thread, which must never park: this channel's loop, or
+     * another client's, such as an async tool continuing on its HTTP client's callback.
+     */
+    private boolean onIoThread() {
+        return channel.eventLoop().inEventLoop() || FastThreadLocalThread.currentThreadHasFastThreadLocal();
     }
 
     /**

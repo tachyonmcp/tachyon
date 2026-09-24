@@ -39,7 +39,9 @@ class NetworkConfigTest {
         assertThat(config.allowedHeaders()).isNull();
         assertThat(config.ioEngine()).isEqualTo(NettyIoEngine.AUTO);
         assertThat(config.heartbeatInterval()).isEqualTo(Duration.ofSeconds(15));
-        assertThat(config.maxPendingSseBytes()).as("buffering off by default").isZero();
+        assertThat(config.maxPendingSseBytes())
+                .as("a tool may run 64 KiB ahead of its client by default")
+                .isEqualTo(64 * 1024);
     }
 
     @Test

@@ -48,12 +48,13 @@ import org.jspecify.annotations.Nullable;
  * @param heartbeatInterval  SSE heartbeat interval that keeps an upgraded stream alive (default
  *                           15s); keep below the idle timeout of any proxy in front of the server
  *                           and below the session TTL; {@code <= 0} disables
- * @param maxPendingSseBytes encoded, unsent output one POST-SSE stream may buffer (default
- *                           {@code 0}: none, so a tool waits until each event reaches the socket);
- *                           past it, a tool sending progress, logs or comments waits for the
- *                           client. A subscriber is disconnected past this limit, or past the
- *                           channel's write high watermark when the limit is {@code 0}. The final
- *                           response is always accepted, and one larger event may exceed it
+ * @param maxPendingSseBytes encoded, unsent output one POST-SSE stream may buffer (default 64
+ *                           KiB; {@code 0}: none, so a tool waits until each event reaches the
+ *                           socket); past it, a tool sending progress, logs or comments waits
+ *                           for the client. A subscriber, or a tool writing from a Netty I/O
+ *                           thread, is disconnected past this limit, or past the channel's write
+ *                           high watermark when the limit is {@code 0}. The final response is
+ *                           always accepted, and one larger event may exceed it
  */
 @ExperimentalApi
 public record NetworkConfig(
@@ -109,7 +110,7 @@ public record NetworkConfig(
     public static final Duration DEFAULT_WRITER_IDLE_TIMEOUT = Duration.ofMinutes(5);
     public static final Duration DEFAULT_HEARTBEAT_INTERVAL = Duration.ofSeconds(15);
     public static final int DEFAULT_MAX_PIPELINED_REQUESTS = 16;
-    public static final int DEFAULT_MAX_PENDING_SSE_BYTES = 0;
+    public static final int DEFAULT_MAX_PENDING_SSE_BYTES = 64 * 1024;
 
     static final NetworkConfig DEFAULT = new NetworkConfig(
             DEFAULT_HOST,
@@ -287,16 +288,18 @@ public record NetworkConfig(
 
         /**
          * Sets how much encoded, unsent output one POST-SSE stream may buffer (default {@value
-         * NetworkConfig#DEFAULT_MAX_PENDING_SSE_BYTES}). Past it, a tool sending progress, log
-         * messages or comments waits until the client catches up. {@code 0} disables buffering: a
-         * tool waits until each event reaches the socket before sending the next. Raise it (e.g.
-         * to 1 MiB) so a fast tool can run ahead of the client, at the cost of that much memory per
-         * slow client until {@code writerIdleTimeout} closes it.
+         * NetworkConfig#DEFAULT_MAX_PENDING_SSE_BYTES} bytes, roughly 200 typical progress
+         * notifications). Past it, a tool sending progress, log messages or comments waits until
+         * the client catches up. {@code 0} disables buffering: a tool waits until each event reaches
+         * the socket before sending the next. Raise it (e.g. to 1 MiB) so a fast tool can run
+         * further ahead of the client, at the cost of that much memory per slow client until
+         * {@code writerIdleTimeout} closes it.
          *
-         * <p>A {@code subscriptions/listen} subscriber never waits: it is disconnected once this
-         * limit is full or, when the limit is {@code 0}, once the channel's write high watermark
-         * is. The final response is always accepted, and one event larger than the limit may still
-         * be sent.
+         * <p>A {@code subscriptions/listen} subscriber never waits, nor does a tool writing from a
+         * Netty I/O thread (for example, an async tool continuing on a Netty-based HTTP client's
+         * callback): the client is disconnected once this limit is full or, when the limit is
+         * {@code 0}, once the channel's write high watermark is. The final response is always
+         * accepted, and one event larger than the limit may still be sent.
          */
         public Builder maxPendingSseBytes(int bytes) {
             if (bytes < 0) {
