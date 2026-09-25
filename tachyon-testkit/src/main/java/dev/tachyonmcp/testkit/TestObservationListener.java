@@ -12,10 +12,19 @@ import java.util.function.Supplier;
 /** Controllable {@link ObservationListener} fixture for MCP server tests. */
 public final class TestObservationListener implements ObservationListener {
 
-    /** One recorded {@link #start} call. */
+    /**
+     * One recorded {@link #start} call.
+     *
+     * @param info the started operation
+     */
     public record Started(OperationInfo info) {}
 
-    /** One recorded {@link #complete} call. */
+    /**
+     * One recorded {@link #complete} call.
+     *
+     * @param info the completed operation
+     * @param outcome the operation outcome
+     */
     public record Completed(OperationInfo info, OperationOutcome outcome) {}
 
     private final List<Started> started = new CopyOnWriteArrayList<>();
@@ -26,13 +35,23 @@ public final class TestObservationListener implements ObservationListener {
     /** Creates a new test observation listener. */
     public TestObservationListener() {}
 
-    /** Makes every {@link #start} call throw the given exception, until {@link #reset()}. */
+    /**
+     * Makes every {@link #start} call throw the given exception, until {@link #reset()}.
+     *
+     * @param exception supplies the exception to throw
+     * @return this listener
+     */
     public TestObservationListener failOnStart(Supplier<? extends RuntimeException> exception) {
         this.startFailure = exception;
         return this;
     }
 
-    /** Makes every {@link #complete} call throw the given exception, until {@link #reset()}. */
+    /**
+     * Makes every {@link #complete} call throw the given exception, until {@link #reset()}.
+     *
+     * @param exception supplies the exception to throw
+     * @return this listener
+     */
     public TestObservationListener failOnComplete(Supplier<? extends RuntimeException> exception) {
         this.completeFailure = exception;
         return this;
@@ -57,17 +76,29 @@ public final class TestObservationListener implements ObservationListener {
         }
     }
 
-    /** Returns every recorded {@link #start} call, in order. */
+    /**
+     * Returns every recorded {@link #start} call, in order.
+     *
+     * @return an immutable snapshot of started operations
+     */
     public List<Started> started() {
         return List.copyOf(started);
     }
 
-    /** Returns every recorded {@link #complete} call, in order. */
+    /**
+     * Returns every recorded {@link #complete} call, in order.
+     *
+     * @return an immutable snapshot of completed operations
+     */
     public List<Completed> completed() {
         return List.copyOf(completed);
     }
 
-    /** Clears recorded calls and any configured failure. */
+    /**
+     * Clears recorded calls and any configured failure.
+     *
+     * @return this listener
+     */
     public TestObservationListener reset() {
         started.clear();
         completed.clear();

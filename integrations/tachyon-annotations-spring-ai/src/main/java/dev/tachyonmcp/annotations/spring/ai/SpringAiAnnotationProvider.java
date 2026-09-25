@@ -67,6 +67,14 @@ public class SpringAiAnnotationProvider implements AnnotationProvider {
 
     private static final SpringAiAnnotationProvider INSTANCE = new SpringAiAnnotationProvider();
 
+    /** Creates a provider. Prefer {@link #instance()}. */
+    public SpringAiAnnotationProvider() {}
+
+    /**
+     * Returns the shared provider instance.
+     *
+     * @return the shared instance
+     */
     public static SpringAiAnnotationProvider instance() {
         return INSTANCE;
     }
