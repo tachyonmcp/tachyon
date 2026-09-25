@@ -3,6 +3,7 @@ package dev.tachyonmcp.core.runtime;
 
 import dev.tachyonmcp.api.annotations.InternalApi;
 import dev.tachyonmcp.api.server.domain.LoggingLevel;
+import dev.tachyonmcp.api.server.security.SecurityContext;
 import dev.tachyonmcp.core.protocol.Protocol;
 import dev.tachyonmcp.core.protocol.Protocols;
 import dev.tachyonmcp.core.server.session.SessionKey;
@@ -37,6 +38,7 @@ public class Session {
     private final Set<String> enabledExtensions = ConcurrentHashMap.newKeySet();
     private final AtomicReference<@Nullable Protocol> protocol = new AtomicReference<>();
     private final AtomicReference<@Nullable LoggingLevel> loggingLevel = new AtomicReference<>();
+    private final AtomicReference<@Nullable SecurityContext> securityContext = new AtomicReference<>();
     private final AtomicReference<SessionSnapshot> persistedSnapshot;
     private volatile @Nullable String resumingStreamKey;
 
@@ -193,6 +195,28 @@ public class Session {
     public void protocol(Protocol protocol) {
         if (this.protocol.compareAndSet(null, Objects.requireNonNull(protocol, "protocol"))) {
             onChange.accept(this);
+        }
+    }
+
+    /**
+     * Returns the security context of the request that created this session. It identifies the
+     * session's owner, never the current caller: requests are authenticated on their own, and the
+     * caller's context is {@link dev.tachyonmcp.api.runtime.InteractionContext#securityContext()}.
+     * Process-local; a session restored from a snapshot is anonymous.
+     */
+    public SecurityContext securityContext() {
+        final var owner = securityContext.get();
+        return owner != null ? owner : SecurityContext.anonymous();
+    }
+
+    /**
+     * Records the security context of the request that created this session, once.
+     *
+     * @throws IllegalStateException if a context was already recorded
+     */
+    public void securityContext(SecurityContext owner) {
+        if (!securityContext.compareAndSet(null, Objects.requireNonNull(owner, "owner"))) {
+            throw new IllegalStateException("Session " + id + " already has a security context");
         }
     }
 

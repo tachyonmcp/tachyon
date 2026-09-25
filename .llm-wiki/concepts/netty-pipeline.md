@@ -2,8 +2,8 @@
 title: Netty pipeline
 tags: [concept, transport, netty]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/http/]
-updated: 2026-09-24
-commit: d2a0bdba
+updated: 2026-09-25
+commit: cbfbcd7f
 ---
 
 # 🧪 Netty pipeline
@@ -42,6 +42,7 @@ Verdict: one static-order pipeline per channel. Every registered `Protocol`'s ha
 | 13 | `http-aggregator` | `CorsHttpObjectAggregator(maxContentLength)` | 413/417 with the request's CORS decision; Netty's close rule kept (`CorsHttpObjectAggregator#handleOversizedMessage`). `Expect` rejects are decorated through `CorsHttpObjectAggregator#newContinueResponse` using an independent copy; successful 100 Continue is unchanged |
 | 14 | `unsupported-protocol-version` | `UnsupportedProtocolVersionHandler` | 400 JSON-RPC error with body `id` + supported list `UnsupportedProtocolVersionHandler#channelRead` |
 | 15 | `interaction` | `InteractionHandler` | fallback protocol resolve for GET/DELETE; lifecycle events → ctx `InteractionHandler#userEventTriggered` |
+| – | `authentication` | `AuthenticationHandler` (per channel) | only with a provider: authenticates each request off the event loop, sets `ChannelContext#setSecurityContext`; 401/400/500 → [[authentication]] |
 | 16 | `idle` | `IdleStateHandler` | if reader/writer idle > 0 |
 | 17 | `mcp-header-match` | `McpHeaderMatchHandler` | SEP-2243 mirror **agreement** vs body, every version, ungated `McpHeaderMatchHandler#channelRead` |
 | 18 | `mcp-<ver>-*` | `Protocol.requestHandlers(server)` for each protocol | 2025: none; 2026: `RequestValidationHandler` (`_meta`/removed methods) → `RequiredHeadersHandler` (mirror **presence**) → `ExtensionNegotiationHandler` |
@@ -61,7 +62,7 @@ Verdict: one static-order pipeline per channel. Every registered `Protocol`'s ha
 
 | Attr | Key | Proof |
 |---|---|---|
-| `ChannelContext` (protocol, session, lifecycle, enabled extensions, attrs) | `InteractionHandler.INTERACTION_CONTEXT_KEY` | `InteractionHandler#logger` |
+| `ChannelContext` (protocol, session, lifecycle, enabled extensions, attrs, current request's security context) | `InteractionHandler.INTERACTION_CONTEXT_KEY` | `InteractionHandler#logger` |
 | `Session` | `tachyonSession` | `ChannelHandlerUtils#SESSION_KEY` |
 | rejected flag (drop rest of request) | `tachyonRequestRejected` | `ChannelHandlerUtils` |
 | unsupported version | `unsupportedProtocolVersion` | `ProtocolVersionHandler.java` (`UNSUPPORTED_VERSION_KEY`) |

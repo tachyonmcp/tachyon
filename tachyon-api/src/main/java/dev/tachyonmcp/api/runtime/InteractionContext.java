@@ -2,6 +2,7 @@
 package dev.tachyonmcp.api.runtime;
 
 import dev.tachyonmcp.api.annotations.ExperimentalApi;
+import dev.tachyonmcp.api.server.security.SecurityContext;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import org.jspecify.annotations.Nullable;
@@ -79,6 +80,19 @@ public interface InteractionContext {
      * @return the client context
      */
     ClientContext client();
+
+    /**
+     * Returns the security context of the request being handled, resolved by the server's
+     * authentication provider. It belongs to this request, not to the session or connection, and
+     * stays fixed for the handler's lifetime, including work it continues on other threads.
+     *
+     * @return the caller's security context; {@link SecurityContext#anonymous()} when the server
+     *     authenticates no requests
+     */
+    @ExperimentalApi
+    default SecurityContext securityContext() {
+        return SecurityContext.anonymous();
+    }
 
     /**
      * Sends a request to the client and returns a future that completes with the raw JSON response.

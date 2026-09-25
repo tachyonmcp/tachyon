@@ -36,6 +36,7 @@ Index into code, **not** a spec. Page vs code mismatch → code wins, fix the pa
 | [[declarative-configuration]] | Native Tachyon annotations: registration, binding, results, declarative completions |
 | [[configuration]] | `ServerBuilder` groups, config records, defaults table |
 | [[security-guards]] | DNS-rebinding, header guard, Accept, endpoint, stateless guard, CORS, body limit |
+| [[authentication]] | Opt-in per-request `SecurityContext`: `AuthenticationProvider` on VT, bearer tokens, RFC 6750 rejections |
 | [[observability]] | `ObservationListener` lifecycle, outcomes, payload capture, OTel bridge |
 | [[api-stability]] | `@ExperimentalApi`/`@InternalApi`/`@LegacyApi`, revapi, internal packages, Immutables |
 

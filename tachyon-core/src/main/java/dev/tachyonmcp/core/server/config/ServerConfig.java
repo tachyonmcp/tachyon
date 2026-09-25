@@ -7,8 +7,8 @@ import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Aggregated server configuration grouping identity, capabilities, session, network, runtime, and
- * observability settings.
+ * Aggregated server configuration grouping identity, capabilities, session, network, runtime,
+ * observability, and security settings.
  */
 public final class ServerConfig {
 
@@ -18,6 +18,7 @@ public final class ServerConfig {
     private final NetworkConfig network;
     private final RuntimeConfig runtime;
     private final ObservabilityConfig observability;
+    private final SecurityConfig security;
 
     private ServerConfig(Builder builder) {
         this.identity = Objects.requireNonNull(builder.identity, "identity cannot be null");
@@ -26,6 +27,7 @@ public final class ServerConfig {
         this.network = Objects.requireNonNull(builder.network, "network cannot be null");
         this.runtime = Objects.requireNonNull(builder.runtime, "runtime cannot be null");
         this.observability = Objects.requireNonNull(builder.observability, "observability cannot be null");
+        this.security = Objects.requireNonNull(builder.security, "security cannot be null");
     }
 
     /** Returns a builder for an immutable server configuration. */
@@ -63,6 +65,11 @@ public final class ServerConfig {
         return observability;
     }
 
+    /** Returns request-authentication settings. */
+    public SecurityConfig security() {
+        return security;
+    }
+
     /** Builder for {@link ServerConfig}. */
     public static final class Builder {
 
@@ -83,6 +90,8 @@ public final class ServerConfig {
 
         @Nullable
         private ObservabilityConfig observability;
+
+        private SecurityConfig security = SecurityConfig.disabled();
 
         private Builder() {}
 
@@ -119,6 +128,12 @@ public final class ServerConfig {
         /** Sets passive observation-lifecycle settings. */
         public Builder observability(ObservabilityConfig observability) {
             this.observability = observability;
+            return this;
+        }
+
+        /** Sets request-authentication settings; defaults to {@link SecurityConfig#disabled()}. */
+        public Builder security(SecurityConfig security) {
+            this.security = security;
             return this;
         }
 

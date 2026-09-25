@@ -15,6 +15,7 @@ import dev.tachyonmcp.api.server.features.tools.Tools;
 import dev.tachyonmcp.core.server.config.CapabilitiesConfig;
 import dev.tachyonmcp.core.server.config.NetworkConfig;
 import dev.tachyonmcp.core.server.config.ObservabilityConfig;
+import dev.tachyonmcp.core.server.config.SecurityConfig;
 import dev.tachyonmcp.core.server.config.ServerConfig;
 import dev.tachyonmcp.core.server.config.SessionConfig;
 import dev.tachyonmcp.core.server.features.tasks.TasksExtension;
@@ -42,6 +43,7 @@ final class DefaultServerBuilder implements ServerBuilder {
     private final NetworkConfig.Builder networkBuilder = NetworkConfig.builder();
     private final RuntimeConfig.Builder runtimeBuilder = RuntimeConfig.builder();
     private final ObservabilityConfig.Builder observabilityBuilder = ObservabilityConfig.builder();
+    private final SecurityConfig.Builder securityBuilder = SecurityConfig.builder();
     private final List<ServerExtension> extensions = new ArrayList<>();
     private final Set<String> extensionIds = new HashSet<>();
     private final List<Consumer<TachyonServer>> bootstrapRegistrations = new ArrayList<>();
@@ -111,6 +113,12 @@ final class DefaultServerBuilder implements ServerBuilder {
     @Override
     public ServerBuilder observability(Consumer<ObservabilityConfig.Builder> configurer) {
         configurer.accept(observabilityBuilder);
+        return this;
+    }
+
+    @Override
+    public ServerBuilder security(Consumer<SecurityConfig.Builder> configurer) {
+        configurer.accept(securityBuilder);
         return this;
     }
 
@@ -335,6 +343,7 @@ final class DefaultServerBuilder implements ServerBuilder {
                 .network(networkBuilder.build())
                 .runtime(runtimeBuilder.build())
                 .observability(observabilityBuilder.build())
+                .security(securityBuilder.build())
                 .build();
     }
 }

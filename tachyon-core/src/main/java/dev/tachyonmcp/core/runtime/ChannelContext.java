@@ -3,6 +3,7 @@ package dev.tachyonmcp.core.runtime;
 
 import dev.tachyonmcp.api.annotations.InternalApi;
 import dev.tachyonmcp.api.runtime.InteractionContext;
+import dev.tachyonmcp.api.server.security.SecurityContext;
 import dev.tachyonmcp.core.protocol.Protocol;
 import org.jspecify.annotations.Nullable;
 
@@ -51,6 +52,15 @@ public interface ChannelContext extends InteractionContext {
      * @param session the session, or {@code null} to clear
      */
     void setSession(@Nullable Session session);
+
+    /**
+     * Sets the security context of the request now on this channel. The HTTP pipelining gate admits
+     * one request per channel at a time, and every request is authenticated, so this never outlives
+     * the request it was set for. Dispatch contexts copy it when created.
+     *
+     * @param securityContext the current request's security context
+     */
+    void setSecurityContext(SecurityContext securityContext);
 
     /**
      * Enables an extension for this channel.

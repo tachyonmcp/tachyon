@@ -425,6 +425,16 @@ A stringly-typed attribute bag has two failure modes that compile clean and brea
 
 Testing handler dispatch/error mapping: see [`tachyon-development` skill](../../.agents/skills/tachyon-development/SKILL.md).
 
+## 🔴 Security context is per request, passed explicitly
+
+`InteractionContext#securityContext()` is the caller of **this** request. Never read identity from a thread-local, the session, or the connection:
+
+- **No holder.** A `ThreadLocal` owner broke async task ownership (#393); Spring's `SecurityContextHolder` needs delegating executors for the same reason. The dispatch context copies the value once, so handler work on other threads keeps its caller.
+- **Not the session.** MCP security best practices: servers MUST NOT use sessions for authentication. `Session#securityContext()` is the creator, for binding checks only.
+- **Not the connection.** A gateway pools one connection across callers. `ChannelContext#setSecurityContext` holds only the current request, which is safe because `HttpPipeliningGate` admits one request per channel at a time.
+- **Immutable, no credentials.** Implementations never carry the token (MCP forbids token passthrough). Anonymous is `SecurityContext.anonymous()`, never `null`, and is never authenticated.
+- **Providers run off the event loop.** `AuthenticationHandler` calls the provider on the handler executor. `AuthenticationException` rejects credentials (`401`/`400`); any other exception means they could not be checked (`500`).
+
 ## Request cancellation
 
 For session-based requests, `notifications/cancelled` targets only inbound work with the same

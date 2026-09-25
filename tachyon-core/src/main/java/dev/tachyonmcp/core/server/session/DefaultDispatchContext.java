@@ -8,6 +8,7 @@ import dev.tachyonmcp.api.runtime.ContextNotifications;
 import dev.tachyonmcp.api.server.domain.LoggingLevel;
 import dev.tachyonmcp.api.server.domain.ProgressToken;
 import dev.tachyonmcp.api.server.domain.RequestId;
+import dev.tachyonmcp.api.server.security.SecurityContext;
 import dev.tachyonmcp.core.protocol.Protocol;
 import dev.tachyonmcp.core.protocol.ProtocolRequestMapper;
 import dev.tachyonmcp.core.protocol.ProtocolResponseMapper;
@@ -34,6 +35,7 @@ public class DefaultDispatchContext implements DispatchContext {
     private final ChannelContext channel;
     private final ServerEngine server;
     private final @Nullable RequestId requestId;
+    private final SecurityContext securityContext;
     private final ContextNotifications notifications = new NotificationsImpl();
     private volatile @Nullable OutboundSseStream outboundStream;
     private volatile @Nullable LoggingLevel permittedLogLevel;
@@ -47,6 +49,8 @@ public class DefaultDispatchContext implements DispatchContext {
         this.channel = channel;
         this.server = server;
         this.requestId = requestId;
+        // Copied, not delegated: the channel's value moves on to the next request.
+        this.securityContext = channel.securityContext();
     }
 
     public static DispatchContext create(Protocol protocol, ServerEngine server) {
@@ -99,6 +103,16 @@ public class DefaultDispatchContext implements DispatchContext {
     @Override
     public <T> void set(AttributeKey<T> key, T value) {
         channel.set(key, value);
+    }
+
+    @Override
+    public SecurityContext securityContext() {
+        return securityContext;
+    }
+
+    @Override
+    public void setSecurityContext(SecurityContext securityContext) {
+        channel.setSecurityContext(securityContext);
     }
 
     @Override

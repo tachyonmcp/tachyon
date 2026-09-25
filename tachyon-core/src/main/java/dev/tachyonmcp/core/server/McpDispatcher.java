@@ -649,7 +649,9 @@ public class McpDispatcher {
                             var reattached = ic.observation().reattach();
                             try {
                                 if (!server.isStateless()) {
-                                    ic.setSession(server.createSession(generateSessionId(channelContext)));
+                                    final var session = server.createSession(generateSessionId(channelContext));
+                                    session.securityContext(ic.securityContext());
+                                    ic.setSession(session);
                                 }
                                 return (CompletionStage<Object>) decodeAndHandleAsync(handler, ic, rawParams);
                             } catch (Exception e) {

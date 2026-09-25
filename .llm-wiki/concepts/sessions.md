@@ -2,8 +2,8 @@
 title: Sessions
 tags: [concept, session, state]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/runtime/Session.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/session/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/SessionConfig.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultServerBuilder.java, tachyon-api/src/main/java/dev/tachyonmcp/api/server/session/SessionIdGenerator.java]
-updated: 2026-09-18
-commit: 6a895703
+updated: 2026-09-25
+commit: cbfbcd7f
 ---
 
 # 🪪 Sessions
@@ -14,7 +14,7 @@ Verdict: **stateless by default** (`SessionConfig.enabled=false`) — a stateles
 
 | Type | Role | Proof |
 |---|---|---|
-| `Session` | Runtime: id, `SessionKey`, `SessionState`, SSE connection, backpressure, cursor, extensions, protocol, log level, resuming stream key | `Session` |
+| `Session` | Runtime: id, `SessionKey`, `SessionState`, SSE connection, backpressure, cursor, extensions, protocol, log level, resuming stream key, creator's security context (set once at `initialize`, process-local, not in `SessionSnapshot`) → [[authentication]] | `Session`, `Session#securityContext` |
 | `SessionState` | `INITIALIZING → ACTIVE → (DRAINING) → CLOSED` | `SessionState` |
 | `SessionKey(sessionId, generationId)` | generation fences stale work; UUID generation per create | `SessionKey`, `SessionManager#withLifecycleLock` |
 | `SessionSnapshot` | transport-free state + `expiresAt` + `revision` | `SessionSnapshot` |

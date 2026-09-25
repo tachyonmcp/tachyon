@@ -5,9 +5,11 @@ import dev.tachyonmcp.api.annotations.InternalApi;
 import dev.tachyonmcp.api.runtime.AttributeKey;
 import dev.tachyonmcp.api.runtime.ClientContext;
 import dev.tachyonmcp.api.runtime.ContextNotifications;
+import dev.tachyonmcp.api.server.security.SecurityContext;
 import dev.tachyonmcp.core.protocol.Protocol;
 import dev.tachyonmcp.core.server.session.WireClientContext;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -24,6 +26,8 @@ public class DefaultChannelContext implements ChannelContext {
     private final Set<String> enabledExtensions = ConcurrentHashMap.newKeySet();
 
     private volatile Lifecycle lifecycle = Lifecycle.INITIALIZATION;
+
+    private volatile SecurityContext securityContext = SecurityContext.anonymous();
 
     private final AtomicReference<@Nullable Session> sessionHolder = new AtomicReference<>();
 
@@ -55,6 +59,16 @@ public class DefaultChannelContext implements ChannelContext {
     @Override
     public void setSession(@Nullable Session session) {
         this.sessionHolder.set(session);
+    }
+
+    @Override
+    public SecurityContext securityContext() {
+        return securityContext;
+    }
+
+    @Override
+    public void setSecurityContext(SecurityContext securityContext) {
+        this.securityContext = Objects.requireNonNull(securityContext, "securityContext");
     }
 
     @Override

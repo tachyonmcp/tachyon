@@ -16,14 +16,16 @@ long-running tools and shutdown behaviour: [FAQ](../faq.md#deployment-and-operat
 
 ## Before exposing the server publicly
 
-Listening on a public interface is only the first step. Tachyon serves plain HTTP and has no
-built-in authentication or authorization, so a public deployment has to supply both.
+Listening on a public interface is only the first step. Tachyon serves plain HTTP and
+authenticates nothing by default, so a public deployment has to supply authentication and
+authorization.
 
 - **TLS.** Terminate TLS in a reverse proxy, load balancer, or platform ingress in front of Tachyon.
-- **Authentication and authorization.** Enforce them in that front layer, or in a gateway that
-  forwards only authorized calls. Tachyon does not check credentials. `allowedHosts` and the
-  `Origin` check only decide which `Host` and `Origin` values a request may carry; they do not
-  identify a caller.
+  It must forward the `Authorization` header unchanged.
+- **Authentication and authorization.** Configure [bearer authentication](authentication.md) so
+  Tachyon checks a token on every request, or enforce both in a gateway that forwards only
+  authorized calls. `allowedHosts` and the `Origin` check only decide which `Host` and `Origin`
+  values a request may carry; they do not identify a caller.
 - **Direct access.** Make Tachyon reachable only through that layer. A client that can reach the
   Tachyon port directly bypasses whatever the layer enforces.
 - **Limits.** Set `maxContentLength` (default 1 MB) and the idle timeouts for your traffic. See

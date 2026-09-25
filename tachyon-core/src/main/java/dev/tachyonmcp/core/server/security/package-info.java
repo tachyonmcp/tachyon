@@ -3,9 +3,9 @@
  */
 
 /**
- * Server, capability, network, session, security, and task configuration types.
+ * HTTP authentication providers.
  */
 @NullMarked
-package dev.tachyonmcp.core.server.config;
+package dev.tachyonmcp.core.server.security;
 
 import org.jspecify.annotations.NullMarked;
