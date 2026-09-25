@@ -39,7 +39,8 @@ public interface TachyonServer extends AutoCloseable {
     Prompts prompts();
 
     /**
-     * Returns the task registry.
+     * Returns the task registry. It updates tasks that task-augmented tool calls created; it never
+     * creates a task nor changes a task's owning session.
      */
     @ExperimentalApi
     Tasks tasks();

@@ -104,10 +104,17 @@ public interface ServerEngine extends TachyonServer {
 
     TaskRegistry tasksRegistry();
 
-    /** Maps and sends a task status notification. */
+    /**
+     * Maps and sends a task status notification to the owning session, if any, and to
+     * {@code subscriptions/listen} subscribers of the task. A {@code null} session is never
+     * broadcast. Never blocks on a slow client: its stream is closed instead.
+     */
     void notifyTaskStatus(TaskSnapshot snapshot, @Nullable String sessionId);
 
-    /** Maps and sends a task progress notification to the session that owns {@code progressToken}. */
+    /**
+     * Maps and sends a task progress notification to the session that owns {@code progressToken};
+     * dropped when {@code sessionId} is {@code null}.
+     */
     void notifyTaskProgress(
             ProgressToken progressToken,
             @Nullable String sessionId,

@@ -461,11 +461,7 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
         if (sessionId != null) {
             getSession(sessionId).ifPresent(session -> notifyTaskStatus(session, snapshot));
         } else {
-            for (var session : sessionManager.allSessions()) {
-                if (session.state() == SessionState.ACTIVE) {
-                    notifyTaskStatus(session, snapshot);
-                }
-            }
+            logger.debug("Task {} has no owning session; skipping session status delivery", snapshot.taskId());
         }
         // Session-based delivery above serves legacy (2025-11-25) requestors. Modern (2026-07-28)
         // requestors opt in per taskId via subscriptions/listen, independent of any session.
@@ -483,11 +479,7 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
             getSession(sessionId)
                     .ifPresent(session -> notifyTaskProgress(session, progressToken, progress, total, message));
         } else {
-            for (var session : sessionManager.allSessions()) {
-                if (session.state() == SessionState.ACTIVE) {
-                    notifyTaskProgress(session, progressToken, progress, total, message);
-                }
-            }
+            logger.debug("Task progress {} has no owning session; dropping", progressToken);
         }
     }
 
@@ -502,7 +494,9 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
                 .taskStatusNotificationParams(snapshot);
         var paramsJson = JsonUtils.writeString(params);
         var notificationJson = JsonRpcCodec.serializeNotificationAsString("notifications/tasks/status", paramsJson);
-        sendSerializedNotification(session, "notifications/tasks/status", paramsJson, notificationJson, null);
+        // Sent under TaskEntry's lock: offer, so a slow client closes its stream instead of stalling
+        // every publisher of the task.
+        sendSerializedNotification(session, "notifications/tasks/status", paramsJson, notificationJson, null, true);
     }
 
     private void notifyTaskProgress(
@@ -782,6 +776,16 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
             String paramsStr,
             String notificationJson,
             @Nullable OutboundSseStream stream) {
+        sendSerializedNotification(session, method, paramsStr, notificationJson, stream, false);
+    }
+
+    private void sendSerializedNotification(
+            Session session,
+            String method,
+            String paramsStr,
+            String notificationJson,
+            @Nullable OutboundSseStream stream,
+            boolean offer) {
         if (session.state() == SessionState.CLOSED) {
             return;
         }
@@ -796,7 +800,11 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
 
         if (target != null) {
             target.start();
-            target.writeEvent(sseEvent);
+            if (offer) {
+                target.offerEvent(sseEvent);
+            } else {
+                target.writeEvent(sseEvent);
+            }
         } else {
             session.send(sseEvent);
         }

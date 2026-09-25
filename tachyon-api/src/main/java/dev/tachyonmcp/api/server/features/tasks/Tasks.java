@@ -9,7 +9,16 @@ import org.jspecify.annotations.Nullable;
  */
 @ExperimentalApi
 public interface Tasks {
-    /** Publishes a complete task projection and returns the effective cached snapshot. */
+    /**
+     * Publishes a newer revision of a task and returns the effective snapshot.
+     *
+     * <p>Only a task-augmented tool call that returns {@code ToolResult.task(...)} creates a cached
+     * task, owned by that call's session for the task's lifetime. Publishing never changes the owner:
+     * the owner gets {@code notifications/tasks/status}, and {@code subscriptions/listen} subscribers
+     * of the task get {@code notifications/tasks}. A task Tachyon has not cached, e.g. one created on
+     * another node, reaches its subscribers only and stays uncached. Status is never broadcast to
+     * other sessions.
+     */
     TaskSnapshot publish(TaskSnapshot snapshot);
 
     /** Returns the cached task projection, or {@code null} when absent. */
@@ -25,12 +34,10 @@ public interface Tasks {
 
     /**
      * Reports progress for a task-augmented tool call, emitted as {@code notifications/progress}
-     * to the progress token of the request that created the task.
+     * to the progress token of the task-augmented tool call that created the task.
      *
-     * <p>A no-op, logged at debug, when {@code taskId} is unknown or the task was created without
-     * a progress token — e.g. every task created via {@link #publish} directly, since {@link
-     * TaskSnapshot} carries no token; only the initial snapshot returned by a task-augmented tool
-     * handler captures one.
+     * <p>A no-op, logged at debug, when {@code taskId} is not cached or that call carried no progress
+     * token; {@link TaskSnapshot} carries none.
      *
      * @param taskId   the task to report progress for
      * @param progress the current progress value

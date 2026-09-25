@@ -41,10 +41,6 @@ public final class OutboundSseStreamMessageRouter implements OutboundStreamResol
         return OUTBOUND_SSE_STREAM.get();
     }
 
-    public static @Nullable String currentSessionId() {
-        return DISPATCH_SESSION_ID.get();
-    }
-
     @Override
     public @Nullable OutboundSseStream resolve(Session session) {
         var outboundStream = OUTBOUND_SSE_STREAM.get();

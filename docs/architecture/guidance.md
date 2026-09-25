@@ -184,7 +184,10 @@ public interface Tasks {
 ```
 
 `publish` updates the cache, applies retention policy, and emits any negotiated MCP notification.
-It does not start work. `TaskConnector.get()` is authoritative for `tasks/get`; a successful
+It does not start work. Only the task-augmented tool call's result creates a cached task, with that
+call's session as owner for the task's lifetime; never infer an owner from the calling thread, and
+never change it. Only the owner receives session notifications. `TaskConnector.get()` is
+authoritative for `tasks/get`; a successful
 snapshot is published before mapping the response. A refresh failure must not silently invent a
 state. A cached snapshot may be used only under an explicit stale-read policy.
 

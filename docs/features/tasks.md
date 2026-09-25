@@ -17,7 +17,7 @@ your annotated services.
 
 ## Configure a task connector
 
-Build a `TaskConnector` from the three operations in the modern Tasks extension. Lookup, cooperative
+Build a `TaskConnector` (package `dev.tachyonmcp.api.server.features.tasks`) from the three operations in the modern Tasks extension. Lookup, cooperative
 cancellation, and input submission are one required contract. Only the two legacy operations are
 optional:
 
@@ -104,6 +104,24 @@ boolean remove(String taskId);
 void reportProgress(String taskId, double progress, @Nullable Double total, @Nullable String message);
 ```
 
+A task-augmented `tools/call` that returns `ToolResult.task(...)` creates the task. Its session and
+progress token become the task's owner and progress target, fixed for the task's lifetime. Session
+notifications (`notifications/tasks/status`, and `notifications/progress` from `reportProgress`) go
+to that session only. `publish` updates a task and never changes its owner, whichever thread or
+callback calls it. A task id the tool returns that another session already owns fails the call.
+
+`publish` never creates a task. A snapshot for a task Tachyon has not cached, e.g. a connector
+callback that runs before the tool returns or on another node, reaches `subscriptions/listen`
+subscribers only and is not cached; pull through `tasks/get` stays authoritative.
+
+Only the owner reaches its task. On a stateful server, `tasks/get`, `tasks/cancel`, `tasks/result`
+and `tasks/update` for a task another session owns fail with the same `Task not found` error as an
+unknown id, before Tachyon calls the connector, and `tasks/list` leaves such tasks out. A client that
+reconnects with a new session therefore loses access to its earlier tasks. Tachyon checks only tasks
+it has cached with an owner: ownerless tasks and ids it has not seen go to the connector, which
+receives the `InteractionContext` and must authorize them itself. Tachyon never broadcasts a task to
+other sessions.
+
 Each snapshot carries a monotonically increasing `revision`. Tachyon ignores duplicate or older
 revisions. Push improves notification latency, but pull remains authoritative: `tasks/get` always
 calls the connector.
@@ -130,15 +148,15 @@ external work.
 
 ## Report progress
 
-`reportProgress` emits `notifications/progress` addressed to the progress token of the request that
-created the task — it is not part of `TaskSnapshot` and carries no revision:
+`reportProgress` emits `notifications/progress` addressed to the progress token of the
+task-augmented tool call that created the task — it is not part of `TaskSnapshot` and carries no
+revision:
 
 ```java
 server.tasks().reportProgress(workflowId, 40.0, 100.0, "Charging card");
 ```
 
-Only a task created by a task-augmented tool call has a progress token to notify — a task known to
-Tachyon solely through `publish(TaskSnapshot)` has none, so `reportProgress` for it is a no-op,
+When that call carried no progress token, or the task is not cached, `reportProgress` is a no-op,
 logged at debug.
 
 ## Kotlin

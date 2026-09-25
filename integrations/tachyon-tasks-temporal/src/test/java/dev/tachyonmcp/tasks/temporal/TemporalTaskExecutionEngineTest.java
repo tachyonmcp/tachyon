@@ -25,6 +25,7 @@ import io.temporal.workflow.UpdateMethod;
 import io.temporal.workflow.Workflow;
 import io.temporal.workflow.WorkflowInterface;
 import io.temporal.workflow.WorkflowMethod;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
@@ -105,6 +106,7 @@ class TemporalTaskExecutionEngineTest {
                         .snapshotMapper(TemporalTaskExecutionEngineTest::snapshot)
                         .inputUpdate("provideInput", input -> new Object[] {input.inputResponses()})
                         .build())
+                .clock(Clock.systemUTC())
                 .build();
     }
 

@@ -42,10 +42,12 @@ class TasksExtensionTest extends AbstractStatefulMcpE2eTest {
                 server.tasks().reportProgress("legacy-progress", 0.5, 1.0, "halfway");
                 return ToolResult.text("ok");
             });
-            registrar.tools().register(b -> b.name("notify-legacy-task-status"), (context, request) -> {
-                server.tasks().publish(TaskSnapshot.working("legacy-notify", Instant.parse("2026-08-27T07:00:00Z"), 1));
-                return ToolResult.text("ok");
-            });
+            registrar
+                    .tools()
+                    .register(
+                            b -> b.name("notify-legacy-task-status").taskSupport(TaskSupport.REQUIRED),
+                            (context, request) -> ToolResult.task(
+                                    TaskSnapshot.working("legacy-notify", Instant.parse("2026-08-27T07:00:00Z"), 1)));
         });
     }
 
@@ -94,7 +96,7 @@ class TasksExtensionTest extends AbstractStatefulMcpE2eTest {
 
             client.sendRpc("""
                     {"jsonrpc":"2.0","id":2,"method":"tools/call","params":{
-                      "name":"notify-legacy-task-status","arguments":{}}}
+                      "name":"notify-legacy-task-status","arguments":{},"task":{}}}
                     """);
 
             client.awaitNotification("notifications/tasks/status").satisfies(params -> {

@@ -65,7 +65,8 @@ public final class TaskConnector {
     }
 
     /**
-     * Returns the legacy {@code tasks/list} hook, or {@code null} when unsupported.
+     * Returns the legacy {@code tasks/list} hook, or {@code null} when unsupported. The hook scopes
+     * results to the caller; see {@link TaskListFn#apply}.
      * <p>
      * Legacy: legacy surface kept for MCP 2025-11-25 (pre-SEP-2663) compatibility; no
      *     equivalent exists in the modern tasks extension. Not scheduled for removal.

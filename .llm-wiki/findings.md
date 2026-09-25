@@ -2,15 +2,14 @@
 title: Findings
 tags: [meta, findings]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/HandlerFutures.java]
-updated: 2026-09-24
-commit: b1099e37
+updated: 2026-09-25
+commit: bb583cea
 ---
 
 # 🔎 Findings
 
 Spotted while reading code. Runtime verification noted per finding. Fixed in code ⇒ 🗑️ remove row.
 
-- ⚠️ Notifications route onto the POST-SSE stream only from the dispatching thread (ThreadLocal). A handler continuing on another thread ⇒ event goes to the GET stream, or is dropped when there is none (stateful) — surprising for async tools. `OutboundSseStreamMessageRouter#currentSessionId`, `McpDispatcher#invokeHandlerAsync`
 - ⚠️ `UnsupportedProtocolVersionHandler` encodes the rejection with `ProtocolVersionHandler#LATEST_PROTOCOL` (not `Protocols#baseline`) + HTTP 400, even for legacy-looking clients. Intentional per SEP-2575? `UnsupportedProtocolVersionHandler#channelRead`
 - ⚠️ GET-SSE has no byte budget: `Session#send` checks `isWritable` on the caller thread, then `NettySseConnection#send` queues a loop task. Busy/blocked loop ⇒ writability never flips ⇒ loop task queue grows with the producer. Same class as the fixed POST-SSE bug, lower risk. `Session#send`, `NettySseConnection#send`
 - ⚠️ POST-SSE budget is per stream (`PostSseStream#reserve`); no global outbound cap or connection limit. N slow streams ⇒ N × `maxPendingSseBytes` (default 64 KiB) + one parked producer each, for `writerIdleTimeout` (5 min). A trickle reader completes writes, so writer idle never fires ⇒ held indefinitely.
@@ -18,6 +17,10 @@ Spotted while reading code. Runtime verification noted per finding. Fixed in cod
 - ⚠️ Several producers on one POST-SSE stream: a parked producer can be overtaken ⇒ wire ids out of order ⇒ `Last-Event-ID` resume may skip one. Pre-existing race, wider with parking. `PostSseStream#awaitCapacity`
 - ⚠️ A platform `ServerBuilder#threadFactory` still gets thread-per-task (`DefaultServerBuilder#build`), so no pool starvation, but each producer parked on a slow POST-SSE client holds one OS thread until `writerIdleTimeout`. Default virtual threads unaffected.
 - ⚠️ Absolute-form request-target (`POST http://host/mcp HTTP/1.1`) ⇒ 404: `EndpointValidatorHandler#channelRead` compares the raw URI. RFC 9112 §3.2.2: servers MUST accept absolute-form. Fails closed. Fix must also check the authority against `Host` and the DNS-rebinding guard, or an authority-less check becomes a bypass.
+- ⚠️ Task access is enforced only for cached tasks with an owner (`DefaultTaskRegistry#visibleTo`). An uncached id (evicted by the janitor, or after a restart) goes to the connector, so any session can reach it. `subscriptions/listen` `taskIds` has no check, harmless while 2026-07-28 has no sessions (every task ownerless). Connectors must authorize via `InteractionContext`. `TaskMethodHandlers`
+- ⚠️ Task cache is unbounded for non-terminal tasks: the janitor evicts only terminal + expired entries (`TaskEntry#isResultExpired`). Abandoned `working` tasks stay forever. `DefaultTaskRegistry#runJanitorSweep`
+- ⚠️ A refused `TaskRegistry#create` answers "Task-producing tool returned a task owned by another session": if a tool derives task ids from client input (e.g. an idempotency key), a client can probe which ids other sessions use. `ToolMethodHandlers#mapResult`
+- 🪶 Task notifications are sent under the per-task `TaskEntry` lock (for ordering). SSE sends never park (owner status offers, `DefaultTachyonServer#notifyTaskStatus`), but a custom `SessionEventStore#append` that blocks (remote store) serializes publishers of that task behind its I/O. `TaskEntry#notifyIfNewer`
 
 ## 🪶 Polish
 

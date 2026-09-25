@@ -4,6 +4,7 @@ package dev.tachyonmcp.core.server.features.tasks;
 import static dev.tachyonmcp.core.test.TestUtils.newEngine;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import dev.tachyonmcp.api.server.domain.ProgressToken;
 import dev.tachyonmcp.api.server.domain.TaskResult;
 import dev.tachyonmcp.api.server.features.tasks.TaskConnector;
 import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
@@ -47,11 +48,41 @@ class DefaultTaskRegistryTest {
         var revisionOne = snapshot("task-1", TaskState.WORKING, 1);
         var revisionTwo = snapshot("task-1", TaskState.COMPLETED, 2);
 
-        assertThat(registry.publish(revisionOne).revision()).isEqualTo(1);
+        assertThat(registry.create(revisionOne, "owner", null).revision()).isEqualTo(1);
         var storedRevisionTwo = registry.publish(revisionTwo);
         assertThat(storedRevisionTwo.revision()).isEqualTo(2);
         assertThat(registry.publish(revisionOne)).isEqualTo(storedRevisionTwo);
         assertThat(registry.get("task-1")).isEqualTo(storedRevisionTwo);
+    }
+
+    @Test
+    void onlyCreateCachesATaskAndItsOwnerNeverChanges() {
+        var token = ProgressToken.of("tok");
+
+        assertThat(registry.publish(snapshot("task-1", TaskState.WORKING, 1)).revision())
+                .isEqualTo(1);
+        assertThat(registry.get("task-1"))
+                .as("publish never caches an unknown task")
+                .isNull();
+
+        var created = registry.create(snapshot("task-1", TaskState.WORKING, 1), "owner", token);
+        assertThat(created).isNotNull();
+        assertThat(registry.visibleTo("task-1", "owner")).isTrue();
+        assertThat(registry.visibleTo("task-1", "intruder")).isFalse();
+
+        assertThat(registry.create(snapshot("task-1", TaskState.COMPLETED, 2), "intruder", null))
+                .as("another session cannot create a task id that is already owned")
+                .isNull();
+        assertThat(registry.create(snapshot("task-1", TaskState.COMPLETED, 2), null, null))
+                .as("nor can a sessionless call")
+                .isNull();
+        assertThat(registry.get("task-1")).isEqualTo(created);
+
+        var retried = registry.create(snapshot("task-1", TaskState.WORKING, 2), "owner", null);
+        assertThat(retried).as("the owner's create is idempotent").isNotNull();
+        assertThat(retried.revision()).isEqualTo(2);
+        assertThat(registry.visibleTo("task-1", "owner")).isTrue();
+        assertThat(registry.visibleTo("task-1", "intruder")).isFalse();
     }
 
     @Test
@@ -66,8 +97,8 @@ class DefaultTaskRegistryTest {
 
     @Test
     void janitorEvictsTerminalProjectionButNeverTransitionsActiveWork() {
-        registry.publish(snapshot("active", TaskState.WORKING, 1));
-        registry.publish(snapshot("terminal", TaskState.COMPLETED, 1));
+        registry.create(snapshot("active", TaskState.WORKING, 1), null, null);
+        registry.create(snapshot("terminal", TaskState.COMPLETED, 1), null, null);
 
         clock.advance(Duration.ofMinutes(6));
         registry.runJanitorSweep();
@@ -91,7 +122,7 @@ class DefaultTaskRegistryTest {
 
     @Test
     void removeOnlyDropsProjection() {
-        registry.publish(snapshot("task-1", TaskState.WORKING, 1));
+        registry.create(snapshot("task-1", TaskState.WORKING, 1), null, null);
 
         assertThat(registry.remove("task-1")).isTrue();
         assertThat(registry.remove("task-1")).isFalse();
