@@ -2,8 +2,8 @@
 title: Concurrency & shutdown
 tags: [concept, concurrency, virtual-threads]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/sse/PostSseStream.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/internal/OperationTracker.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/NettyServer.java, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/HandlerFutures.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/OutboundSseStreamMessageRouter.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/PeekedBody.java]
-updated: 2026-09-24
-commit: b1099e37
+updated: 2026-09-25
+commit: 55b278f2
 ---
 
 # 🧵 Concurrency & shutdown
@@ -31,7 +31,7 @@ Ack timestamp publication and stream exception capture: [[observability]].
 
 ## 🧶 ThreadLocal dispatch context
 
-`OutboundSseStreamMessageRouter.withDispatchContext(sessionId, stream, action)` sets ThreadLocals only during **decode + handler kickoff** `McpDispatcher#invokeHandlerAsync`. Consequence: notifications sent synchronously from handler thread route onto POST-SSE stream; from another thread (async continuation) they fall back to session GET connection. Also `DefaultTaskRegistry.publish` reads owner session from it. Test: `tachyon-core/src/test/java/dev/tachyonmcp/core/transport/netty/ForeignThreadContinuationTest.java`.
+`OutboundSseStreamMessageRouter.withDispatchContext(sessionId, stream, action)` sets ThreadLocals only during **decode + handler kickoff** `McpDispatcher#invokeHandlerAsync`. Consequence: notifications sent synchronously from handler thread route onto POST-SSE stream; from another thread (async continuation) they fall back to session GET connection. Task ownership instead comes from creation and stays fixed; routing in [DefaultTachyonServer#notifyTaskStatus](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java) is described in [[tasks]]. Test: `tachyon-core/src/test/java/dev/tachyonmcp/core/transport/netty/ForeignThreadContinuationTest.java`.
 
 ## 🛑 Cancellation chain
 

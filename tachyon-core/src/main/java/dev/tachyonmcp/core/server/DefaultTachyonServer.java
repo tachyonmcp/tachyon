@@ -54,7 +54,6 @@ import dev.tachyonmcp.core.server.internal.OperationTracker;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
 import dev.tachyonmcp.core.server.json.JacksonObjectJsonFactory;
 import dev.tachyonmcp.core.server.json.JacksonPayloadSerde;
-import dev.tachyonmcp.core.server.json.JsonUtils;
 import dev.tachyonmcp.core.server.json.NetworkntJsonSchemaValidator;
 import dev.tachyonmcp.core.server.session.DispatchContext;
 import dev.tachyonmcp.core.server.session.SessionEvent;
@@ -462,10 +461,8 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
             getSession(sessionId).ifPresent(session -> notifyTaskStatus(session, snapshot));
         } else {
             logger.debug("Task {} has no owning session; skipping session status delivery", snapshot.taskId());
+            subscriptionRegistry.notifyTaskStatus(snapshot);
         }
-        // Session-based delivery above serves legacy (2025-11-25) requestors. Modern (2026-07-28)
-        // requestors opt in per taskId via subscriptions/listen, independent of any session.
-        subscriptionRegistry.notifyTaskStatus(snapshot);
     }
 
     @Override
@@ -490,9 +487,8 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
 
     private void notifyTaskStatus(Session session, TaskSnapshot snapshot) {
         var protocol = session.protocol();
-        var params = (protocol != null ? protocol.responseMapper() : responseMapper())
-                .taskStatusNotificationParams(snapshot);
-        var paramsJson = JsonUtils.writeString(params);
+        var mapper = protocol != null ? protocol.responseMapper() : responseMapper();
+        var paramsJson = mapper.encode(mapper.taskStatusNotificationParams(snapshot));
         var notificationJson = JsonRpcCodec.serializeNotificationAsString("notifications/tasks/status", paramsJson);
         // Sent under TaskEntry's lock: offer, so a slow client closes its stream instead of stalling
         // every publisher of the task.
@@ -507,8 +503,7 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
             @Nullable String message) {
         var protocol = session.protocol();
         var mapper = protocol != null ? protocol.responseMapper() : responseMapper();
-        var params = mapper.progressNotificationParams(progressToken, progress, total, message);
-        var paramsJson = JsonUtils.writeString(params);
+        var paramsJson = mapper.encode(mapper.progressNotificationParams(progressToken, progress, total, message));
         var notificationJson = JsonRpcCodec.serializeNotificationAsString("notifications/progress", paramsJson);
         sendSerializedNotification(session, "notifications/progress", paramsJson, notificationJson, null);
     }

@@ -13,11 +13,11 @@ public interface Tasks {
      * Publishes a newer revision of a task and returns the effective snapshot.
      *
      * <p>Only a task-augmented tool call that returns {@code ToolResult.task(...)} creates a cached
-     * task, owned by that call's session for the task's lifetime. Publishing never changes the owner:
-     * the owner gets {@code notifications/tasks/status}, and {@code subscriptions/listen} subscribers
-     * of the task get {@code notifications/tasks}. A task Tachyon has not cached, e.g. one created on
-     * another node, reaches its subscribers only and stays uncached. Status is never broadcast to
-     * other sessions.
+     * task, owned by that call's session for the task's lifetime. Publishing never changes the owner.
+     * An owned task notifies only its owner, with {@code notifications/tasks/status}; an ownerless
+     * task notifies only the {@code subscriptions/listen} subscribers of its id, with
+     * {@code notifications/tasks}. A task Tachyon has not cached, e.g. one created on another node,
+     * counts as ownerless and stays uncached. Status is never broadcast to other sessions.
      */
     TaskSnapshot publish(TaskSnapshot snapshot);
 

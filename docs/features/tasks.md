@@ -109,6 +109,13 @@ progress token become the task's owner and progress target, fixed for the task's
 notifications (`notifications/tasks/status`, and `notifications/progress` from `reportProgress`) go
 to that session only. `publish` updates a task and never changes its owner, whichever thread or
 callback calls it. A task id the tool returns that another session already owns fails the call.
+Tachyon never generates task ids: the tool or the task execution engine does, and owns their
+uniqueness and unpredictability.
+
+Session-owned tasks never emit `notifications/tasks` to sessionless `subscriptions/listen`
+streams, even when a subscriber knows the task id or the owning session has ended. Ownerless tasks
+continue to notify streams that subscribed to their task ids. This routing preserves session
+isolation; it does not provide user authentication or per-user authorization.
 
 `publish` never creates a task. A snapshot for a task Tachyon has not cached, e.g. a connector
 callback that runs before the tool returns or on another node, reaches `subscriptions/listen`
@@ -127,9 +134,9 @@ revisions. Push improves notification latency, but pull remains authoritative: `
 calls the connector.
 
 `ttl` is measured from `createdAt`, not from when a task goes terminal: it's the point at which the
-receiver may delete the task and its result, regardless of status. It's a different setting from the
-server's own `keepAlive` cache-retention window (below), which governs only Tachyon's internal
-snapshot cache.
+receiver may delete the task and its result, regardless of status. Tachyon evicts a cached task once
+its `ttl` has passed, whatever its status. It's a different setting from the server's own `keepAlive`
+cache-retention window (below), which evicts terminal snapshots only.
 
 Terminal snapshots may carry `TaskResult`:
 
@@ -143,8 +150,9 @@ var completed = TaskSnapshot.builder()
         .build();
 ```
 
-The cache retention window removes expired terminal projections only. It never cancels or mutates
-external work.
+The cache janitor removes tasks past their `ttl` and terminal tasks past `keepAlive`. It never cancels
+or mutates external work. An evicted task loses its owner check: later `tasks/*` calls for its id go
+to the connector, which must authorize them.
 
 ## Report progress
 

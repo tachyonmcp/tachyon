@@ -10,6 +10,7 @@ import java.time.Instant;
 import java.util.Objects;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiConsumer;
+import java.util.function.BooleanSupplier;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -97,9 +98,36 @@ final class TaskEntry {
         }
     }
 
-    boolean isResultExpired() {
-        return snapshot.status().isTerminal()
+    /**
+     * Runs {@code remove} if this entry is expired, checked under the lock that orders publishes: a
+     * concurrent publish that renews the task either lands first and keeps it, or lands after.
+     *
+     * @return whether the entry was expired and {@code remove} reported a removal
+     */
+    boolean evictIfExpired(BooleanSupplier remove) {
+        lock.lock();
+        try {
+            return isExpired() && remove.getAsBoolean();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
+     * Whether the janitor may evict this entry: past the snapshot's {@code ttl} from {@code createdAt}
+     * whatever its status, or terminal and cached longer than {@code keepAlive}.
+     */
+    boolean isExpired() {
+        var current = snapshot;
+        var now = clock.instant();
+        var ttl = current.ttl();
+        if (ttl != null
+                && (ownerSessionId == null || current.status().isTerminal())
+                && !now.isBefore(current.createdAt().plus(ttl))) {
+            return true;
+        }
+        return current.status().isTerminal()
                 && keepAlive.compareTo(Duration.ZERO) > 0
-                && !clock.instant().isBefore(cachedAt.plus(keepAlive));
+                && !now.isBefore(cachedAt.plus(keepAlive));
     }
 }
