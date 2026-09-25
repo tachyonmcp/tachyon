@@ -3,7 +3,7 @@
  */
 
 /**
- * Server, capability, network, session, and task configuration types.
+ * Server, capability, network, session, security, and task configuration types.
  */
 @NullMarked
 package dev.tachyonmcp.core.server.config;

@@ -5,6 +5,7 @@ import dev.tachyonmcp.core.protocol.Protocols;
 import dev.tachyonmcp.core.server.McpDispatcher;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
 import dev.tachyonmcp.core.transport.netty.http.AcceptValidationHandler;
+import dev.tachyonmcp.core.transport.netty.http.AuthenticationHandler;
 import dev.tachyonmcp.core.transport.netty.http.ContentTypeValidationHandler;
 import dev.tachyonmcp.core.transport.netty.http.CorsHttpObjectAggregator;
 import dev.tachyonmcp.core.transport.netty.http.CorsPreflightHandler;
@@ -187,6 +188,12 @@ public class McpChannelInitializer extends ChannelInitializer<SocketChannel> {
         // FullHttpRequest is still an HttpRequest, so this fallback protocol resolution (for GET/
         // DELETE, which ProtocolVersionHandler doesn't cover) works the same post-aggregation.
         p.addLast("interaction", interactionHandler);
+        // After "interaction", which creates the channel context the caller's security context is
+        // recorded on; ahead of session lookup and dispatch, so a rejected request touches neither.
+        final var authenticationProvider = server.config().security().authenticationProvider();
+        if (authenticationProvider != null) {
+            p.addLast("authentication", new AuthenticationHandler(authenticationProvider, server.executor()));
+        }
         // On a plain HTTP keep-alive socket an idle tick closes the connection. On a channel carrying
         // an open SSE stream the SseHeartbeat scheduler drives heartbeats independently, so idle ticks
         // are a no-op for SSE channels. Lower readerIdleTimeout below any intermediary proxy's idle

@@ -14,7 +14,7 @@ Verdict: **stateless by default** (`SessionConfig.enabled=false`) — a stateles
 
 | Type | Role | Proof |
 |---|---|---|
-| `Session` | Runtime: id, `SessionKey`, `SessionState`, SSE connection, backpressure, cursor, extensions, protocol, log level, resuming stream key. `send` hands every event to the connection (`false` only when none attached); slow-client hold/close is the connection's job → [[sse-streams]] | `Session`, `Session#send` |
+| `Session` | Runtime: id, `SessionKey`, `SessionState`, SSE connection, backpressure, cursor, extensions, protocol, log level, resuming stream key, creator's security context (set once at `initialize`, process-local, not in `SessionSnapshot`) → [[authentication]]. `send` hands every event to the connection (`false` only when none attached); slow-client hold/close is the connection's job → [[sse-streams]] | `Session`, `Session#send`, `Session#securityContext` |
 | `SessionState` | `INITIALIZING → ACTIVE → (DRAINING) → CLOSED` | `SessionState` |
 | `SessionKey(sessionId, generationId)` | generation fences stale work; UUID generation per create | `SessionKey`, `SessionManager#withLifecycleLock` |
 | `SessionSnapshot` | transport-free state + `expiresAt` + `revision` | `SessionSnapshot` |

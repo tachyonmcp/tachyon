@@ -28,6 +28,7 @@ Spotted while reading code. Runtime verification noted per finding. Fixed in cod
 - 🪶 Task codecs still live in core (`McpTaskMapper` v2025/v2026, task methods on `ProtocolRequestMapper`/`ProtocolResponseMapper`, `capabilities.tasks` in `ServerInfoMapper`); the generated `…extensions.tasks.protocol.v2026_07_28` models are unused. `McpTaskMapper`
 - ⚠️ Kotlin DSL defaults to the Jackson serde, which cannot decode Kotlin data classes: `arguments.decode<T>()` and `typedTool` fail with `-32602 … could not be decoded` until `json { serde = KxSerializationSerde.Default }` is set. Verified at runtime (doc-examples `ToolExamplesTest`). `TachyonServerBuilder#json`
 - 🪶 `ServerBuilder#pipelineCustomizer` keeps a single customizer: a second call replaces the first instead of composing. Verified at runtime (doc-examples `RegistrationExamplesTest`). `DefaultServerBuilder#pipelineCustomizer`
+- ⚠️ DEBUG wire log dumps raw HTTP bytes: with bearer auth on ([[authentication]]), `Authorization` tokens land in the logs. MCP auth spec § Token Theft: servers MUST store tokens securely. Redact (spec K7). `McpChannelInitializer#CHANNEL_LOGGER`
 
 ## 🪶 Polish
 
