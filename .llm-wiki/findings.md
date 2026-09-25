@@ -1,9 +1,9 @@
 ---
 title: Findings
 tags: [meta, findings]
-sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/HandlerFutures.java]
+sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/]
 updated: 2026-09-25
-commit: bb583cea
+commit: 55b278f2
 ---
 
 # 🔎 Findings
@@ -17,9 +17,8 @@ Spotted while reading code. Runtime verification noted per finding. Fixed in cod
 - ⚠️ Several producers on one POST-SSE stream: a parked producer can be overtaken ⇒ wire ids out of order ⇒ `Last-Event-ID` resume may skip one. Pre-existing race, wider with parking. `PostSseStream#awaitCapacity`
 - ⚠️ A platform `ServerBuilder#threadFactory` still gets thread-per-task (`DefaultServerBuilder#build`), so no pool starvation, but each producer parked on a slow POST-SSE client holds one OS thread until `writerIdleTimeout`. Default virtual threads unaffected.
 - ⚠️ Absolute-form request-target (`POST http://host/mcp HTTP/1.1`) ⇒ 404: `EndpointValidatorHandler#channelRead` compares the raw URI. RFC 9112 §3.2.2: servers MUST accept absolute-form. Fails closed. Fix must also check the authority against `Host` and the DNS-rebinding guard, or an authority-less check becomes a bypass.
-- ⚠️ Task access is enforced only for cached tasks with an owner (`DefaultTaskRegistry#visibleTo`). An uncached id (evicted by the janitor, or after a restart) goes to the connector, so any session can reach it. `subscriptions/listen` `taskIds` has no check, harmless while 2026-07-28 has no sessions (every task ownerless). Connectors must authorize via `InteractionContext`. `TaskMethodHandlers`
-- ⚠️ Task cache is unbounded for non-terminal tasks: the janitor evicts only terminal + expired entries (`TaskEntry#isResultExpired`). Abandoned `working` tasks stay forever. `DefaultTaskRegistry#runJanitorSweep`
-- ⚠️ A refused `TaskRegistry#create` answers "Task-producing tool returned a task owned by another session": if a tool derives task ids from client input (e.g. an idempotency key), a client can probe which ids other sessions use. `ToolMethodHandlers#mapResult`
+- ⚠️ Task access is enforced only for cached tasks with an owner (`DefaultTaskRegistry#visibleTo`). An uncached id (evicted by the janitor, or after a restart) goes to the connector, so any session can reach it. Uncached publishes carry no owner and reach matching modern subscribers. Applications must scope connector access and published data when callers have different permissions. Session-owned notification routing is covered in [[tasks]]. [TaskMethodHandlers](../tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tasks/TaskMethodHandlers.java), [DefaultTaskRegistry#publish](../tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tasks/DefaultTaskRegistry.java).
+- ⚠️ Task cache is unbounded for non-terminal tasks without `ttl`: the janitor evicts entries past `ttl` or terminal past keepAlive (`TaskEntry#isExpired`). An abandoned `working` task with `ttl = null` stays forever. `DefaultTaskRegistry#runJanitorSweep`
 - 🪶 Task notifications are sent under the per-task `TaskEntry` lock (for ordering). SSE sends never park (owner status offers, `DefaultTachyonServer#notifyTaskStatus`), but a custom `SessionEventStore#append` that blocks (remote store) serializes publishers of that task behind its I/O. `TaskEntry#notifyIfNewer`
 
 ## 🪶 Polish

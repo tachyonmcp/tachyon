@@ -235,14 +235,21 @@ class TaskSessionIsolationTest extends AbstractStatefulMcpE2eTest {
 
             // Same answer as an unknown id, so an intruder cannot tell the task exists.
             for (var method : List.of("tasks/get", "tasks/cancel", "tasks/result")) {
-                var response = intruder.sendRpc("""
+                var denied = intruder.sendRpc("""
                         {"jsonrpc":"2.0","id":3,"method":"%s","params":{"taskId":"private-task"}}
                         """.formatted(method));
-                assertThatResponse(response)
+                var unknown = intruder.sendRpc("""
+                        {"jsonrpc":"2.0","id":3,"method":"%s","params":{"taskId":"never-created"}}
+                        """.formatted(method));
+                assertThatResponse(denied)
                         .as(method)
                         .isJsonRpcError()
                         .hasErrorCode(-32602)
                         .hasErrorMessageContaining("Task not found");
+                assertThat(denied.statusCode()).isEqualTo(unknown.statusCode());
+                assertThatJson(denied.body())
+                        .as("%s: denied and unknown ids must be indistinguishable", method)
+                        .isEqualTo(unknown.body());
             }
             assertThat(taskEngine.cancelledTaskIds())
                     .as("the connector never sees the intruder's cancel")

@@ -204,7 +204,11 @@ public final class ToolMethodHandlers {
                                 context.sessionId(),
                                 mapped.request().progressToken());
                 if (snapshot == null) {
-                    return internalError("Task-producing tool returned a task owned by another session");
+                    // Generic on the wire: the reason would tell the caller that another session uses this id.
+                    logger.warn(
+                            "Task-producing tool returned task {} owned by another session",
+                            task.snapshot().taskId());
+                    return internalError("Internal error");
                 }
                 context.observation().markTaskHandoff(snapshot.taskId());
                 return context.responseMapper().createTaskResult(snapshot);

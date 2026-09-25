@@ -776,15 +776,6 @@
                                             inconsistently.
                                         </justification>
                                     </item>
-                                    <item>
-                                        <regex>true</regex>
-                                        <code>java\.method\.addedToInterface</code>
-                                        <ignore>false</ignore>
-                                        <criticality>documented</criticality>
-                                        <justification>Adding a method to an interface is backwards
-                                            compatible; noted, not breaking.
-                                        </justification>
-                                    </item>
                                 </differences>
                             </revapi.differences>
                             <revapi.reporter.text>

@@ -183,7 +183,7 @@ public final class DefaultTaskRegistry implements TaskRegistry {
     }
 
     void runJanitorSweep() {
-        var changed = entries.entrySet().removeIf(entry -> entry.getValue().isResultExpired());
+        var changed = entries.entrySet().removeIf(entry -> entry.getValue().isExpired());
         if (changed) {
             changes.fireOnChange();
         }

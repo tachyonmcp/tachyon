@@ -2,8 +2,8 @@
 title: Testing
 tags: [module, testing, e2e, conformance]
 sources: [e2e/src/test/, conformance/, Makefile, reports/pom.xml, tachyon-core/src/test/, .github/workflows/build.yml, .github/workflows/release.yml]
-updated: 2026-09-24
-commit: b1099e37
+updated: 2026-09-25
+commit: 55b278f2
 ---
 
 # ✅ Testing
@@ -67,6 +67,8 @@ context from the advertised input schema. Requests use `ElicitationRequest.build
 decoding constructs `ElicitationResult` through its builder.
 
 ## 📡 Subscription regression coverage
+
+[TaskSubscriptionIsolationTest#sessionOwnedTasksStayPrivateAcrossProtocolVersionsAndSessionTermination](../../e2e/src/test/java/dev/tachyonmcp/e2e/mcp/TaskSubscriptionIsolationTest.java) covers modern subscribers opened before/after a legacy task is created, owner-only completion delivery, no fallback after owner termination, and continued ownerless result delivery. A later public completion fences earlier writes on each stream. It also compares denied and unknown task responses (HTTP status + complete JSON), alongside legacy [TaskSessionIsolationTest#otherSessionsCannotReachAnOwnedTask](../../e2e/src/test/java/dev/tachyonmcp/e2e/mcp/v2025_11_25/TaskSessionIsolationTest.java). Added coverage; execution deferred at user request.
 
 `PostSseStreamTest` exercises out-of-order write completion and preservation of the first transport failure. `SubscriptionsListenObservationTest` covers shutdown fallback, ack timestamp retention, and exception-detail gating. `McpOpenTelemetryListenerTest#subscriptionCompletionRunsOffNettyEventLoop` checks the completion thread over real HTTP; `subscriptionStreamFailureFailsSpan` checks optional exception export.
 
