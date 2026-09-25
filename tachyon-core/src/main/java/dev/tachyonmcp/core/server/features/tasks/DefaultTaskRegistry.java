@@ -6,7 +6,6 @@ import dev.tachyonmcp.api.server.domain.ProgressToken;
 import dev.tachyonmcp.api.server.features.PaginatedResult;
 import dev.tachyonmcp.api.server.features.tasks.TaskConnector;
 import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
-import dev.tachyonmcp.core.server.OutboundSseStreamMessageRouter;
 import dev.tachyonmcp.core.server.config.TasksConfig;
 import dev.tachyonmcp.core.server.features.ChangeSupport;
 import dev.tachyonmcp.core.server.features.Pagination;
@@ -68,39 +67,51 @@ public final class DefaultTaskRegistry implements TaskRegistry {
 
     @Override
     public TaskSnapshot publish(TaskSnapshot snapshot) {
-        return publish(snapshot, OutboundSseStreamMessageRouter.currentSessionId(), null);
+        var effective = withDefaults(Objects.requireNonNull(snapshot, "snapshot"));
+        var entry = entries.get(effective.taskId());
+        if (entry == null) {
+            // Only create() caches a task. Subscribers may still follow a task created elsewhere.
+            server.notifyTaskStatus(effective, null);
+            return effective;
+        }
+        return publish(entry, effective);
     }
 
     @Override
-    public TaskSnapshot publish(TaskSnapshot snapshot, @Nullable ProgressToken progressToken) {
-        return publish(snapshot, OutboundSseStreamMessageRouter.currentSessionId(), progressToken);
+    public @Nullable TaskSnapshot create(
+            TaskSnapshot snapshot, @Nullable String sessionId, @Nullable ProgressToken progressToken) {
+        var effective = withDefaults(Objects.requireNonNull(snapshot, "snapshot"));
+        var taskId = effective.taskId();
+        var created = new TaskEntry(effective, sessionId, progressToken, keepAlive, clock);
+        var existing = entries.putIfAbsent(taskId, created);
+        if (existing == null) {
+            created.notifyIfNewer(server::notifyTaskStatus);
+            changes.fireOnChange();
+            return effective;
+        }
+        if (!existing.ownedBy(sessionId)) {
+            logger.debug("Refusing to create task {}: owned by another session", taskId);
+            return null;
+        }
+        return publish(existing, effective);
     }
 
-    private TaskSnapshot publish(
-            TaskSnapshot snapshot, @Nullable String sessionId, @Nullable ProgressToken progressToken) {
-        Objects.requireNonNull(snapshot, "snapshot");
-        var effective = pollInterval == null || snapshot.pollInterval() != null
+    private TaskSnapshot publish(TaskEntry entry, TaskSnapshot effective) {
+        if (entry.publish(effective)) {
+            entry.notifyIfNewer(server::notifyTaskStatus);
+            changes.fireOnChange();
+        }
+        return entry.snapshot();
+    }
+
+    /** Applies server defaults ({@code pollInterval}) without touching the cache. */
+    TaskSnapshot withDefaults(TaskSnapshot snapshot) {
+        return pollInterval == null || snapshot.pollInterval() != null
                 ? snapshot
                 : TaskSnapshot.builder()
                         .from(snapshot)
                         .pollInterval(pollInterval)
                         .build();
-        var changed = new boolean[1];
-        var entry = entries.compute(effective.taskId(), (taskId, current) -> {
-            if (current == null) {
-                changed[0] = true;
-                return new TaskEntry(effective, sessionId, progressToken, keepAlive, clock);
-            }
-            var before = current.snapshot();
-            var published = current.publish(effective);
-            changed[0] = published != before;
-            return current;
-        });
-        if (changed[0]) {
-            server.notifyTaskStatus(entry.snapshot(), entry.sessionId());
-            changes.fireOnChange();
-        }
-        return entry.snapshot();
     }
 
     @Override
@@ -118,13 +129,23 @@ public final class DefaultTaskRegistry implements TaskRegistry {
                     taskId);
             return;
         }
-        server.notifyTaskProgress(progressToken, entry.sessionId(), progress, total, message);
+        server.notifyTaskProgress(progressToken, entry.ownerSessionId(), progress, total, message);
     }
 
     @Override
     public @Nullable TaskSnapshot get(String taskId) {
         var entry = entries.get(taskId);
         return entry != null ? entry.snapshot() : null;
+    }
+
+    /**
+     * Whether {@code sessionId} may reach the task through {@code tasks/*}: a task another session
+     * owns is hidden. Ownerless and uncached tasks stay reachable; the connector authorizes those.
+     */
+    boolean visibleTo(String taskId, @Nullable String sessionId) {
+        var entry = entries.get(taskId);
+        var owner = entry != null ? entry.ownerSessionId() : null;
+        return owner == null || owner.equals(sessionId);
     }
 
     PaginatedResult<TaskSnapshot> listCached(int limit, @Nullable String cursor) {

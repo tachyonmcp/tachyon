@@ -17,6 +17,7 @@ import java.time.Clock;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -176,7 +177,7 @@ public final class TemporalTaskExecutionEngine {
         return route;
     }
 
-    private static String requireText(String value, String name) {
+    private static String requireText(@Nullable String value, String name) {
         if (value == null || value.isBlank()) {
             throw new IllegalStateException(name + " must not be blank");
         }
@@ -226,7 +227,7 @@ public final class TemporalTaskExecutionEngine {
          * @param clock clock to use
          * @return this builder
          */
-        Builder clock(Clock clock) {
+        public Builder clock(Clock clock) {
             this.clock = clock;
             return this;
         }

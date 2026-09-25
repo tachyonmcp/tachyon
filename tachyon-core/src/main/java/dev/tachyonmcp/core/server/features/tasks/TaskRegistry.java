@@ -15,9 +15,14 @@ public interface TaskRegistry extends Tasks {
     boolean executionConfigured();
 
     /**
-     * Publishes the initial projection for a task-augmented tool call, capturing
-     * {@code progressToken} for later {@link Tasks#reportProgress}. Only meaningful on task
-     * creation — ignored when the task already exists.
+     * Creates the task a task-augmented tool call returned. Its {@code sessionId} and
+     * {@code progressToken} are fixed for the task's lifetime; they are explicit since an async tool
+     * completes off the dispatch thread. Only this method caches a task. Idempotent for the same
+     * owner: an existing entry then just takes a newer revision.
+     *
+     * @return the effective snapshot, or {@code null} when another session owns the task id: the
+     *     owner's cached snapshot stays unchanged
      */
-    TaskSnapshot publish(TaskSnapshot snapshot, @Nullable ProgressToken progressToken);
+    @Nullable
+    TaskSnapshot create(TaskSnapshot snapshot, @Nullable String sessionId, @Nullable ProgressToken progressToken);
 }

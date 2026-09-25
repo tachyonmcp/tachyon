@@ -89,6 +89,13 @@ class TasksCoreTest extends AbstractStatefulMcpE2eTest {
                 assertThat(request.limit()).isPositive();
                 assertThat(request.cursor()).isNull();
             });
+            assertThat(server.tasks().get("workflow-1"))
+                    .as("tasks/list is a read: it never caches connector snapshots")
+                    .isNull();
+            assertThat(server.tasks().get("workflow-2")).isNull();
+            assertThat(client.notifications())
+                    .as("tasks/list never emits task status")
+                    .noneMatch(n -> n.method().equals("notifications/tasks/status"));
 
             var getJson = client.sendRpc("""
                     {"jsonrpc":"2.0","id":3,"method":"tasks/get","params":{"taskId":"workflow-1"}}

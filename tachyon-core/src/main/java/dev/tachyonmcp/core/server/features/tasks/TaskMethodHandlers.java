@@ -42,6 +42,11 @@ public final class TaskMethodHandlers {
                 : null;
     }
 
+    /** One answer for unknown and foreign tasks, so a caller cannot probe which ids exist. */
+    private static ServerError taskNotFound(String action) {
+        return ServerErrors.invalidParams("Failed to " + action + " task: Task not found");
+    }
+
     private static void requireGate(@Nullable ServerError gate) {
         if (gate != null) {
             throw new RequestMappingException(gate);
@@ -62,7 +67,6 @@ public final class TaskMethodHandlers {
         }
 
         @Override
-        @SuppressWarnings("deprecation")
         public Object handle(DispatchContext context, ProtocolRequestMapper.PageRequest page) throws Exception {
             var connector = registry.taskConnector();
             if (connector == null || connector.list() == null) {
@@ -77,7 +81,10 @@ public final class TaskMethodHandlers {
             if (!result.cursorValid()) {
                 return ServerErrors.invalidParams("Invalid cursor");
             }
-            var snapshots = result.items().stream().map(registry::publish).toList();
+            var snapshots = result.items().stream()
+                    .filter(snapshot -> registry.visibleTo(snapshot.taskId(), context.sessionId()))
+                    .map(registry::withDefaults)
+                    .toList();
             return context.responseMapper().listTasksResult(snapshots, result.nextCursor());
         }
     }
@@ -100,11 +107,14 @@ public final class TaskMethodHandlers {
             if (connector == null) {
                 return ServerErrors.methodNotFound("Method not found");
             }
+            if (!registry.visibleTo(request.taskId(), context.sessionId())) {
+                return taskNotFound("retrieve");
+            }
             final TaskSnapshot snapshot;
             try {
                 snapshot = connector.get().apply(context, request);
             } catch (TaskNotFoundException e) {
-                return ServerErrors.invalidParams("Failed to retrieve task: Task not found");
+                return taskNotFound("retrieve");
             }
             return context.responseMapper().getTaskResult(registry.publish(snapshot));
         }
@@ -129,10 +139,13 @@ public final class TaskMethodHandlers {
             if (connector == null) {
                 return ServerErrors.methodNotFound("Method not found");
             }
+            if (!registry.visibleTo(request.taskId(), context.sessionId())) {
+                return taskNotFound("cancel");
+            }
             try {
                 connector.cancel().apply(context, request);
             } catch (TaskNotFoundException e) {
-                return ServerErrors.invalidParams("Failed to cancel task: Task not found");
+                return taskNotFound("cancel");
             }
             if (!context.requestMapper().supportsLegacyTaskAugmentation()) {
                 return context.responseMapper().emptyResult();
@@ -145,7 +158,7 @@ public final class TaskMethodHandlers {
             try {
                 snapshot = connector.get().apply(context, getRequest);
             } catch (TaskNotFoundException e) {
-                return ServerErrors.invalidParams("Failed to retrieve task: Task not found");
+                return taskNotFound("retrieve");
             }
             return context.responseMapper().cancelTaskResult(registry.publish(snapshot));
         }
@@ -165,11 +178,13 @@ public final class TaskMethodHandlers {
         }
 
         @Override
-        @SuppressWarnings("deprecation")
         public Object handle(DispatchContext context, TaskAwaitResultRequest request) throws Exception {
             var connector = registry.taskConnector();
             if (connector == null || connector.awaitResult() == null) {
                 return ServerErrors.methodNotFound("Method not found");
+            }
+            if (!registry.visibleTo(request.taskId(), context.sessionId())) {
+                return taskNotFound("retrieve");
             }
             var snapshot = registry.publish(connector.awaitResult().apply(context, request));
             return context.responseMapper().getTaskPayloadResult(snapshot.result(), snapshot.taskId());
@@ -196,10 +211,13 @@ public final class TaskMethodHandlers {
             if (connector == null) {
                 return ServerErrors.methodNotFound("Method not found");
             }
+            if (!registry.visibleTo(request.taskId(), context.sessionId())) {
+                return taskNotFound("update");
+            }
             try {
                 connector.update().apply(context, request);
             } catch (TaskNotFoundException e) {
-                return ServerErrors.invalidParams("Failed to update task: Task not found");
+                return taskNotFound("update");
             }
             return context.responseMapper().emptyResult();
         }

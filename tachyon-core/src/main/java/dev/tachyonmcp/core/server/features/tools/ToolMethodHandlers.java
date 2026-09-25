@@ -199,7 +199,13 @@ public final class ToolMethodHandlers {
                 }
                 var snapshot = context.engine()
                         .tasksRegistry()
-                        .publish(task.snapshot(), mapped.request().progressToken());
+                        .create(
+                                task.snapshot(),
+                                context.sessionId(),
+                                mapped.request().progressToken());
+                if (snapshot == null) {
+                    return internalError("Task-producing tool returned a task owned by another session");
+                }
                 context.observation().markTaskHandoff(snapshot.taskId());
                 return context.responseMapper().createTaskResult(snapshot);
             }

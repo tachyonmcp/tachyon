@@ -15,6 +15,10 @@ public interface TaskListFn {
     /**
      * Lists authoritative task projections.
      *
+     * <p>Return only tasks the caller may see, scoped by {@link InteractionContext#sessionId()} or the
+     * application's own authorization. Tachyon additionally hides tasks it knows another session owns,
+     * but that guard covers cached tasks only and does not replace scoping here.
+     *
      * @param ctx current MCP interaction
      * @param request resolved legacy list request
      * @return requested page of task snapshots

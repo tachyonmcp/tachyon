@@ -4,6 +4,7 @@ package dev.tachyonmcp.core.server;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.InstanceOfAssertFactories.MAP;
 
+import dev.tachyonmcp.api.server.domain.ProgressToken;
 import dev.tachyonmcp.api.server.domain.RequestId;
 import dev.tachyonmcp.api.server.domain.TextResourceContents;
 import dev.tachyonmcp.api.server.features.prompts.PromptDescriptor;
@@ -400,7 +401,7 @@ class ServerTest {
     }
 
     @Test
-    void broadcastsTaskStatusWithEachSessionProtocol() {
+    void notifiesTaskStatusOnlyToOwningSessionWithItsProtocol() {
         try (DefaultTachyonServer server = (DefaultTachyonServer)
                 TachyonServer.builder().session(s -> s.enabled()).build()) {
             var legacyConnection = new TestConnection();
@@ -421,24 +422,128 @@ class ServerTest {
             modern.connection(modernConnection);
             modern.activate();
 
-            server.tasks()
-                    .publish(TaskSnapshot.builder()
-                            .taskId("task-1")
-                            .status(TaskState.SUBMITTED)
-                            .createdAt(Instant.EPOCH)
-                            .lastUpdatedAt(Instant.EPOCH)
-                            .revision(1)
-                            .build());
+            server.tasksRegistry().create(submitted("legacy-task"), "legacy", null);
+            server.tasksRegistry().create(submitted("modern-task"), "modern", null);
+            server.tasks().publish(submitted("orphan-task"));
 
             // SUBMITTED isn't a real wire value in either protocol version's status enum -- both
             // fold it to "working" (verified against the current spec: 5 wire states, no submitted).
             assertThat(legacyConnection.sent)
                     .singleElement()
-                    .satisfies(event -> assertThat(event.data()).contains("\"status\":\"working\""));
+                    .satisfies(event -> assertThat(event.data())
+                            .contains("\"taskId\":\"legacy-task\"")
+                            .contains("\"status\":\"working\""));
             assertThat(modernConnection.sent)
                     .singleElement()
-                    .satisfies(event -> assertThat(event.data()).contains("\"status\":\"working\""));
+                    .satisfies(event -> assertThat(event.data())
+                            .contains("\"taskId\":\"modern-task\"")
+                            .contains("\"status\":\"working\""));
         }
+    }
+
+    @Test
+    void reportsTaskProgressOnlyToOwningSession() {
+        try (DefaultTachyonServer server = (DefaultTachyonServer)
+                TachyonServer.builder().session(s -> s.enabled()).build()) {
+            var connection = new TestConnection();
+            var owner = server.createSession("owner");
+            owner.protocol(Protocols.list().stream()
+                    .filter(protocol -> protocol.versionString().equals("2025-11-25"))
+                    .findFirst()
+                    .orElseThrow());
+            owner.connection(connection);
+            owner.activate();
+            var token = ProgressToken.of("tok");
+            server.tasksRegistry().create(submitted("owned-task"), "owner", token);
+            server.tasksRegistry().create(submitted("orphan-task"), null, token);
+            connection.sent.clear();
+
+            // Same token, no owner: must not fall back to any active session.
+            server.tasks().reportProgress("orphan-task", 0.25, 1.0, "orphan");
+            server.tasks().reportProgress("owned-task", 0.5, 1.0, "owned");
+
+            assertThat(connection.sent)
+                    .singleElement()
+                    .satisfies(event -> assertThat(event.data())
+                            .contains("\"method\":\"notifications/progress\"")
+                            .contains("\"progressToken\":\"tok\"")
+                            .contains("\"message\":\"owned\"")
+                            .doesNotContain("orphan"));
+        }
+    }
+
+    @Test
+    void concurrentTaskPublishersNeverDeliverAStaleStatusAfterANewerOne() throws Exception {
+        try (DefaultTachyonServer server = (DefaultTachyonServer)
+                TachyonServer.builder().session(s -> s.enabled()).build()) {
+            var connection = new TestConnection();
+            var owner = server.createSession("owner");
+            owner.protocol(Protocols.list().stream()
+                    .filter(protocol -> protocol.versionString().equals("2025-11-25"))
+                    .findFirst()
+                    .orElseThrow());
+            owner.connection(connection);
+            owner.activate();
+            server.tasksRegistry().create(revision(0), "owner", null);
+
+            var publishers = 8;
+            var revisions = 400;
+            var start = new CountDownLatch(1);
+            var threads = new ArrayList<Thread>();
+            for (int p = 0; p < publishers; p++) {
+                var first = p + 1;
+                threads.add(Thread.ofVirtual().start(() -> {
+                    try {
+                        start.await();
+                        for (long r = first; r <= revisions; r += publishers) {
+                            server.tasks().publish(revision(r));
+                        }
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                }));
+            }
+            start.countDown();
+            for (var thread : threads) {
+                thread.join();
+            }
+
+            var delivered = connection.sent.stream()
+                    .map(event -> Long.parseLong(REVISION_MARKER
+                            .matcher(event.data())
+                            .results()
+                            .findFirst()
+                            .orElseThrow()
+                            .group(1)))
+                    .toList();
+            assertThat(delivered)
+                    .as("status revisions reach the owner in order")
+                    .isSorted();
+            assertThat(delivered).doesNotHaveDuplicates().last().isEqualTo((long) revisions);
+        }
+    }
+
+    private static final Pattern REVISION_MARKER = Pattern.compile("\"statusMessage\":\"r(\\d+)\"");
+
+    private static TaskSnapshot revision(long revision) {
+        return TaskSnapshot.builder()
+                .taskId("raced")
+                .status(TaskState.WORKING)
+                .statusMessage("r" + revision)
+                .createdAt(Instant.EPOCH)
+                .lastUpdatedAt(Instant.EPOCH)
+                .revision(revision)
+                .build();
+    }
+
+    private static TaskSnapshot submitted(String taskId) {
+        return TaskSnapshot.builder()
+                .taskId(taskId)
+                .status(TaskState.SUBMITTED)
+                .createdAt(Instant.EPOCH)
+                .lastUpdatedAt(Instant.EPOCH)
+                .revision(1)
+                .build();
     }
 
     @Test

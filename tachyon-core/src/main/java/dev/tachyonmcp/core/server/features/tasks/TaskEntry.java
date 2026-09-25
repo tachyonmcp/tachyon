@@ -9,45 +9,51 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.BiConsumer;
 import org.jspecify.annotations.Nullable;
 
-/** Cached task projection plus server-local retention and notification ownership. */
+/**
+ * Cached task projection plus server-local retention. The owning session and progress token come
+ * from the task-augmented tool call that created the task and never change.
+ */
 @InternalApi
 final class TaskEntry {
 
-    private volatile TaskSnapshot snapshot;
-    private final @Nullable String sessionId;
+    private final @Nullable String ownerSessionId;
     private final @Nullable ProgressToken progressToken;
     private final Duration keepAlive;
     private final Clock clock;
+    private volatile TaskSnapshot snapshot;
     private volatile Instant cachedAt;
+    /** Guards updates and orders notifications; senders must never block while it is held. */
     private final ReentrantLock lock = new ReentrantLock();
+
+    private long notifiedRevision = -1;
 
     TaskEntry(
             TaskSnapshot snapshot,
-            @Nullable String sessionId,
+            @Nullable String ownerSessionId,
             @Nullable ProgressToken progressToken,
             Duration keepAlive,
             Clock clock) {
         this.snapshot = Objects.requireNonNull(snapshot, "snapshot");
-        this.sessionId = sessionId;
+        this.ownerSessionId = ownerSessionId;
         this.progressToken = progressToken;
         this.keepAlive = Objects.requireNonNull(keepAlive, "keepAlive");
         this.clock = Objects.requireNonNull(clock, "clock");
         this.cachedAt = clock.instant();
     }
 
-    TaskSnapshot publish(TaskSnapshot candidate) {
+    /** Applies {@code candidate} if its revision is newer; returns whether it did. */
+    boolean publish(TaskSnapshot candidate) {
         lock.lock();
         try {
-            if (!snapshot.taskId().equals(candidate.taskId())) {
-                throw new IllegalArgumentException("Task ID cannot change");
+            if (candidate.revision() <= snapshot.revision()) {
+                return false;
             }
-            if (candidate.revision() > snapshot.revision()) {
-                cachedAt = clock.instant();
-                snapshot = candidate;
-            }
-            return snapshot;
+            cachedAt = clock.instant();
+            snapshot = candidate;
+            return true;
         } finally {
             lock.unlock();
         }
@@ -57,18 +63,38 @@ final class TaskEntry {
         return snapshot;
     }
 
-    String id() {
-        return snapshot.taskId();
-    }
-
     @Nullable
-    String sessionId() {
-        return sessionId;
+    String ownerSessionId() {
+        return ownerSessionId;
     }
 
     @Nullable
     ProgressToken progressToken() {
         return progressToken;
+    }
+
+    /** Whether {@code sessionId} is this task's owner; {@code null} matches an ownerless task. */
+    boolean ownedBy(@Nullable String sessionId) {
+        return Objects.equals(ownerSessionId, sessionId);
+    }
+
+    /**
+     * Sends the current snapshot to its owner unless a revision at least as new was already sent.
+     * A publisher that lost the race to a newer one therefore sends nothing instead of a stale
+     * status.
+     */
+    void notifyIfNewer(BiConsumer<TaskSnapshot, @Nullable String> sender) {
+        lock.lock();
+        try {
+            var current = snapshot;
+            if (current.revision() <= notifiedRevision) {
+                return;
+            }
+            notifiedRevision = current.revision();
+            sender.accept(current, ownerSessionId);
+        } finally {
+            lock.unlock();
+        }
     }
 
     boolean isResultExpired() {
