@@ -3,7 +3,7 @@ title: Testing
 tags: [module, testing, e2e, conformance]
 sources: [e2e/src/test/, conformance/, Makefile, reports/pom.xml, tachyon-core/src/test/, .github/workflows/build.yml, .github/workflows/release.yml]
 updated: 2026-09-25
-commit: 55b278f2
+commit: cbfbcd7f
 ---
 
 # ✅ Testing
@@ -68,7 +68,7 @@ decoding constructs `ElicitationResult` through its builder.
 
 ## 📡 Subscription regression coverage
 
-[TaskSubscriptionIsolationTest#sessionOwnedTasksStayPrivateAcrossProtocolVersionsAndSessionTermination](../../e2e/src/test/java/dev/tachyonmcp/e2e/mcp/TaskSubscriptionIsolationTest.java) covers modern subscribers opened before/after a legacy task is created, owner-only completion delivery, no fallback after owner termination, and continued ownerless result delivery. A later public completion fences earlier writes on each stream. It also compares denied and unknown task responses (HTTP status + complete JSON), alongside legacy [TaskSessionIsolationTest#otherSessionsCannotReachAnOwnedTask](../../e2e/src/test/java/dev/tachyonmcp/e2e/mcp/v2025_11_25/TaskSessionIsolationTest.java). Added coverage; execution deferred at user request.
+[TaskSubscriptionRoutingTest#taskReachesItsRouteSessionAndEveryAuthorizedListenerNamingIt](../../e2e/src/test/java/dev/tachyonmcp/e2e/mcp/TaskSubscriptionRoutingTest.java) covers modern listeners opened before/after a legacy task is created: the routed task reaches its session and every authorized listener naming it (also after the session is deleted); a listener never gets an id it did not name (fenced by a later event). Legacy [TaskRoutingTest](../../e2e/src/test/java/dev/tachyonmcp/e2e/mcp/v2025_11_25/TaskRoutingTest.java) covers route-from-tool-call, set-once routes and reads never routing; [TaskConnectorAccessTest](../../e2e/src/test/java/dev/tachyonmcp/e2e/mcp/v2025_11_25/TaskConnectorAccessTest.java) the session-scoping connector recipe for `tasks/*` and for listeners (`TaskConnectorAccessTest#refusedListenerNeverReceivesTheTaskEvenAfterEviction`: ack omits the id, nothing arrives after eviction; `TaskConnectorAccessTest#authorizedListenerReceivesARoutedTaskAlongsideItsSession`).
 
 `PostSseStreamTest` exercises out-of-order write completion and preservation of the first transport failure. `SubscriptionsListenObservationTest` covers shutdown fallback, ack timestamp retention, and exception-detail gating. `McpOpenTelemetryListenerTest#subscriptionCompletionRunsOffNettyEventLoop` checks the completion thread over real HTTP; `subscriptionStreamFailureFailsSpan` checks optional exception export.
 

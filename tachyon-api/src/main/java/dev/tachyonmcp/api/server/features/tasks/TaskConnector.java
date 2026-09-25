@@ -13,6 +13,14 @@ import org.jspecify.annotations.Nullable;
  * tasks/update} as one contract, so all three operations are required. Legacy list and blocking
  * result operations remain optional.
  *
+ * <p>The connector is the only access check: Tachyon forwards every {@code tasks/*} request to it
+ * without deciding who may reach a task, and calls {@code get} for each task id a
+ * {@code subscriptions/listen} stream names, keeping only the ids it answers. Authorize each call from its {@link
+ * dev.tachyonmcp.api.runtime.InteractionContext} (for example against the session that started the
+ * work) and answer a task the caller may not see with {@link TaskNotFoundException}, as for an
+ * unknown id. Without such checks a task id is a bearer capability: generate ids that cannot be
+ * guessed, as the MCP tasks specification requires.
+ *
  * <p>Operations are synchronous by design. Tachyon invokes them from request-serving virtual
  * threads, so an implementation may block while calling an external workflow engine or job store.
  * Tachyon never closes the connector or dependencies captured by its functions; lifecycle remains

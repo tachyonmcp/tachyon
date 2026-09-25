@@ -3,6 +3,7 @@ package dev.tachyonmcp.core.server.features.tasks;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import dev.tachyonmcp.api.server.domain.ProgressToken;
 import dev.tachyonmcp.api.server.domain.TaskResult;
 import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
 import dev.tachyonmcp.api.server.features.tasks.TaskState;
@@ -14,7 +15,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
-import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 
 class TaskEntryTest {
@@ -38,40 +38,52 @@ class TaskEntryTest {
     }
 
     @Test
-    void ttlEvictsAnOwnedTaskOnlyOnceItIsTerminal() {
+    void ttlEvictsWhateverTheStatusOrRoute() {
+        // 2025-11-25 Tasks § TTL: after ttl the receiver MAY delete the task regardless of its status.
         var clock = Clock.fixed(CREATED_AT.plus(Duration.ofMinutes(2)), ZoneOffset.UTC);
         var elapsed = Duration.ofMinutes(1);
         var exactlyNow = Duration.ofMinutes(2);
         var pending = Duration.ofHours(1);
+        var routed = new TaskRoute("caller", null);
 
-        assertThat(expired(null, withTtl(working(1), elapsed), clock))
-                .as("ownerless, ttl elapsed")
+        assertThat(expired(TaskRoute.NONE, withTtl(working(1), elapsed), clock))
+                .as("unrouted, ttl elapsed")
                 .isTrue();
-        assertThat(expired(null, withTtl(working(1), exactlyNow), clock))
-                .as("ownerless, ttl ends now")
+        assertThat(expired(TaskRoute.NONE, withTtl(working(1), exactlyNow), clock))
+                .as("unrouted, ttl ends now")
                 .isTrue();
-        assertThat(expired(null, withTtl(working(1), pending), clock))
-                .as("ownerless, ttl pending")
+        assertThat(expired(TaskRoute.NONE, withTtl(working(1), pending), clock))
+                .as("unrouted, ttl pending")
                 .isFalse();
-        assertThat(expired(null, working(1), clock)).as("ownerless, no ttl").isFalse();
-        assertThat(expired("owner", withTtl(working(1), elapsed), clock))
-                .as("owned and running: kept past its ttl so its owner check stays")
-                .isFalse();
-        assertThat(expired("owner", withTtl(completed(), elapsed), clock))
-                .as("owned and terminal, ttl elapsed")
+        assertThat(expired(TaskRoute.NONE, working(1), clock)).as("no ttl").isFalse();
+        assertThat(expired(routed, withTtl(working(1), elapsed), clock))
+                .as("routed and running, ttl elapsed")
                 .isTrue();
-        assertThat(expired("owner", withTtl(completed(), pending), clock))
-                .as("owned and terminal, ttl pending, keepAlive pending")
+        assertThat(expired(routed, withTtl(completed(), pending), clock))
+                .as("terminal, ttl pending, keepAlive pending")
                 .isFalse();
-        assertThat(expired("owner", completed(), clock))
+        assertThat(expired(routed, completed(), clock))
                 .as("terminal, no ttl: keepAlive alone decides")
                 .isFalse();
     }
 
     @Test
+    void entryTakesOnlyItsFirstRoute() {
+        var entry = new TaskEntry(working(1), TaskRoute.NONE, Duration.ZERO, Clock.systemUTC());
+        var first = new TaskRoute("first", ProgressToken.of("tok-1"));
+
+        assertThat(entry.route(TaskRoute.NONE)).isFalse();
+        assertThat(entry.route(first)).isTrue();
+        assertThat(entry.route(new TaskRoute("second", ProgressToken.of("tok-2"))))
+                .as("a colliding task id never redirects push traffic")
+                .isFalse();
+        assertThat(entry.route()).isEqualTo(first);
+    }
+
+    @Test
     void evictionRechecksExpiryAgainstTheCurrentSnapshot() {
         var clock = Clock.fixed(CREATED_AT.plus(Duration.ofMinutes(2)), ZoneOffset.UTC);
-        var entry = new TaskEntry(withTtl(working(1), Duration.ofMinutes(1)), null, null, Duration.ZERO, clock);
+        var entry = new TaskEntry(withTtl(working(1), Duration.ofMinutes(1)), TaskRoute.NONE, Duration.ZERO, clock);
         var removals = new AtomicInteger();
 
         // The sweep saw revision 1 expired; a renewal with a longer ttl lands before it evicts.
@@ -90,8 +102,8 @@ class TaskEntryTest {
         assertThat(removals).hasValue(1);
     }
 
-    private static boolean expired(@Nullable String owner, TaskSnapshot snapshot, Clock clock) {
-        return new TaskEntry(snapshot, owner, null, Duration.ofMinutes(5), clock).isExpired();
+    private static boolean expired(TaskRoute route, TaskSnapshot snapshot, Clock clock) {
+        return new TaskEntry(snapshot, route, Duration.ofMinutes(5), clock).isExpired();
     }
 
     private static TaskSnapshot completed() {
@@ -106,12 +118,12 @@ class TaskEntryTest {
         return TaskSnapshot.builder().from(snapshot).ttl(ttl).build();
     }
 
-    private void record(TaskSnapshot snapshot, @Nullable String session) {
-        sent.add(snapshot.revision() + "@" + session);
+    private void record(TaskSnapshot snapshot, TaskRoute route) {
+        sent.add(snapshot.revision() + "@" + route.sessionId());
     }
 
     private static TaskEntry entry() {
-        return new TaskEntry(working(1), "owner", null, Duration.ofMinutes(5), Clock.systemUTC());
+        return new TaskEntry(working(1), new TaskRoute("owner", null), Duration.ofMinutes(5), Clock.systemUTC());
     }
 
     private static TaskSnapshot working(long revision) {

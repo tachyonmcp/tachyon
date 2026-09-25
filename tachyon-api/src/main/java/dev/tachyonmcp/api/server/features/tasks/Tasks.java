@@ -10,14 +10,14 @@ import org.jspecify.annotations.Nullable;
 @ExperimentalApi
 public interface Tasks {
     /**
-     * Publishes a newer revision of a task and returns the effective snapshot.
+     * Publishes a newer revision of a task and returns the effective snapshot. A task Tachyon has not
+     * cached is cached; an older or equal revision leaves the cache unchanged.
      *
-     * <p>Only a task-augmented tool call that returns {@code ToolResult.task(...)} creates a cached
-     * task, owned by that call's session for the task's lifetime. Publishing never changes the owner.
-     * An owned task notifies only its owner, with {@code notifications/tasks/status}; an ownerless
-     * task notifies only the {@code subscriptions/listen} subscribers of its id, with
-     * {@code notifications/tasks}. A task Tachyon has not cached, e.g. one created on another node,
-     * counts as ownerless and stays uncached. Status is never broadcast to other sessions.
+     * <p>Status goes to the session of the task-augmented tool call that returned the task, with
+     * {@code notifications/tasks/status}, and to every {@code subscriptions/listen} subscriber of its
+     * id that the {@link TaskConnector} let read it when the stream opened, with
+     * {@code notifications/tasks}. Publishing never picks a session from the calling thread, and
+     * status is never broadcast to other sessions.
      */
     TaskSnapshot publish(TaskSnapshot snapshot);
 

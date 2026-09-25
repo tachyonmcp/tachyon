@@ -25,13 +25,15 @@ import org.junit.jupiter.api.Timeout;
 import tools.jackson.databind.node.JsonNodeFactory;
 
 /**
- * Tasks extension without sessions: every task is ownerless, so {@code notifications/tasks} reaches
- * exactly the {@code subscriptions/listen} streams that opted into its id, however the task was
- * published. The server is shared by the class, so every test uses task ids of its own.
+ * Tasks extension without sessions: no task has a session route, so {@code notifications/tasks}
+ * reaches exactly the {@code subscriptions/listen} streams that opted into its id and that the
+ * connector let read it, however the task was published. The server is shared by the class, so every test uses task ids of its own.
  */
 class TaskNotificationsTest extends AbstractStatelessMcpE2eTest<McpClient> {
 
     private static final Instant CREATED_AT = Instant.parse("2026-09-24T07:00:00Z");
+
+    private final TestTaskConnector taskEngine = new TestTaskConnector();
 
     @Override
     protected Mcp20260728Client createTestClient() {
@@ -45,7 +47,7 @@ class TaskNotificationsTest extends AbstractStatelessMcpE2eTest<McpClient> {
 
     @Override
     protected void startDefaultServer() {
-        var connector = new TestTaskConnector().connector();
+        var connector = taskEngine.connector();
         startServer(builder -> builder.capabilities(c -> c.tools(true).tasks(connector)), registrar -> {
             registrar
                     .tools()
@@ -93,7 +95,7 @@ class TaskNotificationsTest extends AbstractStatelessMcpE2eTest<McpClient> {
 
     @Test
     @Timeout(30)
-    void publishOfATaskCreatedElsewhereReachesItsSubscribersUncached() throws Exception {
+    void publishOfATaskCreatedElsewhereReachesItsSubscribersAndIsCached() throws Exception {
         try (var client = tasksClient()) {
             var subscriber = listen(client, 1, "remote-task");
             var bystander = listen(client, 2, "remote-fence");
@@ -107,8 +109,8 @@ class TaskNotificationsTest extends AbstractStatelessMcpE2eTest<McpClient> {
                     .containsEntry("taskId", "remote-task")
                     .containsEntry("status", "working");
             assertThat(server.tasks().get("remote-task"))
-                    .as("only a task-augmented tool call creates a cached task")
-                    .isNull();
+                    .as("publish caches a task Tachyon has not seen")
+                    .isNotNull();
 
             assertNothingBefore(bystander, "remote-fence", "remote-task");
         }
@@ -136,7 +138,9 @@ class TaskNotificationsTest extends AbstractStatelessMcpE2eTest<McpClient> {
         return createTestClient().withExtensions(Map.of(TasksExtension.ID, JsonNodeFactory.instance.objectNode()));
     }
 
-    private static SseStream listen(Mcp20260728Client client, int id, String taskId) throws Exception {
+    /** Listens to {@code taskId}, which the connector must know: it authorizes each listened id. */
+    private SseStream listen(Mcp20260728Client client, int id, String taskId) throws Exception {
+        taskEngine.publish(TaskSnapshot.working(taskId, CREATED_AT, 1));
         var stream = client.openPostStream(null, """
                 {"jsonrpc":"2.0","id":%d,"method":"subscriptions/listen",
                  "params":{"notifications":{"taskIds":["%s"]}}}

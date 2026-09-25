@@ -216,5 +216,12 @@ public interface ProtocolRequestMapper {
             boolean promptsListChanged,
             boolean resourcesListChanged,
             Set<String> resourceSubscriptions,
-            Set<String> taskIds) {}
+            Set<String> taskIds) {
+
+        /** Returns this filter with {@code taskIds} replaced, e.g. by the subset a listener may read. */
+        public SubscriptionListenRequest withTaskIds(Set<String> taskIds) {
+            return new SubscriptionListenRequest(
+                    toolsListChanged, promptsListChanged, resourcesListChanged, resourceSubscriptions, taskIds);
+        }
+    }
 }

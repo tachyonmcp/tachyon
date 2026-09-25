@@ -457,12 +457,12 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
 
     @Override
     public void notifyTaskStatus(TaskSnapshot snapshot, @Nullable String sessionId) {
+        // The route's session, if any; then subscriptions/listen streams naming the id, which the
+        // connector authorized when each stream opened. Never a broadcast.
         if (sessionId != null) {
             getSession(sessionId).ifPresent(session -> notifyTaskStatus(session, snapshot));
-        } else {
-            logger.debug("Task {} has no owning session; skipping session status delivery", snapshot.taskId());
-            subscriptionRegistry.notifyTaskStatus(snapshot);
         }
+        subscriptionRegistry.notifyTaskStatus(snapshot);
     }
 
     @Override

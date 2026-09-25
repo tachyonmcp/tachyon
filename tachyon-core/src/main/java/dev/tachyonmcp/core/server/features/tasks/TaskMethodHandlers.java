@@ -42,7 +42,7 @@ public final class TaskMethodHandlers {
                 : null;
     }
 
-    /** One answer for unknown and foreign tasks, so a caller cannot probe which ids exist. */
+    /** The connector's answer for an id it does not know or will not show this caller. */
     private static ServerError taskNotFound(String action) {
         return ServerErrors.invalidParams("Failed to " + action + " task: Task not found");
     }
@@ -81,10 +81,7 @@ public final class TaskMethodHandlers {
             if (!result.cursorValid()) {
                 return ServerErrors.invalidParams("Invalid cursor");
             }
-            var snapshots = result.items().stream()
-                    .filter(snapshot -> registry.visibleTo(snapshot.taskId(), context.sessionId()))
-                    .map(registry::withDefaults)
-                    .toList();
+            var snapshots = result.items().stream().map(registry::withDefaults).toList();
             return context.responseMapper().listTasksResult(snapshots, result.nextCursor());
         }
     }
@@ -106,9 +103,6 @@ public final class TaskMethodHandlers {
             var connector = registry.taskConnector();
             if (connector == null) {
                 return ServerErrors.methodNotFound("Method not found");
-            }
-            if (!registry.visibleTo(request.taskId(), context.sessionId())) {
-                return taskNotFound("retrieve");
             }
             final TaskSnapshot snapshot;
             try {
@@ -138,9 +132,6 @@ public final class TaskMethodHandlers {
             var connector = registry.taskConnector();
             if (connector == null) {
                 return ServerErrors.methodNotFound("Method not found");
-            }
-            if (!registry.visibleTo(request.taskId(), context.sessionId())) {
-                return taskNotFound("cancel");
             }
             try {
                 connector.cancel().apply(context, request);
@@ -183,9 +174,6 @@ public final class TaskMethodHandlers {
             if (connector == null || connector.awaitResult() == null) {
                 return ServerErrors.methodNotFound("Method not found");
             }
-            if (!registry.visibleTo(request.taskId(), context.sessionId())) {
-                return taskNotFound("retrieve");
-            }
             final TaskSnapshot awaited;
             try {
                 awaited = connector.awaitResult().apply(context, request);
@@ -216,9 +204,6 @@ public final class TaskMethodHandlers {
             var connector = registry.taskConnector();
             if (connector == null) {
                 return ServerErrors.methodNotFound("Method not found");
-            }
-            if (!registry.visibleTo(request.taskId(), context.sessionId())) {
-                return taskNotFound("update");
             }
             try {
                 connector.update().apply(context, request);

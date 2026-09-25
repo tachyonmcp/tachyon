@@ -2,9 +2,11 @@
 package dev.tachyonmcp.core.server.features.tasks;
 
 import dev.tachyonmcp.api.annotations.InternalApi;
-import dev.tachyonmcp.api.server.domain.ProgressToken;
+import dev.tachyonmcp.api.runtime.InteractionContext;
 import dev.tachyonmcp.api.server.features.PaginatedResult;
 import dev.tachyonmcp.api.server.features.tasks.TaskConnector;
+import dev.tachyonmcp.api.server.features.tasks.TaskGetRequest;
+import dev.tachyonmcp.api.server.features.tasks.TaskNotFoundException;
 import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
 import dev.tachyonmcp.core.server.config.TasksConfig;
 import dev.tachyonmcp.core.server.features.ChangeSupport;
@@ -13,8 +15,10 @@ import dev.tachyonmcp.core.server.internal.AbstractJanitor;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
 import java.time.Clock;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -67,38 +71,31 @@ public final class DefaultTaskRegistry implements TaskRegistry {
 
     @Override
     public TaskSnapshot publish(TaskSnapshot snapshot) {
-        var effective = withDefaults(Objects.requireNonNull(snapshot, "snapshot"));
-        var entry = entries.get(effective.taskId());
-        if (entry == null) {
-            // Only create() caches a task. Subscribers may still follow a task created elsewhere.
-            server.notifyTaskStatus(effective, null);
-            return effective;
-        }
-        return publish(entry, effective);
+        return publish(snapshot, TaskRoute.NONE);
     }
 
     @Override
-    public @Nullable TaskSnapshot create(
-            TaskSnapshot snapshot, @Nullable String sessionId, @Nullable ProgressToken progressToken) {
+    public TaskSnapshot publish(TaskSnapshot snapshot, TaskRoute route) {
         var effective = withDefaults(Objects.requireNonNull(snapshot, "snapshot"));
-        var taskId = effective.taskId();
-        var created = new TaskEntry(effective, sessionId, progressToken, keepAlive, clock);
-        var existing = entries.putIfAbsent(taskId, created);
+        Objects.requireNonNull(route, "route");
+        var created = new TaskEntry(effective, route, keepAlive, clock);
+        var existing = entries.putIfAbsent(effective.taskId(), created);
         if (existing == null) {
-            created.notifyIfNewer(server::notifyTaskStatus);
+            created.notifyIfNewer(this::notifyTaskStatus);
             changes.fireOnChange();
             return effective;
         }
-        if (!existing.ownedBy(sessionId)) {
-            logger.debug("Refusing to create task {}: owned by another session", taskId);
-            return null;
-        }
+        existing.route(route);
         return publish(existing, effective);
+    }
+
+    private void notifyTaskStatus(TaskSnapshot snapshot, TaskRoute route) {
+        server.notifyTaskStatus(snapshot, route.sessionId());
     }
 
     private TaskSnapshot publish(TaskEntry entry, TaskSnapshot effective) {
         if (entry.publish(effective)) {
-            entry.notifyIfNewer(server::notifyTaskStatus);
+            entry.notifyIfNewer(this::notifyTaskStatus);
             changes.fireOnChange();
         }
         return entry.snapshot();
@@ -115,13 +112,40 @@ public final class DefaultTaskRegistry implements TaskRegistry {
     }
 
     @Override
+    public Set<String> readableTaskIds(InteractionContext ctx, Set<String> taskIds) {
+        var connector = taskConnector;
+        if (connector == null) {
+            return Set.of();
+        }
+        var readable = new ArrayList<String>(taskIds.size());
+        for (var taskId : taskIds) {
+            try {
+                connector
+                        .get()
+                        .apply(ctx, TaskGetRequest.builder().taskId(taskId).build());
+                readable.add(taskId);
+            } catch (TaskNotFoundException e) {
+                logger.debug("Listener may not read task {}", taskId);
+            } catch (InterruptedException e) {
+                // E.g. executor shutdownNow(): stop asking the connector, keep only ids already allowed.
+                Thread.currentThread().interrupt();
+                break;
+            } catch (Exception e) {
+                logger.debug("Leaving task {} out of a listener: connector failed", taskId, e);
+            }
+        }
+        return Set.copyOf(readable);
+    }
+
+    @Override
     public void reportProgress(String taskId, double progress, @Nullable Double total, @Nullable String message) {
         var entry = entries.get(taskId);
         if (entry == null) {
             logger.debug("Dropping task progress for unknown taskId={}", taskId);
             return;
         }
-        var progressToken = entry.progressToken();
+        var route = entry.route();
+        var progressToken = route.progressToken();
         if (progressToken == null) {
             logger.debug(
                     "Dropping task progress for taskId={}: no progressToken (task was not created by a"
@@ -129,23 +153,13 @@ public final class DefaultTaskRegistry implements TaskRegistry {
                     taskId);
             return;
         }
-        server.notifyTaskProgress(progressToken, entry.ownerSessionId(), progress, total, message);
+        server.notifyTaskProgress(progressToken, route.sessionId(), progress, total, message);
     }
 
     @Override
     public @Nullable TaskSnapshot get(String taskId) {
         var entry = entries.get(taskId);
         return entry != null ? entry.snapshot() : null;
-    }
-
-    /**
-     * Whether {@code sessionId} may reach the task through {@code tasks/*}: a task another session
-     * owns is hidden. Ownerless and uncached tasks stay reachable; the connector authorizes those.
-     */
-    boolean visibleTo(String taskId, @Nullable String sessionId) {
-        var entry = entries.get(taskId);
-        var owner = entry != null ? entry.ownerSessionId() : null;
-        return owner == null || owner.equals(sessionId);
     }
 
     PaginatedResult<TaskSnapshot> listCached(int limit, @Nullable String cursor) {
