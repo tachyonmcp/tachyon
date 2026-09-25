@@ -15,7 +15,11 @@ import org.jspecify.annotations.Nullable;
  */
 public interface SkillsRegistry {
 
-    /** Returns the skills served by this registry, in scan order. */
+    /**
+     * Returns the skills served by this registry, in scan order.
+     *
+     * @return the served skills
+     */
     List<Skill> skills();
 
     /**
@@ -38,7 +42,11 @@ public interface SkillsRegistry {
      */
     record Skill(String skillPath, Map<String, Object> frontmatter, List<SkillFile> files) {
 
-        /** Returns the resource URI of the skill's {@code SKILL.md}. */
+        /**
+         * Returns the resource URI of the skill's {@code SKILL.md}.
+         *
+         * @return the {@code skill://<skill-path>/SKILL.md} URI
+         */
         public String skillUri() {
             return "skill://" + skillPath + "/SKILL.md";
         }

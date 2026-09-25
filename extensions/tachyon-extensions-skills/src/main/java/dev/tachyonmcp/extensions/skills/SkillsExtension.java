@@ -74,7 +74,11 @@ public final class SkillsExtension implements ServerExtension {
         this.fileUris = Set.copyOf(uris);
     }
 
-    /** Creates a new {@link SkillsExtension} builder. */
+    /**
+     * Creates a new {@link SkillsExtension} builder.
+     *
+     * @return a new builder
+     */
     public static Builder builder() {
         return new Builder();
     }
@@ -267,6 +271,9 @@ public final class SkillsExtension implements ServerExtension {
         private String cacheScope = "public";
         private ExtensionNegotiation negotiation = ExtensionNegotiation.OPTIONAL;
 
+        /** Creates a builder with default settings. */
+        public Builder() {}
+
         /**
          * Adds a skill registry. Construct {@link FilesystemSkillsRegistry} or
          * {@link ClasspathSkillsRegistry} directly, or supply a custom {@link SkillsRegistry} —
@@ -329,7 +336,11 @@ public final class SkillsExtension implements ServerExtension {
             return this;
         }
 
-        /** Builds the extension. */
+        /**
+         * Builds the extension.
+         *
+         * @return the configured extension
+         */
         public SkillsExtension build() {
             return new SkillsExtension(registries, cacheTtlMs, cacheScope, negotiation);
         }

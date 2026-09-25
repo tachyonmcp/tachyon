@@ -18,6 +18,12 @@ public class JsonRpcResponseAssert extends AbstractAssert<JsonRpcResponseAssert,
 
     private final @Nullable HttpResponse<String> httpResponse;
 
+    /**
+     * Creates assertions over a JSON-RPC envelope.
+     *
+     * @param httpResponse the originating HTTP response, or {@code null} if none
+     * @param envelope the parsed JSON-RPC response envelope
+     */
     protected JsonRpcResponseAssert(@Nullable HttpResponse<String> httpResponse, JsonNode envelope) {
         super(envelope, JsonRpcResponseAssert.class);
         this.httpResponse = httpResponse;
@@ -106,6 +112,11 @@ public class JsonRpcResponseAssert extends AbstractAssert<JsonRpcResponseAssert,
             return this;
         }
 
+        /**
+         * Returns the {@code result} member of the envelope.
+         *
+         * @return the result node, missing if absent
+         */
         public JsonNode result() {
             return actual.path("result");
         }

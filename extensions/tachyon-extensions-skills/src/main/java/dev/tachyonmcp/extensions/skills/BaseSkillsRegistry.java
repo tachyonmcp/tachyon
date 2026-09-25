@@ -48,7 +48,14 @@ public abstract class BaseSkillsRegistry implements SkillsRegistry {
         }
     }
 
-    /** Scans a directory of skills: every subdirectory containing a {@code SKILL.md} becomes a skill. */
+    /** Creates an empty registry; subclasses populate it via the {@code add*} methods. */
+    protected BaseSkillsRegistry() {}
+
+    /**
+     * Scans a directory of skills: every subdirectory containing a {@code SKILL.md} becomes a skill.
+     *
+     * @param root the directory whose subdirectories are scanned
+     */
     protected final void addSkillDir(Path root) {
         try (var children = Files.list(root)) {
             children.filter(Files::isDirectory)
@@ -59,17 +66,32 @@ public abstract class BaseSkillsRegistry implements SkillsRegistry {
         }
     }
 
-    /** Scans a single skill directory; rethrows {@link IllegalArgumentException} on invalid skills. */
+    /**
+     * Scans a single skill directory; rethrows {@link IllegalArgumentException} on invalid skills.
+     *
+     * @param skillDir the skill directory
+     * @param skillPath the skill path; its final segment must equal the frontmatter {@code name}
+     */
     protected final void addSkill(Path skillDir, String skillPath) {
         addPath(skillDir, skillPath, this::registerStrict);
     }
 
-    /** Registers a skill from pre-read files (relative path → bytes); rethrows on an invalid skill. */
+    /**
+     * Registers a skill from pre-read files (relative path → bytes); rethrows on an invalid skill.
+     *
+     * @param skillPath the skill path
+     * @param files the skill files by relative path
+     */
     protected final void addFilesStrict(String skillPath, Map<String, byte[]> files) {
         registerFiles(skillPath, files, this::registerStrict);
     }
 
-    /** Registers a skill from pre-read files (relative path → bytes); skips and logs an invalid skill. */
+    /**
+     * Registers a skill from pre-read files (relative path → bytes); skips and logs an invalid skill.
+     *
+     * @param skillPath the skill path
+     * @param files the skill files by relative path
+     */
     protected final void addFilesLenient(String skillPath, Map<String, byte[]> files) {
         registerFiles(skillPath, files, this::registerOrSkip);
     }

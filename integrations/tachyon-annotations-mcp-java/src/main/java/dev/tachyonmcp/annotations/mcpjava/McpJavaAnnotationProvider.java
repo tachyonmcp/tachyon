@@ -69,6 +69,14 @@ public class McpJavaAnnotationProvider implements AnnotationProvider {
     private static final String ELEMENT_NAME = "<<element name>>";
     private static final McpJavaAnnotationProvider INSTANCE = new McpJavaAnnotationProvider();
 
+    /** Creates a provider. Prefer {@link #instance()}. */
+    public McpJavaAnnotationProvider() {}
+
+    /**
+     * Returns the shared provider instance.
+     *
+     * @return the shared instance
+     */
     public static McpJavaAnnotationProvider instance() {
         return INSTANCE;
     }

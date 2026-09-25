@@ -48,6 +48,14 @@ public class LangChain4jAnnotationProvider implements AnnotationProvider {
 
     private static final LangChain4jAnnotationProvider INSTANCE = new LangChain4jAnnotationProvider();
 
+    /** Creates a provider. Prefer {@link #instance()}. */
+    public LangChain4jAnnotationProvider() {}
+
+    /**
+     * Returns the shared provider instance.
+     *
+     * @return the shared instance
+     */
     public static LangChain4jAnnotationProvider instance() {
         return INSTANCE;
     }
