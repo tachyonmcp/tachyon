@@ -186,7 +186,13 @@ public final class TaskMethodHandlers {
             if (!registry.visibleTo(request.taskId(), context.sessionId())) {
                 return taskNotFound("retrieve");
             }
-            var snapshot = registry.publish(connector.awaitResult().apply(context, request));
+            final TaskSnapshot awaited;
+            try {
+                awaited = connector.awaitResult().apply(context, request);
+            } catch (TaskNotFoundException e) {
+                return taskNotFound("retrieve");
+            }
+            var snapshot = registry.publish(awaited);
             return context.responseMapper().getTaskPayloadResult(snapshot.result(), snapshot.taskId());
         }
     }

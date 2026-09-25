@@ -2,8 +2,8 @@
 title: Feature registries
 tags: [concept, tools, resources, prompts, completions]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/handlers/, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java]
-updated: 2026-09-24
-commit: c897036b
+updated: 2026-09-25
+commit: 55b278f2
 ---
 
 # 🧰 Feature registries
@@ -80,6 +80,7 @@ Mode `OFF` ⇒ registration silently skipped (debug log) in every registry.
 
 `SubscriptionsListenHandler` `SubscriptionsListenHandler` + `SubscriptionRegistry` `.../features/subscriptions/SubscriptionRegistry.java`:
 - Only when mapper `supportsSubscriptionsListen`; `taskIds` filter needs tasks extension.
+- Task ownership routing happens before subscription fan-out; see [[tasks]] and [DefaultTachyonServer#notifyTaskStatus](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java).
 - `activate` under lock: register + ack `notifications/subscriptions/acknowledged` as **first** event (SEP-2575) `SubscriptionRegistry#activate`.
 - Returned future and Observation both span the whole stream lifetime; completes on disconnect (`Cancelled`) or genuine transport failure (`StreamFailed(causeType, cause?)`), never early at establishment `SubscriptionsListenHandler#handleAsync`.
 - Terminal continuation threading and ack timestamp publication: [[observability]].

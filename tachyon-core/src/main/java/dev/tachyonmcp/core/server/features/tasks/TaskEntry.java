@@ -97,9 +97,19 @@ final class TaskEntry {
         }
     }
 
-    boolean isResultExpired() {
-        return snapshot.status().isTerminal()
+    /**
+     * Whether the janitor may evict this entry: past the snapshot's {@code ttl} from {@code createdAt}
+     * whatever its status, or terminal and cached longer than {@code keepAlive}.
+     */
+    boolean isExpired() {
+        var current = snapshot;
+        var now = clock.instant();
+        var ttl = current.ttl();
+        if (ttl != null && !now.isBefore(current.createdAt().plus(ttl))) {
+            return true;
+        }
+        return current.status().isTerminal()
                 && keepAlive.compareTo(Duration.ZERO) > 0
-                && !clock.instant().isBefore(cachedAt.plus(keepAlive));
+                && !now.isBefore(cachedAt.plus(keepAlive));
     }
 }

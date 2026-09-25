@@ -2,8 +2,8 @@
 title: Overview
 tags: [concept, architecture]
 sources: [pom.xml, tachyon-core/pom.xml, integrations/pom.xml, extensions/pom.xml, tachyon-core/src/main/java/dev/tachyonmcp/core/server/TachyonServer.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/ServerBuilder.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultServerBuilder.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java]
-updated: 2026-09-19
-commit: 95dbd763
+updated: 2026-09-25
+commit: 55b278f2
 ---
 
 # 🛰️ Overview

@@ -99,6 +99,8 @@ class DefaultTaskRegistryTest {
     void janitorEvictsTerminalProjectionButNeverTransitionsActiveWork() {
         registry.create(snapshot("active", TaskState.WORKING, 1), null, null);
         registry.create(snapshot("terminal", TaskState.COMPLETED, 1), null, null);
+        registry.create(withTtl(snapshot("abandoned", TaskState.WORKING, 1), Duration.ofMinutes(6)), null, null);
+        registry.create(withTtl(snapshot("long-lived", TaskState.WORKING, 1), Duration.ofHours(1)), null, null);
 
         clock.advance(Duration.ofMinutes(6));
         registry.runJanitorSweep();
@@ -106,6 +108,10 @@ class DefaultTaskRegistryTest {
         assertThat(registry.get("active")).isNotNull();
         assertThat(registry.get("active").status()).isEqualTo(TaskState.WORKING);
         assertThat(registry.get("terminal")).isNull();
+        assertThat(registry.get("abandoned"))
+                .as("ttl elapsed since createdAt: evicted whatever the status")
+                .isNull();
+        assertThat(registry.get("long-lived")).as("ttl not yet elapsed").isNotNull();
     }
 
     @Test
@@ -116,8 +122,8 @@ class DefaultTaskRegistryTest {
 
         clock.advance(Duration.ofDays(1));
 
-        assertThat(zeroRetention.isResultExpired()).isFalse();
-        assertThat(negativeRetention.isResultExpired()).isFalse();
+        assertThat(zeroRetention.isExpired()).isFalse();
+        assertThat(negativeRetention.isExpired()).isFalse();
     }
 
     @Test
@@ -127,6 +133,10 @@ class DefaultTaskRegistryTest {
         assertThat(registry.remove("task-1")).isTrue();
         assertThat(registry.remove("task-1")).isFalse();
         assertThat(registry.get("task-1")).isNull();
+    }
+
+    private static TaskSnapshot withTtl(TaskSnapshot snapshot, Duration ttl) {
+        return TaskSnapshot.builder().from(snapshot).ttl(ttl).build();
     }
 
     private TaskSnapshot snapshot(String taskId, TaskState status, long revision) {
