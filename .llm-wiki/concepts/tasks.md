@@ -3,7 +3,7 @@ title: Tasks
 tags: [concept, tasks, experimental]
 sources: [tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/tasks/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tasks/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/TasksConfig.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tools/ToolMethodHandlers.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java, integrations/tachyon-tasks-temporal/]
 updated: 2026-09-25
-commit: 55b278f2
+commit: 1814ef5b
 ---
 
 # ⏳ Tasks
@@ -53,6 +53,16 @@ Only `TaskRegistry#create` caches a task; `publish` only updates.
 - Janitor every 30s removes entries past `createdAt + ttl` (any status) or terminal and cached longer than keepAlive `TaskEntry#isExpired`, `DefaultTaskRegistry#runJanitorSweep`. Eviction drops the owner check (uncached ids go to the connector).
 
 Notification routing [DefaultTachyonServer#notifyTaskStatus](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java): a recorded owner ⇒ only that session gets `notifications/tasks/status`; a missing/terminated owner session never falls back to modern subscribers. Only ownerless snapshots reach `SubscriptionRegistry#notifyTaskStatus` → `notifications/tasks` on `subscriptions/listen` streams filtering on taskId. Session status/progress payloads use the session protocol's `ProtocolResponseMapper#encode`. This is session isolation, not user authorization; uncached publishes still lack ownership information.
+
+### ❓ Why the owner is not in `TaskSnapshot`
+
+Owner = server-local routing state in `TaskEntry` (`final`, set by `TaskRegistry#create`); `TaskSnapshot` = the external system's view, authored by connector/engine.
+- `Mcp-Session-Id` is a session credential: snapshots flow to connectors, external stores and logs.
+- Connector-authored `publish` would have to carry the owner ⇒ either it can change the owner (breaks immutability) or the field is ignored (misleading).
+- Snapshots map straight to wire types (`McpTaskMapper`): one missed mapper leaks the owner's session id.
+- 2026-07-28 has no sessions; the spec binds tasks to the authorization context, not a transport session.
+
+Durable ownership (eviction, restart, multi-node) belongs to the connector: every `Task*Fn` gets `InteractionContext`; the engine stores its own owner key (principal/tenant, never the raw session id) and authorizes `get`/`cancel`/`update`/`list`.
 
 ## 🌐 Method map
 
