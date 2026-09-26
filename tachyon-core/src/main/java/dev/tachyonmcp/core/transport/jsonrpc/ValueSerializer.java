@@ -55,7 +55,11 @@ public final class ValueSerializer {
             case Double d -> gen.writeNumber(d);
             case Float f -> gen.writeNumber(f);
             case Boolean b -> gen.writeBoolean(b);
-            default -> gen.writeString(value.toString());
+            default -> {
+                if (!GeneratedCodecs.encode(gen, value)) {
+                    gen.writeString(value.toString());
+                }
+            }
         }
     }
 }
