@@ -20,6 +20,7 @@ import dev.tachyonmcp.api.server.features.tasks.TaskSupport;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
 import dev.tachyonmcp.core.runtime.SessionState;
 import dev.tachyonmcp.core.server.config.SessionConfig;
+import dev.tachyonmcp.core.server.extensions.FakeTasksExtension;
 import dev.tachyonmcp.core.server.session.InMemorySessionStore;
 import dev.tachyonmcp.core.server.session.SessionEvent;
 import dev.tachyonmcp.core.server.session.SessionEventStore;
@@ -209,21 +210,33 @@ class ServerBuilderTest {
     }
 
     @Test
-    void requiredTaskSupportRequiresTaskConnector() {
+    void requiredTaskSupportRequiresTasksExtension() {
         assertThatThrownBy(() -> TachyonServer.builder()
                         .withTools(tools -> tools.register(
                                 builder -> builder.name("task-tool").taskSupport(TaskSupport.REQUIRED),
                                 (context, request) -> ToolResult.empty()))
                         .build())
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessage("Task-producing tools require a TaskConnector");
+                .hasMessage("Task-producing tools require TasksExtension");
+    }
+
+    @Test
+    void requiredTaskSupportBuildsWhenATasksRuntimeIsInstalled() {
+        try (var server = TachyonServer.builder()
+                .withExtensions(new FakeTasksExtension())
+                .withTools(tools -> tools.register(
+                        builder -> builder.name("task-tool").taskSupport(TaskSupport.REQUIRED),
+                        (context, request) -> ToolResult.empty()))
+                .build()) {
+            assertThat(server).isNotNull();
+        }
     }
 
     @ParameterizedTest
     @EnumSource(
             value = TaskSupport.class,
             names = {"FORBIDDEN", "OPTIONAL"})
-    void nonRequiredTaskSupportBuildsWithoutTaskConnector(TaskSupport taskSupport) {
+    void nonRequiredTaskSupportBuildsWithoutTasksExtension(TaskSupport taskSupport) {
         try (var server = TachyonServer.builder()
                 .withTools(tools -> tools.register(
                         builder -> builder.name("task-tool").taskSupport(taskSupport),

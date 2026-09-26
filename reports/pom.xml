@@ -105,7 +105,7 @@
                 <executions>
                     <execution>
                         <id>unpack-module-classes</id>
-                        <phase>process-classes</phase>
+                        <phase>package</phase>
                         <goals>
                             <goal>unpack-dependencies</goal>
                         </goals>

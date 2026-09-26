@@ -1,9 +1,8 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
-package dev.tachyonmcp.core.server.features.tasks;
+package dev.tachyonmcp.extensions.tasks.engine;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import dev.tachyonmcp.api.server.domain.ProgressToken;
 import dev.tachyonmcp.api.server.domain.TaskResult;
 import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
 import dev.tachyonmcp.api.server.features.tasks.TaskState;
@@ -44,7 +43,7 @@ class TaskEntryTest {
         var elapsed = Duration.ofMinutes(1);
         var exactlyNow = Duration.ofMinutes(2);
         var pending = Duration.ofHours(1);
-        var routed = new TaskRoute("caller", null);
+        var routed = new TestRoute("caller");
 
         assertThat(expired(TaskRoute.NONE, withTtl(working(1), elapsed), clock))
                 .as("unrouted, ttl elapsed")
@@ -70,11 +69,11 @@ class TaskEntryTest {
     @Test
     void entryTakesOnlyItsFirstRoute() {
         var entry = new TaskEntry(working(1), TaskRoute.NONE, Duration.ZERO, Clock.systemUTC());
-        var first = new TaskRoute("first", ProgressToken.of("tok-1"));
+        var first = new TestRoute("first");
 
         assertThat(entry.route(TaskRoute.NONE)).isFalse();
         assertThat(entry.route(first)).isTrue();
-        assertThat(entry.route(new TaskRoute("second", ProgressToken.of("tok-2"))))
+        assertThat(entry.route(new TestRoute("second")))
                 .as("a colliding task id never redirects push traffic")
                 .isFalse();
         assertThat(entry.route()).isEqualTo(first);
@@ -119,11 +118,11 @@ class TaskEntryTest {
     }
 
     private void record(TaskSnapshot snapshot, TaskRoute route) {
-        sent.add(snapshot.revision() + "@" + route.sessionId());
+        sent.add(snapshot.revision() + "@" + ((TestRoute) route).owner());
     }
 
     private static TaskEntry entry() {
-        return new TaskEntry(working(1), new TaskRoute("owner", null), Duration.ofMinutes(5), Clock.systemUTC());
+        return new TaskEntry(working(1), new TestRoute("owner"), Duration.ofMinutes(5), Clock.systemUTC());
     }
 
     private static TaskSnapshot working(long revision) {

@@ -1,6 +1,7 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
 package dev.tachyonmcp.e2e.mcp.v2026_07_28;
 
+import static dev.tachyonmcp.e2e.mcp.TasksSupport.tasks;
 import static dev.tachyonmcp.testkit.JsonRpcResponseAssert.assertThat;
 import static java.time.Duration.ofSeconds;
 import static net.javacrumbs.jsonunit.assertj.JsonAssertions.assertThatJson;
@@ -9,8 +10,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
 import dev.tachyonmcp.api.server.features.tasks.TaskSupport;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
-import dev.tachyonmcp.core.server.features.tasks.TasksExtension;
 import dev.tachyonmcp.e2e.mcp.AbstractStatelessMcpE2eTest;
+import dev.tachyonmcp.extensions.tasks.TasksExtension;
 import dev.tachyonmcp.testkit.Mcp20260728Client;
 import dev.tachyonmcp.testkit.McpClient;
 import dev.tachyonmcp.testkit.McpTestClients;
@@ -48,25 +49,30 @@ class TaskNotificationsTest extends AbstractStatelessMcpE2eTest<McpClient> {
     @Override
     protected void startDefaultServer() {
         var connector = taskEngine.connector();
-        startServer(builder -> builder.capabilities(c -> c.tools(true).tasks(connector)), registrar -> {
-            registrar
-                    .tools()
-                    .registerAsync(b -> b.name("book-async").taskSupport(TaskSupport.REQUIRED), (context, request) -> {
-                        var snapshot = TaskSnapshot.working(request.arguments().stringOr("taskId", ""), CREATED_AT, 1);
-                        var dispatchThread = Thread.currentThread();
-                        var result = new CompletableFuture<ToolResult>();
-                        // Completes only after the dispatch thread ends, so the task is mapped off it.
-                        Thread.ofVirtual().start(() -> {
-                            try {
-                                dispatchThread.join();
-                                result.complete(ToolResult.task(snapshot));
-                            } catch (InterruptedException e) {
-                                result.completeExceptionally(e);
-                            }
-                        });
-                        return result;
-                    });
-        });
+        startServer(
+                builder -> builder.capabilities(c -> c.tools(true))
+                        .withExtension(TasksExtension.class, t -> t.connector(connector)),
+                registrar -> {
+                    registrar
+                            .tools()
+                            .registerAsync(
+                                    b -> b.name("book-async").taskSupport(TaskSupport.REQUIRED), (context, request) -> {
+                                        var snapshot = TaskSnapshot.working(
+                                                request.arguments().stringOr("taskId", ""), CREATED_AT, 1);
+                                        var dispatchThread = Thread.currentThread();
+                                        var result = new CompletableFuture<ToolResult>();
+                                        // Completes only after the dispatch thread ends, so the task is mapped off it.
+                                        Thread.ofVirtual().start(() -> {
+                                            try {
+                                                dispatchThread.join();
+                                                result.complete(ToolResult.task(snapshot));
+                                            } catch (InterruptedException e) {
+                                                result.completeExceptionally(e);
+                                            }
+                                        });
+                                        return result;
+                                    });
+                });
     }
 
     @Test
@@ -101,14 +107,14 @@ class TaskNotificationsTest extends AbstractStatelessMcpE2eTest<McpClient> {
             var bystander = listen(client, 2, "remote-fence");
 
             // E.g. a connector callback on a node that never saw the task-augmented tool call.
-            server.tasks().publish(TaskSnapshot.working("remote-task", CREATED_AT, 1));
+            tasks(server).publish(TaskSnapshot.working("remote-task", CREATED_AT, 1));
 
             var status = subscriber.await(f -> isTaskNotification(f, "remote-task"), ofSeconds(5));
             assertThatJson(status.json().path("params").toString())
                     .isObject()
                     .containsEntry("taskId", "remote-task")
                     .containsEntry("status", "working");
-            assertThat(server.tasks().get("remote-task"))
+            assertThat(tasks(server).get("remote-task"))
                     .as("publish caches a task Tachyon has not seen")
                     .isNotNull();
 
@@ -128,7 +134,7 @@ class TaskNotificationsTest extends AbstractStatelessMcpE2eTest<McpClient> {
                     {"jsonrpc":"2.0","id":2,"method":"tasks/cancel","params":{"taskId":"never-created"}}
                     """);
             assertThat(cancel).isJsonRpcError().hasErrorCode(-32602).hasErrorMessageContaining("Task not found");
-            assertThat(server.tasks().get("never-created"))
+            assertThat(tasks(server).get("never-created"))
                     .as("a failed lookup caches nothing")
                     .isNull();
         }
@@ -154,7 +160,7 @@ class TaskNotificationsTest extends AbstractStatelessMcpE2eTest<McpClient> {
      * their order, so a leaked {@code leakedTaskId} notification would arrive before this one.
      */
     private void assertNothingBefore(SseStream stream, String fenceTaskId, String leakedTaskId) {
-        server.tasks().publish(TaskSnapshot.working(fenceTaskId, CREATED_AT, 1));
+        tasks(server).publish(TaskSnapshot.working(fenceTaskId, CREATED_AT, 1));
         stream.await(f -> isTaskNotification(f, fenceTaskId), ofSeconds(5));
         assertThat(stream.received(f -> isTaskNotification(f, leakedTaskId)))
                 .as("a stream that did not opt into %s must not receive it", leakedTaskId)

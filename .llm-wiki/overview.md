@@ -2,8 +2,8 @@
 title: Overview
 tags: [concept, architecture]
 sources: [pom.xml, tachyon-core/pom.xml, integrations/pom.xml, extensions/pom.xml, tachyon-core/src/main/java/dev/tachyonmcp/core/server/TachyonServer.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/ServerBuilder.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultServerBuilder.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java]
-updated: 2026-09-25
-commit: 55b278f2
+updated: 2026-09-26
+commit: e1dcfc68
 ---
 
 # 🛰️ Overview
@@ -42,7 +42,7 @@ graph TD
 
 ## 🎯 The one type users hold
 
-`TachyonServer` interface `TachyonServer` — `AutoCloseable`, exposes registries `tools()/resources()/prompts()/tasks()/completions()`, `annotations(...)`, `notifications()`, `start()`, `port()`, `close()`. Factory `TachyonServer.builder()` → `DefaultServerBuilder` (`DefaultServerBuilder#network`).
+`TachyonServer` interface `TachyonServer` — `AutoCloseable`, exposes registries `tools()/resources()/prompts()/completions()`, `extension(Class)`, `annotations(...)`, `notifications()`, `start()`, `port()`, `close()`. Factory `TachyonServer.builder()` → `DefaultServerBuilder` (`DefaultServerBuilder#network`).
 
 Two-phase: `build()` constructs server + runs registrations, **no socket**; `start()` binds Netty.
 
@@ -50,7 +50,7 @@ Two-phase: `build()` constructs server + runs registrations, **no socket**; `sta
 
 1. `DefaultServerBuilder.build()` [DefaultServerBuilder#build](../tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultServerBuilder.java):
    - default in-memory `SessionEventStore` + `SessionStore`
-   - tasks enabled ⇒ auto-add `TasksExtension` if absent
+   - extensions: `withExtensions` instances first, then one per `withExtension` type (fresh builder `build()` per server; duplicate id ⇒ IAE) `DefaultServerBuilder#resolveExtensions`
    - executor = `threadFactory` given ? thread-per-task : VT executor `tachyon-vt-*` (`DefaultTachyonServer#defaultExecutor`)
    - `new DefaultTachyonServer(...)` → run `withTools/withResources/...` callbacks → annotation providers → `validateConfiguration()`; any throw ⇒ `close()` + rethrow.
 2. `DefaultTachyonServer` ctor `DefaultTachyonServer`: registries, `registerDefaults()` (`DefaultTachyonServer#registerDefaults`), `bootstrapExtensions()` (`DefaultTachyonServer#bootstrapExtensions`), change listeners (`DefaultTachyonServer#setupChangeListeners`), session janitor if sessions on.

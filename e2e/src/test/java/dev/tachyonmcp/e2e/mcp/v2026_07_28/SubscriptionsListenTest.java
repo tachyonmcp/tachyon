@@ -1,6 +1,7 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
 package dev.tachyonmcp.e2e.mcp.v2026_07_28;
 
+import static dev.tachyonmcp.e2e.mcp.TasksSupport.tasks;
 import static net.javacrumbs.jsonunit.assertj.JsonAssertions.assertThatJson;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
@@ -8,8 +9,8 @@ import static org.awaitility.Awaitility.await;
 import dev.tachyonmcp.api.server.domain.TextResourceContents;
 import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
-import dev.tachyonmcp.core.server.features.tasks.TasksExtension;
 import dev.tachyonmcp.e2e.mcp.AbstractStatelessMcpE2eTest;
+import dev.tachyonmcp.extensions.tasks.TasksExtension;
 import dev.tachyonmcp.testkit.Mcp20260728Client;
 import dev.tachyonmcp.testkit.McpTestClients;
 import dev.tachyonmcp.testkit.TestTaskConnector;
@@ -159,7 +160,8 @@ class SubscriptionsListenTest extends AbstractStatelessMcpE2eTest<Mcp20260728Cli
         // The connector authorizes each listened task id, so it must know task-a.
         var taskEngine = new TestTaskConnector()
                 .publish(TaskSnapshot.working("task-a", Instant.parse("2026-08-28T10:00:00Z"), 0));
-        startServer(b -> b.capabilities(c -> c.tools(true).tasks(taskEngine.connector())));
+        startServer(b -> b.capabilities(c -> c.tools(true))
+                .withExtension(TasksExtension.class, t -> t.connector(taskEngine.connector())));
 
         var lines = new CopyOnWriteArrayList<String>();
         var unsubscribedLines = new CopyOnWriteArrayList<String>();
@@ -197,8 +199,8 @@ class SubscriptionsListenTest extends AbstractStatelessMcpE2eTest<Mcp20260728Cli
                 """);
 
             var observedAt = Instant.parse("2026-08-28T10:00:00Z");
-            server.tasks().publish(TaskSnapshot.working("task-b", observedAt, 1));
-            server.tasks().publish(TaskSnapshot.working("task-a", observedAt, 1));
+            tasks(server).publish(TaskSnapshot.working("task-b", observedAt, 1));
+            tasks(server).publish(TaskSnapshot.working("task-a", observedAt, 1));
 
             await().atMost(Duration.ofSeconds(10))
                     .untilAsserted(() -> assertThat(payloads(lines))
@@ -235,7 +237,7 @@ class SubscriptionsListenTest extends AbstractStatelessMcpE2eTest<Mcp20260728Cli
     @Test
     void taskStatusSubscriptionRequiresTasksExtension() throws Exception {
         var taskEngine = new TestTaskConnector();
-        startServer(b -> b.capabilities(c -> c.tasks(taskEngine.connector())));
+        startServer(b -> b.withExtension(TasksExtension.class, t -> t.connector(taskEngine.connector())));
 
         try (var client = createModernTestClient()) {
             var response = client.post("""

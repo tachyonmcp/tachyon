@@ -4,11 +4,13 @@ This example keeps the ownership boundary sharp: one MCP task maps to one [Tempo
 The `tachyon-tasks-temporal` integration starts, refreshes, updates, and cancels through
 `TemporalTaskExecutionEngine`. Temporal owns durability, retries, timers, and business execution.
 
+The server side needs `dev.tachyonmcp:tachyon-extensions-tasks` for `TasksExtension`.
+
 ```java
 var taskEngine = BookingTaskEngine.create(workflowClient, "bookings");
 
 var server = TachyonServer.builder()
-        .capabilities(c -> c.tasks(taskEngine.connector()))
+        .withExtension(TasksExtension.class, t -> t.connector(taskEngine.connector()))
         .port(8080)
         .build();
 

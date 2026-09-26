@@ -1,6 +1,7 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
 package dev.tachyonmcp.e2e.mcp.v2025_11_25;
 
+import static dev.tachyonmcp.e2e.mcp.TasksSupport.tasks;
 import static java.time.Duration.ofSeconds;
 import static net.javacrumbs.jsonunit.assertj.JsonAssertions.assertThatJson;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -8,6 +9,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
 import dev.tachyonmcp.api.server.features.tasks.TaskSupport;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
+import dev.tachyonmcp.extensions.tasks.TasksExtension;
 import dev.tachyonmcp.testkit.Mcp20251125Client;
 import dev.tachyonmcp.testkit.SseFrame;
 import dev.tachyonmcp.testkit.SseStream;
@@ -39,35 +41,43 @@ class TaskRoutingTest extends AbstractStatefulMcpE2eTest {
     @Override
     protected void startDefaultServer() {
         var connector = taskEngine.connector();
-        startServer(builder -> builder.capabilities(c -> c.tasks(connector).logging()), registrar -> {
-            registrar.tools().register(b -> b.name("publish-server-scoped"), (context, request) -> {
-                server.tasks().publish(TaskSnapshot.working("orphan", CREATED_AT, 1));
-                return ToolResult.text("published");
-            });
-            registrar
-                    .tools()
-                    .registerAsync(b -> b.name("book-async").taskSupport(TaskSupport.REQUIRED), (context, request) -> {
-                        var snapshot = TaskSnapshot.working(
-                                request.arguments().stringOr("taskId", ""),
-                                CREATED_AT,
-                                request.arguments().intOpt("revision").orElse(1));
-                        if (request.arguments().boolOpt("publishFirst").orElse(false)) {
-                            server.tasks().publish(snapshot);
-                        }
-                        var dispatchThread = Thread.currentThread();
-                        var result = new CompletableFuture<ToolResult>();
-                        // Completes only after the dispatch thread ends, so the task is mapped off it.
-                        Thread.ofVirtual().start(() -> {
-                            try {
-                                dispatchThread.join();
-                                result.complete(ToolResult.task(snapshot));
-                            } catch (InterruptedException e) {
-                                result.completeExceptionally(e);
-                            }
-                        });
-                        return result;
+        startServer(
+                builder -> builder.capabilities(c -> c.logging())
+                        .withExtension(TasksExtension.class, t -> t.connector(connector)),
+                registrar -> {
+                    registrar.tools().register(b -> b.name("publish-server-scoped"), (context, request) -> {
+                        tasks(server).publish(TaskSnapshot.working("orphan", CREATED_AT, 1));
+                        return ToolResult.text("published");
                     });
-        });
+                    registrar
+                            .tools()
+                            .registerAsync(
+                                    b -> b.name("book-async").taskSupport(TaskSupport.REQUIRED), (context, request) -> {
+                                        var snapshot = TaskSnapshot.working(
+                                                request.arguments().stringOr("taskId", ""),
+                                                CREATED_AT,
+                                                request.arguments()
+                                                        .intOpt("revision")
+                                                        .orElse(1));
+                                        if (request.arguments()
+                                                .boolOpt("publishFirst")
+                                                .orElse(false)) {
+                                            tasks(server).publish(snapshot);
+                                        }
+                                        var dispatchThread = Thread.currentThread();
+                                        var result = new CompletableFuture<ToolResult>();
+                                        // Completes only after the dispatch thread ends, so the task is mapped off it.
+                                        Thread.ofVirtual().start(() -> {
+                                            try {
+                                                dispatchThread.join();
+                                                result.complete(ToolResult.task(snapshot));
+                                            } catch (InterruptedException e) {
+                                                result.completeExceptionally(e);
+                                            }
+                                        });
+                                        return result;
+                                    });
+                });
     }
 
     @Test
@@ -89,12 +99,12 @@ class TaskRoutingTest extends AbstractStatefulMcpE2eTest {
             var fence = fence(callerStream, bystanderStream);
 
             assertThat(notificationsBefore(fence, callerStream, "notifications/tasks/status"))
-                    .as("server.tasks() never infers a route from the calling thread")
+                    .as("the tasks facade never infers a route from the calling thread")
                     .isEmpty();
             assertThat(notificationsBefore(fence, bystanderStream, "notifications/tasks/status"))
                     .as("an unrouted task must not be broadcast to other sessions")
                     .isEmpty();
-            assertThat(server.tasks().get("orphan"))
+            assertThat(tasks(server).get("orphan"))
                     .as("publish caches a task Tachyon has not seen")
                     .isNotNull();
         }
@@ -118,7 +128,7 @@ class TaskRoutingTest extends AbstractStatefulMcpE2eTest {
                     .containsEntry("taskId", "routed")
                     .containsEntry("status", "working");
 
-            server.tasks().reportProgress("routed", 0.5, 1.0, "halfway");
+            tasks(server).reportProgress("routed", 0.5, 1.0, "halfway");
             var progress = awaitNotification(callerStream, "notifications/progress", "halfway");
             // language=JSON
             assertThatJson(progress.json().path("params").toString()).isEqualTo("""
@@ -150,13 +160,13 @@ class TaskRoutingTest extends AbstractStatefulMcpE2eTest {
             book(caller, taskId, true, "tok-early");
 
             // The early publish cached the task unrouted; the tool call's result gave it a route.
-            server.tasks().reportProgress(taskId, 0.75, 1.0, "routed-late");
+            tasks(server).reportProgress(taskId, 0.75, 1.0, "routed-late");
             var progress = awaitNotification(callerStream, "notifications/progress", "routed-late");
             // language=JSON
             assertThatJson(progress.json().path("params").toString()).isEqualTo("""
                     {"progressToken":"tok-early","progress":0.75,"total":1.0,"message":"routed-late"}
                     """);
-            server.tasks()
+            tasks(server)
                     .publish(TaskSnapshot.builder()
                             .from(TaskSnapshot.working(taskId, CREATED_AT, 2))
                             .statusMessage("later")
@@ -209,13 +219,13 @@ class TaskRoutingTest extends AbstractStatefulMcpE2eTest {
                     .as("the call is never refused: access is the connector's decision")
                     .inPath("$.result.task.taskId")
                     .isEqualTo("contested");
-            var cached = server.tasks().get("contested");
+            var cached = tasks(server).get("contested");
             assertThat(cached).isNotNull();
             assertThat(cached.revision())
                     .as("the newer revision wins the cache")
                     .isEqualTo(2);
 
-            server.tasks().reportProgress("contested", 0.5, 1.0, "still-first");
+            tasks(server).reportProgress("contested", 0.5, 1.0, "still-first");
             var progress = awaitNotification(firstStream, "notifications/progress", "still-first");
             // language=JSON
             assertThatJson(progress.json().path("params").toString()).isEqualTo("""
@@ -251,13 +261,13 @@ class TaskRoutingTest extends AbstractStatefulMcpE2eTest {
             reader.sendRpc("""
                     {"jsonrpc":"2.0","id":2,"method":"%s","params":{"taskId":"%s"}}
                     """.formatted(method, taskId));
-            assertThat(server.tasks().get(taskId))
+            assertThat(tasks(server).get(taskId))
                     .as("a read caches the connector's snapshot")
                     .isNotNull();
 
             book(booker, taskId, false, "tok-booker");
 
-            server.tasks().reportProgress(taskId, 0.5, 1.0, "booker-route");
+            tasks(server).reportProgress(taskId, 0.5, 1.0, "booker-route");
             var progress = awaitNotification(bookerStream, "notifications/progress", "booker-route");
             // language=JSON
             assertThatJson(progress.json().path("params").toString()).isEqualTo("""

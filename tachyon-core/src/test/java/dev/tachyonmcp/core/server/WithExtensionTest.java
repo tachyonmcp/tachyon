@@ -1,0 +1,165 @@
+/* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
+package dev.tachyonmcp.core.server;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
+
+import dev.tachyonmcp.api.server.extensions.AdvertiseMode;
+import dev.tachyonmcp.api.server.extensions.ServerExtension;
+import dev.tachyonmcp.core.server.extensions.AnnotatedExtension;
+import dev.tachyonmcp.core.server.extensions.MisannotatedExtension;
+import dev.tachyonmcp.core.server.extensions.StubExtension;
+import dev.tachyonmcp.core.server.extensions.UnregisteredExtension;
+import org.junit.jupiter.api.Test;
+
+class WithExtensionTest {
+
+    @Test
+    void configurersAccumulateOnOneBuilderInCallOrder() {
+        try (var server = TachyonServer.builder()
+                .withExtension(StubExtension.class, b -> b.option("first"))
+                .name("between")
+                .withExtension(StubExtension.class, b -> b.option("second").option("third"))
+                .build()) {
+            assertThat(server.extensions()).hasSize(1);
+            assertThat(server.extension(StubExtension.class))
+                    .get()
+                    .satisfies(extension -> assertThat(extension.options()).containsExactly("first", "second", "third"))
+                    .isSameAs(server.extensions().getFirst());
+        }
+    }
+
+    @Test
+    void engineExtensionIsBootstrappedThroughTheEngineOverloadOnly() {
+        try (var server = TachyonServer.builder()
+                .withExtension(StubExtension.class, b -> {})
+                .build()) {
+            assertThat(server.extension(StubExtension.class).orElseThrow().bootstraps)
+                    .containsExactly("engine");
+        }
+    }
+
+    @Test
+    void extensionWithoutEngineNeedsIsBootstrappedThroughTheContext() {
+        var plain = new ServerExtension() {
+            int contextBootstraps;
+
+            @Override
+            public String extensionId() {
+                return "test/plain";
+            }
+
+            @Override
+            public AdvertiseMode advertiseMode() {
+                return AdvertiseMode.ALWAYS;
+            }
+
+            @Override
+            public void bootstrap(dev.tachyonmcp.api.server.extensions.ExtensionContext context) {
+                contextBootstraps++;
+            }
+        };
+
+        try (var ignored = TachyonServer.builder().withExtensions(plain).build()) {
+            assertThat(plain.contextBootstraps).isEqualTo(1);
+        }
+    }
+
+    @Test
+    void everyBuildGetsItsOwnExtensionInstance() {
+        var builder = TachyonServer.builder().withExtension(StubExtension.class, b -> b.option("shared"));
+
+        try (var one = builder.build();
+                var two = builder.build()) {
+            assertThat(one.extension(StubExtension.class).orElseThrow())
+                    .isNotSameAs(two.extension(StubExtension.class).orElseThrow());
+            assertThat(two.extension(StubExtension.class).orElseThrow().options())
+                    .containsExactly("shared");
+        }
+    }
+
+    @Test
+    void providerOnTheClasspathEnablesNothingUnlessRequested() {
+        try (var server = TachyonServer.builder().build()) {
+            assertThat(server.extensions()).isEmpty();
+            assertThat(server.extension(StubExtension.class)).isEmpty();
+        }
+    }
+
+    @Test
+    void lookupByClassFindsOnlyRegisteredTypes() {
+        try (var server = TachyonServer.builder()
+                .withExtension(StubExtension.class, b -> {})
+                .build()) {
+            assertThat(server.extension(StubExtension.class)).isPresent();
+            assertThat(server.extension(UnregisteredExtension.class)).isEmpty();
+            assertThat(server.extension(ServerExtension.class))
+                    .as("lookup matches by instanceof, so an interface finds the first implementor")
+                    .containsSame(server.extensions().getFirst());
+        }
+    }
+
+    @Test
+    void idClashBetweenInstanceAndTypeFailsTheBuild() {
+        var instance = new ServerExtension() {
+            @Override
+            public String extensionId() {
+                return StubExtension.ID;
+            }
+
+            @Override
+            public AdvertiseMode advertiseMode() {
+                return AdvertiseMode.ALWAYS;
+            }
+        };
+        var clash = TachyonServer.builder().withExtensions(instance).withExtension(StubExtension.class, b -> {});
+        var reversed = TachyonServer.builder()
+                .withExtension(StubExtension.class, b -> {})
+                .withExtensions(instance);
+
+        assertThatIllegalArgumentException()
+                .isThrownBy(clash::build)
+                .withMessage("Duplicate extension ID: " + StubExtension.ID);
+        assertThatIllegalArgumentException()
+                .isThrownBy(reversed::build)
+                .withMessage("Duplicate extension ID: " + StubExtension.ID);
+    }
+
+    @Test
+    void missingProviderNamesTheServiceFileAndTheShadeHint() {
+        var builder = TachyonServer.builder();
+
+        assertThatIllegalStateException()
+                .isThrownBy(() -> builder.withExtension(UnregisteredExtension.class, b -> {}))
+                .withMessageContaining(UnregisteredExtension.class.getName())
+                .withMessageContaining("META-INF/services/dev.tachyonmcp.api.server.extensions.spi.ExtensionProvider")
+                .withMessageContaining("@ProvidedBy")
+                .withMessageContaining("ServicesResourceTransformer");
+    }
+
+    @Test
+    void providedByFindsTheProviderWithoutAServiceFileAndItsBindingBootstrapsTheExtension() {
+        try (var server = TachyonServer.builder()
+                .withExtension(AnnotatedExtension.class, b -> {})
+                .build()) {
+            var extension = server.extension(AnnotatedExtension.class).orElseThrow();
+            assertThat(extension.bootstraps)
+                    .as("the provider's engine binding replaces the public ExtensionContext bootstrap")
+                    .containsExactly("binding");
+            assertThat(server.extensions())
+                    .extracting(ServerExtension::extensionId)
+                    .contains(AnnotatedExtension.ID);
+        }
+    }
+
+    @Test
+    void providedByNamingAProviderForAnotherTypeFailsFast() {
+        var builder = TachyonServer.builder();
+
+        assertThatIllegalStateException()
+                .isThrownBy(() -> builder.withExtension(MisannotatedExtension.class, b -> {}))
+                .withMessageContaining(MisannotatedExtension.class.getName())
+                .withMessageContaining("serves " + StubExtension.class.getName());
+    }
+}

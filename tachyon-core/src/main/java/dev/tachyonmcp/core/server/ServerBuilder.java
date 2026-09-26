@@ -5,6 +5,8 @@ import dev.tachyonmcp.api.annotations.ExperimentalApi;
 import dev.tachyonmcp.api.server.config.JsonConfig;
 import dev.tachyonmcp.api.server.config.RuntimeConfig;
 import dev.tachyonmcp.api.server.config.ServerIdentity;
+import dev.tachyonmcp.api.server.extensions.ConfigurableExtension;
+import dev.tachyonmcp.api.server.extensions.ExtensionBuilder;
 import dev.tachyonmcp.api.server.extensions.ServerExtension;
 import dev.tachyonmcp.api.server.features.completions.Completions;
 import dev.tachyonmcp.api.server.features.prompts.Prompts;
@@ -89,9 +91,35 @@ public interface ServerBuilder {
     ServerBuilder withCompletions(Consumer<Completions> registrar);
 
     /**
-     * Registers one or more {@link ServerExtension}.
+     * Registers one or more {@link ServerExtension}s that need no configuration. For an extension
+     * with options, use {@link #withExtension(Class, Consumer)}.
      */
     ServerBuilder withExtensions(ServerExtension... extensions);
+
+    /**
+     * Registers a {@link ConfigurableExtension} by its class and configures it. The builder type is
+     * inferred from the extension class, so the configurer sees the extension's own options:
+     *
+     * <pre>{@code
+     * TachyonServer.builder()
+     *         .withExtension(TasksExtension.class, tasks -> tasks.connector(connector))
+     *         .build();
+     * }</pre>
+     *
+     * <p>Calling this again for the same class reuses one builder, so configurers accumulate in call
+     * order. The extension is created by {@link #build()}; an extension id already registered through
+     * {@link #withExtensions(ServerExtension...)} or another class fails the build. Nothing is enabled
+     * unless named here: a provider on the classpath alone adds no extension.
+     *
+     * @param type the extension class
+     * @param configurer configures the extension's builder
+     * @param <E> the extension type
+     * @param <B> the builder type
+     * @return this builder
+     * @throws IllegalStateException if no provider for {@code type} is on the classpath
+     */
+    <E extends ConfigurableExtension<B>, B extends ExtensionBuilder<E>> ServerBuilder withExtension(
+            Class<E> type, Consumer<? super B> configurer);
 
     /** Sets the thread factory used by the server-owned virtual-thread-per-task executor. */
     ServerBuilder threadFactory(ThreadFactory threadFactory);

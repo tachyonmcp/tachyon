@@ -14,7 +14,7 @@ import dev.tachyonmcp.core.runtime.SseEvent;
 import dev.tachyonmcp.core.server.OutboundSseStream;
 import dev.tachyonmcp.core.server.RpcMethodHandler;
 import dev.tachyonmcp.core.server.TachyonServer;
-import dev.tachyonmcp.core.server.features.tasks.TaskRegistry;
+import dev.tachyonmcp.core.server.features.tasks.TaskRuntime;
 import dev.tachyonmcp.core.server.session.SessionEvent;
 import dev.tachyonmcp.core.transport.jsonrpc.JsonRpcCodec;
 import io.netty.handler.codec.http.HttpRequest;
@@ -102,7 +102,15 @@ public interface ServerEngine extends TachyonServer {
     /** Returns the server-wide request lifecycle tracker. */
     OperationTracker operations();
 
-    TaskRegistry tasksRegistry();
+    /** Returns the installed task runtime, or {@link TaskRuntime#NONE} when no tasks extension is installed. */
+    TaskRuntime taskRuntime();
+
+    /**
+     * Installs the task runtime. Called once, by the tasks extension while it bootstraps.
+     *
+     * @throws IllegalStateException if a task runtime is already installed
+     */
+    void installTaskRuntime(TaskRuntime runtime);
 
     /**
      * Maps and sends a task status notification to the task's route session ({@code sessionId}, the

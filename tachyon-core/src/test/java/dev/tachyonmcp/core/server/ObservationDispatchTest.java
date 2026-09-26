@@ -5,12 +5,12 @@ import static dev.tachyonmcp.core.test.TestUtils.newEngine;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.tachyonmcp.api.server.domain.RequestId;
-import dev.tachyonmcp.api.server.features.tasks.TaskConnector;
 import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
 import dev.tachyonmcp.api.server.features.tasks.TaskSupport;
 import dev.tachyonmcp.api.server.features.tools.AsyncToolFn;
 import dev.tachyonmcp.api.server.features.tools.ToolDescriptor;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
+import dev.tachyonmcp.core.server.extensions.FakeTasksExtension;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
 import dev.tachyonmcp.core.server.observability.CapturedPayload;
 import dev.tachyonmcp.core.server.observability.ObservationListener;
@@ -378,11 +378,7 @@ class ObservationDispatchTest {
     @Test
     void taskProducingToolReportsTaskHandoffOutcomeInsteadOfCompleted() {
         var listener = new RecordingListener();
-        var connector = TaskConnector.builder()
-                .get((ctx, req) -> TaskSnapshot.working(req.taskId(), Instant.now(), 1))
-                .cancel((ctx, req) -> {})
-                .update((ctx, req) -> {})
-                .build();
+        var tasks = new FakeTasksExtension();
         var descriptor = ToolDescriptor.builder()
                 .name("book")
                 .description("books something")
@@ -392,7 +388,7 @@ class ObservationDispatchTest {
         AsyncToolFn fn = (ctx, request) -> CompletableFuture.completedFuture(ToolResult.task(snapshot));
 
         try (ServerEngine server = newEngine(
-                b -> b.capabilities(c -> c.tasks(connector)).observability(o -> o.listener(listener)),
+                b -> b.withExtensions(tasks).observability(o -> o.listener(listener)),
                 s -> s.tools().registerAsync(descriptor, fn))) {
             server.createSession("sess-task").activate();
             var dispatcher = new McpDispatcher(server, server.executor());
@@ -407,6 +403,10 @@ class ObservationDispatchTest {
             var outcome = listener.completions.getFirst().outcome();
             assertThat(outcome).isInstanceOf(OperationOutcome.TaskHandoff.class);
             assertThat(((OperationOutcome.TaskHandoff) outcome).taskId()).isEqualTo("task-1");
+            assertThat(tasks.published)
+                    .singleElement()
+                    .satisfies(published ->
+                            assertThat(published.snapshot().taskId()).isEqualTo("task-1"));
         }
     }
 

@@ -19,8 +19,7 @@ import dev.tachyonmcp.api.server.features.tools.ToolRequest;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
 import dev.tachyonmcp.core.protocol.ProtocolRequestMapper;
 import dev.tachyonmcp.core.server.RpcMethodHandler;
-import dev.tachyonmcp.core.server.features.tasks.TaskRoute;
-import dev.tachyonmcp.core.server.features.tasks.TasksExtension;
+import dev.tachyonmcp.core.server.features.tasks.TasksExtensionSupport;
 import dev.tachyonmcp.core.server.internal.HandlerFutures;
 import dev.tachyonmcp.core.server.json.JsonUtils;
 import dev.tachyonmcp.core.server.observability.CapturedPayload;
@@ -175,7 +174,7 @@ public final class ToolMethodHandlers {
                 }
                 return null;
             }
-            return taskSupport == TaskSupport.REQUIRED ? TasksExtension.requireDeclared(context) : null;
+            return taskSupport == TaskSupport.REQUIRED ? TasksExtensionSupport.requireDeclared(context) : null;
         }
 
         private Object mapResult(
@@ -191,19 +190,16 @@ public final class ToolMethodHandlers {
                 if (context.requestMapper().supportsLegacyTaskAugmentation() && !mapped.taskAugmented()) {
                     return internalError("Task-producing tool returned a task for a non-task request");
                 }
-                if (!context.engine().tasksRegistry().executionConfigured()) {
+                var taskRuntime = context.engine().taskRuntime();
+                if (!taskRuntime.executionConfigured()) {
                     return internalError("Task-producing tool requires a configured TaskConnector");
                 }
-                var missingCapability = TasksExtension.requireDeclared(context);
+                var missingCapability = TasksExtensionSupport.requireDeclared(context);
                 if (!context.requestMapper().supportsLegacyTaskAugmentation() && missingCapability != null) {
                     return missingCapability;
                 }
-                var snapshot = context.engine()
-                        .tasksRegistry()
-                        .publish(
-                                task.snapshot(),
-                                new TaskRoute(
-                                        context.sessionId(), mapped.request().progressToken()));
+                var snapshot = taskRuntime.publish(
+                        task.snapshot(), context.sessionId(), mapped.request().progressToken());
                 context.observation().markTaskHandoff(snapshot.taskId());
                 return context.responseMapper().createTaskResult(snapshot);
             }

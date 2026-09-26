@@ -10,9 +10,9 @@ import dev.tachyonmcp.api.server.domain.TaskResult;
 import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
 import dev.tachyonmcp.api.server.features.tasks.TaskState;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
-import dev.tachyonmcp.core.server.features.tasks.TasksExtension;
 import dev.tachyonmcp.core.server.json.JsonUtils;
 import dev.tachyonmcp.e2e.mcp.AbstractStatelessMcpE2eTest;
+import dev.tachyonmcp.extensions.tasks.TasksExtension;
 import dev.tachyonmcp.testkit.Mcp20260728Client;
 import dev.tachyonmcp.testkit.McpClient;
 import dev.tachyonmcp.testkit.McpTestClients;
@@ -122,7 +122,9 @@ class StructuredOutputSchemaShapeTest extends AbstractStatelessMcpE2eTest<McpCli
                 .revision(1)
                 .build();
         var taskEngine = new TestTaskConnector().publish(task);
-        startServer(builder -> builder.capabilities(c -> c.tasks(taskEngine.connector())), registrar -> {});
+        startServer(
+                builder -> builder.withExtension(TasksExtension.class, t -> t.connector(taskEngine.connector())),
+                registrar -> {});
 
         try (var client = createModernTestClient()) {
             var response = client.post("""

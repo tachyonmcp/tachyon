@@ -3,10 +3,9 @@
  */
 
 /**
- * Task registry implementations for managing long-running task operations.
- * Provides {@link dev.tachyonmcp.core.server.features.tasks.TaskRegistry}
- * and its default implementation, task ID generation, and task lifecycle
- * tracking for the MCP task extension.
+ * Core-side seam of the tasks extension: {@link dev.tachyonmcp.core.server.features.tasks.TaskRuntime},
+ * and the id and per-request gate the core handlers share. The runtime lives in
+ * {@code tachyon-extensions-tasks}.
  */
 @NullMarked
 @ExperimentalApi

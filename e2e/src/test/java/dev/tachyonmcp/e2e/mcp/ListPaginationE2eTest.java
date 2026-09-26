@@ -8,6 +8,7 @@ import dev.tachyonmcp.api.server.features.prompts.PromptDescriptor;
 import dev.tachyonmcp.api.server.features.resources.ResourceDescriptor;
 import dev.tachyonmcp.api.server.features.resources.ResourceFn;
 import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
+import dev.tachyonmcp.extensions.tasks.TasksExtension;
 import dev.tachyonmcp.testkit.Mcp20251125Client;
 import dev.tachyonmcp.testkit.McpClient;
 import dev.tachyonmcp.testkit.TestTaskConnector;
@@ -115,7 +116,8 @@ class ListPaginationE2eTest extends AbstractStatelessMcpE2eTest<McpClient> {
                 .publish(working("task-a"))
                 .publish(working("task-b"))
                 .publish(working("task-c"));
-        startServer(it -> it.capabilities(c -> c.tasks(taskEngine.connector()).tasksPageSize(2)));
+        startServer(it -> it.withExtension(
+                TasksExtension.class, t -> t.connector(taskEngine.connector()).pageSize(2)));
 
         try (var client = createTestClient()) {
             client.initialize();

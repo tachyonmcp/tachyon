@@ -7,10 +7,10 @@ import dev.tachyonmcp.api.server.extensions.ServerExtension;
 import dev.tachyonmcp.api.server.features.completions.Completions;
 import dev.tachyonmcp.api.server.features.prompts.Prompts;
 import dev.tachyonmcp.api.server.features.resources.Resources;
-import dev.tachyonmcp.api.server.features.tasks.Tasks;
 import dev.tachyonmcp.api.server.features.tools.Tools;
 import dev.tachyonmcp.core.server.config.ServerConfig;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Consumer;
 
 /**
@@ -37,13 +37,6 @@ public interface TachyonServer extends AutoCloseable {
      * Returns the prompt registry.
      */
     Prompts prompts();
-
-    /**
-     * Returns the task registry. It updates tasks that task-augmented tool calls created; it never
-     * creates a task nor changes a task's owning session.
-     */
-    @ExperimentalApi
-    Tasks tasks();
 
     /**
      * Returns the completion registry.
@@ -89,6 +82,23 @@ public interface TachyonServer extends AutoCloseable {
      * Returns the registered extensions.
      */
     List<ServerExtension> extensions();
+
+    /**
+     * Returns the registered extension of the given type, e.g. to reach the runtime facade a
+     * configurable extension exposes.
+     *
+     * @param type the extension class to look up
+     * @param <E> the extension type
+     * @return the first registered extension that is an instance of {@code type}, or empty
+     */
+    default <E extends ServerExtension> Optional<E> extension(Class<E> type) {
+        for (var extension : extensions()) {
+            if (type.isInstance(extension)) {
+                return Optional.of(type.cast(extension));
+            }
+        }
+        return Optional.empty();
+    }
 
     /**
      * Shuts down the server and releases its resources.

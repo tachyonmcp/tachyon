@@ -1,9 +1,9 @@
 ---
 title: Extensions
 tags: [concept, extensions, spi]
-sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/ProtocolVersionHandler.java, tachyon-api/src/main/java/dev/tachyonmcp/api/server/extensions/, tachyon-api/src/main/java/dev/tachyonmcp/api/runtime/Extension.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/handlers/ExtensionNegotiator.java, tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/mcp/v2026_07_28/transport/ExtensionNegotiationHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java, tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/mcp/v2026_07_28/transport/RequestValidationHandler.java]
-updated: 2026-09-25
-commit: 55b278f2
+sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/ProtocolVersionHandler.java, tachyon-api/src/main/java/dev/tachyonmcp/api/server/extensions/, tachyon-api/src/main/java/dev/tachyonmcp/api/runtime/Extension.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/handlers/ExtensionNegotiator.java, tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/mcp/v2026_07_28/transport/ExtensionNegotiationHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultServerBuilder.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java, tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/mcp/v2026_07_28/transport/RequestValidationHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/extensions/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tasks/TasksExtensionSupport.java]
+updated: 2026-09-26
+commit: e1dcfc68
 ---
 
 # 🧩 Extensions
@@ -25,7 +25,13 @@ Verdict: `ServerExtension` = bootstrap hook (register features + custom JSON-RPC
 | `onConnectionInit(ctx, clientSettings)` | no-op | [ServerExtension#onConnectionInit](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/extensions/ServerExtension.java) |
 | `onConnectionClose(ctx)`, `shutdown()` | no-op | [Extension#onConnectionClose](../../tachyon-api/src/main/java/dev/tachyonmcp/api/runtime/Extension.java), [Extension#shutdown](../../tachyon-api/src/main/java/dev/tachyonmcp/api/runtime/Extension.java) |
 
-[ExtensionContext](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/extensions/ExtensionContext.java) = `tools/resources/prompts/completions/tasks`, `executor`, `runtime`, `registerHandler(method, ExtensionMethodHandler)` [ExtensionContext](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/extensions/ExtensionContext.java). [DefaultTachyonServer](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java) implements it [DefaultTachyonServer](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java).
+[ExtensionContext](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/extensions/ExtensionContext.java) = `tools/resources/prompts/completions`, `executor`, `runtime`, `registerHandler(method, ExtensionMethodHandler)` [ExtensionContext](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/extensions/ExtensionContext.java). [DefaultTachyonServer](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java) implements it [DefaultTachyonServer](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java).
+
+### ⚙️ Typed configuration
+
+`ServerBuilder#withExtension(Class<E>, Consumer<? super B>)`: `E extends ConfigurableExtension<B>`, `B extends ExtensionBuilder<E>`, so the configurer sees the extension's own builder. Same type twice ⇒ one builder, configurers in call order; `build()` once per server build `DefaultServerBuilder#resolveExtensions`. Lookup `TachyonServer#extension(Class)`. Stable; `ProvidedBy` + `spi.ExtensionProvider` stay `@ExperimentalApi`.
+- Provider lookup per type `ExtensionProviders#providerFor` (`ClassValue` cache): `@ProvidedBy` on the class first (checked `extensionType()`), else `ServiceLoader` on the type's class loader; none/ambiguous ⇒ ISE. A provider on the classpath enables nothing.
+- Provider that is also `EngineBinding` bootstraps the extension on `ServerEngine` instead of `bootstrap(ExtensionContext)` `DefaultTachyonServer#bootstrapExtensions`: keeps internal types off the extension's public API. Instance-registered internal extensions use `EngineExtension`.
 
 `ExtensionMethodHandler.handle(InteractionContext, JsonObject params)` → `Object` (null ⇒ protocol empty result) [ExtensionMethodHandler](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/extensions/ExtensionMethodHandler.java), adapter [DefaultTachyonServer#getHandler](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java).
 - `params` typed `@Nullable`, but adapter never passes null: absent/non-object ⇒ `JsonObject.empty()` `DefaultTachyonServer#toJsonObject`.
@@ -60,13 +66,13 @@ No per-call `_meta.<extId>` envelope: neither MCP spec nor SEP-2133 defines one,
 
 Policy snapshot at bootstrap into `optionalNegotiationExtensionIds` `DefaultTachyonServer#optionalNegotiationExtensionIds`, `DefaultTachyonServer#bootstrapExtensions`, `DefaultTachyonServer#extensionNegotiationOptional`. `REQUIRED` on a stateless server ⇒ startup WARN (2025-11-25 clients always rejected) `DefaultTachyonServer#bootstrapExtensions`. "Declared on ctx" = session (stateful 2025) or per-request channel ctx (stateless 2025 and 2026) — no leak across 2026 requests. Only undeclared `OPTIONAL` requests keep the extension disabled (`isExtensionEnabled=false`, no `onConnectionInit`); declared `OPTIONAL` extensions are enabled and receive `onConnectionInit`.
 
-Capability requirement inside a handler: throw `MissingRequiredClientCapabilityException(msg, requiredCaps)` ⇒ -32021 (2026) `MissingRequiredClientCapabilityException`. Tasks gate helper `TasksExtension.requireDeclared` (shares `ServerErrors.missingRequiredExtension` `ServerErrors#missingRequiredExtension`) returns error only for session-less protocols `TasksExtension#requireDeclared`.
+Capability requirement inside a handler: throw `MissingRequiredClientCapabilityException(msg, requiredCaps)` ⇒ -32021 (2026) `MissingRequiredClientCapabilityException`. Tasks gate helper `TasksExtensionSupport.requireDeclared` (shares `ServerErrors.missingRequiredExtension` `ServerErrors#missingRequiredExtension`) returns error only for session-less protocols `TasksExtensionSupport#requireDeclared`.
 
 ## 📚 Known extensions
 
 | Id | Impl | Mode | Page |
 |---|---|---|---|
-| `io.modelcontextprotocol/tasks` | `TasksExtension` (core) | ALWAYS | [[tasks]] |
+| `io.modelcontextprotocol/tasks` | `TasksExtension` (`tachyon-extensions-tasks`, via `withExtension`) | ALWAYS | [[tasks]] |
 | `io.modelcontextprotocol/skills` | `SkillsExtension` | ALWAYS, negotiation via builder (default **OPTIONAL**, same as SPI default; `REQUIRED` opt-in) | [[tachyon-extensions-skills]] |
 | `dev.tachyonmcp/kotlin-coroutines` | `CoroutineRuntime` (internal, lifecycle only) | NEVER | [[tachyon-kotlin]] |
 

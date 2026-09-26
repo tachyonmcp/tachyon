@@ -1409,6 +1409,98 @@
           "attachments": {
             "since": "1.0.0-beta.32"
           }
+        },
+
+        {
+          "ignore": true,
+          "code": "java.class.removed",
+          "old": "class dev.tachyonmcp.core.server.features.tasks.TaskMethodHandlers",
+          "justification": "Moved to Tasks Extension",
+          "attachments": {
+            "since": "1.0.0-beta.32"
+          }
+        },
+        {
+          "ignore": true,
+          "code": "java.method.addedToInterface",
+          "new": "method <E extends dev.tachyonmcp.api.server.extensions.ConfigurableExtension<B>, B extends dev.tachyonmcp.api.server.extensions.ExtensionBuilder<E>> dev.tachyonmcp.core.server.ServerBuilder dev.tachyonmcp.core.server.ServerBuilder::withExtension(java.lang.Class<E>, java.util.function.Consumer<? super B>)",
+          "justification": "Type-safe configuration of configurable extensions; ServerBuilder is created by TachyonServer.builder() and not meant to be implemented by users",
+          "attachments": {
+            "since": "1.0.0-beta.32"
+          }
+        },
+        {
+          "ignore": true,
+          "code": "java.method.removed",
+          "old": "method dev.tachyonmcp.core.server.config.CapabilitiesConfig.Builder dev.tachyonmcp.core.server.config.CapabilitiesConfig.Builder::noTasks()",
+          "justification": "Tasks moved to the tachyon-extensions-tasks module; configure them with withExtension(TasksExtension.class, t -> t.connector(connector)); tasks are off unless the extension is registered",
+          "attachments": {
+            "since": "1.0.0-beta.32"
+          }
+        },
+        {
+          "ignore": true,
+          "code": "java.method.removed",
+          "old": "method dev.tachyonmcp.core.server.config.CapabilitiesConfig.Builder dev.tachyonmcp.core.server.config.CapabilitiesConfig.Builder::tasks(dev.tachyonmcp.api.server.features.tasks.TaskConnector)",
+          "justification": "Tasks moved to the tachyon-extensions-tasks module; configure them with withExtension(TasksExtension.class, t -> t.connector(connector))",
+          "attachments": {
+            "since": "1.0.0-beta.32"
+          }
+        },
+        {
+          "ignore": true,
+          "code": "java.method.removed",
+          "old": "method dev.tachyonmcp.core.server.config.CapabilitiesConfig.Builder dev.tachyonmcp.core.server.config.CapabilitiesConfig.Builder::tasks(dev.tachyonmcp.core.server.config.TasksConfig)",
+          "justification": "Tasks moved to the tachyon-extensions-tasks module; configure them with withExtension(TasksExtension.class, t -> t.connector(connector))",
+          "attachments": {
+            "since": "1.0.0-beta.32"
+          }
+        },
+        {
+          "ignore": true,
+          "code": "java.method.removed",
+          "old": "method dev.tachyonmcp.core.server.config.CapabilitiesConfig.Builder dev.tachyonmcp.core.server.config.CapabilitiesConfig.Builder::tasksEnabled(boolean)",
+          "justification": "Tasks moved to the tachyon-extensions-tasks module; configure them with withExtension(TasksExtension.class, t -> t.connector(connector)); registering the extension enables tasks",
+          "attachments": {
+            "since": "1.0.0-beta.32"
+          }
+        },
+        {
+          "ignore": true,
+          "code": "java.method.removed",
+          "old": "method dev.tachyonmcp.core.server.config.CapabilitiesConfig.Builder dev.tachyonmcp.core.server.config.CapabilitiesConfig.Builder::tasksKeepAlive(java.time.Duration)",
+          "justification": "Tasks moved to the tachyon-extensions-tasks module; configure them with withExtension(TasksExtension.class, t -> t.connector(connector)); use keepAlive(...) on the extension builder",
+          "attachments": {
+            "since": "1.0.0-beta.32"
+          }
+        },
+        {
+          "ignore": true,
+          "code": "java.method.removed",
+          "old": "method dev.tachyonmcp.core.server.config.CapabilitiesConfig.Builder dev.tachyonmcp.core.server.config.CapabilitiesConfig.Builder::tasksPageSize(int)",
+          "justification": "Tasks moved to the tachyon-extensions-tasks module; configure them with withExtension(TasksExtension.class, t -> t.connector(connector)); use pageSize(...) on the extension builder",
+          "attachments": {
+            "since": "1.0.0-beta.32"
+          }
+        },
+        {
+          "ignore": true,
+          "code": "java.method.numberOfParametersChanged",
+          "old": "method void dev.tachyonmcp.core.server.config.CapabilitiesConfig::<init>(dev.tachyonmcp.core.server.config.FeatureConfig, dev.tachyonmcp.core.server.config.ResourcesConfig, dev.tachyonmcp.core.server.config.FeatureConfig, dev.tachyonmcp.core.server.config.TasksConfig, dev.tachyonmcp.api.server.config.Mode, boolean)",
+          "new": "method void dev.tachyonmcp.core.server.config.CapabilitiesConfig::<init>(dev.tachyonmcp.core.server.config.FeatureConfig, dev.tachyonmcp.core.server.config.ResourcesConfig, dev.tachyonmcp.core.server.config.FeatureConfig, dev.tachyonmcp.api.server.config.Mode, boolean)",
+          "justification": "The tasks component left CapabilitiesConfig: Tasks moved to the tachyon-extensions-tasks module; configure them with withExtension(TasksExtension.class, t -> t.connector(connector))",
+          "attachments": {
+            "since": "1.0.0-beta.32"
+          }
+        },
+        {
+          "ignore": true,
+          "code": "java.class.removed",
+          "old": "class dev.tachyonmcp.core.server.features.tasks.TasksExtension",
+          "justification": "Replaced by dev.tachyonmcp.extensions.tasks.TasksExtension in the tachyon-extensions-tasks module",
+          "attachments": {
+            "since": "1.0.0-beta.32"
+          }
         }
       ]
     }

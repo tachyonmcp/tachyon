@@ -6,7 +6,6 @@ import dev.tachyonmcp.api.server.config.RuntimeConfig;
 import dev.tachyonmcp.api.server.features.completions.Completions;
 import dev.tachyonmcp.api.server.features.prompts.Prompts;
 import dev.tachyonmcp.api.server.features.resources.Resources;
-import dev.tachyonmcp.api.server.features.tasks.Tasks;
 import dev.tachyonmcp.api.server.features.tools.Tools;
 import java.util.concurrent.Executor;
 
@@ -27,9 +26,6 @@ public interface ExtensionContext {
 
     /** Returns the completion registry façade. */
     Completions completions();
-
-    /** Returns the task runtime façade. */
-    Tasks tasks();
 
     /** Returns the handler executor. */
     Executor executor();

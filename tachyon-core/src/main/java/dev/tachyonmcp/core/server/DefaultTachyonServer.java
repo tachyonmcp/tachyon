@@ -21,7 +21,6 @@ import dev.tachyonmcp.api.server.features.prompts.Prompts;
 import dev.tachyonmcp.api.server.features.resources.Resources;
 import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
 import dev.tachyonmcp.api.server.features.tasks.TaskSupport;
-import dev.tachyonmcp.api.server.features.tasks.Tasks;
 import dev.tachyonmcp.api.server.features.tools.Tools;
 import dev.tachyonmcp.api.server.session.SessionIdGenerator;
 import dev.tachyonmcp.core.protocol.ProtocolResponseMapper;
@@ -32,6 +31,8 @@ import dev.tachyonmcp.core.runtime.SessionState;
 import dev.tachyonmcp.core.runtime.SseEvent;
 import dev.tachyonmcp.core.server.config.ServerConfig;
 import dev.tachyonmcp.core.server.config.SessionConfig;
+import dev.tachyonmcp.core.server.extensions.EngineBinding;
+import dev.tachyonmcp.core.server.extensions.EngineExtension;
 import dev.tachyonmcp.core.server.features.completions.CompletionMethodHandlers;
 import dev.tachyonmcp.core.server.features.completions.DefaultCompletionRegistry;
 import dev.tachyonmcp.core.server.features.prompts.DefaultPromptRegistry;
@@ -39,9 +40,7 @@ import dev.tachyonmcp.core.server.features.prompts.PromptMethodHandlers;
 import dev.tachyonmcp.core.server.features.resources.DefaultResourceRegistry;
 import dev.tachyonmcp.core.server.features.resources.ResourceMethodHandlers;
 import dev.tachyonmcp.core.server.features.subscriptions.SubscriptionRegistry;
-import dev.tachyonmcp.core.server.features.tasks.DefaultTaskRegistry;
-import dev.tachyonmcp.core.server.features.tasks.TaskMethodHandlers;
-import dev.tachyonmcp.core.server.features.tasks.TaskRegistry;
+import dev.tachyonmcp.core.server.features.tasks.TaskRuntime;
 import dev.tachyonmcp.core.server.features.tools.DefaultToolRegistry;
 import dev.tachyonmcp.core.server.features.tools.ToolMethodHandlers;
 import dev.tachyonmcp.core.server.handlers.DiscoverHandler;
@@ -68,6 +67,7 @@ import io.netty.handler.codec.http.HttpRequest;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -103,7 +103,7 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
     private final AtomicLong eventIdCounter = new AtomicLong(0);
     private final DefaultToolRegistry toolRegistry;
     private final DefaultResourceRegistry resourceRegistry;
-    private final DefaultTaskRegistry taskRegistry;
+    private volatile TaskRuntime taskRuntime = TaskRuntime.NONE;
     private final DefaultPromptRegistry promptRegistry;
     private final DefaultCompletionRegistry completionRegistry;
     private final SubscriptionRegistry subscriptionRegistry;
@@ -208,10 +208,9 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
         var hasTaskAugmentedTools = toolRegistry.getAll().stream()
                 .anyMatch(h ->
                         h.descriptor().taskSupport() != null && h.descriptor().taskSupport() != TaskSupport.FORBIDDEN);
-        var tasksConfig = capabilitiesConfig.tasks();
-        if (tasksConfig.enabled() || hasTaskAugmentedTools) {
-            builder.tasks(new ServerCapabilities.Tasks(
-                    tasksConfig.list(), tasksConfig.cancel(), tasksConfig.requests() || hasTaskAugmentedTools));
+        var tasksCapability = taskRuntime.capability(hasTaskAugmentedTools);
+        if (tasksCapability != null) {
+            builder.tasks(tasksCapability);
         }
 
         var toolsConfig = capabilitiesConfig.tools();
@@ -262,9 +261,9 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
         // REQUIRED-without-connector call at runtime; this just fails faster.
         var hasRequiredTaskTool = toolRegistry.getAll().stream()
                 .anyMatch(handler -> handler.descriptor().taskSupport() == TaskSupport.REQUIRED);
-        var connectorMissing = !config.capabilities().tasks().enabled() || !taskRegistry.executionConfigured();
+        var connectorMissing = !taskRuntime.executionConfigured();
         if (hasRequiredTaskTool && connectorMissing) {
-            throw new IllegalStateException("Task-producing tools require a TaskConnector");
+            throw new IllegalStateException("Task-producing tools require TasksExtension");
         }
         if (connectorMissing) {
             var optionalTaskTools = toolRegistry.getAll().stream()
@@ -280,6 +279,8 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
         }
     }
 
+    private final Map<ServerExtension, EngineBinding<?>> engineBindings;
+
     DefaultTachyonServer(
             ExecutorService executor,
             SessionEventStore sessionEventStore,
@@ -291,7 +292,9 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
             @Nullable PayloadDeserializer payloadDeserializer,
             @Nullable JsonSchemaFactory<?> schemaFactory,
             @Nullable List<ServerExtension> extensions,
+            Map<ServerExtension, EngineBinding<?>> engineBindings,
             @Nullable Consumer<ChannelPipeline> pipelineCustomizer) {
+        this.engineBindings = new IdentityHashMap<>(engineBindings);
         this.executor = executor;
         this.config = Objects.requireNonNull(config, "config cannot be null");
         this.sessionEventStore = Objects.requireNonNull(sessionEventStore, "sessionEventStore cannot be null");
@@ -319,8 +322,6 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
         var caps = config.capabilities();
         this.toolRegistry = new DefaultToolRegistry(schemaFactory1, caps.tools());
         this.resourceRegistry = new DefaultResourceRegistry(this, caps.resources());
-        this.taskRegistry =
-                new DefaultTaskRegistry(this, caps.tasks(), config.runtime().clock());
         this.promptRegistry = new DefaultPromptRegistry(caps.prompts());
         this.completionRegistry = new DefaultCompletionRegistry(caps.completions());
         this.subscriptionRegistry = new SubscriptionRegistry(this);
@@ -434,10 +435,6 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
                 subscriptionRegistry.notifyPromptsListChanged();
             });
         }
-        if (caps.tasks().list()) {
-            taskRegistry.onChange(() -> broadcastNotification("notifications/tasks/list_changed"));
-        }
-        taskRegistry.startTtlJanitor();
     }
 
     void broadcastNotification(String method) {
@@ -516,7 +513,6 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
         ToolMethodHandlers.register(
                 methodHandlers, toolRegistry, inputValidator, outputValidator, payloadSerializer, payloadDeserializer);
         ResourceMethodHandlers.register(methodHandlers, resourceRegistry);
-        TaskMethodHandlers.register(methodHandlers, taskRegistry);
         PromptMethodHandlers.register(methodHandlers, promptRegistry, inputValidator);
         CompletionMethodHandlers.register(methodHandlers, completionRegistry);
         if (config.capabilities().logging()) {
@@ -583,6 +579,11 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
         return JsonObject.empty();
     }
 
+    @SuppressWarnings("unchecked")
+    private <E extends ServerExtension> void bootstrap(EngineBinding<E> binding, ServerExtension extension) {
+        binding.bootstrap((E) extension, this);
+    }
+
     private void bootstrapExtensions() {
         for (var ext : extensions) {
             for (var method : ext.methods()) {
@@ -599,7 +600,14 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
             }
             bootstrappingExtensionId = ext.extensionId();
             try {
-                ext.bootstrap(this);
+                var binding = engineBindings.get(ext);
+                if (binding != null) {
+                    bootstrap(binding, ext);
+                } else if (ext instanceof EngineExtension engineExtension) {
+                    engineExtension.bootstrap((ServerEngine) this);
+                } else {
+                    ext.bootstrap((ExtensionContext) this);
+                }
             } finally {
                 bootstrappingExtensionId = null;
             }
@@ -679,13 +687,17 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
     }
 
     @Override
-    public Tasks tasks() {
-        return taskRegistry;
+    public TaskRuntime taskRuntime() {
+        return taskRuntime;
     }
 
     @Override
-    public TaskRegistry tasksRegistry() {
-        return taskRegistry;
+    public void installTaskRuntime(TaskRuntime runtime) {
+        Objects.requireNonNull(runtime, "runtime");
+        if (taskRuntime != TaskRuntime.NONE) {
+            throw new IllegalStateException("A task runtime is already installed");
+        }
+        taskRuntime = runtime;
     }
 
     private final Notifications serverNotifications = this::broadcastLog;
@@ -1002,7 +1014,6 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
                 }
                 subscriptionRegistry.closeAll();
                 shutdownExtensions(deadline);
-                taskRegistry.stopTtlJanitor();
                 sessionManager.close();
                 sessionEventStore.close();
             } catch (IOException e) {

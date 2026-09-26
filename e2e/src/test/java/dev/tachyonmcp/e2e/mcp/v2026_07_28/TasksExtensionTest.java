@@ -12,8 +12,8 @@ import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
 import dev.tachyonmcp.api.server.features.tasks.TaskState;
 import dev.tachyonmcp.api.server.features.tasks.TaskSupport;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
-import dev.tachyonmcp.core.server.features.tasks.TasksExtension;
 import dev.tachyonmcp.e2e.mcp.AbstractStatelessMcpE2eTest;
+import dev.tachyonmcp.extensions.tasks.TasksExtension;
 import dev.tachyonmcp.testkit.Mcp20260728Client;
 import dev.tachyonmcp.testkit.McpClient;
 import dev.tachyonmcp.testkit.McpTestClients;
@@ -217,7 +217,7 @@ class TasksExtensionTest extends AbstractStatelessMcpE2eTest<McpClient> {
     private AtomicInteger startTasksServer(TestTaskConnector taskEngine, String toolName, ToolResult result) {
         final var toolInvocations = new AtomicInteger();
         startServer(
-                builder -> builder.capabilities(c -> c.tasks(taskEngine.connector())),
+                builder -> builder.withExtension(TasksExtension.class, t -> t.connector(taskEngine.connector())),
                 registrar -> registrar
                         .tools()
                         .register(b -> b.name(toolName).taskSupport(TaskSupport.REQUIRED), (context, request) -> {

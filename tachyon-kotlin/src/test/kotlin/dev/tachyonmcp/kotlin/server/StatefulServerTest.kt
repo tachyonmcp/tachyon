@@ -11,6 +11,7 @@ import dev.tachyonmcp.api.server.session.SessionIdGenerator
 import dev.tachyonmcp.core.server.config.SessionConfig
 import dev.tachyonmcp.core.server.session.InMemorySessionEventStore
 import dev.tachyonmcp.core.server.session.InMemorySessionStore
+import dev.tachyonmcp.extensions.tasks.TasksExtension
 import dev.tachyonmcp.kotlin.server.domain.Annotations
 import dev.tachyonmcp.kotlin.server.domain.Icon
 import dev.tachyonmcp.kotlin.server.domain.PromptArgument
@@ -121,12 +122,12 @@ internal class StatefulServerTest {
                     listChanged = true
                     pageSize = 22
                 }
-                tasks(taskConnector) {
-                    pageSize = 23
-                    pollInterval = 250.milliseconds
-                }
                 completionsMode = Mode.ON
                 logging = true
+            }
+            tasks(taskConnector) {
+                pageSize = 23
+                pollInterval = 250.milliseconds
             }
             network {
                 host = "127.0.0.1"
@@ -197,12 +198,12 @@ internal class StatefulServerTest {
                 prompts().mode() shouldBe Mode.ON
                 prompts().listChanged() shouldBe true
                 prompts().pageSize() shouldBe 22
-                tasks().enabled() shouldBe true
-                tasks().connector() shouldBe taskConnector
-                tasks().pageSize() shouldBe 23
                 completions() shouldBe Mode.ON
                 logging() shouldBe true
             }
+
+            // tasks extension
+            handle.extension(TasksExtension::class.java).isPresent shouldBe true
 
             // session
             config.session.enabled shouldBe true

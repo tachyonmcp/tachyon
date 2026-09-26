@@ -1,7 +1,6 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
-package dev.tachyonmcp.core.server.features.tasks;
+package dev.tachyonmcp.extensions.tasks.engine;
 
-import dev.tachyonmcp.api.annotations.InternalApi;
 import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
 import java.time.Clock;
 import java.time.Duration;
@@ -13,9 +12,8 @@ import java.util.function.BooleanSupplier;
 
 /**
  * Cached task projection plus server-local retention and its push {@link TaskRoute}. The route is
- * set at most once, by the task-augmented tool call that returned the task, and never changes.
+ * set at most once, by the binding call that created the task, and never changes.
  */
-@InternalApi
 final class TaskEntry {
 
     private final Duration keepAlive;
@@ -67,12 +65,12 @@ final class TaskEntry {
      * @return whether the entry took {@code candidate}
      */
     boolean route(TaskRoute candidate) {
-        if (candidate.equals(TaskRoute.NONE)) {
+        if (candidate == TaskRoute.NONE) {
             return false;
         }
         lock.lock();
         try {
-            if (!route.equals(TaskRoute.NONE)) {
+            if (route != TaskRoute.NONE) {
                 return false;
             }
             route = candidate;
