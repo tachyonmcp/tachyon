@@ -77,8 +77,8 @@
         <awaitility.version>4.3.0</awaitility.version>
         <finchly.version>0.2.0</finchly.version>
         <immutables.version>2.12.2</immutables.version>
-        <jackson.version>3.2.2</jackson.version>
-        <jackson2.version>2.22.2</jackson2.version>
+        <jackson.version>3.2.3</jackson.version>
+        <jackson2.version>2.22.3</jackson2.version>
         <java-mcp-sdk.version>2.0.1</java-mcp-sdk.version>
         <jmh.version>1.37</jmh.version>
         <json-schema-validator.version>3.0.7</json-schema-validator.version>
