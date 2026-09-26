@@ -19,7 +19,7 @@ import type {
     JSONRPCRequest,
     NotificationParams,
     Result,
-} from "./../mcp-2026-07-28";
+} from "./../../../tachyon-core/protocol/mcp-2026-07-28";
 
 /* Tasks */
 

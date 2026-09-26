@@ -1,0 +1,79 @@
+{
+  "basePackage": "dev.tachyonmcp.core.protocol.mcp.v2026_07_28",
+  "typeMappings": {
+    "ProgressToken": "String",
+    "RequestId": "tools.jackson.databind.JsonNode",
+    "JSONValue": "tools.jackson.databind.ValueNode",
+    "JSONObject": "tools.jackson.databind.node.ObjectNode",
+    "JSONArray": "tools.jackson.databind.node.ArrayNode",
+    "ResultMetaObject": "java.util.Map<String, tools.jackson.databind.JsonNode>",
+    "NotificationMetaObject": "java.util.Map<String, tools.jackson.databind.JsonNode>",
+    "JSONRPCErrorObject": "dev.tachyonmcp.core.protocol.mcp.v2026_07_28.models.Error",
+    "InputRequests": "dev.tachyonmcp.core.protocol.mcp.v2026_07_28.models.InputRequests",
+    "InputResponses": "dev.tachyonmcp.core.protocol.mcp.v2026_07_28.models.InputResponses",
+    "Result": "dev.tachyonmcp.core.protocol.mcp.v2026_07_28.models.Result",
+    "NotificationParams": "dev.tachyonmcp.core.protocol.mcp.v2026_07_28.models.NotificationParams",
+    "JSONRPCRequest": "dev.tachyonmcp.core.protocol.mcp.v2026_07_28.models.JSONRPCRequest",
+    "JSONRPCNotification": "dev.tachyonmcp.core.protocol.mcp.v2026_07_28.models.JSONRPCNotification",
+    "Task.ttlMs": "Long",
+    "Task.pollIntervalMs": "long",
+    "Task.createdAt": "java.time.Instant",
+    "Task.lastUpdatedAt": "java.time.Instant",
+    "WorkingTask.ttlMs": "Long",
+    "WorkingTask.pollIntervalMs": "long",
+    "WorkingTask.createdAt": "java.time.Instant",
+    "WorkingTask.lastUpdatedAt": "java.time.Instant",
+    "InputRequiredTask.ttlMs": "Long",
+    "InputRequiredTask.pollIntervalMs": "long",
+    "InputRequiredTask.createdAt": "java.time.Instant",
+    "InputRequiredTask.lastUpdatedAt": "java.time.Instant",
+    "CompletedTask.ttlMs": "Long",
+    "CompletedTask.pollIntervalMs": "long",
+    "CompletedTask.createdAt": "java.time.Instant",
+    "CompletedTask.lastUpdatedAt": "java.time.Instant",
+    "FailedTask.ttlMs": "Long",
+    "FailedTask.pollIntervalMs": "long",
+    "FailedTask.createdAt": "java.time.Instant",
+    "FailedTask.lastUpdatedAt": "java.time.Instant",
+    "CancelledTask.ttlMs": "Long",
+    "CancelledTask.pollIntervalMs": "long",
+    "CancelledTask.createdAt": "java.time.Instant",
+    "CancelledTask.lastUpdatedAt": "java.time.Instant",
+    "CreateTaskResult.ttlMs": "Long",
+    "CreateTaskResult.pollIntervalMs": "long",
+    "CreateTaskResult.createdAt": "java.time.Instant",
+    "CreateTaskResult.lastUpdatedAt": "java.time.Instant"
+  },
+  "additionalProperties": {
+    "CreateTaskResult": [
+      "_meta?: ResultMetaObject;"
+    ],
+    "UpdateTaskResult": [
+      "_meta?: ResultMetaObject;"
+    ],
+    "CancelTaskResult": [
+      "_meta?: ResultMetaObject;"
+    ],
+    "GetTaskRequest": [
+      "jsonrpc: typeof JSONRPC_VERSION;",
+      "id: RequestId;"
+    ],
+    "UpdateTaskRequest": [
+      "jsonrpc: typeof JSONRPC_VERSION;",
+      "id: RequestId;"
+    ],
+    "CancelTaskRequest": [
+      "jsonrpc: typeof JSONRPC_VERSION;",
+      "id: RequestId;"
+    ],
+    "TaskStatusNotification": [
+      "jsonrpc: typeof JSONRPC_VERSION;"
+    ],
+    "GetTaskResult": [
+      "_meta?: ResultMetaObject;"
+    ],
+    "TaskStatusNotificationParams": [
+      "_meta?: NotificationMetaObject;"
+    ]
+  }
+}
