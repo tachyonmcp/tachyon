@@ -2,8 +2,8 @@
 title: Testing
 tags: [module, testing, e2e, conformance]
 sources: [e2e/src/test/, conformance/, Makefile, reports/pom.xml, tachyon-core/src/test/, .github/workflows/build.yml, .github/workflows/release.yml]
-updated: 2026-09-25
-commit: cbfbcd7f
+updated: 2026-09-26
+commit: caaefc64
 ---
 
 # ✅ Testing
@@ -20,7 +20,7 @@ Verdict: E2E-first (AGENTS.md). Real server on port 0, clients = official MCP Ja
 | one module | `mvn -q test -pl tachyon-core -am` |
 | Kotlin | `mvn test -pl tachyon-kotlin -am` |
 | conformance | `make conformance` |
-| JMH perf gate | `make jmh` → `-Pjmh` profile runs `BenchmarkGate` (`tachyon-core/src/test/java/dev/tachyonmcp/core/BenchmarkGate.java`): every `*Benchmark` via JMH, fails below per-benchmark ops/sec floors; accepts JMH CLI (`-prof gc`, `-t`, regex) via `-Djmh.args` (not `exec.args`, which would also hit the ts2java `exec:exec` runs) |
+| JMH perf gate | `make jmh` → `-Pjmh` profile runs `BenchmarkGate` (`tachyon-core/src/test/java/dev/tachyonmcp/core/BenchmarkGate.java`): runs every `*Benchmark` via JMH, but gates only those with a floor in `BenchmarkGate#MIN_OPS_PER_SEC` (fails below it). Floors today: `InMemorySessionEventStoreBenchmark.append`, `InMemorySessionStoreBenchmark.find` / `touch` / `compareAndSet`; the rest (e.g. `CodecBenchmark`, `ResponseMapperBenchmark`) only report; accepts JMH CLI (`-prof gc`, `-t`, regex) via `-Djmh.args` (not `exec.args`, which would also hit the ts2java `exec:exec` runs) |
 | format/lint | `make format` / `make lint` (Spotless + Detekt; SpotBugs in build) |
 | release build | `make deploy` — `clean deploy -P release,lint -Drevapi.skip=false`; uploads to Maven Central only with `PUBLISH=true`, otherwise `-DskipPublishing=true` (dry run) |
 

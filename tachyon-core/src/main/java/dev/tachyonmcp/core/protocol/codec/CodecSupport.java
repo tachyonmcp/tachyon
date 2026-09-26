@@ -5,6 +5,7 @@ import dev.tachyonmcp.api.annotations.InternalApi;
 import java.io.ByteArrayOutputStream;
 import java.io.StringWriter;
 import org.jspecify.annotations.Nullable;
+import tools.jackson.core.Base64Variants;
 import tools.jackson.core.JsonEncoding;
 import tools.jackson.core.JsonGenerator;
 import tools.jackson.core.JsonParser;
@@ -16,6 +17,8 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.exc.MismatchedInputException;
 import tools.jackson.databind.node.JsonNodeFactory;
 import tools.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.util.RawValue;
+import tools.jackson.databind.util.TokenBuffer;
 
 /**
  * Streaming JSON primitives for generated codecs and the JSON-RPC layer: one {@link JsonFactory},
@@ -123,9 +126,46 @@ public final class CodecSupport {
             case VALUE_TRUE -> NODES.booleanNode(true);
             case VALUE_FALSE -> NODES.booleanNode(false);
             case VALUE_NULL -> NODES.nullNode();
+            case VALUE_EMBEDDED_OBJECT -> readEmbedded(parser, widenIntegers);
             default ->
                 throw MismatchedInputException.from(
                         parser, JsonNode.class, "Unexpected token " + parser.currentToken());
+        };
+    }
+
+    /**
+     * Encodes {@code value} straight into a tree through a {@link TokenBuffer}, as
+     * {@link #readWireTree} would read its JSON text: integers that fit a long become longs,
+     * binary values become base64 string nodes, and raw values are parsed.
+     *
+     * @param codec the value's codec
+     * @param value the value
+     * @param <T> the value type
+     * @return the tree
+     */
+    public static <T> JsonNode encodeToTree(Codec<T> codec, T value) {
+        try (var buffer = TokenBuffer.forGeneration()) {
+            codec.encode(buffer, value);
+            try (var parser = buffer.asParser()) {
+                parser.nextToken();
+                return readWireTree(parser);
+            }
+        }
+    }
+
+    /** A {@link TokenBuffer} keeps binary and raw values as objects; read them as their JSON text would be. */
+    private static JsonNode readEmbedded(JsonParser parser, boolean widenIntegers) {
+        return switch (parser.getEmbeddedObject()) {
+            case byte[] bytes ->
+                NODES.stringNode(Base64Variants.getDefaultVariant().encode(bytes));
+            case RawValue raw -> {
+                try (var rawParser = createParser(String.valueOf(raw.rawValue()))) {
+                    rawParser.nextToken();
+                    yield readTree(rawParser, widenIntegers);
+                }
+            }
+            case null, default ->
+                throw MismatchedInputException.from(parser, JsonNode.class, "Unexpected embedded value");
         };
     }
 

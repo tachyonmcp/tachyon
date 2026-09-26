@@ -3,7 +3,7 @@ title: Protocol versions
 tags: [concept, protocol, mcp]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/, tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/codec/, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/http/McpHeaderMatchHandler.java, tachyon-core/src/main/resources/META-INF/services/dev.tachyonmcp.core.protocol.Protocol, tachyon-core/ts2java.py, tachyon-core/protocol/, tachyon-core/pom.xml, extensions/tachyon-extensions-tasks/protocol/, extensions/tachyon-extensions-tasks/pom.xml]
 updated: 2026-09-26
-commit: 31900e6a
+commit: caaefc64
 ---
 
 # 🔀 Protocol versions
@@ -83,14 +83,14 @@ Header names `McpHeaderNames` `McpHeaderNames#MCP_SESSION_ID`: `MCP-Session-Id`,
 ## 🏭 Codegen (ts2java)
 
 - Wire models + streaming Jackson codecs generated from TypeScript schema: `tachyon-core/protocol/mcp-2025-11-25.ts`, `mcp-2026-07-28.ts` + `*_config.json`.
-- Generator `tachyon-core/ts2java.py`: records (no Jackson annotations; databind never touches them) + one streaming codec per model + a `CodecRegistry` per package. Output `target/generated-sources/ts2java/java` (source root via `pom.xml`); packages `dev.tachyonmcp.core.protocol.mcp.v20xx.models`, `...codecs`. Files the run no longer produces are deleted (`Generator#prune_stale`).
+- Generator `tachyon-core/ts2java.py`: records (no Jackson annotations; databind never touches them) + one streaming codec per model + a `CodecRegistry` per package. Output `target/generated-sources/ts2java/java` (source root via `pom.xml`); packages `dev.tachyonmcp.core.protocol.mcp.v20xx.models`, `...codecs`. Files the run no longer produces are deleted from `models/` and `codecs/` (`Generator#prune_stale`); in the parent package only the obsolete protocol files named in `REMOVED_PROTOCOL_FILES` are removed, since other code may live there (`Generator#write_outputs`).
 - Codecs implement core's hand-written streaming contract, [Codec](../../tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/codec/Codec.java) + [CodecSupport](../../tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/codec/CodecSupport.java) (`dev.tachyonmcp.core.protocol.codec`): one `JsonFactory`, no `ObjectMapper`. `Codec#encodeProperties` writes a value's properties into an open object; generated codecs override it, unions dispatch it to the variant. A non-object input to `Codec#decodeFromBytes` / `ProtocolCodecUtil#decodeWithCodec` fails with Jackson's `MismatchedInputException`.
 - JSON objects (index signatures, `_meta`, `additionalProperties`, `*MetaObject`) are `ObjectNode`; a `java.util.Map` field fails generation. `RequestId`/`ProgressToken` map to `JsonNode` (numeric ids stay numbers). Body FQNs become imports unless the simple name clashes (`Generator#finalize_imports`).
 - ⚠️ Generated code not in git. Handwritten mappers live next to generated codecs in `codecs/`.
 - Revapi ignores generated classes (commit `3cc96c5f`).
 - Extension mode: config key `basePackage` (e.g. `extensions/tachyon-extensions-tasks/protocol/tasks-2026-07-28_config.json`). Types imported from the core TS schema map to core models via `typeMappings`; their inherited fields come from `additionalProperties`. The extension `CodecRegistry#codecFor` falls back to core's registry (`Generator#add_codec_registry`).
 - Intersection aliases (`A & B & { … }`) merge local interfaces + inline objects (`Generator#generate`); an intersection with one discriminated union (`GetTaskResult = Result & DetailedTask & …`) becomes a record holding the variant (`DetailedTask detailedTask`) next to its own fields; its codec decodes the variant from a buffered copy, then the own fields, and writes the variant inline via `encodeProperties` (`Generator#flattened_unions`, `Generator#add_codec`). Other union intersections are skipped with a warning.
-- JMH: `CodecBenchmark` (decode/encode, union, JSON-RPC parse, generic writer). Perf rule: `.agents/skills/tachyon-development/SKILL.md` § Performance.
+- JMH: `CodecBenchmark` (decode/encode, union, JSON-RPC parse, generic writer); `ResponseMapperBenchmark` (2026-07-28 `tasks/get` completed result and `server/discover`, both inlining a generated model as a tree via `CodecSupport#encodeToTree`). Perf rule: `.agents/skills/tachyon-development/SKILL.md` § Performance.
 
 ## ➕ Adding a protocol version (checklist)
 

@@ -10,6 +10,7 @@ import dev.tachyonmcp.api.json.JsonSchema;
 import dev.tachyonmcp.api.server.domain.Annotations;
 import dev.tachyonmcp.api.server.domain.FormInputRequest;
 import dev.tachyonmcp.api.server.domain.Icon;
+import dev.tachyonmcp.api.server.domain.ImageContent;
 import dev.tachyonmcp.api.server.domain.LoggingLevel;
 import dev.tachyonmcp.api.server.domain.ProgressToken;
 import dev.tachyonmcp.api.server.domain.PromptArgument;
@@ -109,6 +110,26 @@ class McpResponseMapperTest {
         assertThat(properties(result._meta()))
                 .containsEntry("trace", JsonNodeFactory.instance.objectNode().put("id", 7));
         assertThat(result.content()).hasSize(1);
+    }
+
+    @Test
+    void completedTaskInlinesBinaryContentAndNumbersAsOnTheWire() {
+        var result = ToolResult.Success.of(
+                Map.of("count", 3, "ratio", 0.5),
+                List.of(ImageContent.of(new byte[] {1, 2, 3}, "image/png"), TextContent.of("done")));
+        var snapshot = TaskSnapshot.completed("task-1", Instant.EPOCH, Instant.EPOCH, 2, result);
+
+        var json = mapper.encode(mapper.getTaskResult(snapshot));
+
+        assertThatJson(json).inPath("$.result").isEqualTo("""
+                {
+                  "content": [
+                    {"type": "image", "data": "AQID", "mimeType": "image/png"},
+                    {"type": "text", "text": "done"}
+                  ],
+                  "structuredContent": {"count": 3, "ratio": 0.5},
+                  "resultType": "complete"
+                }""");
     }
 
     @Test

@@ -63,18 +63,12 @@ import dev.tachyonmcp.core.protocol.mcp.v2026_07_28.models.Tool;
 import dev.tachyonmcp.core.server.json.JsonUtils;
 import dev.tachyonmcp.core.transport.jsonrpc.JsonRpcCodec;
 import dev.tachyonmcp.core.transport.jsonrpc.JsonRpcError;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
-import tools.jackson.core.JsonEncoding;
-import tools.jackson.core.ObjectWriteContext;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.node.JsonNodeFactory;
 import tools.jackson.databind.node.ObjectNode;
@@ -147,16 +141,16 @@ public final class McpResponseMapper extends dev.tachyonmcp.core.protocol.mcp.v2
             registeredExtensions.forEach((id, settings) -> extensions.set(id, JsonUtils.parse(settings)));
             capsBuilder.extensions(extensions);
         }
-        var implementation = ServerInfoMapper.toImplementation(serverIdentity);
+        var serverInfo = encodeToTree(Implementation.class, ServerInfoMapper.toImplementation(serverIdentity));
         var meta = JsonNodeFactory.instance.objectNode();
-        meta.set("io.modelcontextprotocol/serverInfo", encodeToTree(Implementation.class, implementation));
+        meta.set("io.modelcontextprotocol/serverInfo", serverInfo);
         // The schema models server identity only via the optional
         // _meta["io.modelcontextprotocol/serverInfo"] key (see `meta` above), but the pinned
         // conformance suite still requires a top-level `serverInfo` field too. `Result` permits
         // arbitrary extra keys (`[key: string]: unknown`), so mirror it there via
         // additionalProperties for conformance, in addition to the spec-correct `_meta` location.
         var additionalProperties = JsonNodeFactory.instance.objectNode();
-        additionalProperties.set("serverInfo", encodeToTree(Implementation.class, implementation));
+        additionalProperties.set("serverInfo", serverInfo);
         return new DiscoverResult(
                 supportedVersions,
                 capsBuilder.build(),
@@ -581,13 +575,6 @@ public final class McpResponseMapper extends dev.tachyonmcp.core.protocol.mcp.v2
     }
 
     private static <T> JsonNode encodeToTree(Class<T> type, T value) {
-        try (var out = new ByteArrayOutputStream(256);
-                var gen = CodecSupport.FACTORY.createGenerator(ObjectWriteContext.empty(), out, JsonEncoding.UTF8)) {
-            CodecRegistry.<T>codecFor(type).encode(gen, value);
-            gen.flush();
-            return JsonUtils.parseJsonNode(out.toString(StandardCharsets.UTF_8));
-        } catch (IOException e) {
-            throw new UncheckedIOException("Failed to encode " + type.getSimpleName(), e);
-        }
+        return CodecSupport.encodeToTree(CodecRegistry.codecFor(type), value);
     }
 }

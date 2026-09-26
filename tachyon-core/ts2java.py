@@ -77,6 +77,9 @@ OBJECT_NODE = "tools.jackson.databind.node.ObjectNode"
 # A package-qualified type reference in generated Java, e.g. java.time.Instant.
 FQN_PATTERN = re.compile(r"\b((?:[a-z_][a-z0-9_]*\.)+)([A-Z]\w*)")
 
+# Files earlier generator versions wrote next to the models package; pruned on upgrade.
+REMOVED_PROTOCOL_FILES = ("McpProtocolVersion", "McpMethodRegistry", "MethodDescriptor", "McpMethodDispatch")
+
 CACHE_DIR_NAME = "ts2java-cache"
 
 
@@ -2483,7 +2486,12 @@ class Generator:
     def shorten_fqns(content, extra_imports, local_names):
         lines = content.split("\n")
         import_idx = [i for i, line in enumerate(lines) if line.startswith("import ")]
-        first, last = import_idx[0], import_idx[-1]
+        if import_idx:
+            first, last = import_idx[0], import_idx[-1]
+        else:
+            # No imports yet: new ones go after the package line and its blank separator.
+            first = next((i + 2 for i, line in enumerate(lines) if line.startswith("package ")), 0)
+            last = first - 1
         imports = {line for line in lines[first : last + 1] if line.startswith("import ")} | extra_imports
         owners = {
             imp[len("import ") : -1].rsplit(".", 1)[1]: imp[len("import ") : -1]
@@ -2507,10 +2515,13 @@ class Generator:
         for directory, names in (
             (self.dir_models, self.model_files),
             (self.dir_codecs, self.codec_files),
-            # The package root held since-removed protocol files (e.g. McpMethodDispatch).
-            (os.path.dirname(self.dir_models), {}),
         ):
             self.prune_stale(directory, names)
+        # The package root held since-removed protocol files; delete only those, it isn't ours.
+        for name in REMOVED_PROTOCOL_FILES:
+            path = os.path.join(os.path.dirname(self.dir_models), f"{name}.java")
+            if os.path.isfile(path):
+                os.remove(path)
         for name, content in self.model_files.items():
             if not content:
                 continue
