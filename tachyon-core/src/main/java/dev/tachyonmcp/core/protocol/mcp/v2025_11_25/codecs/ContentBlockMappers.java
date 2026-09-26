@@ -73,21 +73,21 @@ public final class ContentBlockMappers {
                         t.type().discriminator(),
                         t.text(),
                         toProtocolAnnotations(t.annotations()),
-                        JsonUtils.toJsonNodeMap(t.meta()));
+                        JsonUtils.toObjectTree(t.meta()));
             case ImageContent i ->
                 new dev.tachyonmcp.core.protocol.mcp.v2025_11_25.models.ImageContent(
                         i.type().discriminator(),
                         i.data(),
                         i.mimeType(),
                         toProtocolAnnotations(i.annotations()),
-                        JsonUtils.toJsonNodeMap(i.meta()));
+                        JsonUtils.toObjectTree(i.meta()));
             case AudioContent a ->
                 new dev.tachyonmcp.core.protocol.mcp.v2025_11_25.models.AudioContent(
                         a.type().discriminator(),
                         a.data(),
                         a.mimeType(),
                         toProtocolAnnotations(a.annotations()),
-                        JsonUtils.toJsonNodeMap(a.meta()));
+                        JsonUtils.toObjectTree(a.meta()));
             case ResourceLink r ->
                 new dev.tachyonmcp.core.protocol.mcp.v2025_11_25.models.ResourceLink(
                         r.type().discriminator(),
@@ -99,13 +99,13 @@ public final class ContentBlockMappers {
                         r.mimeType(),
                         toProtocolAnnotations(r.annotations()),
                         r.size(),
-                        JsonUtils.toJsonNodeMap(r.meta()));
+                        JsonUtils.toObjectTree(r.meta()));
             case EmbeddedResource e ->
                 new dev.tachyonmcp.core.protocol.mcp.v2025_11_25.models.EmbeddedResource(
                         e.type().discriminator(),
                         toProtocolResourceContents(e.resource()),
                         toProtocolAnnotations(e.annotations()),
-                        JsonUtils.toJsonNodeMap(e.meta()));
+                        JsonUtils.toObjectTree(e.meta()));
         };
     }
 
@@ -121,10 +121,10 @@ public final class ContentBlockMappers {
         return switch (domain) {
             case TextResourceContents t ->
                 new dev.tachyonmcp.core.protocol.mcp.v2025_11_25.models.TextResourceContents(
-                        t.text(), t.uri(), t.mimeType(), JsonUtils.toJsonNodeMap(t.meta()));
+                        t.text(), t.uri(), t.mimeType(), JsonUtils.toObjectTree(t.meta()));
             case BlobResourceContents b ->
                 new dev.tachyonmcp.core.protocol.mcp.v2025_11_25.models.BlobResourceContents(
-                        b.blob(), b.uri(), b.mimeType(), JsonUtils.toJsonNodeMap(b.meta()));
+                        b.blob(), b.uri(), b.mimeType(), JsonUtils.toObjectTree(b.meta()));
         };
     }
 }

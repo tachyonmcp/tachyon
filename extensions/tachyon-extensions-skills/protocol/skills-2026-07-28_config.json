@@ -1,0 +1,7 @@
+{
+  "basePackage": "dev.tachyonmcp.core.protocol.mcp.v2026_07_28",
+  "typeMappings": {
+    "SkillResource.size": "long",
+    "Skill.resources": "java.util.List<SkillResource>"
+  }
+}

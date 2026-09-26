@@ -18,7 +18,7 @@ final class McpPromptMapper {
         return new Prompt(
                 d.description(),
                 toProtocolPromptArguments(d.arguments()),
-                JsonUtils.toJsonNodeMap(d.meta()),
+                JsonUtils.toObjectTree(d.meta()),
                 d.name(),
                 d.title(),
                 ContentBlockMappers.toProtocolIcons(d.icons()));

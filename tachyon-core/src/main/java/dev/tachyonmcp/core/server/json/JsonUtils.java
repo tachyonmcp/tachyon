@@ -1,18 +1,16 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
 package dev.tachyonmcp.core.server.json;
 
-import static dev.tachyonmcp.core.transport.jsonrpc.JsonRpcCodec.readTreeValue;
-
 import dev.tachyonmcp.api.annotations.InternalApi;
 import dev.tachyonmcp.api.json.JsonDocument;
 import dev.tachyonmcp.api.json.PayloadSerializer;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
+import dev.tachyonmcp.core.protocol.codec.CodecSupport;
 import dev.tachyonmcp.core.transport.jsonrpc.JsonRpcCodec;
-import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.time.Duration;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -20,12 +18,10 @@ import org.jspecify.annotations.Nullable;
 import tools.jackson.core.JacksonException;
 import tools.jackson.core.JsonParser;
 import tools.jackson.core.JsonToken;
-import tools.jackson.core.ObjectReadContext;
-import tools.jackson.core.TreeNode;
-import tools.jackson.core.json.JsonFactory;
 import tools.jackson.databind.DeserializationContext;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.deser.std.StdDeserializer;
+import tools.jackson.databind.exc.MismatchedInputException;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.module.SimpleModule;
 import tools.jackson.databind.node.JsonNodeFactory;
@@ -37,19 +33,6 @@ public final class JsonUtils {
     private static final JsonMapper MAPPER = JsonMapper.builder()
             .addModule(new SimpleModule().addDeserializer(Duration.class, new MillisDurationDeserializer()))
             .build();
-    public static final JsonFactory FACTORY = new JsonFactory();
-
-    public static final ObjectReadContext TREE_READ_CONTEXT = new ObjectReadContext.Base() {
-        @Override
-        @SuppressWarnings("unchecked")
-        public <T extends TreeNode> T readTree(JsonParser p) {
-            try {
-                return (T) readTreeValue(p);
-            } catch (IOException e) {
-                throw new UncheckedIOException(e);
-            }
-        }
-    };
 
     private JsonUtils() {}
 
@@ -76,7 +59,7 @@ public final class JsonUtils {
     }
 
     public static JsonNode parse(String json) {
-        return MAPPER.readTree(json);
+        return readDocument(json, false);
     }
 
     public static JsonNode parse(JsonDocument document) {
@@ -87,18 +70,58 @@ public final class JsonUtils {
         return MAPPER.writeValueAsString(value);
     }
 
-    public static @Nullable Map<String, JsonNode> toJsonNodeMap(@Nullable Map<String, ?> values) {
+    /**
+     * Converts a {@code _meta}-style value map to the object tree generated protocol records carry.
+     * Each value becomes the same tree {@code valueToTree} would build.
+     *
+     * @param values the values, or {@code null}
+     * @return the object in {@code values} order, or {@code null} when {@code values} is {@code null}
+     */
+    public static @Nullable ObjectNode toObjectTree(@Nullable Map<String, ?> values) {
         if (values == null) return null;
-        var result = new LinkedHashMap<String, JsonNode>(values.size());
-        values.forEach((key, value) -> result.put(key, MAPPER.valueToTree(value)));
-        return result;
+        var node = new ObjectNode(JsonNodeFactory.instance, LinkedHashMap.newLinkedHashMap(values.size()));
+        values.forEach((key, value) -> node.set(key, toTree(value)));
+        return node;
     }
 
-    public static @Nullable Map<String, Object> toObjectMap(@Nullable Map<String, JsonNode> values) {
-        if (values == null) return null;
-        var result = new LinkedHashMap<String, Object>(values.size());
-        values.forEach((key, value) -> result.put(key, MAPPER.treeToValue(value, Object.class)));
-        return result;
+    /**
+     * Builds JSON-shaped values (scalars, string-keyed maps, collections, trees) straight from
+     * {@link JsonNodeFactory}, skipping {@code valueToTree}'s serialize-to-buffer round trip; other
+     * types go through the mapper, so the result always equals {@code MAPPER.valueToTree(value)}.
+     */
+    private static JsonNode toTree(@Nullable Object value) {
+        var nodes = JsonNodeFactory.instance;
+        return switch (value) {
+            case null -> nodes.nullNode();
+            case String text -> nodes.stringNode(text);
+            case Boolean flag -> nodes.booleanNode(flag);
+            case Integer i -> nodes.numberNode(i);
+            case Long l -> nodes.numberNode(l);
+            case Double d -> nodes.numberNode(d);
+            case Float f -> nodes.numberNode(f);
+            case BigDecimal d -> nodes.numberNode(d);
+            case BigInteger i -> nodes.numberNode(i);
+            case JsonNode node -> node.deepCopy();
+            case Map<?, ?> map
+            when hasOnlyStringKeys(map) -> {
+                var node = nodes.objectNode();
+                map.forEach((key, item) -> node.set((String) key, toTree(item)));
+                yield node;
+            }
+            case Collection<?> items -> {
+                var array = nodes.arrayNode(items.size());
+                items.forEach(item -> array.add(toTree(item)));
+                yield array;
+            }
+            default -> MAPPER.valueToTree(value);
+        };
+    }
+
+    private static boolean hasOnlyStringKeys(Map<?, ?> map) {
+        for (var key : map.keySet()) {
+            if (!(key instanceof String)) return false;
+        }
+        return true;
     }
 
     /**
@@ -207,12 +230,27 @@ public final class JsonUtils {
         return parseJsonNode(JsonRpcCodec.writeValueAsString(value));
     }
 
+    /**
+     * Parses one JSON document as JSON-RPC wire text: integers that fit a long become longs.
+     *
+     * @param json the JSON text
+     * @return the tree
+     * @throws JacksonException when the text is not exactly one JSON value
+     */
     public static JsonNode parseJsonNode(String json) {
-        try (var p = FACTORY.createParser(TREE_READ_CONTEXT, json)) {
-            p.nextToken();
-            return readTreeValue(p);
-        } catch (IOException e) {
-            throw new UncheckedIOException("Failed to parse JSON", e);
+        return readDocument(json, true);
+    }
+
+    private static JsonNode readDocument(String json, boolean wire) {
+        try (var p = CodecSupport.createParser(json)) {
+            if (p.nextToken() == null) {
+                throw MismatchedInputException.from(p, JsonNode.class, "No content to parse");
+            }
+            var node = wire ? CodecSupport.readWireTree(p) : CodecSupport.readTree(p);
+            if (p.nextToken() != null) {
+                throw MismatchedInputException.from(p, JsonNode.class, "Trailing token after JSON value");
+            }
+            return node;
         }
     }
 
@@ -253,7 +291,7 @@ public final class JsonUtils {
         }
         if (value != null) {
             var json = serializer.serialize(value);
-            var node = MAPPER.readTree(json);
+            var node = parse(json);
             return node.isObject() ? node : null;
         }
         return null;

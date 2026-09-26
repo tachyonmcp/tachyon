@@ -147,9 +147,9 @@ class SkillsExtensionTest {
         context.setSession(session);
         if (negotiate) {
             var handler = server.getHandler("initialize");
-            var caps = ClientCapabilities.builder()
-                    .extensions(Map.of(SkillsExtension.ID, JsonNodeFactory.instance.objectNode()))
-                    .build();
+            var extensions = JsonNodeFactory.instance.objectNode();
+            extensions.putObject(SkillsExtension.ID);
+            var caps = ClientCapabilities.builder().extensions(extensions).build();
             var params = InitializeRequestParams.builder()
                     .protocolVersion("2025-11-25")
                     .capabilities(caps)

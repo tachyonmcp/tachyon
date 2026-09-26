@@ -2,8 +2,8 @@
 title: Findings
 tags: [meta, findings]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/]
-updated: 2026-09-25
-commit: cbfbcd7f
+updated: 2026-09-26
+commit: 31900e6a
 ---
 
 # 🔎 Findings
@@ -22,6 +22,7 @@ Spotted while reading code. Runtime verification noted per finding. Fixed in cod
 - ⚠️ One `subscriptions/listen` request costs one connector `get` per named task id, sequentially on its handler thread; the only bound is `maxContentLength` (1 MB), so one request can fan out to thousands of backend lookups. Cap the id count if connectors are expensive. `DefaultTaskRegistry#readableTaskIds`
 - 🪶 A publish racing janitor eviction can land on the evicted entry: `putIfAbsent` returned it, then `TaskEntry#evictIfExpired` removed it before `TaskEntry#publish`. The status is still sent, but the newer revision is not cached. Benign: the cache is a projection and the next `tasks/get` re-caches the connector's snapshot. Pre-existing (the old `entries.get` path had the same window). `DefaultTaskRegistry#publish`
 - ⚠️ Task cache is unbounded for non-terminal tasks without `ttl`: the janitor evicts entries past `ttl` or terminal past keepAlive (`TaskEntry#isExpired`). An abandoned `working` task with `ttl = null` stays forever. `DefaultTaskRegistry#runJanitorSweep`
+- ⚠️ SEP-2640 `"resources": "dynamic"` unsupported. The schema carries `SkillResource[] | "dynamic"`, but `skills-2026-07-28_config.json` maps `Skill.resources` to `List<SkillResource>`, and `SkillsRegistry.Skill` has no dynamic flag, so a generated-content skill can't be served. Fix needs both: a wire model for the union (generator support or a `JsonNode` mapping) and a registry API for dynamic skills. `SkillsExtension#skillEntry`
 - 🪶 Task notifications are sent under the per-task `TaskEntry` lock (for ordering). SSE sends never park (session status offers, `DefaultTachyonServer#notifyTaskStatus`), but a custom `SessionEventStore#append` that blocks (remote store) serializes publishers of that task behind its I/O. `TaskEntry#notifyIfNewer`
 
 ## 🪶 Polish
@@ -33,4 +34,4 @@ Spotted while reading code. Runtime verification noted per finding. Fixed in cod
 - **Q:** Multi-node: event log store (`SessionEventStore`) replay across nodes? - **A:** No
 - 2026-07-28 + stateful server: dispatcher bypasses sessions via `supportsSessions=false`; GET stream not matched for 2026 → only `subscriptions/listen`. Confirm intended.
 - ⚠️ `MISSING_REQUIRED_CLIENT_CAPABILITY` maps to -32003 on 2025-11-25 (`McpResponseMapper`), -32021 only on 2026-07-28. SEP-2133 / Python SDK use -32021. Decide whether the 2025 wire should switch.
-- ⚠️ Core ts2java configs map `RequestId` → `String`, so generated core request models turn a numeric JSON-RPC `id` into a string on decode/encode. The tasks extension maps it to `JsonNode`. `tachyon-core/protocol/mcp-2026-07-28_config.json`, `tachyon-core/protocol/mcp-2025-11-25_config.json`
+- ⚠️ Generated skills `Skill.resources` is `List<SkillResource>` (config override): schema's `SkillResource[] | "dynamic"` has no ts2java mapping. Fine while registries only publish scanned files; dynamic skills need a union type. `extensions/tachyon-extensions-skills/protocol/skills-2026-07-28_config.json`

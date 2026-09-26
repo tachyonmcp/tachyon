@@ -3,16 +3,39 @@ package dev.tachyonmcp.core.transport.jsonrpc;
 
 import static net.javacrumbs.jsonunit.assertj.JsonAssertions.assertThatJson;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.tachyonmcp.api.server.domain.RequestId;
+import dev.tachyonmcp.core.protocol.codec.CodecSupport;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
+import java.io.IOException;
+import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import tools.jackson.databind.JsonNode;
 
 class JsonRpcCodecTest {
+
+    @Test
+    void parseRequestKeepsIntegersWiderThanLongAndWidensTheRest() {
+        // language=JSON
+        var json = """
+            {"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"big":12345678901234567890,"small":7,"ratio":0.5}}
+            """;
+
+        var message = JsonRpcCodec.parseRequest(Unpooled.copiedBuffer(json, StandardCharsets.UTF_8));
+
+        assertThat(message).isInstanceOfSatisfying(JsonRpcMessage.Request.class, request -> {
+            var params = (JsonNode) request.params();
+            assertThat(params.get("big").bigIntegerValue()).isEqualTo(new BigInteger("12345678901234567890"));
+            assertThat(params.get("small").isLong()).isTrue();
+            assertThat(params.get("ratio").doubleValue()).isEqualTo(0.5);
+        });
+    }
 
     @Test
     void serializeNotificationAsStringContainsRequiredFields() {
@@ -57,6 +80,31 @@ class JsonRpcCodecTest {
               "params": {}
             }
             """);
+    }
+
+    @Test
+    void floatsAreWrittenAsShortestFloatNumbers() {
+        assertThat(JsonRpcCodec.writeValueAsString(0.1f)).isEqualTo("0.1");
+        assertThat(JsonRpcCodec.writeValueAsString(java.util.List.of(1.5f, -0.25f, Float.MAX_VALUE)))
+                .isEqualTo("[1.5,-0.25,3.4028235E38]");
+        assertThat(JsonRpcCodec.writeValueAsString(java.util.Map.of("ratio", 0.1f)))
+                .isEqualTo("{\"ratio\":0.1}");
+    }
+
+    @ParameterizedTest
+    @CsvSource(
+            delimiter = '|',
+            value = {"[]|2|END_ARRAY", "{}|2|END_OBJECT", "{\"a\":1}|2|PROPERTY_NAME"})
+    void readGenericValueRejectsNonValueTokens(String json, int advance, String token) throws Exception {
+        try (var parser = CodecSupport.createParser(json)) {
+            for (var i = 0; i < advance; i++) {
+                parser.nextToken();
+            }
+
+            assertThatThrownBy(() -> JsonRpcCodec.readGenericValue(parser))
+                    .isInstanceOf(IOException.class)
+                    .hasMessage("Unexpected token: " + token);
+        }
     }
 
     @Test

@@ -2,8 +2,8 @@
 title: tachyon-core
 tags: [module, core]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/, tachyon-core/src/main/resources/, tachyon-core/pom.xml]
-updated: 2026-09-25
-commit: 55b278f2
+updated: 2026-09-26
+commit: 31900e6a
 ---
 
 # ⚙️ tachyon-core
@@ -57,4 +57,4 @@ Verdict: the runtime. ~190 main files. Deps: `slf4j-api`, `netty-codec-http`, `n
 
 ## 🧪 Unit tests
 
-`tachyon-core/src/test/java/dev/tachyonmcp/core/` mirrors packages: `server/McpDispatcherTest`, `ServerTest`, `ServerBuilderTest`, `ServerShutdownGraceTest`, `ObservationDispatchTest`; `transport/netty/*HandlerTest`, `ForeignThreadContinuationTest`, `NettyServerThreadingTest`; `protocol/mcp/v*/codecs/*MapperTest`; `session/SessionManagerTest`, `InMemorySessionStoreTest`, `InMemorySessionEventStoreTest`; test utils `core/test/TestUtils`, `VirtualThreads`. JMH benchmarks (not Surefire, JaCoCo-excluded `*Benchmark*`, `tachyon-core/pom.xml`): `session/InMemorySessionEventStoreBenchmark`, `session/InMemorySessionStoreBenchmark`, gated by `BenchmarkGate` (`make jmh`) — see [[testing]].
+`tachyon-core/src/test/java/dev/tachyonmcp/core/` mirrors packages: `server/McpDispatcherTest`, `ServerTest`, `ServerBuilderTest`, `ServerShutdownGraceTest`, `ObservationDispatchTest`; `transport/netty/*HandlerTest`, `ForeignThreadContinuationTest`, `NettyServerThreadingTest`; `protocol/mcp/v*/codecs/*MapperTest`; `session/SessionManagerTest`, `InMemorySessionStoreTest`, `InMemorySessionEventStoreTest`; test utils `core/test/TestUtils`, `VirtualThreads`. JMH benchmarks (not Surefire, JaCoCo-excluded `*Benchmark*`, `tachyon-core/pom.xml`): `session/InMemorySessionEventStoreBenchmark`, `session/InMemorySessionStoreBenchmark`, `server/json/JsonNodeMapBenchmark`, `protocol/CodecBenchmark`, `protocol/ResponseMapperBenchmark` (no floors), gated by `BenchmarkGate` (`make jmh`) — see [[testing]].

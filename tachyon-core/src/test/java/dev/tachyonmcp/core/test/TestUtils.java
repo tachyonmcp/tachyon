@@ -1,19 +1,19 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
 package dev.tachyonmcp.core.test;
 
-import static dev.tachyonmcp.core.server.json.JsonUtils.TREE_READ_CONTEXT;
-
-import dev.tachyonmcp.core.protocol.mcp.v2025_11_25.codecs.Codec;
 import dev.tachyonmcp.core.server.RpcMethodHandler;
 import dev.tachyonmcp.core.server.ServerBuilder;
 import dev.tachyonmcp.core.server.TachyonServer;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
+import dev.tachyonmcp.core.server.json.JsonUtils;
 import dev.tachyonmcp.core.server.session.DispatchContext;
-import dev.tachyonmcp.core.transport.jsonrpc.JsonRpcCodec;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.concurrent.CompletionStage;
 import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ObjectNode;
 
 public class TestUtils {
 
@@ -55,11 +55,15 @@ public class TestUtils {
     }
 
     public static JsonNode parseJson(String json) {
-        try (var p = Codec.FACTORY.createParser(TREE_READ_CONTEXT, json)) {
-            p.nextToken();
-            return JsonRpcCodec.readTreeValue(p);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
+        return JsonUtils.parseJsonNode(json);
+    }
+
+    /** The node's properties as an ordered map, for AssertJ map assertions; empty for {@code null}. */
+    public static Map<String, JsonNode> properties(@Nullable ObjectNode node) {
+        var map = new LinkedHashMap<String, JsonNode>();
+        if (node != null) {
+            node.properties().forEach(property -> map.put(property.getKey(), property.getValue()));
         }
+        return map;
     }
 }

@@ -14,6 +14,9 @@ import dev.tachyonmcp.api.server.extensions.ServerExtension;
 import dev.tachyonmcp.api.server.features.resources.ResourceDescriptor;
 import dev.tachyonmcp.core.server.domain.ServerErrors;
 import dev.tachyonmcp.core.server.features.resources.MimeTypes;
+import dev.tachyonmcp.core.server.json.JsonUtils;
+import dev.tachyonmcp.extensions.skills.protocol.v2026_07_28.models.Skill;
+import dev.tachyonmcp.extensions.skills.protocol.v2026_07_28.models.SkillResource;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -234,20 +237,13 @@ public final class SkillsExtension implements ServerExtension {
                 .toList();
     }
 
-    private static Map<String, Object> skillEntry(SkillsRegistry.Skill skill) {
-        var resources = new ArrayList<Map<String, Object>>(skill.files().size());
-        for (var file : skill.files()) {
-            var resource = new LinkedHashMap<String, Object>();
-            resource.put("uri", file.uri());
-            resource.put("digest", file.digest());
-            resource.put("size", file.size());
-            resources.add(resource);
-        }
-        var entry = new LinkedHashMap<String, Object>();
-        entry.put("uri", skill.skillUri());
-        entry.put("frontmatter", skill.frontmatter());
-        entry.put("resources", resources);
-        return entry;
+    private static Skill skillEntry(SkillsRegistry.Skill skill) {
+        return new Skill(
+                skill.skillUri(),
+                JsonUtils.toObjectTree(skill.frontmatter()),
+                skill.files().stream()
+                        .map(file -> new SkillResource(file.uri(), file.digest(), file.size()))
+                        .toList());
     }
 
     private SkillsRegistry.@Nullable Skill findSkill(String uri) {

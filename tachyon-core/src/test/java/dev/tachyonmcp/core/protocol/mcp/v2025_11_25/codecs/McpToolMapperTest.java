@@ -1,6 +1,7 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
 package dev.tachyonmcp.core.protocol.mcp.v2025_11_25.codecs;
 
+import static dev.tachyonmcp.core.test.TestUtils.properties;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.tachyonmcp.api.server.domain.AudioContent;
@@ -81,7 +82,7 @@ class McpToolMapperTest {
         var domain = TextContent.of("hello", meta, null);
         var protocol = (dev.tachyonmcp.core.protocol.mcp.v2025_11_25.models.TextContent)
                 McpToolMapper.toProtocolContentBlock(domain);
-        assertThat(protocol._meta()).containsEntry("key", PROTOCOL_META_VALUE);
+        assertThat(properties(protocol._meta())).containsEntry("key", PROTOCOL_META_VALUE);
 
         var back = (TextContent) McpToolMapper.toDomainContentBlock(protocol);
         assertThat(back.meta()).containsEntry("key", META_VALUE);
@@ -93,7 +94,7 @@ class McpToolMapperTest {
         var domain = ImageContent.of(DATA_BYTES, "image/png", null, meta);
         var protocol = (dev.tachyonmcp.core.protocol.mcp.v2025_11_25.models.ImageContent)
                 McpToolMapper.toProtocolContentBlock(domain);
-        assertThat(protocol._meta()).containsEntry("key", PROTOCOL_META_VALUE);
+        assertThat(properties(protocol._meta())).containsEntry("key", PROTOCOL_META_VALUE);
 
         var back = (ImageContent) McpToolMapper.toDomainContentBlock(protocol);
         assertThat(back.meta()).containsEntry("key", META_VALUE);
@@ -105,7 +106,7 @@ class McpToolMapperTest {
         var domain = AudioContent.of(DATA_BYTES, "audio/wav", null, meta);
         var protocol = (dev.tachyonmcp.core.protocol.mcp.v2025_11_25.models.AudioContent)
                 McpToolMapper.toProtocolContentBlock(domain);
-        assertThat(protocol._meta()).containsEntry("key", PROTOCOL_META_VALUE);
+        assertThat(properties(protocol._meta())).containsEntry("key", PROTOCOL_META_VALUE);
 
         var back = (AudioContent) McpToolMapper.toDomainContentBlock(protocol);
         assertThat(back.meta()).containsEntry("key", META_VALUE);
@@ -119,7 +120,7 @@ class McpToolMapperTest {
                 .build();
         var protocol = (dev.tachyonmcp.core.protocol.mcp.v2025_11_25.models.ResourceLink)
                 McpToolMapper.toProtocolContentBlock(domain);
-        assertThat(protocol._meta()).containsEntry("key", PROTOCOL_META_VALUE);
+        assertThat(properties(protocol._meta())).containsEntry("key", PROTOCOL_META_VALUE);
 
         var back = (ResourceLink) McpToolMapper.toDomainContentBlock(protocol);
         assertThat(back.meta()).containsEntry("key", META_VALUE);
@@ -132,7 +133,7 @@ class McpToolMapperTest {
         var domain = EmbeddedResource.of(contents, null, meta);
         var protocol = (dev.tachyonmcp.core.protocol.mcp.v2025_11_25.models.EmbeddedResource)
                 McpToolMapper.toProtocolContentBlock(domain);
-        assertThat(protocol._meta()).containsEntry("key", PROTOCOL_META_VALUE);
+        assertThat(properties(protocol._meta())).containsEntry("key", PROTOCOL_META_VALUE);
 
         var back = (EmbeddedResource) McpToolMapper.toDomainContentBlock(protocol);
         assertThat(back.meta()).containsEntry("key", META_VALUE);
@@ -144,7 +145,7 @@ class McpToolMapperTest {
         var domain = TextResourceContents.of("test://uri", "content", "text/plain", meta);
         var protocol = (dev.tachyonmcp.core.protocol.mcp.v2025_11_25.models.TextResourceContents)
                 McpToolMapper.toProtocolResourceContents(domain);
-        assertThat(protocol._meta()).containsEntry("key", PROTOCOL_META_VALUE);
+        assertThat(properties(protocol._meta())).containsEntry("key", PROTOCOL_META_VALUE);
 
         var back = (TextResourceContents) McpToolMapper.toDomainResourceContents(protocol);
         assertThat(back.meta()).containsEntry("key", META_VALUE);
@@ -156,7 +157,7 @@ class McpToolMapperTest {
         var domain = BlobResourceContents.of("test://blob", DATA_BYTES, "application/octet-stream", meta);
         var protocol = (dev.tachyonmcp.core.protocol.mcp.v2025_11_25.models.BlobResourceContents)
                 McpToolMapper.toProtocolResourceContents(domain);
-        assertThat(protocol._meta()).containsEntry("key", PROTOCOL_META_VALUE);
+        assertThat(properties(protocol._meta())).containsEntry("key", PROTOCOL_META_VALUE);
 
         var back = (BlobResourceContents) McpToolMapper.toDomainResourceContents(protocol);
         assertThat(back.meta()).containsEntry("key", META_VALUE);

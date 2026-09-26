@@ -1,6 +1,7 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
 package dev.tachyonmcp.core.transport.jsonrpc;
 
+import dev.tachyonmcp.core.protocol.codec.CodecSupport;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -10,18 +11,15 @@ import org.jspecify.annotations.Nullable;
 import tools.jackson.core.JsonEncoding;
 import tools.jackson.core.JsonGenerator;
 import tools.jackson.core.ObjectWriteContext;
-import tools.jackson.core.json.JsonFactory;
 import tools.jackson.databind.JsonNode;
 
 public final class ValueSerializer {
-
-    private static final JsonFactory FACTORY = new JsonFactory();
 
     private ValueSerializer() {}
 
     public static @Nullable String writeValueAsString(@Nullable Object value) {
         try (var out = new ByteArrayOutputStream(256);
-                var gen = FACTORY.createGenerator(ObjectWriteContext.empty(), out, JsonEncoding.UTF8)) {
+                var gen = CodecSupport.FACTORY.createGenerator(ObjectWriteContext.empty(), out, JsonEncoding.UTF8)) {
             writeJsonValue(gen, value);
             gen.flush();
             return out.toString();
@@ -33,7 +31,7 @@ public final class ValueSerializer {
     public static void writeJsonValue(JsonGenerator gen, @Nullable Object value) {
         switch (value) {
             case null -> gen.writeNull();
-            case JsonNode node -> gen.writeRawValue(node.toString());
+            case JsonNode node -> CodecSupport.writeTree(gen, node);
             case Map<?, ?> map -> {
                 gen.writeStartObject();
                 for (var entry : map.entrySet()) {
@@ -55,7 +53,11 @@ public final class ValueSerializer {
             case Double d -> gen.writeNumber(d);
             case Float f -> gen.writeNumber(f);
             case Boolean b -> gen.writeBoolean(b);
-            default -> gen.writeString(value.toString());
+            default -> {
+                if (!GeneratedCodecs.encode(gen, value)) {
+                    gen.writeString(value.toString());
+                }
+            }
         }
     }
 }

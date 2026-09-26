@@ -2,13 +2,21 @@
 package dev.tachyonmcp.core.server.json;
 
 import static dev.tachyonmcp.core.test.TestUtils.parseJson;
+import static dev.tachyonmcp.core.test.TestUtils.properties;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import dev.tachyonmcp.api.json.JsonDocument;
 import dev.tachyonmcp.api.json.PayloadSerializer;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.time.Duration;
+import java.time.Instant;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -32,6 +40,44 @@ class JsonUtilsTest {
         var result = JsonUtils.mapper().convertValue(Map.of(), WithTtl.class);
 
         assertThat(result.ttl()).isNull();
+    }
+
+    @Test
+    void toObjectTreeBuildsTheSameTreesAsValueToTree() {
+        var nested = new LinkedHashMap<String, Object>();
+        nested.put("taskId", "t-1");
+        nested.put("missing", null);
+        nested.put("tags", new LinkedHashSet<>(List.of("a", "b")));
+        var values = new LinkedHashMap<String, Object>();
+        values.put("null", null);
+        values.put("text", "req-42");
+        values.put("flag", true);
+        values.put("int", 7);
+        values.put("long", 1L << 40);
+        values.put("short", (short) 3);
+        values.put("byte", (byte) 4);
+        values.put("double", 1.5d);
+        values.put("float", 2.5f);
+        values.put("decimal", new BigDecimal("1.10"));
+        values.put("bigint", new BigInteger("12345678901234567890"));
+        values.put("bytes", new byte[] {1, 2});
+        values.put("instant", Instant.EPOCH);
+        values.put("list", Arrays.asList("a", null, 1));
+        values.put("nested", nested);
+        values.put("intKeys", Map.of(1, "one"));
+        values.put("tree", JsonNodeFactory.instance.objectNode().put("k", 1));
+
+        var result = JsonUtils.toObjectTree(values);
+
+        assertThat(properties(result)).containsExactlyEntriesOf(expectedTrees(values));
+        assertThat(result.get("tree")).isNotSameAs(values.get("tree"));
+        assertThat(JsonUtils.toObjectTree(null)).isNull();
+    }
+
+    private static Map<String, JsonNode> expectedTrees(Map<String, Object> values) {
+        var expected = new LinkedHashMap<String, JsonNode>();
+        values.forEach((key, value) -> expected.put(key, JsonUtils.mapper().valueToTree(value)));
+        return expected;
     }
 
     @Test

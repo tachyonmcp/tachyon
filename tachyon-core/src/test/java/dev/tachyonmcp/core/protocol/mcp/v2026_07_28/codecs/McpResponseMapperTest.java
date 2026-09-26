@@ -1,6 +1,7 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
 package dev.tachyonmcp.core.protocol.mcp.v2026_07_28.codecs;
 
+import static dev.tachyonmcp.core.test.TestUtils.properties;
 import static net.javacrumbs.jsonunit.assertj.JsonAssertions.assertThatJson;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -9,6 +10,7 @@ import dev.tachyonmcp.api.json.JsonSchema;
 import dev.tachyonmcp.api.server.domain.Annotations;
 import dev.tachyonmcp.api.server.domain.FormInputRequest;
 import dev.tachyonmcp.api.server.domain.Icon;
+import dev.tachyonmcp.api.server.domain.ImageContent;
 import dev.tachyonmcp.api.server.domain.LoggingLevel;
 import dev.tachyonmcp.api.server.domain.ProgressToken;
 import dev.tachyonmcp.api.server.domain.PromptArgument;
@@ -76,7 +78,8 @@ class McpResponseMapperTest {
         assertThat(result.resultType()).isEqualTo("complete");
         assertThat(result.completion().values()).containsExactly("one");
         assertThat(result.completion().total()).isEqualTo(100500);
-        assertThat(result._meta()).containsEntry("trace", JsonNodeFactory.instance.stringNode("complete-1"));
+        assertThat(properties(result._meta()))
+                .containsEntry("trace", JsonNodeFactory.instance.stringNode("complete-1"));
     }
 
     @Test
@@ -104,9 +107,29 @@ class McpResponseMapperTest {
         assertThat(result.resultType()).isEqualTo("complete");
         assertThat(result.structuredContent())
                 .isEqualTo(JsonNodeFactory.instance.arrayNode().add(1).add(true));
-        assertThat(result._meta())
+        assertThat(properties(result._meta()))
                 .containsEntry("trace", JsonNodeFactory.instance.objectNode().put("id", 7));
         assertThat(result.content()).hasSize(1);
+    }
+
+    @Test
+    void completedTaskInlinesBinaryContentAndNumbersAsOnTheWire() {
+        var result = ToolResult.Success.of(
+                Map.of("count", 3, "ratio", 0.5),
+                List.of(ImageContent.of(new byte[] {1, 2, 3}, "image/png"), TextContent.of("done")));
+        var snapshot = TaskSnapshot.completed("task-1", Instant.EPOCH, Instant.EPOCH, 2, result);
+
+        var json = mapper.encode(mapper.getTaskResult(snapshot));
+
+        assertThatJson(json).inPath("$.result").isEqualTo("""
+                {
+                  "content": [
+                    {"type": "image", "data": "AQID", "mimeType": "image/png"},
+                    {"type": "text", "text": "done"}
+                  ],
+                  "structuredContent": {"count": 3, "ratio": 0.5},
+                  "resultType": "complete"
+                }""");
     }
 
     @Test
@@ -117,7 +140,7 @@ class McpResponseMapperTest {
         assertThat(result.resultType()).isEqualTo("complete");
         assertThat(result.description()).isEqualTo("Greeting");
         assertThat(result.messages()).hasSize(1);
-        assertThat(result._meta()).containsEntry("trace", JsonNodeFactory.instance.stringNode("prompt-1"));
+        assertThat(properties(result._meta())).containsEntry("trace", JsonNodeFactory.instance.stringNode("prompt-1"));
     }
 
     @Test
@@ -159,22 +182,22 @@ class McpResponseMapperTest {
 
         assertThat(toolResult.tools().getFirst().annotations().readOnlyHint()).isTrue();
         assertThat(toolResult.tools().getFirst().icons()).hasSize(1);
-        assertThat(toolResult.tools().getFirst()._meta())
+        assertThat(properties(toolResult.tools().getFirst()._meta()))
                 .containsEntry("kind", JsonNodeFactory.instance.stringNode("tool"));
         assertThat(resourceResult.resources().getFirst().annotations().priority())
                 .isEqualTo(0.5);
         assertThat(resourceResult.resources().getFirst().icons()).hasSize(1);
-        assertThat(resourceResult.resources().getFirst()._meta())
+        assertThat(properties(resourceResult.resources().getFirst()._meta()))
                 .containsEntry("kind", JsonNodeFactory.instance.stringNode("resource"));
         assertThat(templateResult.resourceTemplates().getFirst().annotations().priority())
                 .isEqualTo(0.5);
         assertThat(templateResult.resourceTemplates().getFirst().icons()).hasSize(1);
-        assertThat(templateResult.resourceTemplates().getFirst()._meta())
+        assertThat(properties(templateResult.resourceTemplates().getFirst()._meta()))
                 .containsEntry("kind", JsonNodeFactory.instance.stringNode("template"));
         assertThat(promptResult.prompts().getFirst().arguments().getFirst().name())
                 .isEqualTo("name");
         assertThat(promptResult.prompts().getFirst().icons()).hasSize(1);
-        assertThat(promptResult.prompts().getFirst()._meta())
+        assertThat(properties(promptResult.prompts().getFirst()._meta()))
                 .containsEntry("kind", JsonNodeFactory.instance.stringNode("prompt"));
     }
 

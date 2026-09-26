@@ -19,7 +19,7 @@ final class McpResourceMapper {
                 d.mimeType(),
                 ContentBlockMappers.toProtocolAnnotations(d.annotations()),
                 d.size(),
-                JsonUtils.toJsonNodeMap(d.meta()),
+                JsonUtils.toObjectTree(d.meta()),
                 d.name(),
                 d.title(),
                 ContentBlockMappers.toProtocolIcons(d.icons()));
@@ -31,7 +31,7 @@ final class McpResourceMapper {
                 descriptor.description(),
                 descriptor.mimeType(),
                 ContentBlockMappers.toProtocolAnnotations(descriptor.annotations()),
-                JsonUtils.toJsonNodeMap(descriptor.meta()),
+                JsonUtils.toObjectTree(descriptor.meta()),
                 descriptor.name(),
                 descriptor.title(),
                 ContentBlockMappers.toProtocolIcons(descriptor.icons()));
