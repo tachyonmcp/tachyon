@@ -2,8 +2,8 @@
 title: Configuration
 tags: [concept, config, builder]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/server/ServerBuilder.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultServerBuilder.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/, tachyon-api/src/main/java/dev/tachyonmcp/api/server/config/]
-updated: 2026-09-24
-commit: d2a0bdba
+updated: 2026-09-26
+commit: e1dcfc68
 ---
 
 # 🎛️ Configuration
@@ -46,7 +46,7 @@ Verdict: `ServerBuilder` exposes grouped `Consumer<X.Builder>` configurers + sho
 | feature modes | `AUTO`, listChanged false, page 50 | `FeatureConfig#DEFAULT`, `ResourcesConfig#DEFAULT` |
 | completions | `AUTO` | `CapabilitiesConfig#DEFAULT` |
 | logging capability | **false** | same |
-| tasks | disabled; keepAlive 5min | `TasksConfig#DEFAULT_TASK_KEEP_ALIVE` |
+| tasks | not a capability: `withExtension(TasksExtension.class, …)`; keepAlive 5min | `TaskEngineSettings#DEFAULT_KEEP_ALIVE` |
 | shutdown grace / request timeout | 5s / 60s | `RuntimeConfig#shutdownGracePeriod` |
 | slow request log | `MonitoringConfig.DEFAULT` | `tachyon-api/.../config/MonitoringConfig.java` |
 | payload capture | all off, 4096 bytes | `PayloadCapturePolicy#DEFAULT_MAX_BYTES` |

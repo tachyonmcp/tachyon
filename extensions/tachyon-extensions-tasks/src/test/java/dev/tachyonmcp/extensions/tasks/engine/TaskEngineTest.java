@@ -1,17 +1,14 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
-package dev.tachyonmcp.core.server.features.tasks;
+package dev.tachyonmcp.extensions.tasks.engine;
 
-import static dev.tachyonmcp.core.test.TestUtils.newEngine;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import dev.tachyonmcp.api.server.domain.ProgressToken;
 import dev.tachyonmcp.api.server.domain.TaskResult;
 import dev.tachyonmcp.api.server.features.tasks.TaskConnector;
 import dev.tachyonmcp.api.server.features.tasks.TaskNotFoundException;
 import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
 import dev.tachyonmcp.api.server.features.tasks.TaskState;
-import dev.tachyonmcp.core.server.config.TasksConfig;
-import dev.tachyonmcp.core.server.internal.ServerEngine;
+import dev.tachyonmcp.core.server.features.Pagination;
 import dev.tachyonmcp.core.server.session.NoopInteractionContext;
 import java.io.IOException;
 import java.time.Clock;
@@ -22,38 +19,30 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Map;
 import java.util.Set;
-import org.junit.jupiter.api.AfterEach;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 
-class DefaultTaskRegistryTest {
+class TaskEngineTest {
 
-    private final ServerEngine server = newEngine(builder -> {});
     private final MutableClock clock = new MutableClock(Instant.parse("2026-08-27T07:00:00Z"));
-    private final DefaultTaskRegistry registry = new DefaultTaskRegistry(
-            server,
-            TasksConfig.builder()
-                    .enabled(true)
-                    .connector(TaskConnector.builder()
+    private final TaskEngine registry = new TaskEngine(
+            new TaskEngineSettings(
+                    TaskConnector.builder()
                             .get((ctx, request) -> null)
                             .cancel((ctx, request) -> {})
                             .update((ctx, request) -> {})
-                            .build())
-                    .keepAlive(Duration.ofMinutes(5))
-                    .pollInterval(Duration.ofSeconds(2))
-                    .build(),
+                            .build(),
+                    Pagination.DEFAULT_PAGE_SIZE,
+                    Duration.ofMinutes(5),
+                    Duration.ofSeconds(2)),
             clock);
-
-    @AfterEach
-    void tearDown() {
-        server.close();
-    }
 
     @Test
     void publishAcceptsOnlyNewerRevisions() {
         var revisionOne = snapshot("task-1", TaskState.WORKING, 1);
         var revisionTwo = snapshot("task-1", TaskState.COMPLETED, 2);
 
-        assertThat(registry.publish(revisionOne, new TaskRoute("caller", null)).revision())
+        assertThat(registry.publish(revisionOne, new TestRoute("caller")).revision())
                 .isEqualTo(1);
         var storedRevisionTwo = registry.publish(revisionTwo);
         assertThat(storedRevisionTwo.revision()).isEqualTo(2);
@@ -63,7 +52,7 @@ class DefaultTaskRegistryTest {
 
     @Test
     void publishCachesAnUnknownTaskAndARoutedPublishNeverRefuses() {
-        var route = new TaskRoute("caller", ProgressToken.of("tok"));
+        var route = new TestRoute("caller");
 
         var published = registry.publish(snapshot("task-1", TaskState.WORKING, 2));
         assertThat(registry.get("task-1")).as("publish caches an unknown task").isEqualTo(published);
@@ -71,7 +60,7 @@ class DefaultTaskRegistryTest {
         assertThat(registry.publish(snapshot("task-1", TaskState.WORKING, 1), route))
                 .as("an older revision from the tool call keeps the cached one")
                 .isEqualTo(published);
-        assertThat(registry.publish(snapshot("task-1", TaskState.COMPLETED, 3), new TaskRoute("other", null))
+        assertThat(registry.publish(snapshot("task-1", TaskState.COMPLETED, 3), new TestRoute("other"))
                         .revision())
                 .as("a colliding tool call is never refused; access is the connector's decision")
                 .isEqualTo(3);
@@ -80,11 +69,9 @@ class DefaultTaskRegistryTest {
     @Test
     void readableTaskIdsKeepOnlyWhatTheConnectorAnswersAndFailClosed() {
         var readable = snapshot("readable", TaskState.WORKING, 1);
-        var guarded = new DefaultTaskRegistry(
-                server,
-                TasksConfig.builder()
-                        .enabled(true)
-                        .connector(TaskConnector.builder()
+        var guarded = new TaskEngine(
+                new TaskEngineSettings(
+                        TaskConnector.builder()
                                 .get((ctx, request) -> switch (request.taskId()) {
                                     case "readable" -> readable;
                                     case "failing" -> throw new IOException("introspection endpoint unavailable");
@@ -92,8 +79,10 @@ class DefaultTaskRegistryTest {
                                 })
                                 .cancel((ctx, request) -> {})
                                 .update((ctx, request) -> {})
-                                .build())
-                        .build(),
+                                .build(),
+                        Pagination.DEFAULT_PAGE_SIZE,
+                        TaskEngineSettings.DEFAULT_KEEP_ALIVE,
+                        null),
                 clock);
 
         assertThat(guarded.readableTaskIds(NoopInteractionContext.INSTANCE, Set.of("readable", "refused", "failing")))
@@ -109,19 +98,19 @@ class DefaultTaskRegistryTest {
     @Test
     void readableTaskIdsStopAtAnInterruptAndRestoreIt() {
         var asked = new ArrayList<String>();
-        var guarded = new DefaultTaskRegistry(
-                server,
-                TasksConfig.builder()
-                        .enabled(true)
-                        .connector(TaskConnector.builder()
+        var guarded = new TaskEngine(
+                new TaskEngineSettings(
+                        TaskConnector.builder()
                                 .get((ctx, request) -> {
                                     asked.add(request.taskId());
                                     throw new InterruptedException("executor shutting down");
                                 })
                                 .cancel((ctx, request) -> {})
                                 .update((ctx, request) -> {})
-                                .build())
-                        .build(),
+                                .build(),
+                        Pagination.DEFAULT_PAGE_SIZE,
+                        TaskEngineSettings.DEFAULT_KEEP_ALIVE,
+                        null),
                 clock);
 
         try {
@@ -178,6 +167,41 @@ class DefaultTaskRegistryTest {
 
         assertThat(zeroRetention.isExpired()).isFalse();
         assertThat(negativeRetention.isExpired()).isFalse();
+    }
+
+    @Test
+    void listenersReceiveEachRevisionOnceAlongTheFirstRoute() {
+        var events = new ArrayList<String>();
+        registry.addListener(new TaskEvents() {
+            @Override
+            public void onStatus(TaskSnapshot snapshot, TaskRoute route) {
+                events.add("status " + snapshot.taskId() + "@" + snapshot.revision() + " -> " + route);
+            }
+
+            @Override
+            public void onProgress(
+                    String taskId, TaskRoute route, double progress, @Nullable Double total, @Nullable String message) {
+                events.add("progress " + taskId + " " + progress + "/" + total + " " + message + " -> " + route);
+            }
+        });
+        var changes = new ArrayList<String>();
+        registry.onChange(() -> changes.add("changed"));
+        var owner = new TestRoute("owner");
+
+        registry.publish(snapshot("task-1", TaskState.WORKING, 1));
+        registry.publish(snapshot("task-1", TaskState.WORKING, 2), owner);
+        registry.publish(snapshot("task-1", TaskState.WORKING, 2), new TestRoute("intruder"));
+        registry.publish(snapshot("task-1", TaskState.COMPLETED, 3), new TestRoute("intruder"));
+        registry.reportProgress("task-1", 0.5, 1.0, "halfway");
+        registry.reportProgress("unknown", 0.5, null, null);
+
+        assertThat(events)
+                .containsExactly(
+                        "status task-1@1 -> TaskRoute.NONE",
+                        "status task-1@2 -> " + owner,
+                        "status task-1@3 -> " + owner,
+                        "progress task-1 0.5/1.0 halfway -> " + owner);
+        assertThat(changes).as("one change per accepted revision").hasSize(3);
     }
 
     @Test

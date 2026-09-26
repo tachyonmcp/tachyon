@@ -5,6 +5,7 @@ import static dev.tachyonmcp.testkit.JsonRpcResponseAssert.assertThat;
 
 import dev.tachyonmcp.api.server.domain.Icon;
 import dev.tachyonmcp.e2e.mcp.AbstractStatelessMcpE2eTest;
+import dev.tachyonmcp.extensions.tasks.TasksExtension;
 import dev.tachyonmcp.testkit.Mcp20251125Client;
 import dev.tachyonmcp.testkit.McpClient;
 import dev.tachyonmcp.testkit.TestTaskConnector;
@@ -38,8 +39,8 @@ class ServerInfoTest extends AbstractStatelessMcpE2eTest<McpClient> {
                         .prompts(true)
                         .tools(true)
                         .resources(true, true)
-                        .prompts(true)
-                        .tasks(taskEngine.connector())));
+                        .prompts(true))
+                .withExtension(TasksExtension.class, t -> t.connector(taskEngine.connector())));
 
         try (var client = createTestClient()) {
             // language=json

@@ -9,7 +9,14 @@ MCP projection. Temporal owns execution, retries, timers, durable waits, and can
     <artifactId>tachyon-tasks-temporal</artifactId>
     <version>${tachyon.version}</version>
 </dependency>
+<dependency>
+    <groupId>dev.tachyonmcp</groupId>
+    <artifactId>tachyon-extensions-tasks</artifactId>
+    <version>${tachyon.version}</version>
+</dependency>
 ```
+
+`tachyon-extensions-tasks` provides `TasksExtension`, which serves the MCP `tasks/*` methods.
 
 Define how an operation starts a Workflow, queries application-owned status, accepts input, and
 maps that status to a complete `TaskSnapshot`:
@@ -30,7 +37,7 @@ var taskEngine = TemporalTaskExecutionEngine.builder(workflowClient)
         .build();
 
 var server = TachyonServer.builder()
-        .capabilities(c -> c.tasks(taskEngine.connector()))
+        .withExtension(TasksExtension.class, t -> t.connector(taskEngine.connector()))
         .port(8080)
         .build();
 

@@ -1,6 +1,7 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
 package dev.tachyonmcp.e2e.mcp.v2025_11_25;
 
+import static dev.tachyonmcp.e2e.mcp.TasksSupport.tasks;
 import static dev.tachyonmcp.testkit.McpHttpResponseAssert.assertThatResponse;
 import static java.time.Duration.ofSeconds;
 import static net.javacrumbs.jsonunit.assertj.JsonAssertions.assertThatJson;
@@ -13,8 +14,8 @@ import dev.tachyonmcp.api.server.features.tasks.TaskNotFoundException;
 import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
 import dev.tachyonmcp.api.server.features.tasks.TaskSupport;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
-import dev.tachyonmcp.core.server.features.tasks.TasksExtension;
 import dev.tachyonmcp.core.server.json.JsonUtils;
+import dev.tachyonmcp.extensions.tasks.TasksExtension;
 import dev.tachyonmcp.testkit.Mcp20251125Client;
 import dev.tachyonmcp.testkit.Mcp20260728Client;
 import dev.tachyonmcp.testkit.McpTestClients;
@@ -51,7 +52,7 @@ class TaskConnectorAccessTest extends AbstractStatefulMcpE2eTest {
     protected void startDefaultServer() {
         var connector = sessionScopedConnector();
         startServer(
-                builder -> builder.capabilities(c -> c.tasks(connector)),
+                builder -> builder.withExtension(TasksExtension.class, t -> t.connector(connector)),
                 registrar -> registrar
                         .tools()
                         .register(b -> b.name("book").taskSupport(TaskSupport.REQUIRED), (context, request) -> {
@@ -188,13 +189,13 @@ class TaskConnectorAccessTest extends AbstractStatefulMcpE2eTest {
                     .containsExactly("open-task");
             assertThat(accessChecks).contains("private-task@null", "open-task@null");
 
-            server.tasks().publish(TaskSnapshot.working("private-task", CREATED_AT, 2));
+            tasks(server).publish(TaskSnapshot.working("private-task", CREATED_AT, 2));
             // Evicted, e.g. by ttl: the route is gone and the next publish caches the task unrouted.
-            assertThat(server.tasks().remove("private-task")).isTrue();
-            server.tasks()
+            assertThat(tasks(server).remove("private-task")).isTrue();
+            tasks(server)
                     .publish(TaskSnapshot.completed(
                             "private-task", CREATED_AT, CREATED_AT, 3, ToolResult.text("private result")));
-            server.tasks()
+            tasks(server)
                     .publish(TaskSnapshot.completed(
                             "open-task", CREATED_AT, CREATED_AT, 2, ToolResult.text("open result")));
 
@@ -229,7 +230,7 @@ class TaskConnectorAccessTest extends AbstractStatefulMcpE2eTest {
             var stream = listen(listener, 8, "shared-task");
             assertThat(acknowledgedTaskIds(stream)).containsExactly("shared-task");
 
-            server.tasks()
+            tasks(server)
                     .publish(TaskSnapshot.builder()
                             .from(TaskSnapshot.working("shared-task", CREATED_AT, 2))
                             .statusMessage("shared")

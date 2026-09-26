@@ -11,8 +11,10 @@ import dev.tachyonmcp.core.server.config.FeatureConfig;
 import dev.tachyonmcp.core.server.config.NetworkConfig;
 import dev.tachyonmcp.core.server.config.ResourcesConfig;
 import dev.tachyonmcp.core.server.config.SessionConfig;
-import dev.tachyonmcp.core.server.config.TasksConfig;
+import dev.tachyonmcp.core.server.ServerBuilder;
+import dev.tachyonmcp.core.server.TachyonServer;
 import dev.tachyonmcp.core.transport.netty.NettyIoEngine;
+import dev.tachyonmcp.extensions.tasks.TasksExtension;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -25,16 +27,10 @@ final class ConfigReference {
 
     /**
      * Capabilities — which MCP features to advertise. Each feature has its own config type:
-     * {@link FeatureConfig} (tools/prompts), {@link ResourcesConfig}, {@link TasksConfig}.
+     * {@link FeatureConfig} (tools/prompts), {@link ResourcesConfig}. Tasks are an extension: see
+     * {@link #tasks()}.
      */
     static CapabilitiesConfig capabilities() {
-        // Modern Tasks requires get/cancel/update. Legacy list/awaitResult remain optional.
-        var taskConnector = TaskConnector.builder()
-            .get((ctx, request) -> null)
-            .cancel((ctx, request) -> {})
-            .update((ctx, request) -> {})
-            .build();
-
         return CapabilitiesConfig.builder()
             .tools(FeatureConfig.builder()
                 .mode(Mode.AUTO) // ON when tools registered
@@ -49,13 +45,29 @@ final class ConfigReference {
                 .mode(Mode.AUTO) // ON when prompts registered
                 .listChanged(false)
                 .build())
-            .tasks(TasksConfig.builder()
-                .enabled(false) // also advertised when a registered tool supports task augmentation
-                .connector(taskConnector) // required when enabled
-                .build())
             .completions(Mode.AUTO)
             .logging(false)
             .build();
+    }
+
+    /**
+     * Tasks — the {@code tachyon-extensions-tasks} module. Registering the extension enables tasks;
+     * there is no capability switch.
+     */
+    static ServerBuilder tasks() {
+        // Modern Tasks requires get/cancel/update. Legacy list/awaitResult remain optional.
+        var taskConnector = TaskConnector.builder()
+            .get((ctx, request) -> null)
+            .cancel((ctx, request) -> {})
+            .update((ctx, request) -> {})
+            .build();
+
+        return TachyonServer.builder()
+            .withExtension(TasksExtension.class, tasks -> tasks
+                .connector(taskConnector) // required
+                .pageSize(50)
+                .keepAlive(Duration.ofMinutes(5))
+                .pollInterval(Duration.ofSeconds(2)));
     }
 
     /**
@@ -66,7 +78,7 @@ final class ConfigReference {
         return CapabilitiesConfig.builder()
             .tools(true) // Mode.ON, listChanged=true
             .resources(true, true) // Mode.ON, subscribe=true, listChanged=true
-            .prompts() // Mode.ON, listChanged=false; tasks remain off by default
+            .prompts() // Mode.ON, listChanged=false
             .completions() // true
             .logging() // true
             .build();

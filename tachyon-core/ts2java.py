@@ -1255,7 +1255,12 @@ class Generator:
                 simple_typ = self.simplify_type(typ)
                 params.append(f"{indent}    {nullable}{simple_typ} {fname}")
             class_desc = " ".join(w for w in anon_name.replace("_", " ").split() if w)
-            out.append(f'{indent}/** Parameters for {{@link {parent_name}}}. */\n')
+            inner_params = [(c[1], c[3] or "") for c in comps]
+            out.append(
+                JavadocFormatter.make_javadoc(
+                    f"Parameters for {{@link {parent_name}}}.", inner_params or None, indent
+                )
+            )
             out.append(f'{indent}{GENERATED_ANNOTATION}\n')
             out.append(f"{indent}public record {anon_name}(\n")
             out.append(",\n".join(params))
@@ -1371,12 +1376,24 @@ class Generator:
             cn = v.upper().replace("-", "_").replace(" ", "_").replace("/", "_")
             if cn[0].isdigit():
                 cn = "_" + cn
-            lines.append(f'    {cn}("{v}")')
+            lines.append(f'    /** The {{@code "{v}"}} value. */\n    {cn}("{v}")')
         out.append(",\n".join(lines))
         out.append(";\n\n")
         out.append("    private final String value;\n\n")
         out.append(f"    {name}(String value) {{ this.value = value; }}\n\n")
+        out.append("    /**\n")
+        out.append("     * Returns the wire value of this constant.\n")
+        out.append("     *\n")
+        out.append("     * @return the wire value\n")
+        out.append("     */\n")
         out.append("    public String getValue() { return value; }\n\n")
+        out.append("    /**\n")
+        out.append("     * Resolves a constant from its wire value.\n")
+        out.append("     *\n")
+        out.append("     * @param value the wire value\n")
+        out.append("     * @return the matching constant\n")
+        out.append("     * @throws IllegalArgumentException if no constant has the given value\n")
+        out.append("     */\n")
         out.append("    public static " + name + " fromValue(String value) {\n")
         out.append("        for (" + name + " v : values()) {\n")
         out.append("            if (v.value.equals(value)) return v;\n")
@@ -2145,8 +2162,11 @@ class Generator:
         out.append("import java.util.Map;\n")
         out.append("import java.util.concurrent.ConcurrentHashMap;\n")
         out.append("import javax.annotation.processing.Generated;\n\n")
+        out.append("/** Registry of the generated codecs, keyed by model type. */\n")
         out.append(f'{GENERATED_ANNOTATION}\n')
         out.append(f"public class {name} {{\n")
+        out.append("    /** Default constructor. */\n")
+        out.append(f"    public {name}() {{}}\n\n")
         # Static codec map
         out.append(
             "    private static final Map<Class<?>, Codec<?>> CODECS = new LinkedHashMap<>();\n\n"

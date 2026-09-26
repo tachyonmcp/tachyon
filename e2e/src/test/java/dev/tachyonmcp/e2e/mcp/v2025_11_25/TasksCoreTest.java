@@ -1,6 +1,7 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
 package dev.tachyonmcp.e2e.mcp.v2025_11_25;
 
+import static dev.tachyonmcp.e2e.mcp.TasksSupport.tasks;
 import static dev.tachyonmcp.testkit.McpHttpResponseAssert.assertThatResponse;
 import static net.javacrumbs.jsonunit.assertj.JsonAssertions.assertThatJson;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -10,7 +11,7 @@ import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
 import dev.tachyonmcp.api.server.features.tasks.TaskState;
 import dev.tachyonmcp.api.server.features.tasks.TaskSupport;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
-import dev.tachyonmcp.core.server.config.TasksConfig;
+import dev.tachyonmcp.extensions.tasks.TasksExtension;
 import dev.tachyonmcp.testkit.TestTaskConnector;
 import java.time.Duration;
 import java.time.Instant;
@@ -27,11 +28,9 @@ class TasksCoreTest extends AbstractStatefulMcpE2eTest {
     protected void startDefaultServer() {
         taskConnector = new TestTaskConnector();
         startServer(
-                it -> it.capabilities(c -> c.tasks(TasksConfig.builder()
-                        .enabled(true)
-                        .connector(taskConnector.connector())
-                        .pollInterval(DEFAULT_POLL_INTERVAL)
-                        .build())),
+                it -> it.withExtension(
+                        TasksExtension.class,
+                        t -> t.connector(taskConnector.connector()).pollInterval(DEFAULT_POLL_INTERVAL)),
                 registrar -> registrar
                         .tools()
                         .register(
@@ -89,10 +88,10 @@ class TasksCoreTest extends AbstractStatefulMcpE2eTest {
                 assertThat(request.limit()).isPositive();
                 assertThat(request.cursor()).isNull();
             });
-            assertThat(server.tasks().get("workflow-1"))
+            assertThat(tasks(server).get("workflow-1"))
                     .as("tasks/list is a read: it never caches connector snapshots")
                     .isNull();
-            assertThat(server.tasks().get("workflow-2")).isNull();
+            assertThat(tasks(server).get("workflow-2")).isNull();
             assertThat(client.notifications())
                     .as("tasks/list never emits task status")
                     .noneMatch(n -> n.method().equals("notifications/tasks/status"));

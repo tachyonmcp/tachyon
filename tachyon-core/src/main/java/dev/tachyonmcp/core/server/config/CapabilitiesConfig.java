@@ -1,11 +1,7 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
 package dev.tachyonmcp.core.server.config;
 
-import dev.tachyonmcp.api.annotations.ExperimentalApi;
 import dev.tachyonmcp.api.server.config.Mode;
-import dev.tachyonmcp.api.server.features.tasks.TaskConnector;
-import java.time.Duration;
-import java.util.Objects;
 
 /**
  * Configuration of which MCP capabilities to enable and their behaviour.
@@ -13,28 +9,17 @@ import java.util.Objects;
  * @param tools       tools capability configuration
  * @param resources   resources capability configuration
  * @param prompts     prompts capability configuration
- * @param tasks       tasks capability configuration
  * @param completions completions enablement mode (default {@link Mode#AUTO})
  * @param logging     whether the logging capability is enabled (default {@code false})
  */
 public record CapabilitiesConfig(
-        FeatureConfig tools,
-        ResourcesConfig resources,
-        FeatureConfig prompts,
-        @ExperimentalApi TasksConfig tasks,
-        Mode completions,
-        boolean logging) {
+        FeatureConfig tools, ResourcesConfig resources, FeatureConfig prompts, Mode completions, boolean logging) {
 
     /**
      * Default configuration with all capabilities auto-detected and change notifications off.
      */
     public static final CapabilitiesConfig DEFAULT = new CapabilitiesConfig(
-            FeatureConfig.DEFAULT,
-            ResourcesConfig.DEFAULT,
-            FeatureConfig.DEFAULT,
-            TasksConfig.DEFAULT,
-            Mode.AUTO,
-            false);
+            FeatureConfig.DEFAULT, ResourcesConfig.DEFAULT, FeatureConfig.DEFAULT, Mode.AUTO, false);
 
     /**
      * Creates a new builder.
@@ -53,7 +38,6 @@ public record CapabilitiesConfig(
         private FeatureConfig.Builder toolsBuilder = FeatureConfig.builder();
         private ResourcesConfig.Builder resourcesBuilder = ResourcesConfig.builder();
         private FeatureConfig.Builder promptsBuilder = FeatureConfig.builder();
-        private TasksConfig.Builder tasksBuilder = TasksConfig.builder();
         private Mode completions = Mode.AUTO;
         private boolean logging;
 
@@ -101,22 +85,6 @@ public record CapabilitiesConfig(
                     .mode(config.mode())
                     .listChanged(config.listChanged())
                     .pageSize(config.pageSize());
-            return this;
-        }
-
-        /**
-         * Configures tasks from a tasks config.
-         *
-         * @param config the tasks config
-         * @return this builder
-         */
-        public Builder tasks(TasksConfig config) {
-            tasksBuilder = TasksConfig.builder()
-                    .enabled(config.enabled())
-                    .connector(config.connector())
-                    .pageSize(config.pageSize())
-                    .keepAlive(config.keepAlive())
-                    .pollInterval(config.pollInterval());
             return this;
         }
 
@@ -244,39 +212,6 @@ public record CapabilitiesConfig(
         }
 
         /**
-         * Sets whether tasks are enabled.
-         *
-         * @param tasksEnabled whether tasks are enabled
-         * @return this builder
-         */
-        public Builder tasksEnabled(boolean tasksEnabled) {
-            tasksBuilder.enabled(tasksEnabled);
-            return this;
-        }
-
-        /**
-         * Sets the tasks page size.
-         *
-         * @param tasksPageSize the tasks page size
-         * @return this builder
-         */
-        public Builder tasksPageSize(int tasksPageSize) {
-            tasksBuilder.pageSize(tasksPageSize);
-            return this;
-        }
-
-        /**
-         * Sets the tasks keep-alive duration.
-         *
-         * @param tasksKeepAlive the tasks keep-alive duration
-         * @return this builder
-         */
-        public Builder tasksKeepAlive(Duration tasksKeepAlive) {
-            tasksBuilder.keepAlive(tasksKeepAlive);
-            return this;
-        }
-
-        /**
          * Sets whether logging is enabled.
          *
          * @param logging whether logging is enabled
@@ -293,15 +228,8 @@ public record CapabilitiesConfig(
          * @return the built {@link CapabilitiesConfig}
          */
         public CapabilitiesConfig build() {
-            var tasks = tasksBuilder.build();
-            validateTaskConnector(tasks);
             return new CapabilitiesConfig(
-                    toolsBuilder.build(),
-                    resourcesBuilder.build(),
-                    promptsBuilder.build(),
-                    tasks,
-                    completions,
-                    logging);
+                    toolsBuilder.build(), resourcesBuilder.build(), promptsBuilder.build(), completions, logging);
         }
 
         // === Convenience defaults ===
@@ -416,34 +344,6 @@ public record CapabilitiesConfig(
          */
         public Builder noPrompts() {
             return promptsMode(Mode.OFF);
-        }
-
-        /**
-         * Disables tasks.
-         *
-         * @return this builder
-         */
-        public Builder noTasks() {
-            tasksBuilder.enabled(false).connector(null);
-            return this;
-        }
-
-        /**
-         * Enables tasks using the supplied connector. Modern operations are required by the
-         * connector; legacy {@code tasks/list} and blocking result remain optional.
-         *
-         * @param connector task execution connector
-         * @return this builder
-         */
-        public Builder tasks(TaskConnector connector) {
-            tasksBuilder.enabled(true).connector(Objects.requireNonNull(connector, "connector"));
-            return this;
-        }
-
-        private static void validateTaskConnector(TasksConfig tasks) {
-            if (tasks.enabled() && tasks.connector() == null) {
-                throw new IllegalStateException("Tasks capability requires a TaskConnector");
-            }
         }
     }
 }

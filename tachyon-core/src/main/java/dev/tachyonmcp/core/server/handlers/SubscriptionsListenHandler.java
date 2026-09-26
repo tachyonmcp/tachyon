@@ -8,7 +8,7 @@ import dev.tachyonmcp.core.server.RpcMethodHandler;
 import dev.tachyonmcp.core.server.domain.ServerErrors;
 import dev.tachyonmcp.core.server.features.subscriptions.SubscriptionRegistry;
 import dev.tachyonmcp.core.server.features.subscriptions.SubscriptionStreamFailedException;
-import dev.tachyonmcp.core.server.features.tasks.TasksExtension;
+import dev.tachyonmcp.core.server.features.tasks.TasksExtensionSupport;
 import dev.tachyonmcp.core.server.session.DispatchContext;
 import java.nio.channels.ClosedChannelException;
 import java.util.concurrent.CompletableFuture;
@@ -52,7 +52,7 @@ public final class SubscriptionsListenHandler
         }
         var request = requestMapper.subscriptionsListen(rawParams);
         if (!request.taskIds().isEmpty()) {
-            var missingCapability = TasksExtension.requireDeclared(context);
+            var missingCapability = TasksExtensionSupport.requireDeclared(context);
             if (missingCapability != null) {
                 throw new RequestMappingException(missingCapability);
             }
@@ -71,7 +71,7 @@ public final class SubscriptionsListenHandler
         // Every task-related request is authorized (ext-tasks § Security): the connector decides which
         // task ids this listener may follow, and the ack lists only those. Runs on the handler executor.
         var filter =
-                requested.withTaskIds(context.engine().tasksRegistry().readableTaskIds(context, requested.taskIds()));
+                requested.withTaskIds(context.engine().taskRuntime().readableTaskIds(context, requested.taskIds()));
         var stream = context.outboundStream();
         if (stream == null) {
             return CompletableFuture.completedFuture(ServerErrors.internalError("No SSE stream available"));

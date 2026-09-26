@@ -27,9 +27,7 @@ internal class ToolDescriptorAttributesTest {
         val toolAnnotations = ToolAnnotations.builder().readOnlyHint(true).build()
 
         buildServer {
-            capabilities {
-                tasks(DescriptorTaskConnector)
-            }
+            tasks(DescriptorTaskConnector)
             tool(
                 name = "build-time",
                 description = "desc",

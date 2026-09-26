@@ -2,9 +2,8 @@
 package dev.tachyonmcp.kotlin.server.config
 
 import dev.tachyonmcp.api.server.features.tasks.TaskConnector
-import dev.tachyonmcp.core.server.config.TasksConfig
-import dev.tachyonmcp.core.server.config.TasksConfig.DEFAULT_TASK_KEEP_ALIVE
 import dev.tachyonmcp.core.server.features.Pagination
+import dev.tachyonmcp.extensions.tasks.TasksExtension
 import dev.tachyonmcp.kotlin.server.TachyonDsl
 import kotlin.time.Duration
 import kotlin.time.toJavaDuration
@@ -22,18 +21,16 @@ public class TasksScope
          * How long a completed/failed/cancelled task's result stays retrievable before eviction.
          * Zero or negative disables eviction — the result is kept indefinitely.
          */
-        public var keepAlive: Duration = DEFAULT_TASK_KEEP_ALIVE.toKotlinDuration()
+        public var keepAlive: Duration = TasksExtension.DEFAULT_KEEP_ALIVE.toKotlinDuration()
 
         /** Suggested client polling interval, or `null` to omit it. */
         public var pollInterval: Duration? = null
 
-        internal fun toConfig(): TasksConfig =
-            TasksConfig
-                .builder()
-                .enabled(true)
+        internal fun applyTo(builder: TasksExtension.Builder) {
+            builder
                 .connector(connector)
                 .pageSize(pageSize)
                 .keepAlive(keepAlive.toJavaDuration())
                 .pollInterval(pollInterval?.toJavaDuration())
-                .build()
+        }
     }

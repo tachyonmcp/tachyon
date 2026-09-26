@@ -7,7 +7,10 @@ import dev.tachyonmcp.api.json.PayloadSerializer;
 import dev.tachyonmcp.api.server.config.JsonConfig;
 import dev.tachyonmcp.api.server.config.RuntimeConfig;
 import dev.tachyonmcp.api.server.config.ServerIdentity;
+import dev.tachyonmcp.api.server.extensions.ConfigurableExtension;
+import dev.tachyonmcp.api.server.extensions.ExtensionBuilder;
 import dev.tachyonmcp.api.server.extensions.ServerExtension;
+import dev.tachyonmcp.api.server.extensions.spi.ExtensionProvider;
 import dev.tachyonmcp.api.server.features.completions.Completions;
 import dev.tachyonmcp.api.server.features.prompts.Prompts;
 import dev.tachyonmcp.api.server.features.resources.Resources;
@@ -17,13 +20,18 @@ import dev.tachyonmcp.core.server.config.NetworkConfig;
 import dev.tachyonmcp.core.server.config.ObservabilityConfig;
 import dev.tachyonmcp.core.server.config.ServerConfig;
 import dev.tachyonmcp.core.server.config.SessionConfig;
-import dev.tachyonmcp.core.server.features.tasks.TasksExtension;
+import dev.tachyonmcp.core.server.extensions.EngineBinding;
+import dev.tachyonmcp.core.server.extensions.ExtensionProviders;
 import dev.tachyonmcp.core.server.json.JacksonPayloadSerde;
 import dev.tachyonmcp.core.server.json.NetworkntJsonSchemaValidator;
 import io.netty.channel.ChannelPipeline;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -44,6 +52,7 @@ final class DefaultServerBuilder implements ServerBuilder {
     private final ObservabilityConfig.Builder observabilityBuilder = ObservabilityConfig.builder();
     private final List<ServerExtension> extensions = new ArrayList<>();
     private final Set<String> extensionIds = new HashSet<>();
+    private final Map<Class<?>, Configured> configuredExtensions = new LinkedHashMap<>();
     private final List<Consumer<TachyonServer>> bootstrapRegistrations = new ArrayList<>();
 
     private JsonSchemaValidator inputSchemaValidator = new NetworkntJsonSchemaValidator();
@@ -229,6 +238,21 @@ final class DefaultServerBuilder implements ServerBuilder {
         return this;
     }
 
+    @Override
+    public <E extends ConfigurableExtension<B>, B extends ExtensionBuilder<E>> ServerBuilder withExtension(
+            Class<E> type, Consumer<? super B> configurer) {
+        Objects.requireNonNull(type, "type");
+        Objects.requireNonNull(configurer, "configurer");
+        var configured = configuredExtensions.computeIfAbsent(type, key -> {
+            var provider = ExtensionProviders.providerFor(type);
+            return new Configured(provider, provider.newBuilder());
+        });
+        @SuppressWarnings("unchecked")
+        var builder = (B) configured.builder();
+        configurer.accept(builder);
+        return this;
+    }
+
     private void addExtension(ServerExtension extension) {
         if (!extensionIds.add(extension.extensionId())) {
             throw new IllegalArgumentException("Duplicate extension ID: " + extension.extensionId());
@@ -290,10 +314,7 @@ final class DefaultServerBuilder implements ServerBuilder {
         var sessionConfig = serverConfig.session();
         var sessionEventStore = sessionConfig.sessionEventStoreOrDefault();
         var sessionStore = sessionConfig.sessionStoreOrDefault();
-        if (serverConfig.capabilities().tasks().enabled() && !extensionIds.contains(TasksExtension.ID)) {
-            addExtension(TasksExtension.instance());
-        }
-        var allExtensions = List.copyOf(extensions);
+        var resolvedExtensions = resolveExtensions();
         final ExecutorService resolvedExecutor;
         if (threadFactory != null) {
             resolvedExecutor = Executors.newThreadPerTaskExecutor(threadFactory);
@@ -310,7 +331,8 @@ final class DefaultServerBuilder implements ServerBuilder {
                 payloadSerializer,
                 payloadDeserializer,
                 null,
-                allExtensions,
+                resolvedExtensions.extensions(),
+                resolvedExtensions.engineBindings(),
                 pipelineCustomizer);
         try {
             bootstrapRegistrations.forEach(registrar -> registrar.accept(server));
@@ -322,6 +344,33 @@ final class DefaultServerBuilder implements ServerBuilder {
         }
         return server;
     }
+
+    /**
+     * Instances registered directly come first, then one extension per configured type. Builders run
+     * per call, so each server gets its own extension instances. A provider that is also an
+     * {@link EngineBinding} bootstraps the extension it built.
+     */
+    private ResolvedExtensions resolveExtensions() {
+        var resolved = new ArrayList<>(extensions);
+        var bindings = new IdentityHashMap<ServerExtension, EngineBinding<?>>();
+        var ids = new HashSet<>(extensionIds);
+        for (var configured : configuredExtensions.values()) {
+            var extension = configured.builder().build();
+            if (!ids.add(extension.extensionId())) {
+                throw new IllegalArgumentException("Duplicate extension ID: " + extension.extensionId());
+            }
+            resolved.add(extension);
+            if (configured.provider() instanceof EngineBinding<?> binding) {
+                bindings.put(extension, binding);
+            }
+        }
+        return new ResolvedExtensions(List.copyOf(resolved), bindings);
+    }
+
+    private record Configured(ExtensionProvider<?, ?> provider, ExtensionBuilder<?> builder) {}
+
+    private record ResolvedExtensions(
+            List<ServerExtension> extensions, Map<ServerExtension, EngineBinding<?>> engineBindings) {}
 
     /**
      * Builds the {@link ServerConfig} from the current builder state.

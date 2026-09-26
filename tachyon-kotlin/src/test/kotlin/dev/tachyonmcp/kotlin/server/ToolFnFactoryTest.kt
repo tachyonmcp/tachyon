@@ -181,9 +181,7 @@ internal class ToolFnFactoryTest {
         TachyonServer(port = 0) {
             name("cancellable-tool-test")
             session { enable() }
-            capabilities {
-                tasks(connector)
-            }
+            tasks(connector)
             tool("cancellable", taskSupport = TaskSupport.REQUIRED) {
                 ToolResult.task(initial)
             }

@@ -4,6 +4,7 @@ package dev.tachyonmcp.e2e.mcp.v2025_11_25;
 import static dev.tachyonmcp.testkit.McpHttpResponseAssert.assertThatResponse;
 
 import dev.tachyonmcp.api.server.features.tasks.TaskConnector;
+import dev.tachyonmcp.extensions.tasks.TasksExtension;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -20,7 +21,7 @@ class TasksOptionalOperationsTest extends AbstractStatefulMcpE2eTest {
                 .cancel((context, request) -> {})
                 .update((context, request) -> {})
                 .build();
-        startServer(it -> it.capabilities(c -> c.tasks(minimalConnector)));
+        startServer(it -> it.withExtension(TasksExtension.class, t -> t.connector(minimalConnector)));
     }
 
     @Test

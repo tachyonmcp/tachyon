@@ -1,6 +1,7 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
 package dev.tachyonmcp.e2e.mcp.v2025_11_25;
 
+import static dev.tachyonmcp.e2e.mcp.TasksSupport.tasks;
 import static dev.tachyonmcp.testkit.JsonRpcResponseAssert.assertThat;
 import static net.javacrumbs.jsonunit.assertj.JsonAssertions.assertThatJson;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -9,6 +10,7 @@ import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
 import dev.tachyonmcp.api.server.features.tasks.TaskSupport;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
 import dev.tachyonmcp.e2e.mcp.AbstractStatelessMcpE2eTest;
+import dev.tachyonmcp.extensions.tasks.TasksExtension;
 import dev.tachyonmcp.testkit.Mcp20251125Client;
 import dev.tachyonmcp.testkit.TestTaskConnector;
 import java.time.Instant;
@@ -33,13 +35,17 @@ class StatelessTasksTest extends AbstractStatelessMcpE2eTest<Mcp20251125Client> 
 
     @Override
     protected void startDefaultServer() {
-        startServer(builder -> builder.capabilities(c -> c.tasks(taskEngine.connector())), registrar -> {
-            registrar.tools().register(b -> b.name("book").taskSupport(TaskSupport.REQUIRED), (context, request) -> {
-                var snapshot = TaskSnapshot.working("stateless-task", CREATED_AT, 1);
-                taskEngine.publish(snapshot);
-                return ToolResult.task(snapshot);
-            });
-        });
+        startServer(
+                builder -> builder.withExtension(TasksExtension.class, t -> t.connector(taskEngine.connector())),
+                registrar -> {
+                    registrar
+                            .tools()
+                            .register(b -> b.name("book").taskSupport(TaskSupport.REQUIRED), (context, request) -> {
+                                var snapshot = TaskSnapshot.working("stateless-task", CREATED_AT, 1);
+                                taskEngine.publish(snapshot);
+                                return ToolResult.task(snapshot);
+                            });
+                });
     }
 
     @Test
@@ -61,7 +67,7 @@ class StatelessTasksTest extends AbstractStatelessMcpE2eTest<Mcp20251125Client> 
             assertThatJson(get.body()).inPath("$.result.taskId").isEqualTo("stateless-task");
 
             // Nobody owns it: progress has no session to go to and must be dropped quietly.
-            server.tasks().reportProgress("stateless-task", 0.5, 1.0, "halfway");
+            tasks(server).reportProgress("stateless-task", 0.5, 1.0, "halfway");
 
             assertThat(client.notifications())
                     .as("a stateless server sends no session notifications for tasks")

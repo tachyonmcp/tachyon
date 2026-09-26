@@ -7,6 +7,7 @@ import static net.javacrumbs.jsonunit.assertj.JsonAssertions.assertThatJson;
 import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
 import dev.tachyonmcp.api.server.features.tasks.TaskSupport;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
+import dev.tachyonmcp.extensions.tasks.TasksExtension;
 import dev.tachyonmcp.testkit.TestTaskConnector;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
@@ -20,23 +21,25 @@ class TaskAugmentedToolTest extends AbstractStatefulMcpE2eTest {
     protected void startDefaultServer() {
         snapshot = TaskSnapshot.working("external-42", Instant.parse("2026-08-27T07:00:00Z"), 1);
         taskEngine = new TestTaskConnector().publish(snapshot);
-        startServer(builder -> builder.capabilities(c -> c.tasks(taskEngine.connector())), registrar -> {
-            registrar
-                    .tools()
-                    .register(
-                            b -> b.name("required").taskSupport(TaskSupport.REQUIRED),
-                            (context, request) -> ToolResult.task(snapshot));
-            registrar
-                    .tools()
-                    .register(
-                            b -> b.name("optional").taskSupport(TaskSupport.OPTIONAL),
-                            (context, request) -> ToolResult.text("inline"));
-            registrar
-                    .tools()
-                    .register(
-                            b -> b.name("forbidden").taskSupport(TaskSupport.FORBIDDEN),
-                            (context, request) -> ToolResult.text("inline"));
-        });
+        startServer(
+                builder -> builder.withExtension(TasksExtension.class, t -> t.connector(taskEngine.connector())),
+                registrar -> {
+                    registrar
+                            .tools()
+                            .register(
+                                    b -> b.name("required").taskSupport(TaskSupport.REQUIRED),
+                                    (context, request) -> ToolResult.task(snapshot));
+                    registrar
+                            .tools()
+                            .register(
+                                    b -> b.name("optional").taskSupport(TaskSupport.OPTIONAL),
+                                    (context, request) -> ToolResult.text("inline"));
+                    registrar
+                            .tools()
+                            .register(
+                                    b -> b.name("forbidden").taskSupport(TaskSupport.FORBIDDEN),
+                                    (context, request) -> ToolResult.text("inline"));
+                });
     }
 
     @Test

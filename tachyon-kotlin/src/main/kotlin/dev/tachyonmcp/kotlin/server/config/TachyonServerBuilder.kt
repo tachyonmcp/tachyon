@@ -9,17 +9,21 @@ import dev.tachyonmcp.api.server.domain.PromptArgument
 import dev.tachyonmcp.api.server.domain.PromptMessage
 import dev.tachyonmcp.api.server.domain.ResourceContents
 import dev.tachyonmcp.api.server.domain.ToolAnnotations
+import dev.tachyonmcp.api.server.extensions.ConfigurableExtension
+import dev.tachyonmcp.api.server.extensions.ExtensionBuilder
 import dev.tachyonmcp.api.server.extensions.ServerExtension
 import dev.tachyonmcp.api.server.features.completions.CompletionResult
 import dev.tachyonmcp.api.server.features.prompts.PromptDescriptor
 import dev.tachyonmcp.api.server.features.resources.ResourceDescriptor
 import dev.tachyonmcp.api.server.features.resources.ResourceTemplateDescriptor
+import dev.tachyonmcp.api.server.features.tasks.TaskConnector
 import dev.tachyonmcp.api.server.features.tasks.TaskSupport
 import dev.tachyonmcp.api.server.features.tools.ToolDescriptor
 import dev.tachyonmcp.api.server.features.tools.ToolResult
 import dev.tachyonmcp.core.server.ServerBuilder
 import dev.tachyonmcp.core.server.config.NetworkConfig
 import dev.tachyonmcp.core.server.features.resources.MimeTypes
+import dev.tachyonmcp.extensions.tasks.TasksExtension
 import dev.tachyonmcp.kotlin.server.DefaultKotlinTachyonServer
 import dev.tachyonmcp.kotlin.server.TachyonDsl
 import dev.tachyonmcp.kotlin.server.TachyonServer
@@ -507,6 +511,41 @@ public class TachyonServerBuilder
         /** Registers one or more [ServerExtension]s, e.g. from `tachyon-extensions`. */
         public fun extensions(vararg extensions: ServerExtension): TachyonServerBuilder =
             this.also { delegate.withExtensions(*extensions) }
+
+        /**
+         * Registers the tasks extension, so tools can hand long-running work to [connector] and clients
+         * can poll it through the `tasks` methods.
+         *
+         * @param connector system that owns task execution
+         * @param configure retention, paging, and polling options
+         * @return this builder
+         */
+        @OptIn(ExperimentalContracts::class)
+        @ExperimentalApi
+        public fun tasks(
+            connector: TaskConnector,
+            configure: (@TachyonDsl TasksScope).() -> Unit = {},
+        ): TachyonServerBuilder {
+            contract { callsInPlace(configure, InvocationKind.EXACTLY_ONCE) }
+            val scope = TasksScope(connector).apply(configure)
+            delegate.withExtension<TasksExtension, TasksExtension.Builder>(
+                TasksExtension::class.java,
+            ) {
+                scope.applyTo(it)
+            }
+            return this
+        }
+
+        /**
+         * Registers a [ConfigurableExtension] by class and configures its builder. Calling this again for
+         * the same class keeps configuring the same builder.
+         */
+        @ExperimentalApi
+        public fun <E, B> withExtension(
+            type: Class<E>,
+            configure: B.() -> Unit,
+        ): TachyonServerBuilder where E : ConfigurableExtension<B>, B : ExtensionBuilder<E> =
+            this.also { delegate.withExtension(type) { it.configure() } }
 
         /** Configures the JSON payload boundary: serde, schema factory, and validators. */
         @OptIn(ExperimentalContracts::class)

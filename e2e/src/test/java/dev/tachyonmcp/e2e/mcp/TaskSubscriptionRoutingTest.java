@@ -1,6 +1,7 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
 package dev.tachyonmcp.e2e.mcp;
 
+import static dev.tachyonmcp.e2e.mcp.TasksSupport.tasks;
 import static dev.tachyonmcp.testkit.JsonRpcResponseAssert.assertThat;
 import static java.time.Duration.ofSeconds;
 import static net.javacrumbs.jsonunit.assertj.JsonAssertions.assertThatJson;
@@ -10,8 +11,8 @@ import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
 import dev.tachyonmcp.api.server.features.tasks.TaskSupport;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
 import dev.tachyonmcp.core.server.TachyonServer;
-import dev.tachyonmcp.core.server.features.tasks.TasksExtension;
 import dev.tachyonmcp.core.server.json.JsonUtils;
+import dev.tachyonmcp.extensions.tasks.TasksExtension;
 import dev.tachyonmcp.testkit.Mcp20260728Client;
 import dev.tachyonmcp.testkit.McpTestClients;
 import dev.tachyonmcp.testkit.SseFrame;
@@ -43,7 +44,7 @@ class TaskSubscriptionRoutingTest {
         try (final var server = TachyonServer.builder()
                 .port(0)
                 .session(s -> s.enabled())
-                .capabilities(c -> c.tasks(connector))
+                .withExtension(TasksExtension.class, t -> t.connector(connector))
                 .withTools(tools -> tools.register(
                         b -> b.name("start-task").taskSupport(TaskSupport.REQUIRED),
                         (context, request) -> ToolResult.task(
@@ -73,7 +74,7 @@ class TaskSubscriptionRoutingTest {
                         """);
                 final var lateSubscriber = listen(subscriber, 3, "routed-task", "unrouted-task");
 
-                server.tasks()
+                tasks(server)
                         .publish(TaskSnapshot.completed(
                                 "routed-task", CREATED_AT, CREATED_AT, 2, ToolResult.text("routed result")));
                 final var completion = creatorStream.await(
@@ -93,7 +94,7 @@ class TaskSubscriptionRoutingTest {
                         """);
 
                 assertThat(creator.delete(sessionId).statusCode()).isEqualTo(200);
-                server.tasks()
+                tasks(server)
                         .publish(TaskSnapshot.completed(
                                 "routed-task",
                                 CREATED_AT,
@@ -107,7 +108,7 @@ class TaskSubscriptionRoutingTest {
                           "name":"start-task","arguments":{"taskId":"unrouted-task"}}}
                         """);
                 assertThat(unroutedTask).isSuccess().hasId(4).hasResultType("task");
-                server.tasks()
+                tasks(server)
                         .publish(TaskSnapshot.completed(
                                 "unrouted-task", CREATED_AT, CREATED_AT, 2, ToolResult.text("unrouted result")));
 
