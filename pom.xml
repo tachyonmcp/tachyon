@@ -93,7 +93,7 @@
         <micrometer.version>1.17.1</micrometer.version>
         <mockito.version>5.23.0</mockito.version>
         <netty.version>4.2.18.Final</netty.version>
-        <slf4j.version>2.0.19</slf4j.version>
+        <slf4j.version>2.0.20</slf4j.version>
         <snakeyaml.version>2.7</snakeyaml.version>
         <spring-boot.version>4.1.1</spring-boot.version>
         <temporal.version>1.39.0</temporal.version>
