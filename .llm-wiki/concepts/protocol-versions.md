@@ -1,9 +1,9 @@
 ---
 title: Protocol versions
 tags: [concept, protocol, mcp]
-sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/http/McpHeaderMatchHandler.java, tachyon-core/src/main/resources/META-INF/services/dev.tachyonmcp.core.protocol.Protocol, tachyon-core/ts2java.py, tachyon-core/protocol/, tachyon-core/pom.xml]
-updated: 2026-09-23
-commit: 150e2ac9
+sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/http/McpHeaderMatchHandler.java, tachyon-core/src/main/resources/META-INF/services/dev.tachyonmcp.core.protocol.Protocol, tachyon-core/ts2java.py, tachyon-core/protocol/, tachyon-core/pom.xml, extensions/tachyon-extensions-tasks/protocol/, extensions/tachyon-extensions-tasks/pom.xml]
+updated: 2026-09-26
+commit: 02dce5bb
 ---
 
 # 🔀 Protocol versions
@@ -87,6 +87,8 @@ Header names `McpHeaderNames` `McpHeaderNames#MCP_SESSION_ID`: `MCP-Session-Id`,
 - Bound in `pom.xml` via `exec-maven-plugin` at `generate-sources`; output `target/generated-sources/ts2java/java` added as source root (`pom.xml`). Generated packages: `dev.tachyonmcp.core.protocol.mcp.v20xx.models`, `...codecs`.
 - ⚠️ Generated code not in git. Handwritten mappers live next to generated codecs in `codecs/`.
 - Revapi ignores generated classes (commit `3cc96c5f`).
+- Extension mode: config key `basePackage` (e.g. `extensions/tachyon-extensions-tasks/protocol/tasks-2026-07-28_config.json`). Types imported from the core TS schema map to core models via `typeMappings`; their inherited fields come from `additionalProperties`. No `Codec`/`CodecSupport`/`Mcp*`/protocol files emitted — codecs import core's; the extension `CodecRegistry#codecFor` falls back to core's registry (`Generator#import_base_codecs`, `Generator#add_codec_registry`).
+- Intersection aliases (`A & B & { … }`) merge local interfaces + inline objects (`Generator#generate`); an intersection with one discriminated union (`GetTaskResult = Result & DetailedTask & …`) becomes a record holding the variant (`@JsonUnwrapped DetailedTask detailedTask`) next to its own fields; its codec decodes the variant from a buffered copy, then the own fields, and encodes the variant's properties inline (`Generator#flattened_unions`, `Generator#add_codec`). Other union intersections are skipped with a warning.
 
 ## ➕ Adding a protocol version (checklist)
 

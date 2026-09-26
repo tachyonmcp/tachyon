@@ -178,28 +178,6 @@
                             </arguments>
                         </configuration>
                     </execution>
-                    <execution>
-                        <id>generate-tasks-2026-07-28</id>
-                        <phase>generate-sources</phase>
-                        <goals>
-                            <goal>exec</goal>
-                        </goals>
-                        <configuration>
-                            <skip>true</skip>
-                            <executable>python3</executable>
-                            <arguments>
-                                <argument>${project.basedir}/ts2java.py</argument>
-                                <argument>--ts</argument>
-                                <argument>${project.basedir}/protocol/tasks/tasks-2026-07-28.ts</argument>
-                                <argument>--pkg-default</argument>
-                                <argument>dev.tachyonmcp.core.protocol.mcp.v2026_07_28.tasks</argument>
-                                <argument>--pkg-protocol</argument>
-                                <argument>dev.tachyonmcp.core.protocol.mcp.v2026_07_28.tasks</argument>
-                                <argument>--config</argument>
-                                <argument>${project.basedir}/protocol/tasks/tasks-2026-07-28_config.json</argument>
-                            </arguments>
-                        </configuration>
-                    </execution>
                 </executions>
             </plugin>
             <plugin>

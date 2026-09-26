@@ -33,3 +33,4 @@ Spotted while reading code. Runtime verification noted per finding. Fixed in cod
 - **Q:** Multi-node: event log store (`SessionEventStore`) replay across nodes? - **A:** No
 - 2026-07-28 + stateful server: dispatcher bypasses sessions via `supportsSessions=false`; GET stream not matched for 2026 → only `subscriptions/listen`. Confirm intended.
 - ⚠️ `MISSING_REQUIRED_CLIENT_CAPABILITY` maps to -32003 on 2025-11-25 (`McpResponseMapper`), -32021 only on 2026-07-28. SEP-2133 / Python SDK use -32021. Decide whether the 2025 wire should switch.
+- ⚠️ Core ts2java configs map `RequestId` → `String`, so generated core request models turn a numeric JSON-RPC `id` into a string on decode/encode. The tasks extension maps it to `JsonNode`. `tachyon-core/protocol/mcp-2026-07-28_config.json`, `tachyon-core/protocol/mcp-2025-11-25_config.json`

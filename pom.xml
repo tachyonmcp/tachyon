@@ -247,6 +247,11 @@
             </dependency>
             <dependency>
                 <groupId>dev.tachyonmcp</groupId>
+                <artifactId>tachyon-extensions-tasks</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>dev.tachyonmcp</groupId>
                 <artifactId>tachyon-testkit</artifactId>
                 <version>${project.version}</version>
             </dependency>
@@ -500,6 +505,7 @@
                     <configuration>
                         <excludes>
                             <exclude>dev/tachyonmcp/core/protocol/mcp/**/*</exclude>
+                            <exclude>dev/tachyonmcp/extensions/*/protocol/**/*</exclude>
                         </excludes>
                     </configuration>
                     <executions>

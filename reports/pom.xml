@@ -51,6 +51,10 @@
         </dependency>
         <dependency>
             <groupId>dev.tachyonmcp</groupId>
+            <artifactId>tachyon-extensions-tasks</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>dev.tachyonmcp</groupId>
             <artifactId>tachyon-testkit</artifactId>
         </dependency>
         <dependency>
@@ -183,7 +187,6 @@
                     </execution>
                 </executions>
             </plugin>
-
         </plugins>
     </build>
 </project>

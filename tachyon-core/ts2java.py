@@ -222,12 +222,12 @@ class TsParser:
                 i = end_idx + 1
                 jsdoc = ""
                 continue
-            m = re.match(
-                r"export\s+type\s+(\w+)\s*=\s*(.+?);\s*", text[i:], re.DOTALL
-            )
+            m = re.match(r"export\s+type\s+(\w+)\s*=\s*", text[i:])
             if m:
                 name = m.group(1)
-                rhs = re.sub(r"//.*", "", m.group(2)).strip()
+                rhs_start = i + m.end()
+                rhs_end = TsParser.find_statement_end(text, rhs_start)
+                rhs = re.sub(r"//.*", "", text[rhs_start:rhs_end]).strip()
                 exports.append(
                     {
                         "kind": "type_alias",
@@ -236,7 +236,7 @@ class TsParser:
                         "jsdoc": jsdoc,
                     }
                 )
-                i += m.end()
+                i = rhs_end + 1
                 jsdoc = ""
                 continue
             m = re.match(r"export\s+(const|function|class|enum)\s", text[i:])
@@ -247,6 +247,40 @@ class TsParser:
                 continue
             i += 1
         return exports
+
+    @staticmethod
+    def _bracket_depth(text, i, depth):
+        """Nesting depth after `text[i]`; the `>` of an arrow (`=>`) closes nothing."""
+        ch = text[i]
+        if ch in "{(<[":
+            return depth + 1
+        if ch in "})]" or (ch == ">" and (i == 0 or text[i - 1] != "=")):
+            return max(depth - 1, 0)
+        return depth
+
+    @staticmethod
+    def find_statement_end(text, start):
+        """Index of the `;` ending a type alias, skipping `;` nested in `{}`, `()`, `<>` or `[]`."""
+        depth = 0
+        for i in range(start, len(text)):
+            if text[i] == ";" and depth == 0:
+                return i
+            depth = TsParser._bracket_depth(text, i, depth)
+        return len(text)
+
+    @staticmethod
+    def split_top_level(text, sep):
+        """Splits on `sep` outside `{}`, `()`, `<>` and `[]`."""
+        parts = []
+        depth = 0
+        part_start = 0
+        for i, ch in enumerate(text):
+            if ch == sep and depth == 0:
+                parts.append(text[part_start:i].strip())
+                part_start = i + 1
+            depth = TsParser._bracket_depth(text, i, depth)
+        parts.append(text[part_start:].strip())
+        return [p for p in parts if p]
 
     @staticmethod
     def extract_balanced(text, start):
@@ -448,6 +482,8 @@ class JavadocFormatter:
             return inner
 
         text = re.sub(r"\{@link\s+([^}]*)\}", _clean_link, text)
+        # TS prose like "Result & Task" is a bad HTML entity to doclint; keep real entities intact.
+        text = re.sub(r"&(?!#?\w+;)", "&amp;", text)
         return text
 
     @staticmethod
@@ -489,6 +525,7 @@ class Generator:
         type_mappings=None,
         additional_properties=None,
         ignore_properties=None,
+        base_package=None,
     ):
         self.ts_path = ts_path or DEFAULT_TS
         self.base_dir = base_dir or DEFAULT_BASE
@@ -507,6 +544,12 @@ class Generator:
         self.field_type_mappings = {k: v for k, v in raw_mappings.items() if "." in k}
         self.additional_props = additional_properties or {}
         self.ignore_props = ignore_properties or {}
+        # Extension mode: types from the base package (e.g. core MCP models) are referenced via
+        # typeMappings, and its Codec/CodecSupport/CodecRegistry are imported instead of generated.
+        self.base_package = base_package
+        # model name -> (discriminated union, component name) for intersections that inline one
+        # union's properties (GetTaskResult = Result & DetailedTask & { resultType: "complete" }).
+        self.flattened_unions = {}
         # class_name -> set of json field names that are required-but-nullable (`x: T | null`,
         # no `?`). Their key MUST be written on encode, emitting JSON null when the value is null.
         self.nullable_required = {}
@@ -1201,6 +1244,8 @@ class Generator:
         imports.add("javax.annotation.processing.Generated")
         imports.add("com.fasterxml.jackson.annotation.JsonIgnoreProperties")
         imports.add("com.fasterxml.jackson.annotation.JsonProperty")
+        if any(c[4] is None for c in components):
+            imports.add("com.fasterxml.jackson.annotation.JsonUnwrapped")
         self._collect_imports(components, imports)
         # Also collect imports from inner record components
         self._collect_inner_imports(name, imports)
@@ -1218,9 +1263,8 @@ class Generator:
             typ, fname, optional, _, json_name = c
             nullable = "@Nullable " if optional else ""
             simple_typ = self.simplify_type(typ)
-            params.append(
-                f'    @JsonProperty("{json_name}") {nullable}{simple_typ} {fname}'
-            )
+            annotation = "@JsonUnwrapped" if json_name is None else f'@JsonProperty("{json_name}")'
+            params.append(f"    {annotation} {nullable}{simple_typ} {fname}")
 
         class_desc = JavadocFormatter.format_jsdoc(jsdoc) if jsdoc else ""
         if not class_desc:
@@ -1629,7 +1673,11 @@ class Generator:
 
         components = self.model_components[model_name]
         has_additional = any(c[1] == "additionalProperties" for c in components)
-        regular = [c for c in components if c[1] != "additionalProperties"]
+        flattened = self.flattened_unions.get(model_name)
+        regular = [
+            c for c in components
+            if c[1] != "additionalProperties" and (not flattened or c[1] != flattened[1])
+        ]
 
         out = []
         out.append(self.pkg(self.pkg_codecs))
@@ -1694,6 +1742,13 @@ class Generator:
                     refs.add(self.top_owner(q))
                 elif base in self.model_files:
                     refs.add(base)
+        if flattened:
+            union, _ = flattened
+            refs.add(union)
+            emit_import("tools.jackson.databind.util.TokenBuffer")
+            if has_additional:
+                emit_import("java.util.Set")
+                refs.update(vn for vn, _ in self.discriminated_unions[union][1])
         refs.discard(owner)
         refs.discard(self.pkg_models + "." + owner)
         for r in sorted(refs):
@@ -1714,7 +1769,24 @@ class Generator:
 
         # --- DECODE ---
         out.append("    @Override\n")
-        out.append(f"    public {qname} decode(JsonParser parser) {{\n")
+        if flattened:
+            union, field = flattened
+            out.append(f"    public {qname} decode(JsonParser source) {{\n")
+            out.append("        var buffer = TokenBuffer.forBuffering(source, source.objectReadContext());\n")
+            out.append("        buffer.copyCurrentStructure(source);\n")
+            out.append(f"        {union} {field};\n")
+            out.append("        try (JsonParser parser = buffer.asParser()) {\n")
+            out.append("            parser.nextToken();\n")
+            out.append(f"            {field} = CodecRegistry.<{union}>codecFor({union}.class).decode(parser);\n")
+            out.append("        }\n")
+            out.append("        try (JsonParser parser = buffer.asParser()) {\n")
+            out.append("            parser.nextToken();\n")
+            out.append(f"            return decodeProperties(parser, {field});\n")
+            out.append("        }\n")
+            out.append("    }\n\n")
+            out.append(f"    private {qname} decodeProperties(JsonParser parser, {union} {field}) {{\n")
+        else:
+            out.append(f"    public {qname} decode(JsonParser parser) {{\n")
         for typ, fname, optional, _, _ in regular:
             if "java.util.List" in typ:
                 item = typ.split("<")[1][:-1]
@@ -1750,7 +1822,7 @@ class Generator:
             if is_nullable_required and typ in ("String", "Boolean", "Long", "Double") and not is_raw_json_str:
                 # Required-but-nullable scalar: decodeValue returns null for a JSON null.
                 out.append(
-                    f"                    {fname} = decodeValue(parser, {self.ref_for_type(typ, model_name)}.class);\n"
+                    f"                    {fname} = CodecSupport.decodeValue(parser, {self.ref_for_type(typ, model_name)}.class);\n"
                 )
                 out.append("                }\n")
                 continue
@@ -1862,7 +1934,20 @@ class Generator:
                 out.append("                    }\n")
             out.append("                }\n")
 
-        if has_additional:
+        if has_additional and flattened:
+            out.append("                default -> {\n")
+            out.append(f"                    if (variantProperties({flattened[1]}).contains(fieldName)) {{\n")
+            out.append("                        parser.skipChildren();\n")
+            out.append("                        continue;\n")
+            out.append("                    }\n")
+            out.append(
+                "                    if (additionalProperties == null) additionalProperties = new LinkedHashMap<>();\n"
+            )
+            out.append(
+                "                    additionalProperties.put(fieldName, CodecSupport.readTree(parser));\n"
+            )
+            out.append("                }\n")
+        elif has_additional:
             out.append("                default -> {\n")
             out.append(
                 "                    if (additionalProperties == null) additionalProperties = new LinkedHashMap<>();\n"
@@ -1876,7 +1961,7 @@ class Generator:
         out.append("            }\n")
         out.append("        }\n\n")
 
-        args = []
+        args = [flattened[1]] if flattened else []
         for typ, fname, optional, _, _ in regular:
             if "java.util.List" in typ:
                 args.append(f"{fname}List")
@@ -1897,6 +1982,13 @@ class Generator:
         out.append("    @Override\n")
         out.append(f"    public void encode(JsonGenerator gen, {qname} value) {{\n")
         out.append("        gen.writeStartObject();\n")
+        if flattened:
+            union, field = flattened
+            out.append(f"        var variant = CodecRegistry.<{union}>codecFor({union}.class).encodeToBytes(value.{field}());\n")
+            out.append("        try (JsonParser parser = CodecSupport.createParser(variant)) {\n")
+            out.append("            parser.nextToken();\n")
+            out.append(f'            CodecSupport.writeTreeEntries(gen, CodecSupport.readTreeMap(parser, "{field}"));\n')
+            out.append("        }\n")
         for typ, fname, optional, _, json_name in regular:
             acc = f"value.{fname}()"
             is_primitive = typ in ("boolean", "long", "double")
@@ -2013,6 +2105,16 @@ class Generator:
 
         out.append("        gen.writeEndObject();\n")
         out.append("    }\n")
+
+        if flattened and has_additional:
+            union, field = flattened
+            out.append(f"\n    private static Set<String> variantProperties({union} {field}) {{\n")
+            out.append(f"        return switch ({field}) {{\n")
+            for vn, _ in self.discriminated_unions[union][1]:
+                names = ", ".join(f'"{c[4]}"' for c in self.model_components[vn] if c[4])
+                out.append(f"            case {vn} ignored -> Set.of({names});\n")
+            out.append("        };\n")
+            out.append("    }\n")
 
         out.append("}\n")
         self.codec_files[codec_name] = "".join(out)
@@ -2138,6 +2240,7 @@ class Generator:
         out.append("        tb.copyCurrentStructure(parser);\n\n")
         out.append("        String type = null;\n")
         out.append("        try (JsonParser tp = tb.asParser()) {\n")
+        out.append("            tp.nextToken();\n")
         out.append("            while (tp.nextToken() != JsonToken.END_OBJECT) {\n")
         out.append("                String fn = tp.currentName();\n")
         out.append("                tp.nextToken();\n")
@@ -2205,6 +2308,7 @@ class Generator:
         for vn, field in variant_field_map.items():
             out.append(f"        boolean has{field} = false;\n")
         out.append("        try (JsonParser tp = tb.asParser()) {\n")
+        out.append("            tp.nextToken();\n")
         out.append("            while (tp.nextToken() != JsonToken.END_OBJECT) {\n")
         out.append("                String fn = tp.currentName();\n")
         out.append("                tp.nextToken();\n")
@@ -2679,7 +2783,8 @@ class Generator:
             model_imports.add(notif)
         for ref in sorted(model_imports):
             out.append(f"import {self.pkg_models}.{ref};\n")
-        out.append("import java.util.Collections;\n")
+        if not self.base_package:
+            out.append("import java.util.Collections;\n")
         out.append("import java.util.LinkedHashMap;\n")
         out.append("import java.util.Map;\n")
         out.append("import java.util.concurrent.ConcurrentHashMap;\n")
@@ -2711,7 +2816,11 @@ class Generator:
         out.append("     *\n")
         out.append("     * @param <T>        the model type\n")
         out.append("     * @param modelClass the model type\n")
-        out.append("     * @return the codec, or {@code null} if none is registered\n")
+        if self.base_package:
+            out.append("     * @return the codec, falling back to the base registry for base-package types,\n")
+            out.append("     *     or {@code null} if neither registers one\n")
+        else:
+            out.append("     * @return the codec, or {@code null} if none is registered\n")
         out.append("     */\n")
         out.append('    @SuppressWarnings("unchecked")\n')
         out.append("    public static <T> Codec<T> codecFor(Class<T> modelClass) {\n")
@@ -2719,7 +2828,13 @@ class Generator:
         out.append("            var override = (Codec<T>) OVERRIDES.get(modelClass);\n")
         out.append("            if (override != null) return override;\n")
         out.append("        }\n")
-        out.append("        return (Codec<T>) CODECS.get(modelClass);\n")
+        if self.base_package:
+            out.append("        var codec = (Codec<T>) CODECS.get(modelClass);\n")
+            out.append(
+                f"        return codec != null ? codec : {self.base_package}.codecs.CodecRegistry.codecFor(modelClass);\n"
+            )
+        else:
+            out.append("        return (Codec<T>) CODECS.get(modelClass);\n")
         out.append("    }\n\n")
         out.append("    /**\n")
         out.append("     * Replaces the codec used for a model type.\n")
@@ -2730,7 +2845,13 @@ class Generator:
         out.append("     */\n")
         out.append("    public static <T> void registerOverride(Class<T> modelClass, Codec<T> codec) {\n")
         out.append("        OVERRIDES.put(modelClass, codec);\n")
-        out.append("    }\n\n")
+        out.append("    }\n")
+        if self.base_package:
+            # Extensions add no MCP methods of their own to the base dispatcher.
+            out.append("}\n")
+            self.codec_files[name] = "".join(out)
+            return
+        out.append("\n")
         # Instance-based method lookup (for dispatcher)
         out.append("    private final Map<String, Object> codecs;\n\n")
         out.append(f"    private {name}(Builder b) {{\n")
@@ -2956,25 +3077,50 @@ class Generator:
             if literals and "string" in non_literals:
                 continue
 
-            # Intersection types (GetTaskResult = Result & Task)
+            # Intersection types (CreateTaskResult = Result & Task & { resultType: "task" })
             if "&" in rhs:
-                parts = [p.strip() for p in rhs.split("&")]
+                parts = TsParser.split_top_level(rhs, "&")
+                union_parts = [
+                    p for p in parts
+                    if p in self.discriminated_unions or p in self.structural_unions
+                ]
+                flattened = None
+                if union_parts:
+                    if len(union_parts) > 1 or union_parts[0] not in self.discriminated_unions:
+                        print(
+                            f"ts2java: skipping {name}: intersection with union {union_parts[0]} "
+                            f"can't be flattened into a record; map it in typeMappings or hand-write it"
+                        )
+                        continue
+                    flattened = union_parts[0]
                 all_fields = {}
                 has_idx = False
                 for p in parts:
+                    if p == flattened:
+                        continue
                     if p in self.all_interfaces:
-                        exp2 = self.all_interfaces[p]
-                        fields, idx = self.collect_all_fields(exp2)
-                        has_idx = has_idx or idx
-                        for f in fields:
-                            if f["kind"] != "field":
-                                continue
-                            fname = f["name"]
-                            if fname not in all_fields:
-                                all_fields[fname] = f
-                if all_fields:
+                        fields, idx = self.collect_all_fields(self.all_interfaces[p])
+                    elif p.startswith("{"):
+                        fields = TsParser.parse_fields(p[1:])
+                        # Same test as resolve_inline_object: a trailing `;` is optional in TS.
+                        idx = bool(re.search(r"\[\s*\w+\s*:\s*\w+\s*\]\s*:", p))
+                    else:
+                        # Base-package types (typeMappings) contribute no fields here; declare the
+                        # inherited ones in the config's additionalProperties.
+                        continue
+                    has_idx = has_idx or idx
+                    for f in fields:
+                        if f["kind"] == "field":
+                            # Later parts narrow earlier ones (e.g. a literal discriminator).
+                            all_fields[f["name"]] = f
+                if all_fields or self.additional_props.get(name) or flattened:
                     merged = list(all_fields.values())
                     comps, _ = self.get_components(merged, name, has_idx)
+                    if flattened:
+                        field = flattened[0].lower() + flattened[1:]
+                        doc = f"the {flattened} variant whose properties are inlined into this object"
+                        comps.insert(0, (flattened, field, False, doc, None))
+                        self.flattened_unions[name] = (flattened, field)
                     ifaces = []
                     if name in self.request_names:
                         ifaces.append("McpRequest")
@@ -3006,6 +3152,31 @@ class Generator:
                     comps, _ = self.get_components(fields, anon_name)
                     self.add_model(anon_name, comps)
 
+        # 6-7. Message hierarchy lives in the base package (sealed there), not in extensions
+        if not self.base_package:
+            self.add_message_hierarchy()
+
+        # 8. Codec interface + codecs for all models
+        if not self.skip_codecs:
+            if not self.base_package:
+                self.add_codec_support()
+                self.add_codec_interface()
+            self.add_model_codecs()
+
+        # 9. Protocol registries
+        if self.base_package:
+            if not self.skip_codecs:
+                self.add_codec_registry()
+                self.import_base_codecs()
+        elif not self.skip_protocol:
+            self.add_protocol_version()
+            self.add_method_registry()
+            self.add_descriptors()
+            self.add_codec_registry()
+
+        self.write_outputs()
+
+    def add_message_hierarchy(self):
         # 6. UnknownRequest
         self.add_model(
             "UnknownRequest",
@@ -3039,62 +3210,68 @@ class Generator:
         for cls, super_iface, permits in hierarchy:
             self.add_interface(cls, permits if permits else None, super_iface)
 
-        # 8. Codec interface + codecs for all models
-        if not self.skip_codecs:
-            self.add_codec_support()
-            self.add_codec_interface()
-            for model_name in list(self.model_files.keys()):
-                if model_name in self.type_mappings:
+    def add_model_codecs(self):
+        for model_name in list(self.model_files.keys()):
+            if model_name in self.type_mappings:
+                continue
+            if model_name in self.structural_unions:
+                continue
+            if model_name in self.discriminated_unions:
+                disc, variants = self.discriminated_unions[model_name]
+                self.add_discriminated_codec(model_name, disc, variants)
+                continue
+            if model_name in self.interface_extends:
+                # Polymorphic extends parents referenced as field types get a deduction codec
+                # (e.g. ResourceContents). The rest are plain records that codecs still
+                # reference by their declared type (NotificationParams, RequestParams, Result,
+                # Error), so they fall through to a plain codec below — without one,
+                # CodecRegistry.codecFor returns null and the caller NPEs.
+                if model_name == "ResourceContents":
+                    children = self.interface_extends[model_name]
+                    variant_field_map = OrderedDict()
+                    parent_exp = self.all_interfaces.get(model_name)
+                    parent_field_set = set()
+                    if parent_exp:
+                        for f in parent_exp.get("fields", []):
+                            if f["kind"] == "field":
+                                parent_field_set.add(f["name"])
+                    for child_name in children:
+                        child_exp = self.all_interfaces.get(child_name)
+                        if child_exp:
+                            for f in child_exp.get("fields", []):
+                                if f["kind"] == "field" and f["name"] not in parent_field_set:
+                                    variant_field_map[child_name] = f["name"]
+                                    break
+                    if variant_field_map:
+                        self.add_deduction_codec(model_name, variant_field_map)
                     continue
-                if model_name in self.structural_unions:
-                    continue
-                if model_name in self.discriminated_unions:
-                    disc, variants = self.discriminated_unions[model_name]
-                    self.add_discriminated_codec(model_name, disc, variants)
-                    continue
-                if model_name in self.interface_extends:
-                    # Polymorphic extends parents referenced as field types get a deduction codec
-                    # (e.g. ResourceContents). The rest are plain records that codecs still
-                    # reference by their declared type (NotificationParams, RequestParams, Result,
-                    # Error), so they fall through to a plain codec below — without one,
-                    # CodecRegistry.codecFor returns null and the caller NPEs.
-                    if model_name == "ResourceContents":
-                        children = self.interface_extends[model_name]
-                        variant_field_map = OrderedDict()
-                        parent_exp = self.all_interfaces.get(model_name)
-                        parent_field_set = set()
-                        if parent_exp:
-                            for f in parent_exp.get("fields", []):
-                                if f["kind"] == "field":
-                                    parent_field_set.add(f["name"])
-                        for child_name in children:
-                            child_exp = self.all_interfaces.get(child_name)
-                            if child_exp:
-                                for f in child_exp.get("fields", []):
-                                    if f["kind"] == "field" and f["name"] not in parent_field_set:
-                                        variant_field_map[child_name] = f["name"]
-                                        break
-                        if variant_field_map:
-                            self.add_deduction_codec(model_name, variant_field_map)
-                        continue
-                if model_name in (
-                    "McpMessage",
-                    "McpRequest",
-                    "McpNotification",
-                    "McpResponse",
-                ):
-                    continue
-                if model_name in self.codec_files:
-                    continue
-                self.add_codec(model_name)
+            if model_name in (
+                "McpMessage",
+                "McpRequest",
+                "McpNotification",
+                "McpResponse",
+            ):
+                continue
+            if model_name in self.codec_files:
+                continue
+            self.add_codec(model_name)
 
-        # 9. Protocol registries
-        if not self.skip_protocol:
-            self.add_protocol_version()
-            self.add_method_registry()
-            self.add_descriptors()
-            self.add_codec_registry()
+    def import_base_codecs(self):
+        """Adds imports of the base package's Codec/CodecSupport to every generated codec."""
+        base_codecs = f"{self.base_package}.codecs"
+        for name, content in self.codec_files.items():
+            needed = set()
+            if re.search(r"\bCodec<", content):
+                needed.add(f"import {base_codecs}.Codec;")
+            if "CodecSupport." in content:
+                needed.add(f"import {base_codecs}.CodecSupport;")
+            lines = content.split("\n")
+            import_idx = [i for i, line in enumerate(lines) if line.startswith("import ")]
+            first, last = import_idx[0], import_idx[-1]
+            imports = sorted(set(lines[first : last + 1]) | needed)
+            self.codec_files[name] = "\n".join(lines[:first] + imports + lines[last + 1 :])
 
+    def write_outputs(self):
         # 10. Write files
         for name, content in self.model_files.items():
             if not content:
@@ -3157,7 +3334,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--config",
         default=None,
-        help="Path to JSON config file with typeMappings and additionalProperties",
+        help="Path to JSON config file with typeMappings, additionalProperties, ignoreProperties "
+        "and basePackage (extension mode: reuse that package's models and codecs)",
     )
     parser.add_argument(
         "--force",
@@ -3189,6 +3367,7 @@ if __name__ == "__main__":
         type_mappings = config.get("typeMappings")
         additional_properties = config.get("additionalProperties", {})
         ignore_properties = config.get("ignoreProperties", {})
+        base_package = config.get("basePackage")
 
         gen = Generator(
             ts_path=args.ts,
@@ -3200,6 +3379,7 @@ if __name__ == "__main__":
             type_mappings=type_mappings,
             additional_properties=additional_properties,
             ignore_properties=ignore_properties,
+            base_package=base_package,
         )
         gen.generate()
 
