@@ -13,6 +13,7 @@ import java.io.UncheckedIOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.time.Duration;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -87,11 +88,58 @@ public final class JsonUtils {
         return MAPPER.writeValueAsString(value);
     }
 
+    /**
+     * Converts a {@code _meta}-style value map to the {@code Map<String, JsonNode>} generated
+     * protocol records carry. Each value becomes the same tree {@code valueToTree} would build.
+     *
+     * @param values the values, or {@code null}
+     * @return the trees in {@code values} order, or {@code null} when {@code values} is {@code null}
+     */
     public static @Nullable Map<String, JsonNode> toJsonNodeMap(@Nullable Map<String, ?> values) {
         if (values == null) return null;
-        var result = new LinkedHashMap<String, JsonNode>(values.size());
-        values.forEach((key, value) -> result.put(key, MAPPER.valueToTree(value)));
+        var result = LinkedHashMap.<String, JsonNode>newLinkedHashMap(values.size());
+        values.forEach((key, value) -> result.put(key, toTree(value)));
         return result;
+    }
+
+    /**
+     * Builds JSON-shaped values (scalars, string-keyed maps, collections, trees) straight from
+     * {@link JsonNodeFactory}, skipping {@code valueToTree}'s serialize-to-buffer round trip; other
+     * types go through the mapper, so the result always equals {@code MAPPER.valueToTree(value)}.
+     */
+    private static JsonNode toTree(@Nullable Object value) {
+        var nodes = JsonNodeFactory.instance;
+        return switch (value) {
+            case null -> nodes.nullNode();
+            case String text -> nodes.stringNode(text);
+            case Boolean flag -> nodes.booleanNode(flag);
+            case Integer i -> nodes.numberNode(i);
+            case Long l -> nodes.numberNode(l);
+            case Double d -> nodes.numberNode(d);
+            case Float f -> nodes.numberNode(f);
+            case BigDecimal d -> nodes.numberNode(d);
+            case BigInteger i -> nodes.numberNode(i);
+            case JsonNode node -> node.deepCopy();
+            case Map<?, ?> map
+            when hasOnlyStringKeys(map) -> {
+                var node = nodes.objectNode();
+                map.forEach((key, item) -> node.set((String) key, toTree(item)));
+                yield node;
+            }
+            case Collection<?> items -> {
+                var array = nodes.arrayNode(items.size());
+                items.forEach(item -> array.add(toTree(item)));
+                yield array;
+            }
+            default -> MAPPER.valueToTree(value);
+        };
+    }
+
+    private static boolean hasOnlyStringKeys(Map<?, ?> map) {
+        for (var key : map.keySet()) {
+            if (!(key instanceof String)) return false;
+        }
+        return true;
     }
 
     public static @Nullable Map<String, Object> toObjectMap(@Nullable Map<String, JsonNode> values) {

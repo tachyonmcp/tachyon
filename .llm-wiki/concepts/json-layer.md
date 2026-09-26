@@ -2,8 +2,8 @@
 title: JSON layer
 tags: [concept, json, schema]
 sources: [tachyon-api/src/main/java/dev/tachyonmcp/api/json/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/json/, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/, tachyon-core/src/main/resources/META-INF/services/, tachyon-kotlin/src/main/kotlin/dev/tachyonmcp/kotlin/server/json/]
-updated: 2026-09-17
-commit: 1a4081f4
+updated: 2026-09-26
+commit: 66106c6b
 ---
 
 # 🧾 JSON layer
@@ -13,6 +13,7 @@ Verdict: three independent JSON concerns. (1) **JSON-RPC envelope** — hand-rol
 ## ✉️ JSON-RPC codec
 
 [JsonRpcCodec](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/JsonRpcCodec.java) `tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/JsonRpcCodec.java`:
+- `JsonUtils.toJsonNodeMap(Map<String, ?>)` turns domain `_meta`/`experimental` maps into the `Map<String, JsonNode>` generated records carry. JSON-shaped values (scalars, string-keyed maps, collections, trees) are built straight from `JsonNodeFactory`; anything else goes through `valueToTree`. Output always equals `valueToTree` per value (`JsonUtilsTest#toJsonNodeMapBuildsTheSameTreesAsValueToTree`; trees are deep-copied). JMH `JsonNodeMapBenchmark`: 2.5× (`_meta`) / 1.7× (frontmatter) throughput vs per-entry `valueToTree`, half the allocation `JsonUtils#toJsonNodeMap`, `JsonUtils#toTree`.
 - `JsonUtils.toParamsNode(Object)` narrows a raw `params` payload (tree, or a decoded `Map`) to one `ObjectNode`; anything else (absent, by-position array) ⇒ empty object, so a validator's field lookups just miss instead of branching on Java type `JsonUtils#toParamsNode`.
 - `parseRequest(ByteBuf)` streaming; `params` read as Jackson tree (`JsonNode`), `result`/`error.data` kept **raw JSON string** [JsonRpcCodec#parseRequest](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/JsonRpcCodec.java), [JsonRpcCodec](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/JsonRpcCodec.java).
 - Classification priority: error (code+message) > result > method+id ⇒ `Request` > method ⇒ [JsonRpcMessage.Notification](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/JsonRpcMessage.java) > IAE [JsonRpcCodec#parseRequest](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/JsonRpcCodec.java).
