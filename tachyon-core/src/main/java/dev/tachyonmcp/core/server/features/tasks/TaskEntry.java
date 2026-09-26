@@ -2,7 +2,6 @@
 package dev.tachyonmcp.core.server.features.tasks;
 
 import dev.tachyonmcp.api.annotations.InternalApi;
-import dev.tachyonmcp.api.server.domain.ProgressToken;
 import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
 import java.time.Clock;
 import java.time.Duration;
@@ -11,35 +10,27 @@ import java.util.Objects;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiConsumer;
 import java.util.function.BooleanSupplier;
-import org.jspecify.annotations.Nullable;
 
 /**
- * Cached task projection plus server-local retention. The owning session and progress token come
- * from the task-augmented tool call that created the task and never change.
+ * Cached task projection plus server-local retention and its push {@link TaskRoute}. The route is
+ * set at most once, by the task-augmented tool call that returned the task, and never changes.
  */
 @InternalApi
 final class TaskEntry {
 
-    private final @Nullable String ownerSessionId;
-    private final @Nullable ProgressToken progressToken;
     private final Duration keepAlive;
     private final Clock clock;
     private volatile TaskSnapshot snapshot;
     private volatile Instant cachedAt;
+    private volatile TaskRoute route;
     /** Guards updates and orders notifications; senders must never block while it is held. */
     private final ReentrantLock lock = new ReentrantLock();
 
     private long notifiedRevision = -1;
 
-    TaskEntry(
-            TaskSnapshot snapshot,
-            @Nullable String ownerSessionId,
-            @Nullable ProgressToken progressToken,
-            Duration keepAlive,
-            Clock clock) {
+    TaskEntry(TaskSnapshot snapshot, TaskRoute route, Duration keepAlive, Clock clock) {
         this.snapshot = Objects.requireNonNull(snapshot, "snapshot");
-        this.ownerSessionId = ownerSessionId;
-        this.progressToken = progressToken;
+        this.route = Objects.requireNonNull(route, "route");
         this.keepAlive = Objects.requireNonNull(keepAlive, "keepAlive");
         this.clock = Objects.requireNonNull(clock, "clock");
         this.cachedAt = clock.instant();
@@ -64,27 +55,39 @@ final class TaskEntry {
         return snapshot;
     }
 
-    @Nullable
-    String ownerSessionId() {
-        return ownerSessionId;
-    }
-
-    @Nullable
-    ProgressToken progressToken() {
-        return progressToken;
-    }
-
-    /** Whether {@code sessionId} is this task's owner; {@code null} matches an ownerless task. */
-    boolean ownedBy(@Nullable String sessionId) {
-        return Objects.equals(ownerSessionId, sessionId);
+    TaskRoute route() {
+        return route;
     }
 
     /**
-     * Sends the current snapshot to its owner unless a revision at least as new was already sent.
+     * Gives an unrouted entry {@code candidate}; a routed entry keeps its route, so a colliding task
+     * id never redirects another caller's push traffic. Revisions sent before the route attaches are
+     * not re-sent along it.
+     *
+     * @return whether the entry took {@code candidate}
+     */
+    boolean route(TaskRoute candidate) {
+        if (candidate.equals(TaskRoute.NONE)) {
+            return false;
+        }
+        lock.lock();
+        try {
+            if (!route.equals(TaskRoute.NONE)) {
+                return false;
+            }
+            route = candidate;
+            return true;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
+     * Sends the current snapshot along its route unless a revision at least as new was already sent.
      * A publisher that lost the race to a newer one therefore sends nothing instead of a stale
      * status.
      */
-    void notifyIfNewer(BiConsumer<TaskSnapshot, @Nullable String> sender) {
+    void notifyIfNewer(BiConsumer<TaskSnapshot, TaskRoute> sender) {
         lock.lock();
         try {
             var current = snapshot;
@@ -92,7 +95,7 @@ final class TaskEntry {
                 return;
             }
             notifiedRevision = current.revision();
-            sender.accept(current, ownerSessionId);
+            sender.accept(current, route);
         } finally {
             lock.unlock();
         }
@@ -121,9 +124,7 @@ final class TaskEntry {
         var current = snapshot;
         var now = clock.instant();
         var ttl = current.ttl();
-        if (ttl != null
-                && (ownerSessionId == null || current.status().isTerminal())
-                && !now.isBefore(current.createdAt().plus(ttl))) {
+        if (ttl != null && !now.isBefore(current.createdAt().plus(ttl))) {
             return true;
         }
         return current.status().isTerminal()

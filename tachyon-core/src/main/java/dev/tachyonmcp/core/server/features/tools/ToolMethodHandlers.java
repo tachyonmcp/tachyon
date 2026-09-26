@@ -19,6 +19,7 @@ import dev.tachyonmcp.api.server.features.tools.ToolRequest;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
 import dev.tachyonmcp.core.protocol.ProtocolRequestMapper;
 import dev.tachyonmcp.core.server.RpcMethodHandler;
+import dev.tachyonmcp.core.server.features.tasks.TaskRoute;
 import dev.tachyonmcp.core.server.features.tasks.TasksExtension;
 import dev.tachyonmcp.core.server.internal.HandlerFutures;
 import dev.tachyonmcp.core.server.json.JsonUtils;
@@ -199,17 +200,10 @@ public final class ToolMethodHandlers {
                 }
                 var snapshot = context.engine()
                         .tasksRegistry()
-                        .create(
+                        .publish(
                                 task.snapshot(),
-                                context.sessionId(),
-                                mapped.request().progressToken());
-                if (snapshot == null) {
-                    // Generic on the wire: the reason would tell the caller that another session uses this id.
-                    logger.warn(
-                            "Task-producing tool returned task {} owned by another session",
-                            task.snapshot().taskId());
-                    return internalError("Internal error");
-                }
+                                new TaskRoute(
+                                        context.sessionId(), mapped.request().progressToken()));
                 context.observation().markTaskHandoff(snapshot.taskId());
                 return context.responseMapper().createTaskResult(snapshot);
             }

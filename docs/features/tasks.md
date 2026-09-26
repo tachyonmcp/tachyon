@@ -104,30 +104,53 @@ boolean remove(String taskId);
 void reportProgress(String taskId, double progress, @Nullable Double total, @Nullable String message);
 ```
 
-A task-augmented `tools/call` that returns `ToolResult.task(...)` creates the task. Its session and
-progress token become the task's owner and progress target, fixed for the task's lifetime. Session
-notifications (`notifications/tasks/status`, and `notifications/progress` from `reportProgress`) go
-to that session only. `publish` updates a task and never changes its owner, whichever thread or
-callback calls it. A task id the tool returns that another session already owns fails the call.
-Tachyon never generates task ids: the tool or the task execution engine does, and owns their
+`publish` caches a task Tachyon has not seen and otherwise applies newer revisions. It never
+starts work.
+
+### Where notifications go
+
+A task-augmented `tools/call` that returns `ToolResult.task(...)` gives the task a route: that
+call's session and progress token. The route is fixed once set.
+- `notifications/tasks/status` goes to that session, and `notifications/progress` from
+  `reportProgress` to that token.
+- A task published before the tool call returns, e.g. by a job that reports `working` early, takes
+  the route when the call returns.
+- A second tool call that returns the same id succeeds but never takes the route.
+- `publish` never picks a session from the calling thread.
+
+Every `subscriptions/listen` stream that names a task id also receives that task's
+`notifications/tasks`, routed or not, as long as the connector let the stream read it. When the
+stream opens, Tachyon calls the connector's `get` with the listener's `InteractionContext` for each
+id it names. An id the connector refuses or fails on is left out, and the acknowledgment lists only
+the ids that stay. The check runs once per stream, not per notification. Status is never broadcast
+to other sessions.
+
+### Who can reach a task
+
+Tachyon does not decide access. `tasks/get`, `tasks/cancel`, `tasks/result`, `tasks/update` and
+`tasks/list` always call the connector, which receives the caller's `InteractionContext` and
+must authorize the call. So does every task id a `subscriptions/listen` stream names, through
+`get`. Tachyon has no authentication, so the MCP spec's rule for servers without
+an authorization context applies: the task id is a bearer capability. Generate it unguessable, e.g.
+a random UUID. Tachyon never generates task ids: the tool or the task execution engine owns their
 uniqueness and unpredictability.
 
-Session-owned tasks never emit `notifications/tasks` to sessionless `subscriptions/listen`
-streams, even when a subscriber knows the task id or the owning session has ended. Ownerless tasks
-continue to notify streams that subscribed to their task ids. This routing preserves session
-isolation; it does not provide user authentication or per-user authorization.
+To keep a task private to the session that started it, record the session with the job and check
+it in the connector. Answer a task the caller may not see like an unknown id:
 
-`publish` never creates a task. A snapshot for a task Tachyon has not cached, e.g. a connector
-callback that runs before the tool returns or on another node, reaches `subscriptions/listen`
-subscribers only and is not cached; pull through `tasks/get` stays authoritative.
+```java
+.get((ctx, request) -> {
+    var job = jobs.find(request.taskId());
+    if (job == null || !Objects.equals(job.sessionId(), ctx.sessionId())) {
+        throw new TaskNotFoundException(request.taskId());
+    }
+    return job.snapshot();
+})
+```
 
-Only the owner reaches its task. On a stateful server, `tasks/get`, `tasks/cancel`, `tasks/result`
-and `tasks/update` for a task another session owns fail with the same `Task not found` error as an
-unknown id, before Tachyon calls the connector, and `tasks/list` leaves such tasks out. A client that
-reconnects with a new session therefore loses access to its earlier tasks. Tachyon checks only tasks
-it has cached with an owner: ownerless tasks and ids it has not seen go to the connector, which
-receives the `InteractionContext` and must authorize them itself. Tachyon never broadcasts a task to
-other sessions.
+Apply the same check in `cancel`, `update` and `awaitResult`, and filter `list`. The `get` check also
+keeps other clients' `subscriptions/listen` streams away from the task. A client that reconnects with
+a new session then loses access to its earlier tasks.
 
 Each snapshot carries a monotonically increasing `revision`. Tachyon ignores duplicate or older
 revisions. Push improves notification latency, but pull remains authoritative: `tasks/get` always
@@ -151,8 +174,9 @@ var completed = TaskSnapshot.builder()
 ```
 
 The cache janitor removes tasks past their `ttl` and terminal tasks past `keepAlive`. It never cancels
-or mutates external work. An evicted task loses its owner check: later `tasks/*` calls for its id go
-to the connector, which must authorize them.
+or mutates external work. An evicted task loses its route: a later publish caches it unrouted, so its
+session no longer receives its status. Listeners are unaffected: the connector authorized them when
+their streams opened.
 
 ## Report progress
 

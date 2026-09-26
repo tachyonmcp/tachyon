@@ -156,7 +156,9 @@ class SubscriptionsListenTest extends AbstractStatelessMcpE2eTest<Mcp20260728Cli
 
     @Test
     void pushesTaskStatusOnlyForSubscribedTaskId() throws Exception {
-        var taskEngine = new TestTaskConnector();
+        // The connector authorizes each listened task id, so it must know task-a.
+        var taskEngine = new TestTaskConnector()
+                .publish(TaskSnapshot.working("task-a", Instant.parse("2026-08-28T10:00:00Z"), 0));
         startServer(b -> b.capabilities(c -> c.tools(true).tasks(taskEngine.connector())));
 
         var lines = new CopyOnWriteArrayList<String>();

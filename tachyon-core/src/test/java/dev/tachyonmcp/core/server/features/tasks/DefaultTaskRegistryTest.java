@@ -7,16 +7,21 @@ import static org.assertj.core.api.Assertions.assertThat;
 import dev.tachyonmcp.api.server.domain.ProgressToken;
 import dev.tachyonmcp.api.server.domain.TaskResult;
 import dev.tachyonmcp.api.server.features.tasks.TaskConnector;
+import dev.tachyonmcp.api.server.features.tasks.TaskNotFoundException;
 import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
 import dev.tachyonmcp.api.server.features.tasks.TaskState;
 import dev.tachyonmcp.core.server.config.TasksConfig;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
+import dev.tachyonmcp.core.server.session.NoopInteractionContext;
+import java.io.IOException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -48,7 +53,8 @@ class DefaultTaskRegistryTest {
         var revisionOne = snapshot("task-1", TaskState.WORKING, 1);
         var revisionTwo = snapshot("task-1", TaskState.COMPLETED, 2);
 
-        assertThat(registry.create(revisionOne, "owner", null).revision()).isEqualTo(1);
+        assertThat(registry.publish(revisionOne, new TaskRoute("caller", null)).revision())
+                .isEqualTo(1);
         var storedRevisionTwo = registry.publish(revisionTwo);
         assertThat(storedRevisionTwo.revision()).isEqualTo(2);
         assertThat(registry.publish(revisionOne)).isEqualTo(storedRevisionTwo);
@@ -56,33 +62,81 @@ class DefaultTaskRegistryTest {
     }
 
     @Test
-    void onlyCreateCachesATaskAndItsOwnerNeverChanges() {
-        var token = ProgressToken.of("tok");
+    void publishCachesAnUnknownTaskAndARoutedPublishNeverRefuses() {
+        var route = new TaskRoute("caller", ProgressToken.of("tok"));
 
-        assertThat(registry.publish(snapshot("task-1", TaskState.WORKING, 1)).revision())
-                .isEqualTo(1);
-        assertThat(registry.get("task-1"))
-                .as("publish never caches an unknown task")
+        var published = registry.publish(snapshot("task-1", TaskState.WORKING, 2));
+        assertThat(registry.get("task-1")).as("publish caches an unknown task").isEqualTo(published);
+
+        assertThat(registry.publish(snapshot("task-1", TaskState.WORKING, 1), route))
+                .as("an older revision from the tool call keeps the cached one")
+                .isEqualTo(published);
+        assertThat(registry.publish(snapshot("task-1", TaskState.COMPLETED, 3), new TaskRoute("other", null))
+                        .revision())
+                .as("a colliding tool call is never refused; access is the connector's decision")
+                .isEqualTo(3);
+    }
+
+    @Test
+    void readableTaskIdsKeepOnlyWhatTheConnectorAnswersAndFailClosed() {
+        var readable = snapshot("readable", TaskState.WORKING, 1);
+        var guarded = new DefaultTaskRegistry(
+                server,
+                TasksConfig.builder()
+                        .enabled(true)
+                        .connector(TaskConnector.builder()
+                                .get((ctx, request) -> switch (request.taskId()) {
+                                    case "readable" -> readable;
+                                    case "failing" -> throw new IOException("introspection endpoint unavailable");
+                                    default -> throw new TaskNotFoundException(request.taskId());
+                                })
+                                .cancel((ctx, request) -> {})
+                                .update((ctx, request) -> {})
+                                .build())
+                        .build(),
+                clock);
+
+        assertThat(guarded.readableTaskIds(NoopInteractionContext.INSTANCE, Set.of("readable", "refused", "failing")))
+                .as("refused and failing ids are left out: a connector outage never opens a stream")
+                .containsExactly("readable");
+        assertThat(guarded.get("readable"))
+                .as("authorizing a listener caches nothing")
                 .isNull();
+        assertThat(guarded.readableTaskIds(NoopInteractionContext.INSTANCE, Set.of()))
+                .isEmpty();
+    }
 
-        var created = registry.create(snapshot("task-1", TaskState.WORKING, 1), "owner", token);
-        assertThat(created).isNotNull();
-        assertThat(registry.visibleTo("task-1", "owner")).isTrue();
-        assertThat(registry.visibleTo("task-1", "intruder")).isFalse();
+    @Test
+    void readableTaskIdsStopAtAnInterruptAndRestoreIt() {
+        var asked = new ArrayList<String>();
+        var guarded = new DefaultTaskRegistry(
+                server,
+                TasksConfig.builder()
+                        .enabled(true)
+                        .connector(TaskConnector.builder()
+                                .get((ctx, request) -> {
+                                    asked.add(request.taskId());
+                                    throw new InterruptedException("executor shutting down");
+                                })
+                                .cancel((ctx, request) -> {})
+                                .update((ctx, request) -> {})
+                                .build())
+                        .build(),
+                clock);
 
-        assertThat(registry.create(snapshot("task-1", TaskState.COMPLETED, 2), "intruder", null))
-                .as("another session cannot create a task id that is already owned")
-                .isNull();
-        assertThat(registry.create(snapshot("task-1", TaskState.COMPLETED, 2), null, null))
-                .as("nor can a sessionless call")
-                .isNull();
-        assertThat(registry.get("task-1")).isEqualTo(created);
-
-        var retried = registry.create(snapshot("task-1", TaskState.WORKING, 2), "owner", null);
-        assertThat(retried).as("the owner's create is idempotent").isNotNull();
-        assertThat(retried.revision()).isEqualTo(2);
-        assertThat(registry.visibleTo("task-1", "owner")).isTrue();
-        assertThat(registry.visibleTo("task-1", "intruder")).isFalse();
+        try {
+            assertThat(guarded.readableTaskIds(NoopInteractionContext.INSTANCE, Set.of("first", "second", "third")))
+                    .as("an interrupted check allows nothing")
+                    .isEmpty();
+            assertThat(asked)
+                    .as("the connector is not asked again after an interrupt")
+                    .hasSize(1);
+            assertThat(Thread.currentThread().isInterrupted())
+                    .as("the interrupt is restored for the caller")
+                    .isTrue();
+        } finally {
+            Thread.interrupted();
+        }
     }
 
     @Test
@@ -97,10 +151,10 @@ class DefaultTaskRegistryTest {
 
     @Test
     void janitorEvictsTerminalProjectionButNeverTransitionsActiveWork() {
-        registry.create(snapshot("active", TaskState.WORKING, 1), null, null);
-        registry.create(snapshot("terminal", TaskState.COMPLETED, 1), null, null);
-        registry.create(withTtl(snapshot("abandoned", TaskState.WORKING, 1), Duration.ofMinutes(6)), null, null);
-        registry.create(withTtl(snapshot("long-lived", TaskState.WORKING, 1), Duration.ofHours(1)), null, null);
+        registry.publish(snapshot("active", TaskState.WORKING, 1), TaskRoute.NONE);
+        registry.publish(snapshot("terminal", TaskState.COMPLETED, 1), TaskRoute.NONE);
+        registry.publish(withTtl(snapshot("abandoned", TaskState.WORKING, 1), Duration.ofMinutes(6)), TaskRoute.NONE);
+        registry.publish(withTtl(snapshot("long-lived", TaskState.WORKING, 1), Duration.ofHours(1)), TaskRoute.NONE);
 
         clock.advance(Duration.ofMinutes(6));
         registry.runJanitorSweep();
@@ -117,8 +171,8 @@ class DefaultTaskRegistryTest {
     @Test
     void nonPositiveKeepAliveRetainsTerminalResults() {
         var terminal = snapshot("terminal", TaskState.COMPLETED, 1);
-        var zeroRetention = new TaskEntry(terminal, null, null, Duration.ZERO, clock);
-        var negativeRetention = new TaskEntry(terminal, null, null, Duration.ofSeconds(-1), clock);
+        var zeroRetention = new TaskEntry(terminal, TaskRoute.NONE, Duration.ZERO, clock);
+        var negativeRetention = new TaskEntry(terminal, TaskRoute.NONE, Duration.ofSeconds(-1), clock);
 
         clock.advance(Duration.ofDays(1));
 
@@ -128,7 +182,7 @@ class DefaultTaskRegistryTest {
 
     @Test
     void removeOnlyDropsProjection() {
-        registry.create(snapshot("task-1", TaskState.WORKING, 1), null, null);
+        registry.publish(snapshot("task-1", TaskState.WORKING, 1), TaskRoute.NONE);
 
         assertThat(registry.remove("task-1")).isTrue();
         assertThat(registry.remove("task-1")).isFalse();

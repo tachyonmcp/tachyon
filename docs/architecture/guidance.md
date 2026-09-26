@@ -183,10 +183,12 @@ public interface Tasks {
 }
 ```
 
-`publish` updates the cache, applies retention policy, and emits any negotiated MCP notification.
-It does not start work. Only the task-augmented tool call's result creates a cached task, with that
-call's session as owner for the task's lifetime; never infer an owner from the calling thread, and
-never change it. Only the owner receives session notifications. `TaskConnector.get()` is
+`publish` upserts the cache, applies retention policy, and emits any negotiated MCP notification.
+It does not start work. The task-augmented tool call's result gives the task its push route (session
+and progress token), set once; never infer a route from the calling thread, and never re-route. A
+route is delivery, not access: Tachyon never gates `tasks/*`, the connector authorizes each call
+from `InteractionContext`. A later owner (authenticated principal) is a separate field, not the
+route. `TaskConnector.get()` is
 authoritative for `tasks/get`; a successful
 snapshot is published before mapping the response. A refresh failure must not silently invent a
 state. A cached snapshot may be used only under an explicit stale-read policy.

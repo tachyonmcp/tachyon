@@ -3,7 +3,7 @@ title: Tasks
 tags: [concept, tasks, experimental]
 sources: [tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/tasks/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tasks/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/TasksConfig.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tools/ToolMethodHandlers.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java, integrations/tachyon-tasks-temporal/]
 updated: 2026-09-25
-commit: 1814ef5b
+commit: cbfbcd7f
 ---
 
 # ⏳ Tasks
@@ -37,32 +37,35 @@ Startup check: any `REQUIRED` tool w/o connector ⇒ `IllegalStateException("Tas
 | 2025-11-25 (legacy augmentation) | client sends task-augmented call; `FORBIDDEN`+augmented ⇒ invalid params; `REQUIRED`+plain ⇒ invalid params |
 | 2026-07-28 | no augmentation flag; `REQUIRED` ⇒ tasks extension must be declared (else -32021) |
 
-Tool returns `ToolResult.task(snapshot)` ⇒ checks (not FORBIDDEN, legacy must be augmented, connector configured, extension declared on modern) ⇒ `tasksRegistry.create(snapshot, context.sessionId(), progressToken)` (explicit: async tools map off the dispatch thread) ⇒ `createTaskResult`, observation outcome `TaskHandoff`. Non-task result for REQUIRED/augmented ⇒ internal error.
+Tool returns `ToolResult.task(snapshot)` ⇒ checks (not FORBIDDEN, legacy must be augmented, connector configured, extension declared on modern) ⇒ `tasksRegistry.publish(snapshot, new TaskRoute(context.sessionId(), progressToken))` (explicit: async tools map off the dispatch thread); never refused ⇒ `createTaskResult`, observation outcome `TaskHandoff`. Non-task result for REQUIRED/augmented ⇒ internal error.
 
 ## 🗂️ Registry semantics
 
-Only `TaskRegistry#create` caches a task; `publish` only updates.
+Verdict: cache + push **routing**, no access control. A `TaskRoute` (session + progress token) is a delivery address, never an owner; the connector authorizes every `tasks/*` call. Without an authorization context the task id is a bearer capability (2025-11-25 Tasks § Security).
+
 - effective pollInterval = snapshot's or config default `DefaultTaskRegistry#withDefaults`.
-- `create(snapshot, sessionId, progressToken)`: `putIfAbsent` a `TaskEntry` whose owner session + progress token are `final` (never change, no claim). Existing entry: same owner (`TaskEntry#ownedBy`, `null` = ownerless) ⇒ idempotent, publishes the revision; else ⇒ `null`, owner's snapshot untouched, tool call gets internal error `DefaultTaskRegistry#create`.
-- `publish(snapshot)`: cached ⇒ `TaskEntry#publish` accepts only **higher revision**; changed ⇒ `server.notifyTaskStatus(snapshot, ownerSessionId)` + `ChangeSupport.fireOnChange` (listeners append, like the other registries) `DefaultTaskRegistry#onChange`. Uncached ⇒ `notifyTaskStatus(snapshot, null)` (listen subscribers only, e.g. task created on another node) and **not cached**. So `tasks/get|cancel|result` never cache, and an early connector callback before the tool returns is pushed, not cached.
-- No `InteractionContext#tasks()`: owner comes only from the task-augmented `tools/call`, never from a thread or facade.
-- Task ids come from the tool or task execution engine, never Tachyon; their uniqueness and unpredictability are out of Tachyon's scope (a colliding id fails `create`).
-- `reportProgress(taskId, …)` needs the creating call's progressToken, else dropped `DefaultTaskRegistry#reportProgress`.
-- Access: `DefaultTaskRegistry#visibleTo` hides a task owned by another session; `tasks/get|cancel|result|update` answer it exactly like an unknown id (`TaskMethodHandlers#taskNotFound`, also for the connector's `TaskNotFoundException`) before calling the connector, `tasks/list` filters it out. Ownerless and uncached ids go to the connector.
-- Threading: `TaskEntry` lock guards publish + notify. `TaskEntry#notifyIfNewer` gates on `notifiedRevision`, so a publisher that lost the race never sends a stale status after a newer one. Sends run under the lock, so owner status uses `offerEvent` (slow client ⇒ its stream closes, publishers never park) `DefaultTachyonServer#notifyTaskStatus`.
-- Janitor every 30s removes entries past `createdAt + ttl` (any status) or terminal and cached longer than keepAlive `TaskEntry#isExpired`, `DefaultTaskRegistry#runJanitorSweep`. Eviction drops the owner check (uncached ids go to the connector).
+- `publish(snapshot)` = `publish(snapshot, TaskRoute.NONE)`: upsert. Uncached ⇒ cached unrouted; cached ⇒ `TaskEntry#publish` accepts only **higher revision**; changed ⇒ `TaskEntry#notifyIfNewer` + `ChangeSupport.fireOnChange` `DefaultTaskRegistry#publish`, `DefaultTaskRegistry#onChange`.
+- `publish(snapshot, route)` (tool path): `putIfAbsent`; existing entry takes `route` only if unrouted (`TaskEntry#route(TaskRoute)`: set once, never re-routed, colliding call succeeds) `DefaultTaskRegistry#publish`. Route attach itself pushes nothing: the tool result carries that revision; revisions sent before attach are not re-sent.
+- `tasks/get|cancel|result` publish the connector's snapshot ⇒ cached unrouted; a read never routes. `tasks/list` never caches.
+- Route source: only the task-augmented `tools/call`, never a thread, facade or read. No `InteractionContext#tasks()`.
+- Task ids come from the tool or engine, never Tachyon; unguessability is their job (spec MUST without context binding).
+- `reportProgress(taskId, …)` needs the route's progressToken, else dropped `DefaultTaskRegistry#reportProgress`.
+- Threading: `TaskEntry` lock guards publish + route + notify. `TaskEntry#notifyIfNewer` gates on `notifiedRevision`, so a publisher that lost the race never sends a stale status. Sends run under the lock, so session status uses `offerEvent` (slow client ⇒ its stream closes, publishers never park) `DefaultTachyonServer#notifyTaskStatus`.
+- Janitor every 30s removes entries past `createdAt + ttl` (any status, any route) or terminal and cached longer than keepAlive `TaskEntry#isExpired`, `DefaultTaskRegistry#runJanitorSweep`. Eviction drops the route: later status reaches listeners only.
 
-Notification routing [DefaultTachyonServer#notifyTaskStatus](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java): a recorded owner ⇒ only that session gets `notifications/tasks/status`; a missing/terminated owner session never falls back to modern subscribers. Only ownerless snapshots reach `SubscriptionRegistry#notifyTaskStatus` → `notifications/tasks` on `subscriptions/listen` streams filtering on taskId. Session status/progress payloads use the session protocol's `ProtocolResponseMapper#encode`. This is session isolation, not user authorization; uncached publishes still lack ownership information.
+Notification routing [DefaultTachyonServer#notifyTaskStatus](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java): routed ⇒ that session gets `notifications/tasks/status` (gone ⇒ nothing, no fallback); always also `SubscriptionRegistry#notifyTaskStatus` → `notifications/tasks` on `subscriptions/listen` streams naming the taskId. Listener ids are pre-authorized: `SubscriptionsListenHandler#handleAsync` narrows the filter to `TaskRegistry#readableTaskIds` (connector `get` per id with the listener's ctx, fail closed, nothing cached) before `SubscriptionRegistry#activate`, so the ack echoes only honored ids (2026-07-28 subscriptions: ack = honored subset). Eviction/route loss changes nothing for listeners. Checked once per stream, not per event. Never broadcast. Session payloads use the session protocol's `ProtocolResponseMapper#encode`.
 
-### ❓ Why the owner is not in `TaskSnapshot`
+History: beta.30 inferred the route from the `OutboundSseStreamMessageRouter` ThreadLocal and broadcast unrouted status to every session; beta.31 (#393) made the session an owner with `visibleTo` gates. Both replaced by explicit route + connector access.
 
-Owner = server-local routing state in `TaskEntry` (`final`, set by `TaskRegistry#create`); `TaskSnapshot` = the external system's view, authored by connector/engine.
-- `Mcp-Session-Id` is a session credential: snapshots flow to connectors, external stores and logs.
-- Connector-authored `publish` would have to carry the owner ⇒ either it can change the owner (breaks immutability) or the field is ignored (misleading).
-- Snapshots map straight to wire types (`McpTaskMapper`): one missed mapper leaks the owner's session id.
-- 2026-07-28 has no sessions; the spec binds tasks to the authorization context, not a transport session.
+### ❓ Why the route is not in `TaskSnapshot`
 
-Durable ownership (eviction, restart, multi-node) belongs to the connector: every `Task*Fn` gets `InteractionContext`; the engine stores its own owner key (principal/tenant, never the raw session id) and authorizes `get`/`cancel`/`update`/`list`.
+Route = server-local delivery state in `TaskEntry` (set once by `TaskRegistry#publish(TaskSnapshot, TaskRoute)`); `TaskSnapshot` = the external system's view, authored by connector/engine.
+- `Mcp-Session-Id` is session state: snapshots flow to connectors, external stores and logs.
+- Connector-authored `publish` would have to carry the route ⇒ either it can re-route (breaks set-once) or the field is ignored (misleading).
+- Snapshots map straight to wire types (`McpTaskMapper`): one missed mapper leaks a session id.
+- 2026-07-28 has no sessions; the spec binds tasks to the authorization context, not a transport session. A future principal owner is a separate `TaskEntry` field, not the route.
+
+Durable access control (eviction, restart, multi-node) belongs to the connector: every `Task*Fn` gets `InteractionContext`; the engine stores its own owner key and authorizes `get`/`cancel`/`update`/`list`.
 
 ## 🌐 Method map
 
@@ -70,7 +73,7 @@ Durable ownership (eviction, restart, multi-node) belongs to the connector: ever
 
 | Method | Gate | Connector | Result |
 |---|---|---|---|
-| `tasks/list` | legacy only | `list` (null ⇒ method not found) | read only: connector scopes by caller (`TaskListFn#apply`), `visibleTo` guard, `withDefaults`; never cached, no notification |
+| `tasks/list` | legacy only | `list` (null ⇒ method not found) | read only: connector scopes by caller (`TaskListFn#apply`), `withDefaults`; never cached, no notification |
 | `tasks/get` | modern: extension declared | `get`; `TaskNotFoundException` ⇒ invalid params | `getTaskResult` |
 | `tasks/cancel` | modern: extension | `cancel` then (legacy) `get` | modern empty / legacy snapshot |
 | `tasks/result` | legacy only | `awaitResult` (blocking) | tool call payload |

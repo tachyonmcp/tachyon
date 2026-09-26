@@ -21,10 +21,11 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Handles MCP 2026-07-28's {@code subscriptions/listen} (replaces {@code resources/subscribe} and
- * the plain HTTP GET stream, SEP-2575): acknowledges the subscription on its request-scoped SSE
- * stream, registers it with {@link SubscriptionRegistry}, and defers the JSON-RPC response until
- * the client disconnects (no response) or the server shuts down (graceful {@code
- * resultType: "complete"} response) — see {@link SubscriptionRegistry#closeAll()}.
+ * the plain HTTP GET stream, SEP-2575): keeps only the task ids the task connector lets the caller
+ * read, acknowledges the subscription on its request-scoped SSE stream, registers it with {@link
+ * SubscriptionRegistry}, and defers the JSON-RPC response until the client disconnects (no response)
+ * or the server shuts down (graceful {@code resultType: "complete"} response) — see {@link
+ * SubscriptionRegistry#closeAll()}.
  */
 @InternalApi
 public final class SubscriptionsListenHandler
@@ -66,7 +67,11 @@ public final class SubscriptionsListenHandler
 
     @Override
     public CompletionStage<Object> handleAsync(
-            DispatchContext context, ProtocolRequestMapper.SubscriptionListenRequest filter) {
+            DispatchContext context, ProtocolRequestMapper.SubscriptionListenRequest requested) {
+        // Every task-related request is authorized (ext-tasks § Security): the connector decides which
+        // task ids this listener may follow, and the ack lists only those. Runs on the handler executor.
+        var filter =
+                requested.withTaskIds(context.engine().tasksRegistry().readableTaskIds(context, requested.taskIds()));
         var stream = context.outboundStream();
         if (stream == null) {
             return CompletableFuture.completedFuture(ServerErrors.internalError("No SSE stream available"));

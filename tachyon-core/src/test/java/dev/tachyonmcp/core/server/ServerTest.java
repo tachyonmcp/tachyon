@@ -17,6 +17,7 @@ import dev.tachyonmcp.core.runtime.Backpressure;
 import dev.tachyonmcp.core.runtime.SessionState;
 import dev.tachyonmcp.core.runtime.SseConnection;
 import dev.tachyonmcp.core.runtime.SseEvent;
+import dev.tachyonmcp.core.server.features.tasks.TaskRoute;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
 import dev.tachyonmcp.core.server.session.SessionEvent;
 import java.time.Instant;
@@ -422,8 +423,8 @@ class ServerTest {
             modern.connection(modernConnection);
             modern.activate();
 
-            server.tasksRegistry().create(submitted("legacy-task"), "legacy", null);
-            server.tasksRegistry().create(submitted("modern-task"), "modern", null);
+            server.tasksRegistry().publish(submitted("legacy-task"), new TaskRoute("legacy", null));
+            server.tasksRegistry().publish(submitted("modern-task"), new TaskRoute("modern", null));
             server.tasks().publish(submitted("orphan-task"));
 
             // SUBMITTED isn't a real wire value in either protocol version's status enum -- both
@@ -442,7 +443,7 @@ class ServerTest {
     }
 
     @Test
-    void reportsTaskProgressOnlyToOwningSession() {
+    void reportsTaskProgressOnlyToTheRoutedSession() {
         try (DefaultTachyonServer server = (DefaultTachyonServer)
                 TachyonServer.builder().session(s -> s.enabled()).build()) {
             var connection = new TestConnection();
@@ -454,11 +455,11 @@ class ServerTest {
             owner.connection(connection);
             owner.activate();
             var token = ProgressToken.of("tok");
-            server.tasksRegistry().create(submitted("owned-task"), "owner", token);
-            server.tasksRegistry().create(submitted("orphan-task"), null, token);
+            server.tasksRegistry().publish(submitted("owned-task"), new TaskRoute("owner", token));
+            server.tasksRegistry().publish(submitted("orphan-task"), new TaskRoute(null, token));
             connection.sent.clear();
 
-            // Same token, no owner: must not fall back to any active session.
+            // Same token, no session: must not fall back to any active session.
             server.tasks().reportProgress("orphan-task", 0.25, 1.0, "orphan");
             server.tasks().reportProgress("owned-task", 0.5, 1.0, "owned");
 
@@ -484,7 +485,7 @@ class ServerTest {
                     .orElseThrow());
             owner.connection(connection);
             owner.activate();
-            server.tasksRegistry().create(revision(0), "owner", null);
+            server.tasksRegistry().publish(revision(0), new TaskRoute("owner", null));
 
             var publishers = 8;
             var revisions = 400;
