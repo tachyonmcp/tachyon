@@ -3,7 +3,7 @@ title: JSON layer
 tags: [concept, json, schema]
 sources: [tachyon-api/src/main/java/dev/tachyonmcp/api/json/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/json/, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/, tachyon-core/src/main/resources/META-INF/services/, tachyon-kotlin/src/main/kotlin/dev/tachyonmcp/kotlin/server/json/]
 updated: 2026-09-26
-commit: 66106c6b
+commit: d4cd5641
 ---
 
 # 🧾 JSON layer
@@ -13,15 +13,16 @@ Verdict: three independent JSON concerns. (1) **JSON-RPC envelope** — hand-rol
 ## ✉️ JSON-RPC codec
 
 [JsonRpcCodec](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/JsonRpcCodec.java) `tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/JsonRpcCodec.java`:
-- `JsonUtils.toJsonNodeMap(Map<String, ?>)` turns domain `_meta`/`experimental` maps into the `Map<String, JsonNode>` generated records carry. JSON-shaped values (scalars, string-keyed maps, collections, trees) are built straight from `JsonNodeFactory`; anything else goes through `valueToTree`. Output always equals `valueToTree` per value (`JsonUtilsTest#toJsonNodeMapBuildsTheSameTreesAsValueToTree`; trees are deep-copied). JMH `JsonNodeMapBenchmark`: 2.5× (`_meta`) / 1.7× (frontmatter) throughput vs per-entry `valueToTree`, half the allocation `JsonUtils#toJsonNodeMap`, `JsonUtils#toTree`.
+- `JsonUtils.toObjectTree(Map<String, ?>)` turns domain `_meta`/`experimental` maps into the `ObjectNode` generated records carry. JSON-shaped values (scalars, string-keyed maps, collections, trees) are built straight from `JsonNodeFactory` into a presized node; anything else goes through `valueToTree`. Output equals `valueToTree` per value (`JsonUtilsTest#toObjectTreeBuildsTheSameTreesAsValueToTree`; trees are deep-copied). JMH `JsonNodeMapBenchmark` `JsonUtils#toObjectTree`, `JsonUtils#toTree`.
 - Generic value writer `ValueSerializer#writeJsonValue` (maps, lists, scalars, trees; behind `JsonRpcCodec.writeValueAsString`/`toJsonParams`) writes a ts2java-generated model, at any nesting depth, with its generated codec: `<pkg>.models.X` → `<pkg>.codecs.CodecRegistry#codecFor`, per-class `MethodHandle` cached in a `ClassValue`. Covers core models of both versions and extension models (whose registry falls back to core's). So an `ExtensionMethodHandler` can return generated records directly. Other objects still go out as `toString()` `GeneratedCodecs#encode`.
 - `JsonUtils.toParamsNode(Object)` narrows a raw `params` payload (tree, or a decoded `Map`) to one `ObjectNode`; anything else (absent, by-position array) ⇒ empty object, so a validator's field lookups just miss instead of branching on Java type `JsonUtils#toParamsNode`.
+- One streaming tree reader/writer for the wire and codecs, `CodecSupport#readTree` / `#readWireTree` / `#writeTree` (token copy, no string round trip). Wire text (`JsonRpcCodec#readTreeValue`, `JsonUtils#parseJsonNode`) widens integers to `Long` so numeric request ids and `_meta` values stay `Long`; codec trees and `JsonUtils#parse` keep Jackson's native width. Integers above `Long.MAX_VALUE` become big-integer nodes.
 - `parseRequest(ByteBuf)` streaming; `params` read as Jackson tree (`JsonNode`), `result`/`error.data` kept **raw JSON string** [JsonRpcCodec#parseRequest](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/JsonRpcCodec.java), [JsonRpcCodec](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/JsonRpcCodec.java).
 - Classification priority: error (code+message) > result > method+id ⇒ `Request` > method ⇒ [JsonRpcMessage.Notification](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/JsonRpcMessage.java) > IAE [JsonRpcCodec#parseRequest](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/JsonRpcCodec.java).
 - `id`: long / double / string / null [JsonRpcCodec#parseId](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/JsonRpcCodec.java) → [RequestId](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/domain/RequestId.java) (`tachyon-api/.../server/domain/RequestId.java`).
 - Serialize to `byte[]` (GC-managed, not pooled — dropped response on shutdown ≠ leak) [JsonRpcCodec#serialize](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/JsonRpcCodec.java).
 - [JsonRpcMessage](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/JsonRpcMessage.java) sealed `Request<T> | Response | Error | Notification<T>` [JsonRpcMessage](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/JsonRpcMessage.java). `JsonRpcError(code, message, data, httpStatus=200)` [JsonRpcError](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/JsonRpcError.java).
-- [ValueSerializer](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/ValueSerializer.java) plain Map/List/scalar writer (unknown ⇒ `toString()`) [ValueSerializer#writeJsonValue](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/ValueSerializer.java).
+- [ValueSerializer](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/ValueSerializer.java) plain Map/List/scalar/tree writer (generated model ⇒ its codec; other unknown ⇒ `toString()`) [ValueSerializer#writeJsonValue](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/ValueSerializer.java).
 
 ## 📄 Documents & schemas (api)
 

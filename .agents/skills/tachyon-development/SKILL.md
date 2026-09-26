@@ -31,6 +31,19 @@ description: >-
   semantics) is not done until its docs are done: update the relevant file under `docs/`, this
   skill, and/or `docs/architecture/guidance.md` in the same change. Don't defer it to a follow-up.
 
+# Performance 🏎️
+
+- A change to a hot path or JSON utility is not done without a JMH before/after on the same machine.
+  Hot paths: dispatch, transport, SSE, sessions, `ts2java.py` output. JSON utilities:
+  `core.protocol.codec`, `core.server.json`, `core.transport.jsonrpc`.
+  - Run the covering `*Benchmark` on the base commit and on the change, with `-prof gc`.
+  - If no benchmark covers the path, write one first and commit it, so later changes reuse it.
+  - Report ops/s and B/op deltas in the commit message or PR; explain every regression.
+- Run: `./mvnw -pl tachyon-core -am verify -Pjmh -DskipTests -Djmh.args='<BenchmarkRegex> -prof gc'`.
+  Use `-Djmh.args`, not `-Dexec.args`: `exec.args` also rewrites the ts2java `exec:exec` runs.
+- Streaming Jackson only on wire paths: `JsonParser`/`JsonGenerator` via `CodecSupport`, no
+  `ObjectMapper`/databind. Trees go through `CodecSupport#readTree`/`#readWireTree`/`#writeTree`.
+
 # Test Rules 🧪
 
 - Prefer E2E; use unit tests only for edge cases E2E cannot cover.

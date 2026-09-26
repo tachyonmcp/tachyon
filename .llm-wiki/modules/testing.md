@@ -20,7 +20,7 @@ Verdict: E2E-first (AGENTS.md). Real server on port 0, clients = official MCP Ja
 | one module | `mvn -q test -pl tachyon-core -am` |
 | Kotlin | `mvn test -pl tachyon-kotlin -am` |
 | conformance | `make conformance` |
-| JMH perf gate | `make jmh` → `-Pjmh` profile runs `BenchmarkGate` (`tachyon-core/src/test/java/dev/tachyonmcp/core/BenchmarkGate.java`): every `*Benchmark` via JMH, fails below per-benchmark ops/sec floors; accepts JMH CLI (`-prof gc`, `-t`, regex) via `-Dexec.args` |
+| JMH perf gate | `make jmh` → `-Pjmh` profile runs `BenchmarkGate` (`tachyon-core/src/test/java/dev/tachyonmcp/core/BenchmarkGate.java`): every `*Benchmark` via JMH, fails below per-benchmark ops/sec floors; accepts JMH CLI (`-prof gc`, `-t`, regex) via `-Djmh.args` (not `exec.args`, which would also hit the ts2java `exec:exec` runs) |
 | format/lint | `make format` / `make lint` (Spotless + Detekt; SpotBugs in build) |
 | release build | `make deploy` — `clean deploy -P release,lint -Drevapi.skip=false`; uploads to Maven Central only with `PUBLISH=true`, otherwise `-DskipPublishing=true` (dry run) |
 

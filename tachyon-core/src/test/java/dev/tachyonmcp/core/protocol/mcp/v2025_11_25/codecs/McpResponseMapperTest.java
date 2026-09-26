@@ -1,6 +1,7 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
 package dev.tachyonmcp.core.protocol.mcp.v2025_11_25.codecs;
 
+import static dev.tachyonmcp.core.test.TestUtils.properties;
 import static net.javacrumbs.jsonunit.assertj.JsonAssertions.assertThatJson;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -59,7 +60,7 @@ class McpResponseMapperTest {
 
         var payload = (CallToolResult) mapper.getTaskPayloadResult(result, "task-2");
 
-        assertThat(payload.structuredContent()).containsKey("temp");
+        assertThat(properties(payload.structuredContent())).containsKey("temp");
         // A structured-only result injects the serialized JSON as a text block (MCP backwards-compat).
         assertThat(payload.content()).isNotEmpty();
     }
@@ -102,7 +103,7 @@ class McpResponseMapperTest {
 
         var payload = (CallToolResult) mapper.getTaskPayloadResult(result, "task-5");
 
-        assertThat(payload._meta()).containsEntry("trace", JSON.stringNode("abc"));
+        assertThat(properties(payload._meta())).containsEntry("trace", JSON.stringNode("abc"));
         assertThat(relatedTaskId(payload)).isEqualTo("task-5");
     }
 
@@ -148,12 +149,14 @@ class McpResponseMapperTest {
                         .build()),
                 null);
 
-        assertThat(completion._meta()).containsEntry("kind", JSON.stringNode("completion"));
-        assertThat(promptResult._meta()).containsEntry("kind", JSON.stringNode("prompt-result"));
-        assertThat(tools.tools().getFirst()._meta()).containsEntry("kind", JSON.stringNode("tool"));
-        assertThat(resources.resources().getFirst()._meta()).containsEntry("kind", JSON.stringNode("resource"));
-        assertThat(templates.resourceTemplates().getFirst()._meta()).containsEntry("kind", JSON.stringNode("template"));
-        assertThat(prompts.prompts().getFirst()._meta()).containsEntry("kind", JSON.stringNode("prompt"));
+        assertThat(properties(completion._meta())).containsEntry("kind", JSON.stringNode("completion"));
+        assertThat(properties(promptResult._meta())).containsEntry("kind", JSON.stringNode("prompt-result"));
+        assertThat(properties(tools.tools().getFirst()._meta())).containsEntry("kind", JSON.stringNode("tool"));
+        assertThat(properties(resources.resources().getFirst()._meta()))
+                .containsEntry("kind", JSON.stringNode("resource"));
+        assertThat(properties(templates.resourceTemplates().getFirst()._meta()))
+                .containsEntry("kind", JSON.stringNode("template"));
+        assertThat(properties(prompts.prompts().getFirst()._meta())).containsEntry("kind", JSON.stringNode("prompt"));
     }
 
     @Test

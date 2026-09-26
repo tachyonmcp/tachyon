@@ -2,6 +2,7 @@
 package dev.tachyonmcp.core.server.json;
 
 import static dev.tachyonmcp.core.test.TestUtils.parseJson;
+import static dev.tachyonmcp.core.test.TestUtils.properties;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -42,7 +43,7 @@ class JsonUtilsTest {
     }
 
     @Test
-    void toJsonNodeMapBuildsTheSameTreesAsValueToTree() {
+    void toObjectTreeBuildsTheSameTreesAsValueToTree() {
         var nested = new LinkedHashMap<String, Object>();
         nested.put("taskId", "t-1");
         nested.put("missing", null);
@@ -66,11 +67,11 @@ class JsonUtilsTest {
         values.put("intKeys", Map.of(1, "one"));
         values.put("tree", JsonNodeFactory.instance.objectNode().put("k", 1));
 
-        var result = JsonUtils.toJsonNodeMap(values);
+        var result = JsonUtils.toObjectTree(values);
 
-        assertThat(result).containsExactlyEntriesOf(expectedTrees(values));
+        assertThat(properties(result)).containsExactlyEntriesOf(expectedTrees(values));
         assertThat(result.get("tree")).isNotSameAs(values.get("tree"));
-        assertThat(JsonUtils.toJsonNodeMap(null)).isNull();
+        assertThat(JsonUtils.toObjectTree(null)).isNull();
     }
 
     private static Map<String, JsonNode> expectedTrees(Map<String, Object> values) {

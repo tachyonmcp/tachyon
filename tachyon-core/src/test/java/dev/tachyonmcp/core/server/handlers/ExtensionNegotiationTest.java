@@ -14,6 +14,7 @@ import dev.tachyonmcp.core.protocol.mcp.v2025_11_25.models.ClientCapabilities;
 import dev.tachyonmcp.core.protocol.mcp.v2025_11_25.models.InitializeRequestParams;
 import dev.tachyonmcp.core.runtime.Session;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
+import dev.tachyonmcp.core.server.json.JsonUtils;
 import dev.tachyonmcp.core.server.session.DefaultDispatchContext;
 import dev.tachyonmcp.core.server.session.DispatchContext;
 import java.util.Map;
@@ -85,7 +86,9 @@ class ExtensionNegotiationTest {
     }
 
     private static InitializeRequestParams buildInitParams(Map<String, JsonNode> extensions) {
-        var capabilities = ClientCapabilities.builder().extensions(extensions).build();
+        var extensionsNode = JsonUtils.toObjectTree(extensions);
+        var capabilities =
+                ClientCapabilities.builder().extensions(extensionsNode).build();
         return InitializeRequestParams.builder()
                 .protocolVersion("2025-11-25")
                 .capabilities(capabilities)

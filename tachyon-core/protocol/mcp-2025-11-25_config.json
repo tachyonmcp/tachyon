@@ -1,7 +1,7 @@
 {
   "typeMappings": {
-    "ProgressToken": "String",
-    "RequestId": "String",
+    "ProgressToken": "tools.jackson.databind.JsonNode",
+    "RequestId": "tools.jackson.databind.JsonNode",
     "JSONValue": "tools.jackson.databind.ValueNode",
     "JSONObject": "tools.jackson.databind.node.ObjectNode",
     "JSONArray": "tools.jackson.databind.node.ArrayNode",

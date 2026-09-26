@@ -1,13 +1,13 @@
 {
   "basePackage": "dev.tachyonmcp.core.protocol.mcp.v2026_07_28",
   "typeMappings": {
-    "ProgressToken": "String",
+    "ProgressToken": "tools.jackson.databind.JsonNode",
     "RequestId": "tools.jackson.databind.JsonNode",
     "JSONValue": "tools.jackson.databind.ValueNode",
     "JSONObject": "tools.jackson.databind.node.ObjectNode",
     "JSONArray": "tools.jackson.databind.node.ArrayNode",
-    "ResultMetaObject": "java.util.Map<String, tools.jackson.databind.JsonNode>",
-    "NotificationMetaObject": "java.util.Map<String, tools.jackson.databind.JsonNode>",
+    "ResultMetaObject": "tools.jackson.databind.node.ObjectNode",
+    "NotificationMetaObject": "tools.jackson.databind.node.ObjectNode",
     "JSONRPCErrorObject": "dev.tachyonmcp.core.protocol.mcp.v2026_07_28.models.Error",
     "InputRequests": "dev.tachyonmcp.core.protocol.mcp.v2026_07_28.models.InputRequests",
     "InputResponses": "dev.tachyonmcp.core.protocol.mcp.v2026_07_28.models.InputResponses",

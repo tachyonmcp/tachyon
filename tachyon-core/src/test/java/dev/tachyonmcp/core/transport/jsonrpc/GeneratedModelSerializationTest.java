@@ -9,6 +9,7 @@ import dev.tachyonmcp.core.protocol.mcp.v2026_07_28.models.TextContent;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.node.JsonNodeFactory;
 
 /**
  * Generated protocol models reaching the generic serializer (e.g. inside a map an extension
@@ -18,7 +19,7 @@ class GeneratedModelSerializationTest {
 
     @Test
     void generatedModelsNestedInMapsAndListsUseTheirCodecs() {
-        var current = new TextContent("text", "hello", null, Map.of());
+        var current = new TextContent("text", "hello", null, JsonNodeFactory.instance.objectNode());
         var legacy = new dev.tachyonmcp.core.protocol.mcp.v2025_11_25.models.TextContent("text", "hi", null, null);
         var nested = new CompleteResult.Completion(List.of("a", "b"), 2L, null);
 

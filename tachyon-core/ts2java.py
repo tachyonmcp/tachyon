@@ -19,7 +19,6 @@ DEFAULT_BASE = "target/generated-sources/ts2java"
 DEFAULT_PKG = "com.example.tsimport"
 DEFAULT_PKG_MODELS = f"{DEFAULT_PKG}.models"
 DEFAULT_PKG_CODECS = f"{DEFAULT_PKG}.codecs"
-DEFAULT_PKG_PROTOCOL = f"{DEFAULT_PKG}.protocol"
 VERBOSE = False
 
 # ISO 8601, per the javax.annotation.processing.Generated#date contract; shared by every
@@ -47,7 +46,7 @@ UNKNOWN_SIMPLE_MAP = {
 }
 
 # Jackson JSON-tree types (JsonNode and its concrete subtypes, e.g. via the JSONObject/JSONArray/
-# JSONValue schema aliases in typeMappings). decodeValue/encodeValue already handle any of these
+# JSONValue schema aliases in typeMappings). Generated codecs read/write them as trees
 # generically (readValueAsTree / instanceof JsonNode) — a field resolving to one of these must use
 # that generic path, not CodecRegistry.codecFor, which only holds codecs for schema-modeled types.
 JSON_TREE_TYPES = (
@@ -58,6 +57,25 @@ JSON_TREE_TYPES = (
 )
 
 STRING_NUMBER_UNIONS = {"ProgressToken", "RequestId"}
+
+# Top-level JSON-RPC message unions: huge, dispatch-only; never generated as union types.
+MESSAGE_UNIONS = {
+    "ClientRequest",
+    "ServerRequest",
+    "ClientResult",
+    "ServerResult",
+    "ClientNotification",
+    "ServerNotification",
+}
+
+# Hand-written streaming Codec contract and primitives every generated codec imports.
+CORE_CODEC_PACKAGE = "dev.tachyonmcp.core.protocol.codec"
+
+# JSON objects (index signatures, _meta, additionalProperties) are Jackson's own object tree.
+OBJECT_NODE = "tools.jackson.databind.node.ObjectNode"
+
+# A package-qualified type reference in generated Java, e.g. java.time.Instant.
+FQN_PATTERN = re.compile(r"\b((?:[a-z_][a-z0-9_]*\.)+)([A-Z]\w*)")
 
 CACHE_DIR_NAME = "ts2java-cache"
 
@@ -92,7 +110,7 @@ def _find_target_dir(base_dir):
     return abs_base
 
 
-def _cache_path_for(ts_path, base_dir, pkg_models, pkg_codecs, pkg_protocol):
+def _cache_path_for(ts_path, base_dir, pkg_models, pkg_codecs):
     stem = re.sub(r"[^A-Za-z0-9_.-]+", "_", os.path.splitext(os.path.basename(ts_path))[0])
     ident = "|".join(
         [
@@ -100,7 +118,6 @@ def _cache_path_for(ts_path, base_dir, pkg_models, pkg_codecs, pkg_protocol):
             os.path.abspath(base_dir),
             pkg_models or "",
             pkg_codecs or "",
-            pkg_protocol or "",
         ]
     )
     digest = hashlib.sha256(ident.encode("utf-8")).hexdigest()[:12]
@@ -520,7 +537,6 @@ class Generator:
         base_dir=None,
         pkg_models=None,
         pkg_codecs=None,
-        pkg_protocol=None,
         unknown_type="JsonNode",
         type_mappings=None,
         additional_properties=None,
@@ -531,9 +547,7 @@ class Generator:
         self.base_dir = base_dir or DEFAULT_BASE
         self.pkg_models = pkg_models or DEFAULT_PKG_MODELS
         self.pkg_codecs = pkg_codecs
-        self.pkg_protocol = pkg_protocol
         self.skip_codecs = not self.pkg_codecs
-        self.skip_protocol = not self.pkg_protocol
         self.unknown_type = unknown_type
         self.unknown_java_type = UNKNOWN_TYPE_MAP[unknown_type]
         self.unknown_simple = UNKNOWN_SIMPLE_MAP.get(
@@ -559,11 +573,6 @@ class Generator:
             if self.pkg_codecs
             else None
         )
-        self.dir_protocol = (
-            f"{self.base_dir}/java/{self.pkg_protocol.replace('.', '/')}"
-            if self.pkg_protocol
-            else None
-        )
 
         # Per-instance primitive map (don't mutate module-level PRIMITIVE_MAP)
         self.primitive_map = dict(PRIMITIVE_MAP)
@@ -580,15 +589,10 @@ class Generator:
         self.inner_types = set()
         self.inner_model_owners = {}
         self.processed_inner = set()
-        self.request_names = set()
-        self.result_names = set()
-        self.notif_names = set()
         self.discriminated_unions = OrderedDict()
         self.variant_names = set()
         self.structural_unions = OrderedDict()
         self.interface_extends = OrderedDict()
-        self.method_map = OrderedDict()
-        self.notifications = []
 
         for exp in self.exports:
             self.known_type_names.add(exp["name"])
@@ -603,7 +607,6 @@ class Generator:
             OrderedDict()
         )  # name -> [(type, field, optional, jsdoc), ...]
         self.codec_files = OrderedDict()
-        self.protocol_files = OrderedDict()
 
         self.init_from_ts()
 
@@ -619,15 +622,10 @@ class Generator:
         )
 
     def init_from_ts(self):
-        self.request_names.clear()
-        self.result_names.clear()
-        self.notif_names.clear()
         self.discriminated_unions.clear()
         self.variant_names.clear()
         self.structural_unions.clear()
         self.interface_extends.clear()
-        self.method_map.clear()
-        self.notifications[:] = []
 
         text = self.ts_text
 
@@ -645,44 +643,8 @@ class Generator:
                 i += 1
             return text[brace + 1 : i - 1]
 
-        def parse_union(name):
-            m = re.search(r"export type " + name + r"\s*=\s*(.*?);", text, re.DOTALL)
-            if not m:
-                return set()
-            rhs = m.group(1).strip()
-            parts = [p.strip() for p in rhs.split("|") if p.strip()]
-            return {
-                p
-                for p in parts
-                if re.match(r"^[A-Z]", p) and '"' not in p and p != "never"
-            }
-
-        # 1. Message hierarchy from type union aliases
-        for uname in [
-            "ClientRequest",
-            "ServerRequest",
-            "ClientResult",
-            "ServerResult",
-            "ClientNotification",
-            "ServerNotification",
-        ]:
-            parts = parse_union(uname)
-            if uname.endswith("Request"):
-                self.request_names.update(parts)
-            elif uname.endswith("Result"):
-                self.result_names.update(parts)
-            elif uname.endswith("Notification"):
-                self.notif_names.update(parts)
-
         # 2. Detect discriminated unions
-        seen_unions = {
-            "ClientRequest",
-            "ServerRequest",
-            "ClientResult",
-            "ServerResult",
-            "ClientNotification",
-            "ServerNotification",
-        }
+        seen_unions = set(MESSAGE_UNIONS)
         for m in re.finditer(r"export type (\w+)\s*=\s*(.*?);", text, re.DOTALL):
             name = m.group(1)
             if name in seen_unions:
@@ -753,39 +715,6 @@ class Generator:
             if len(struct) >= 2:
                 self.structural_unions[name] = struct
 
-        # 4. Build method_map
-        meth_map = {}
-        for m in re.finditer(
-            r'export interface (\w+)\b[^}]*?method:\s*"([^"]+)"', text, re.DOTALL
-        ):
-            iface = m.group(1)
-            meth = m.group(2)
-            meth_map[iface] = meth
-
-        for req in sorted(self.request_names):
-            if req not in meth_map:
-                continue
-            meth = meth_map[req]
-            base = req[: -len("Request")] if req.endswith("Request") else req
-            res = base + "Result"
-            if res not in self.result_names:
-                res = "EmptyResult"
-            self.method_map[meth] = (req, res)
-            self.result_names.add(res)
-
-        # 5. Build notifications
-        for notif in sorted(self.notif_names):
-            if notif not in meth_map:
-                continue
-            meth = meth_map[notif]
-            idx = text.find(f"export interface {notif}")
-            body = ""
-            if idx >= 0:
-                body = extract_body(text, idx)
-            pm = re.search(r"params:\s*(\w+)", body) if body else None
-            pt = pm.group(1) if pm else None
-            self.notifications.append((meth, notif, pt))
-
         # 6. Interface extends hierarchy (child -> parent for vertical sealed interfaces)
         parent_children = OrderedDict()
         for exp in self.exports:
@@ -853,6 +782,8 @@ class Generator:
                     val_t = self.primitive_map.get(val_t, val_t)
                     if val_t == "unknown":
                         val_t = UNKNOWN_TYPE_MAP.get("unknown", "tools.jackson.databind.JsonNode")
+                    if key_t == "String" and val_t in JSON_TREE_TYPES:
+                        return OBJECT_NODE
                     jk = "String" if key_t == "String" else key_t
                     return f"java.util.Map<{jk}, {val_t}>"
                 if only in self.known_type_names:
@@ -947,10 +878,10 @@ class Generator:
 
     def resolve_inline_object(self, type_str, owning_type=None, field_name=None):
         if re.search(r"\[\s*\w+\s*:\s*\w+\s*\]\s*:", type_str):
-            return "java.util.Map<String, tools.jackson.databind.JsonNode>"
+            return OBJECT_NODE
         body_match = re.match(r"\{(.+)\}", type_str, re.DOTALL)
         if not body_match:
-            return "java.util.Map<String, tools.jackson.databind.JsonNode>"
+            return OBJECT_NODE
         body = body_match.group(1).strip()
         for key, val in self.anon_registry.items():
             if isinstance(val, tuple) and val[0] == body:
@@ -1061,6 +992,16 @@ class Generator:
                 return "java.util.List<tools.jackson.databind.JsonNode>"
             return "java.util.List<" + inner + ">"
         return None
+
+    @staticmethod
+    def prune_stale(directory, names):
+        """Deletes .java files this run no longer produces; the output tree is generator-owned."""
+        if not directory or not os.path.isdir(directory):
+            return
+        for file_name in os.listdir(directory):
+            path = os.path.join(directory, file_name)
+            if file_name.endswith(".java") and file_name[:-5] not in names and os.path.isfile(path):
+                os.remove(path)
 
     def write_file(self, path, content):
         os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -1198,7 +1139,7 @@ class Generator:
         if has_additional:
             components.append(
                 (
-                    "java.util.Map<String, tools.jackson.databind.JsonNode>",
+                    OBJECT_NODE,
                     "additionalProperties",
                     True,
                     "",
@@ -1242,10 +1183,6 @@ class Generator:
 
         imports = set()
         imports.add("javax.annotation.processing.Generated")
-        imports.add("com.fasterxml.jackson.annotation.JsonIgnoreProperties")
-        imports.add("com.fasterxml.jackson.annotation.JsonProperty")
-        if any(c[4] is None for c in components):
-            imports.add("com.fasterxml.jackson.annotation.JsonUnwrapped")
         self._collect_imports(components, imports)
         # Also collect imports from inner record components
         self._collect_inner_imports(name, imports)
@@ -1263,8 +1200,7 @@ class Generator:
             typ, fname, optional, _, json_name = c
             nullable = "@Nullable " if optional else ""
             simple_typ = self.simplify_type(typ)
-            annotation = "@JsonUnwrapped" if json_name is None else f'@JsonProperty("{json_name}")'
-            params.append(f"    {annotation} {nullable}{simple_typ} {fname}")
+            params.append(f"    {nullable}{simple_typ} {fname}")
 
         class_desc = JavadocFormatter.format_jsdoc(jsdoc) if jsdoc else ""
         if not class_desc:
@@ -1279,7 +1215,6 @@ class Generator:
         jd_block = JavadocFormatter.make_javadoc(class_desc, param_docs or None)
         if jd_block:
             out.append(jd_block)
-        out.append('@JsonIgnoreProperties(ignoreUnknown = true)\n')
         out.append(f'{GENERATED_ANNOTATION}\n')
         out.append(f"public record {name}(\n")
         out.append(",\n".join(params))
@@ -1310,18 +1245,15 @@ class Generator:
             fields = TsParser.parse_fields("{" + body + "}")
             comps, _ = self.get_components(fields, qualified_name)
             self.model_components[qualified_name] = comps
-            out.append(f'{indent}@JsonIgnoreProperties(ignoreUnknown = true)\n')
-            out.append(f'{indent}{GENERATED_ANNOTATION}\n')
             params = []
             for c in comps:
                 typ, fname, optional, _, json_name = c
                 nullable = "@Nullable " if optional else ""
                 simple_typ = self.simplify_type(typ)
-                params.append(
-                    f'{indent}    @JsonProperty("{json_name}") {nullable}{simple_typ} {fname}'
-                )
+                params.append(f"{indent}    {nullable}{simple_typ} {fname}")
             class_desc = " ".join(w for w in anon_name.replace("_", " ").split() if w)
             out.append(f'{indent}/** Parameters for {{@link {parent_name}}}. */\n')
+            out.append(f'{indent}{GENERATED_ANNOTATION}\n')
             out.append(f"{indent}public record {anon_name}(\n")
             out.append(",\n".join(params))
             out.append(f"\n{indent}) {{\n")
@@ -1329,51 +1261,19 @@ class Generator:
             self.append_builder(qualified_name, out, comps, depth)
             out.append(f"{indent}}}\n\n")
 
-    def add_interface(self, name, permits=None, super_iface=None, jsdoc=None):
-        if name in self.model_files:
-            return
-        out = []
-        out.append(self.pkg(self.pkg_models))
-        out.append("\n")
-        out.append("import javax.annotation.processing.Generated;\n")
-        out.append("\n")
-        class_desc = JavadocFormatter.format_jsdoc(jsdoc) if jsdoc else ""
-        jd_block = JavadocFormatter.make_javadoc(class_desc)
-        if jd_block:
-            out.append(jd_block)
-        ext = f" extends {super_iface}" if super_iface else ""
-        perm = f" permits {', '.join(permits)}" if permits else ""
-        out.append(f'{GENERATED_ANNOTATION}\n')
-        out.append(f"public sealed interface {name}{ext}{perm} {{\n")
-        out.append("}\n")
-        self.model_files[name] = "".join(out)
-
     def add_discriminated_interface(self, name, discriminator, variants, jsdoc=None):
         if name in self.model_files:
             return
         out = []
         out.append(self.pkg(self.pkg_models))
         out.append("\n")
-        out.append("import com.fasterxml.jackson.annotation.JsonSubTypes;\n")
-        out.append("import com.fasterxml.jackson.annotation.JsonTypeInfo;\n")
         out.append("import javax.annotation.processing.Generated;\n")
         out.append("\n")
         class_desc = JavadocFormatter.format_jsdoc(jsdoc) if jsdoc else ""
         jd_block = JavadocFormatter.make_javadoc(class_desc)
         if jd_block:
             out.append(jd_block)
-        entries = [
-            f'        @JsonSubTypes.Type(value = {vn}.class, name = "{lit}")'
-            for vn, lit in variants
-        ]
-        out.append("@JsonTypeInfo(\n")
-        out.append("    use = JsonTypeInfo.Id.NAME,\n")
-        out.append("    include = JsonTypeInfo.As.EXISTING_PROPERTY,\n")
-        out.append(f'    property = "{discriminator}"\n')
-        out.append(")\n")
-        out.append("@JsonSubTypes({\n")
-        out.append(",\n".join(entries))
-        out.append("\n})\n")
+        out.append(f'{GENERATED_ANNOTATION}\n')
         permit_list = ", ".join(v[0] for v in variants)
         out.append(f"public sealed interface {name} permits {permit_list} {{\n")
         out.append("}\n")
@@ -1390,8 +1290,6 @@ class Generator:
 
         imports = set()
         imports.add("javax.annotation.processing.Generated")
-        imports.add("com.fasterxml.jackson.annotation.JsonSubTypes")
-        imports.add("com.fasterxml.jackson.annotation.JsonTypeInfo")
         self._collect_imports(comps, imports)
         imp_str = "\n".join(f"import {i};" for i in sorted(imports))
         if imp_str:
@@ -1406,15 +1304,6 @@ class Generator:
         jd_block = JavadocFormatter.make_javadoc(class_desc)
         if jd_block:
             out.append(jd_block)
-        entries = [
-            f"        @JsonSubTypes.Type(value = {v}.class)"
-            for v in children
-            if v in self.all_interfaces
-        ]
-        out.append("@JsonTypeInfo(use = JsonTypeInfo.Id.DEDUCTION)\n")
-        out.append("@JsonSubTypes({\n")
-        out.append(",\n".join(entries))
-        out.append("\n})\n")
         out.append(f'{GENERATED_ANNOTATION}\n')
         # Determine extends clause — if this sealed interface is also a child of another
         parent_ext = ""
@@ -1448,23 +1337,12 @@ class Generator:
         out = []
         out.append(self.pkg(self.pkg_models))
         out.append("\n")
-        out.append("import com.fasterxml.jackson.annotation.JsonSubTypes;\n")
-        out.append("import com.fasterxml.jackson.annotation.JsonTypeInfo;\n")
         out.append("import javax.annotation.processing.Generated;\n")
         out.append("\n")
         class_desc = JavadocFormatter.format_jsdoc(jsdoc) if jsdoc else ""
         jd_block = JavadocFormatter.make_javadoc(class_desc)
         if jd_block:
             out.append(jd_block)
-        entries = [
-            f"        @JsonSubTypes.Type(value = {v}.class)"
-            for v in variants
-            if v in self.all_interfaces
-        ]
-        out.append("@JsonTypeInfo(use = JsonTypeInfo.Id.DEDUCTION)\n")
-        out.append("@JsonSubTypes({\n")
-        out.append(",\n".join(entries))
-        out.append("\n})\n")
         out.append(f'{GENERATED_ANNOTATION}\n')
         ext = f" extends {super_iface}" if super_iface else ""
         out.append(
@@ -1478,8 +1356,7 @@ class Generator:
             return
         out = []
         out.append(self.pkg(self.pkg_models))
-        out.append("\nimport com.fasterxml.jackson.annotation.JsonValue;\n")
-        out.append("import javax.annotation.processing.Generated;\n\n")
+        out.append("\nimport javax.annotation.processing.Generated;\n\n")
         class_desc = JavadocFormatter.format_jsdoc(jsdoc) if jsdoc else ""
         jd_block = JavadocFormatter.make_javadoc(class_desc)
         if jd_block:
@@ -1496,7 +1373,6 @@ class Generator:
         out.append(";\n\n")
         out.append("    private final String value;\n\n")
         out.append(f"    {name}(String value) {{ this.value = value; }}\n\n")
-        out.append("    @JsonValue\n")
         out.append("    public String getValue() { return value; }\n\n")
         out.append("    public static " + name + " fromValue(String value) {\n")
         out.append("        for (" + name + " v : values()) {\n")
@@ -1661,6 +1537,34 @@ class Generator:
 
     # --- Codec generation ---
 
+    @staticmethod
+    def union_encoders(union_name, variants):
+        """encode + encodeProperties for a sealed union: exhaustive dispatch to the variant codec."""
+        out = []
+        for method in ("encode", "encodeProperties"):
+            out.append("    @Override\n")
+            out.append(f"    public void {method}(JsonGenerator gen, {union_name} value) {{\n")
+            out.append("        switch (value) {\n")
+            for vn in variants:
+                out.append(f"            case {vn} v -> CodecRegistry.<{vn}>codecFor({vn}.class).{method}(gen, v);\n")
+            out.append("        }\n")
+            out.append("    }\n\n")
+        return "".join(out).rstrip("\n") + "\n"
+
+    @staticmethod
+    def decode_expr(typ, json_name):
+        """Null-tolerant decode of a scalar or tree value at the parser's current token."""
+        simple = typ.split(".")[-1]
+        if simple in ("String", "Boolean", "Long", "Double"):
+            return f"CodecSupport.decode{simple}(parser)"
+        if simple in ("boolean", "long", "double"):
+            return f"CodecSupport.decode{simple.capitalize()}(parser)"
+        if simple == "ObjectNode":
+            return f'CodecSupport.readObject(parser, "{json_name}")'
+        if simple == "JsonNode":
+            return "CodecSupport.readNullableTree(parser)"
+        raise ValueError(f"No streaming decode for {typ} ('{json_name}'); map it to JsonNode or ObjectNode")
+
     def add_codec(self, model_name):
         codec_name = self.codec_class_name(model_name)
         if codec_name in self.codec_files:
@@ -1672,6 +1576,11 @@ class Generator:
         qname = self.type_ref(model_name, model_name)
 
         components = self.model_components[model_name]
+        for typ, fname, *_ in components:
+            if "java.util.Map" in typ:
+                raise ValueError(
+                    f"{model_name}.{fname}: {typ} has no streaming codec; map JSON objects to ObjectNode"
+                )
         has_additional = any(c[1] == "additionalProperties" for c in components)
         flattened = self.flattened_unions.get(model_name)
         regular = [
@@ -1696,11 +1605,6 @@ class Generator:
         if any("java.util.List" in c[0] for c in components):
             emit_import("java.util.ArrayList")
             emit_import("java.util.List")
-        if has_additional or any("java.util.Map" in c[0] for c in components):
-            emit_import("java.util.Map")
-            emit_import("tools.jackson.databind.JsonNode")
-        if has_additional:
-            emit_import("java.util.LinkedHashMap")
         if any(c[0] in JSON_TREE_TYPES or "java.util.List<tools.jackson.databind" in c[0] for c in components):
             emit_import("tools.jackson.databind.JsonNode")
         emit_import("javax.annotation.processing.Generated")
@@ -1792,8 +1696,6 @@ class Generator:
                 item = typ.split("<")[1][:-1]
                 item_ref = self.ref_for_type(item, model_name)
                 out.append(f"        List<{item_ref}> {fname}List = null;\n")
-            elif "java.util.Map" in typ:
-                out.append(f"        Map<String, JsonNode> {fname}Map = null;\n")
             else:
                 default = "null"
                 if typ == "boolean":
@@ -1805,7 +1707,7 @@ class Generator:
                 var_typ = self.ref_for_type(typ, model_name)
                 out.append(f"        {var_typ} {fname} = {default};\n")
         if has_additional:
-            out.append("        Map<String, JsonNode> additionalProperties = null;\n")
+            out.append(f"        {OBJECT_NODE} additionalProperties = null;\n")
 
         out.append("\n        while (parser.nextToken() != JsonToken.END_OBJECT) {\n")
         out.append("            String fieldName = parser.currentName();\n")
@@ -1820,10 +1722,7 @@ class Generator:
                 and self.field_type_mappings.get(f"{model_name}.{json_name}") == "String"
             )
             if is_nullable_required and typ in ("String", "Boolean", "Long", "Double") and not is_raw_json_str:
-                # Required-but-nullable scalar: decodeValue returns null for a JSON null.
-                out.append(
-                    f"                    {fname} = CodecSupport.decodeValue(parser, {self.ref_for_type(typ, model_name)}.class);\n"
-                )
+                out.append(f"                    {fname} = {self.decode_expr(typ, json_name)};\n")
                 out.append("                }\n")
                 continue
             if is_nullable_required:
@@ -1885,7 +1784,7 @@ class Generator:
                 )
                 if is_scalar_item:
                     out.append(
-                        f"                            list.add(CodecSupport.decodeValue(parser, {item_ref}.class));\n"
+                        f"                            list.add({self.decode_expr(item_ref, json_name)});\n"
                     )
                 elif is_enum_item:
                     out.append(
@@ -1904,13 +1803,7 @@ class Generator:
                 )
                 out.append(f"                    }}\n")
             elif typ in JSON_TREE_TYPES:
-                out.append(
-                    f"                    {fname} = CodecSupport.decodeValue(parser, {typ}.class);\n"
-                )
-            elif "java.util.Map" in typ:
-                out.append(
-                    f'                    {fname}Map = CodecSupport.readTreeMap(parser, "{json_name}");\n'
-                )
+                out.append(f"                    {fname} = {self.decode_expr(typ, json_name)};\n")
             else:
                 base_type = self.registry_ref(typ, model_name)
                 if self.is_enum_type(typ):
@@ -1941,19 +1834,13 @@ class Generator:
             out.append("                        continue;\n")
             out.append("                    }\n")
             out.append(
-                "                    if (additionalProperties == null) additionalProperties = new LinkedHashMap<>();\n"
-            )
-            out.append(
-                "                    additionalProperties.put(fieldName, CodecSupport.readTree(parser));\n"
+                "                    additionalProperties = CodecSupport.readProperty(additionalProperties, fieldName, parser);\n"
             )
             out.append("                }\n")
         elif has_additional:
             out.append("                default -> {\n")
             out.append(
-                "                    if (additionalProperties == null) additionalProperties = new LinkedHashMap<>();\n"
-            )
-            out.append(
-                "                    additionalProperties.put(fieldName, CodecSupport.readTree(parser));\n"
+                "                    additionalProperties = CodecSupport.readProperty(additionalProperties, fieldName, parser);\n"
             )
             out.append("                }\n")
         else:
@@ -1965,8 +1852,6 @@ class Generator:
         for typ, fname, optional, _, _ in regular:
             if "java.util.List" in typ:
                 args.append(f"{fname}List")
-            elif "java.util.Map" in typ:
-                args.append(f"{fname}Map")
             else:
                 args.append(fname)
         if has_additional:
@@ -1982,13 +1867,14 @@ class Generator:
         out.append("    @Override\n")
         out.append(f"    public void encode(JsonGenerator gen, {qname} value) {{\n")
         out.append("        gen.writeStartObject();\n")
+        out.append("        encodeProperties(gen, value);\n")
+        out.append("        gen.writeEndObject();\n")
+        out.append("    }\n\n")
+        out.append("    @Override\n")
+        out.append(f"    public void encodeProperties(JsonGenerator gen, {qname} value) {{\n")
         if flattened:
             union, field = flattened
-            out.append(f"        var variant = CodecRegistry.<{union}>codecFor({union}.class).encodeToBytes(value.{field}());\n")
-            out.append("        try (JsonParser parser = CodecSupport.createParser(variant)) {\n")
-            out.append("            parser.nextToken();\n")
-            out.append(f'            CodecSupport.writeTreeEntries(gen, CodecSupport.readTreeMap(parser, "{field}"));\n')
-            out.append("        }\n")
+            out.append(f"        CodecRegistry.<{union}>codecFor({union}.class).encodeProperties(gen, value.{field}());\n")
         for typ, fname, optional, _, json_name in regular:
             acc = f"value.{fname}()"
             is_primitive = typ in ("boolean", "long", "double")
@@ -2071,10 +1957,6 @@ class Generator:
             elif typ in JSON_TREE_TYPES:
                 out.append(f'{ind}gen.writeName("{json_name}");\n')
                 out.append(f"{ind}CodecSupport.encodeValue(gen, {acc});\n")
-            elif "java.util.Map" in typ:
-                out.append(f'{ind}gen.writeObjectPropertyStart("{json_name}");\n')
-                out.append(f"{ind}CodecSupport.writeTreeEntries(gen, {acc});\n")
-                out.append(f"{ind}gen.writeEndObject();\n")
             else:
                 base_type = self.registry_ref(typ, model_name)
                 if self.is_enum_type(typ):
@@ -2100,10 +1982,9 @@ class Generator:
 
         if has_additional:
             out.append("        if (value.additionalProperties() != null) {\n")
-            out.append("            CodecSupport.writeTreeEntries(gen, value.additionalProperties());\n")
+            out.append("            CodecSupport.writeProperties(gen, value.additionalProperties());\n")
             out.append("        }\n")
 
-        out.append("        gen.writeEndObject();\n")
         out.append("    }\n")
 
         if flattened and has_additional:
@@ -2120,94 +2001,6 @@ class Generator:
         self.codec_files[codec_name] = "".join(out)
 
     # --- Protocol registries ---
-
-    def add_protocol_version(self):
-        name = "McpProtocolVersion"
-        if name in self.protocol_files:
-            return
-        out = [self.pkg(self.pkg_protocol), "\n"]
-        out.append("import javax.annotation.processing.Generated;\n\n")
-        out.append(f'{GENERATED_ANNOTATION}\n')
-        out.append(f"public final class {name} {{\n")
-        out.append('    public static final String VERSION = "2025-11-25";\n')
-        out.append("    private McpProtocolVersion() {}\n")
-        out.append("}\n")
-        self.protocol_files[name] = "".join(out)
-
-    def add_method_registry(self):
-        name = "McpMethodRegistry"
-        if name in self.protocol_files:
-            return
-        out = [self.pkg(self.pkg_protocol), "\n"]
-        out.append("import javax.annotation.processing.Generated;\n\n")
-        out.append(f'{GENERATED_ANNOTATION}\n')
-        out.append(f"public final class {name} {{\n")
-        for method, _ in self.method_map.items():
-            cn = method.upper().replace("/", "_")
-            out.append(f'    public static final String {cn} = "{method}";\n')
-        out.append(f"    private {name}() {{}}\n")
-        out.append("}\n")
-        self.protocol_files[name] = "".join(out)
-
-    def add_descriptors(self):
-        if "MethodDescriptor" not in self.protocol_files:
-            out = [self.pkg(self.pkg_protocol), "\n"]
-            out.append("import javax.annotation.processing.Generated;\n\n")
-            out.append(f'{GENERATED_ANNOTATION}\n')
-            out.append("public record MethodDescriptor(\n")
-            out.append("    String method,\n")
-            out.append("    Class<?> requestType,\n")
-            out.append("    Class<?> resultType\n")
-            out.append(") {}\n")
-            self.protocol_files["MethodDescriptor"] = "".join(out)
-
-        name = "McpMethodDispatch"
-        if name in self.protocol_files:
-            return
-        out = [self.pkg(self.pkg_protocol), "\n"]
-        model_refs = set()
-        for _, (req, res) in self.method_map.items():
-            model_refs.add(req)
-            model_refs.add(res)
-        model_refs.add("UnknownRequest")
-        for r in sorted(model_refs):
-            out.append(f"import {self.pkg_models}.{r};\n")
-        out.append("import java.util.Collections;\n")
-        out.append("import java.util.LinkedHashMap;\n")
-        out.append("import java.util.Map;\n")
-        out.append("import java.util.Set;\n\n")
-        out.append(f"public final class {name} {{\n")
-        out.append(
-            "    private static final Map<String, MethodDescriptor> METHODS = buildMethods();\n\n"
-        )
-        out.append(
-            "    private static Map<String, MethodDescriptor> buildMethods() {\n"
-        )
-        out.append("        var map = new LinkedHashMap<String, MethodDescriptor>();\n")
-        for method, (req, res) in self.method_map.items():
-            out.append(
-                f'        map.put("{method}", new MethodDescriptor("{method}", {req}.class, {res}.class));\n'
-            )
-        out.append("        return Collections.unmodifiableMap(map);\n")
-        out.append("    }\n\n")
-        out.append(
-            "    public static MethodDescriptor get(String method) { return METHODS.get(method); }\n"
-        )
-        out.append(
-            "    public static Set<String> knownMethods() { return METHODS.keySet(); }\n"
-        )
-        out.append("    public static Class<?> requestType(String method) {\n")
-        out.append("        var d = METHODS.get(method);\n")
-        out.append(
-            "        return d != null ? d.requestType() : UnknownRequest.class;\n"
-        )
-        out.append("    }\n")
-        out.append("    public static Class<?> resultType(String method) {\n")
-        out.append("        var d = METHODS.get(method);\n")
-        out.append("        return d != null ? d.resultType() : null;\n")
-        out.append("    }\n")
-        out.append("}\n")
-        self.protocol_files[name] = "".join(out)
 
     def add_discriminated_codec(self, union_name, discriminator, variants):
         codec_name = self.codec_class_name(union_name)
@@ -2265,16 +2058,7 @@ class Generator:
         out.append("    }\n\n")
 
         # --- ENCODE ---
-        out.append("    @Override\n")
-        out.append(f"    public void encode(JsonGenerator gen, {union_name} value) {{\n")
-        first = True
-        for vn, _ in variants:
-            prefix = "if" if first else "} else if"
-            out.append(f"        {prefix} (value instanceof {vn} v) {{\n")
-            out.append(f"            CodecRegistry.<{vn}>codecFor({vn}.class).encode(gen, v);\n")
-            first = False
-        out.append("        }\n")
-        out.append("    }\n")
+        out.append(self.union_encoders(union_name, [vn for vn, _ in variants]))
         out.append("}\n")
         self.codec_files[codec_name] = "".join(out)
 
@@ -2332,434 +2116,9 @@ class Generator:
         out.append("        }\n")
         out.append("    }\n\n")
 
-        out.append("    @Override\n")
-        out.append(f"    public void encode(JsonGenerator gen, {union_name} value) {{\n")
-        first = True
-        for vn in variant_field_map:
-            prefix = "if" if first else "} else if"
-            out.append(f"        {prefix} (value instanceof {vn} v) {{\n")
-            out.append(f"            CodecRegistry.<{vn}>codecFor({vn}.class).encode(gen, v);\n")
-            first = False
-        out.append("        }\n")
-        out.append("    }\n")
+        out.append(self.union_encoders(union_name, list(variant_field_map)))
         out.append("}\n")
         self.codec_files[codec_name] = "".join(out)
-
-    def add_codec_interface(self):
-        name = "Codec"
-        if name in self.codec_files:
-            return
-        out = [self.pkg(self.pkg_codecs), "\n"]
-        for i in sorted(
-            [
-                "tools.jackson.core.JacksonException",
-                "tools.jackson.core.JsonGenerator",
-                "tools.jackson.core.JsonParser",
-                "tools.jackson.core.JsonToken",
-                "tools.jackson.core.json.JsonFactory",
-                "javax.annotation.processing.Generated",
-            ]
-        ):
-            out.append(f"import {i};\n")
-        out.append("\n")
-        out.append("/** Codec for serializing and deserializing model types. */\n")
-        out.append(f'{GENERATED_ANNOTATION}\n')
-        out.append("public interface Codec<T> {\n")
-        out.append("    /** Shared streaming factory; prefer {@link CodecSupport} for tree-aware parsing. */\n")
-        out.append("    JsonFactory FACTORY = CodecSupport.FACTORY;\n\n")
-        out.append("    /**\n")
-        out.append("     * Deserializes a value from JSON.\n")
-        out.append("     *\n")
-        out.append("     * @param parser the JSON parser positioned at a value\n")
-        out.append("     * @return the decoded value\n")
-        out.append("     * @throws JacksonException on parse failure\n")
-        out.append("     */\n")
-        out.append("    T decode(JsonParser parser);\n\n")
-        out.append("    /**\n")
-        out.append("     * Serializes a value to JSON.\n")
-        out.append("     *\n")
-        out.append("     * @param gen   the JSON generator to write to\n")
-        out.append("     * @param value the value to serialize\n")
-        out.append("     * @throws JacksonException on write failure\n")
-        out.append("     */\n")
-        out.append("    void encode(JsonGenerator gen, T value);\n\n")
-        out.append("    /**\n")
-        out.append("     * Serializes a value to a UTF-8 JSON byte array.\n")
-        out.append("     *\n")
-        out.append("     * @param value the value to serialize\n")
-        out.append("     * @return the UTF-8 encoded JSON\n")
-        out.append("     * @throws JacksonException on write failure\n")
-        out.append("     */\n")
-        out.append("    default byte[] encodeToBytes(T value) {\n")
-        out.append("        return CodecSupport.writeToBytes(gen -> encode(gen, value));\n")
-        out.append("    }\n\n")
-        out.append("    /**\n")
-        out.append("     * Deserializes a value from a UTF-8 JSON byte array.\n")
-        out.append("     *\n")
-        out.append("     * @param data the UTF-8 encoded JSON object\n")
-        out.append("     * @return the decoded value\n")
-        out.append("     * @throws JacksonException on parse failure\n")
-        out.append("     */\n")
-        out.append("    default T decodeFromBytes(byte[] data) {\n")
-        out.append("        try (var parser = CodecSupport.createParser(data)) {\n")
-        out.append("            if (parser.nextToken() != JsonToken.START_OBJECT) {\n")
-        out.append('                throw new IllegalArgumentException("Expected JSON object");\n')
-        out.append("            }\n")
-        out.append("            return decode(parser);\n")
-        out.append("        }\n")
-        out.append("    }\n")
-        out.append("}\n")
-        self.codec_files[name] = "".join(out)
-
-    def add_codec_support(self):
-        name = "CodecSupport"
-        if name in self.codec_files:
-            return
-        out = [self.pkg(self.pkg_codecs), "\n"]
-        for i in sorted(
-            [
-                "java.io.ByteArrayOutputStream",
-                "java.io.StringWriter",
-                "java.util.LinkedHashMap",
-                "java.util.Map",
-                "javax.annotation.processing.Generated",
-                "org.jspecify.annotations.Nullable",
-                "tools.jackson.core.JacksonException",
-                "tools.jackson.core.JsonGenerator",
-                "tools.jackson.core.JsonParser",
-                "tools.jackson.core.JsonToken",
-                "tools.jackson.core.ObjectReadContext",
-                "tools.jackson.core.json.JsonFactory",
-                "tools.jackson.databind.DeserializationFeature",
-                "tools.jackson.databind.exc.MismatchedInputException",
-                "tools.jackson.databind.JsonNode",
-                "tools.jackson.databind.json.JsonMapper",
-            ]
-        ):
-            out.append(f"import {i};\n")
-        out.append("\n")
-        out.append("""/**
- * Streaming helpers shared by every generated {@link Codec}.
- *
- * <p>All reads tolerate an explicit JSON {@code null} in place of a value: the wire allows it for
- * any optional property, and the streaming accessors ({@code getString}, {@code getBooleanValue},
- * &hellip;) either coerce it to nonsense or throw. All tree reads and writes go through a
- * databind-backed context, so they work no matter which {@code ObjectReadContext} produced the
- * parser.
- */""")
-        out.append("\n")
-        out.append(f'{GENERATED_ANNOTATION}\n')
-        out.append("public final class CodecSupport {\n\n")
-        out.append(
-            "    /**\n"
-            "     * Reads and writes sub-trees of a larger stream, so the trailing-token check that guards a\n"
-            "     * whole-document bind must be off.\n"
-            "     */\n"
-        )
-        out.append(
-            "    private static final JsonMapper MAPPER = JsonMapper.builder()\n"
-            "            .disable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)\n"
-            "            .build();\n\n"
-        )
-        out.append("    /** Streaming factory shared by the generated codecs. */\n")
-        out.append("    public static final JsonFactory FACTORY = new JsonFactory();\n\n")
-        out.append("    private CodecSupport() {}\n\n")
-        out.append("""    /** Writes JSON into a generator. */
-    @FunctionalInterface
-    public interface JsonWriter {
-        /**
-         * Writes one JSON value.
-         *
-         * @param gen the generator to write to
-         */
-        void write(JsonGenerator gen);
-    }
-
-    /**
-     * Creates a tree-capable parser over UTF-8 JSON bytes.
-     *
-     * @param data the UTF-8 encoded JSON
-     * @return a parser whose {@code readValueAsTree} is backed by databind
-     */
-    public static JsonParser createParser(byte[] data) {
-        return MAPPER.createParser(data);
-    }
-
-    /**
-     * Creates a tree-capable parser over a JSON string.
-     *
-     * @param json the JSON text
-     * @return a parser whose {@code readValueAsTree} is backed by databind
-     */
-    public static JsonParser createParser(String json) {
-        return MAPPER.createParser(json);
-    }
-
-    /**
-     * Serializes JSON written by {@code writer} to a UTF-8 byte array.
-     *
-     * @param writer writes the JSON value
-     * @return the UTF-8 encoded JSON
-     */
-    public static byte[] writeToBytes(JsonWriter writer) {
-        var out = new ByteArrayOutputStream(256);
-        try (var gen = MAPPER.createGenerator(out)) {
-            writer.write(gen);
-        }
-        return out.toByteArray();
-    }
-
-    /**
-     * Reads the value at the parser's current token as a tree, regardless of the parser's own
-     * {@code ObjectReadContext}.
-     *
-     * @param parser the parser positioned at a value
-     * @return the parsed tree
-     */
-    public static JsonNode readTree(JsonParser parser) {
-        return MAPPER.readTree(parser);
-    }
-
-    /**
-     * Writes a tree to the generator without an intermediate string.
-     *
-     * @param gen  the generator to write to
-     * @param node the tree to write
-     */
-    public static void writeTree(JsonGenerator gen, @Nullable JsonNode node) {
-        if (node == null) {
-            gen.writeNull();
-            return;
-        }
-        try (JsonParser p = node.traverse(ObjectReadContext.empty())) {
-            p.nextToken();
-            gen.copyCurrentStructure(p);
-        }
-    }
-
-    /**
-     * Writes each entry of a tree map as a property of the current object.
-     *
-     * @param gen     the generator, positioned inside an object
-     * @param entries the properties to write
-     */
-    public static void writeTreeEntries(JsonGenerator gen, Map<String, JsonNode> entries) {
-        for (var entry : entries.entrySet()) {
-            gen.writeName(entry.getKey());
-            writeTree(gen, entry.getValue());
-        }
-    }
-
-    /**
-     * Reads a JSON object into a map of trees. An explicit JSON null yields {@code null}; any other
-     * non-object token is a client error.
-     *
-     * @param parser the parser positioned at the value
-     * @param field  the property being read, for the error message
-     * @return the property map, or {@code null}
-     */
-    public static @Nullable Map<String, JsonNode> readTreeMap(JsonParser parser, String field) {
-        if (parser.currentToken() == JsonToken.VALUE_NULL) return null;
-        if (parser.currentToken() != JsonToken.START_OBJECT) throw wrongType(parser, field, "an object");
-        var map = new LinkedHashMap<String, JsonNode>();
-        while (parser.nextToken() != JsonToken.END_OBJECT) {
-            String key = parser.currentName();
-            parser.nextToken();
-            map.put(key, readTree(parser));
-        }
-        return map;
-    }
-
-    /**
-     * Reports a property whose JSON type does not match the schema.
-     *
-     * <p>The generated codecs skip properties they do not model, but a property they <em>do</em>
-     * model arriving with the wrong type is a client error, not something to drop silently.
-     *
-     * @param parser   the parser positioned at the offending value
-     * @param field    the property name
-     * @param expected a description of the expected shape, e.g. {@code "an object"}
-     * @return the exception to throw
-     */
-    public static MismatchedInputException wrongType(JsonParser parser, String field, String expected) {
-        return MismatchedInputException.from(
-                parser, Object.class, "Property '" + field + "' expects " + expected);
-    }
-
-    /**
-     * Copies the value at the current token out as raw JSON text, without building a tree.
-     *
-     * @param parser the parser positioned at a value
-     * @return the raw JSON, or {@code null} for an explicit JSON null
-     */
-    public static @Nullable String readRawJson(JsonParser parser) {
-        if (parser.currentToken() == JsonToken.VALUE_NULL) return null;
-        var writer = new StringWriter();
-        try (JsonGenerator gen = FACTORY.createGenerator(tools.jackson.core.ObjectWriteContext.empty(), writer)) {
-            gen.copyCurrentStructure(parser);
-        }
-        return writer.toString();
-    }
-
-    /**
-     * Reads a string, tolerating an explicit JSON null.
-     *
-     * @param parser the parser positioned at a value
-     * @return the string, or {@code null}
-     */
-    public static @Nullable String decodeString(JsonParser parser) {
-        return parser.currentToken() == JsonToken.VALUE_NULL ? null : parser.getString();
-    }
-
-    /**
-     * Reads a boolean, tolerating an explicit JSON null.
-     *
-     * @param parser the parser positioned at a value
-     * @return the boolean, or {@code null}
-     */
-    public static @Nullable Boolean decodeBoolean(JsonParser parser) {
-        return parser.currentToken() == JsonToken.VALUE_NULL ? null : parser.getBooleanValue();
-    }
-
-    /**
-     * Reads a long, tolerating an explicit JSON null.
-     *
-     * @param parser the parser positioned at a value
-     * @return the long, or {@code null}
-     */
-    public static @Nullable Long decodeLong(JsonParser parser) {
-        return parser.currentToken() == JsonToken.VALUE_NULL ? null : parser.getLongValue();
-    }
-
-    /**
-     * Reads a double, tolerating an explicit JSON null.
-     *
-     * @param parser the parser positioned at a value
-     * @return the double, or {@code null}
-     */
-    public static @Nullable Double decodeDouble(JsonParser parser) {
-        return parser.currentToken() == JsonToken.VALUE_NULL ? null : parser.getDoubleValue();
-    }
-
-    /**
-     * Reads a primitive boolean, substituting {@code fallback} for an explicit JSON null.
-     *
-     * @param parser   the parser positioned at a value
-     * @param fallback the value to use for a JSON null
-     * @return the boolean
-     */
-    public static boolean decodeBoolean(JsonParser parser, boolean fallback) {
-        return parser.currentToken() == JsonToken.VALUE_NULL ? fallback : parser.getBooleanValue();
-    }
-
-    /**
-     * Reads a primitive long, substituting {@code fallback} for an explicit JSON null.
-     *
-     * @param parser   the parser positioned at a value
-     * @param fallback the value to use for a JSON null
-     * @return the long
-     */
-    public static long decodeLong(JsonParser parser, long fallback) {
-        return parser.currentToken() == JsonToken.VALUE_NULL ? fallback : parser.getLongValue();
-    }
-
-    /**
-     * Reads a primitive double, substituting {@code fallback} for an explicit JSON null.
-     *
-     * @param parser   the parser positioned at a value
-     * @param fallback the value to use for a JSON null
-     * @return the double
-     */
-    public static double decodeDouble(JsonParser parser, double fallback) {
-        return parser.currentToken() == JsonToken.VALUE_NULL ? fallback : parser.getDoubleValue();
-    }
-
-    /**
-     * Reads base64 binary, tolerating an explicit JSON null.
-     *
-     * @param parser the parser positioned at a value
-     * @return the decoded bytes, or {@code null}
-     */
-    public static byte @Nullable [] decodeBinary(JsonParser parser) {
-        return parser.currentToken() == JsonToken.VALUE_NULL ? null : parser.getBinaryValue();
-    }
-
-    /**
-     * Reads a value of one of the scalar or tree types the generated codecs use.
-     *
-     * @param <T>    the value type
-     * @param parser the parser positioned at a value
-     * @param type   the expected type
-     * @return the decoded value, or {@code null} for an explicit JSON null
-     */
-    @SuppressWarnings("unchecked")
-    public static <T> @Nullable T decodeValue(JsonParser parser, Class<T> type) {
-        if (parser.currentToken() == JsonToken.VALUE_NULL) return null;
-        if (type == String.class) return (T) parser.getString();
-        if (type == Boolean.class || type == boolean.class) return (T) Boolean.valueOf(parser.getBooleanValue());
-        if (type == Long.class || type == long.class) return (T) Long.valueOf(parser.getLongValue());
-        if (type == Double.class || type == double.class) return (T) Double.valueOf(parser.getDoubleValue());
-%%DECODE_UNKNOWN%%        return (T) readTree(parser);
-    }
-
-    /**
-     * Writes a scalar, tree, or {@code null} value to the generator.
-     *
-     * @param gen   the generator to write to
-     * @param value the value to write
-     */
-    public static void encodeValue(JsonGenerator gen, @Nullable Object value) {
-        switch (value) {
-            case null -> gen.writeNull();
-            case String s -> gen.writeString(s);
-            case Boolean b -> gen.writeBoolean(b);
-            case Long l -> gen.writeNumber(l);
-            case Double d -> gen.writeNumber(d);
-            case JsonNode n -> writeTree(gen, n);
-%%ENCODE_UNKNOWN%%            default -> gen.writeString(value.toString());
-        }
-    }
-}
-""")
-        text = "".join(out)
-        decode_unknown = ""
-        encode_unknown = ""
-        extra_imports = ""
-        if self.unknown_type == "TokenBuffer":
-            decode_unknown = (
-                "        if (type == TokenBuffer.class) {\n"
-                "            TokenBuffer buf = TokenBuffer.forBuffering(parser, parser.objectReadContext());\n"
-                "            buf.copyCurrentStructure(parser);\n"
-                "            return (T) buf;\n"
-                "        }\n"
-            )
-            encode_unknown = "            case TokenBuffer tb -> tb.serialize(gen);\n"
-            extra_imports = "import tools.jackson.databind.util.TokenBuffer;\n"
-        elif self.unknown_type == "byte[]":
-            decode_unknown = (
-                "        if (type == byte[].class) {\n"
-                "            return (T) writeToBytes(gen -> {\n"
-                "                gen.copyCurrentStructure(parser);\n"
-                "            });\n"
-                "        }\n"
-            )
-            encode_unknown = (
-                "            case byte[] b -> {\n"
-                "                try (JsonParser sub = createParser(b)) {\n"
-                "                    sub.nextToken();\n"
-                "                    gen.copyCurrentStructure(sub);\n"
-                "                }\n"
-                "            }\n"
-            )
-        text = text.replace("%%DECODE_UNKNOWN%%", decode_unknown)
-        text = text.replace("%%ENCODE_UNKNOWN%%", encode_unknown)
-        if extra_imports:
-            text = text.replace(
-                "import tools.jackson.databind.json.JsonMapper;\n",
-                "import tools.jackson.databind.json.JsonMapper;\n" + extra_imports,
-                1,
-            )
-        self.codec_files[name] = text
 
     def add_codec_registry(self):
         name = "CodecRegistry"
@@ -2777,14 +2136,8 @@ class Generator:
                 model_imports.add(owner)
             else:
                 model_imports.add(model_part)
-        for req, _ in self.method_map.values():
-            model_imports.add(req)
-        for _, notif, _ in self.notifications:
-            model_imports.add(notif)
         for ref in sorted(model_imports):
             out.append(f"import {self.pkg_models}.{ref};\n")
-        if not self.base_package:
-            out.append("import java.util.Collections;\n")
         out.append("import java.util.LinkedHashMap;\n")
         out.append("import java.util.Map;\n")
         out.append("import java.util.concurrent.ConcurrentHashMap;\n")
@@ -2845,78 +2198,6 @@ class Generator:
         out.append("     */\n")
         out.append("    public static <T> void registerOverride(Class<T> modelClass, Codec<T> codec) {\n")
         out.append("        OVERRIDES.put(modelClass, codec);\n")
-        out.append("    }\n")
-        if self.base_package:
-            # Extensions add no MCP methods of their own to the base dispatcher.
-            out.append("}\n")
-            self.codec_files[name] = "".join(out)
-            return
-        out.append("\n")
-        # Instance-based method lookup (for dispatcher)
-        out.append("    private final Map<String, Object> codecs;\n\n")
-        out.append(f"    private {name}(Builder b) {{\n")
-        out.append("        this.codecs = Collections.unmodifiableMap(b.codecs);\n")
-        out.append("    }\n\n")
-        out.append('    @SuppressWarnings("unchecked")\n')
-        out.append(
-            '    public <T> T requestCodec(String method) { return (T) codecs.get("request:" + method); }\n'
-        )
-        out.append('    @SuppressWarnings("unchecked")\n')
-        out.append(
-            '    public <T> T notificationCodec(String method) { return (T) codecs.get("notification:" + method); }\n'
-        )
-        out.append('    @SuppressWarnings("unchecked")\n')
-        out.append(
-            '    public <T> T resultCodec(Class<?> c) { return (T) codecs.get("result:" + c.getSimpleName()); }\n\n'
-        )
-        out.append("    /**\n")
-        out.append("     * Creates a new builder.\n")
-        out.append("     *\n")
-        out.append("     * @return a new builder\n")
-        out.append("     */\n")
-        out.append("    public static Builder builder() { return new Builder(); }\n\n")
-        out.append("    /** Builder for {@link CodecRegistry}. */\n")
-        out.append("    public static class Builder {\n")
-        out.append(
-            "        private final Map<String, Object> codecs = new LinkedHashMap<>();\n\n"
-        )
-        out.append("        /** Default constructor. */\n")
-        out.append("        public Builder() {}\n\n")
-        for method, (req, res) in self.method_map.items():
-            desc = method.replace("_", " ").title()
-            out.append("        /**\n")
-            out.append(f"         * Registers codecs for {desc}.\n")
-            out.append("         *\n")
-            out.append("         * @return this builder\n")
-            out.append("         */\n")
-            out.append(f"        public Builder register{req}() {{\n")
-            out.append(
-                f'            codecs.put("request:{method}", new {req}Codec());\n'
-            )
-            out.append(f'            codecs.put("result:{res}", new {res}Codec());\n')
-            out.append("            return this;\n")
-            out.append("        }\n")
-        for method, notif, _ in self.notifications:
-            desc = method.replace("_", " ").title()
-            out.append("        /**\n")
-            out.append(f"         * Registers codec for {desc}.\n")
-            out.append("         *\n")
-            out.append("         * @return this builder\n")
-            out.append("         */\n")
-            out.append(f"        public Builder register{notif}() {{\n")
-            out.append(
-                f'            codecs.put("notification:{method}", new {notif}Codec());\n'
-            )
-            out.append("            return this;\n")
-            out.append("        }\n")
-        out.append("        /**\n")
-        out.append(f"         * Builds the {{@link CodecRegistry}}.\n")
-        out.append("         *\n")
-        out.append("         * @return the built registry\n")
-        out.append("         */\n")
-        out.append(
-            f"        public CodecRegistry build() {{ return new CodecRegistry(this); }}\n"
-        )
         out.append("    }\n")
         out.append("}\n")
         self.codec_files[name] = "".join(out)
@@ -3007,12 +2288,6 @@ class Generator:
             comps, _ = self.get_components(fields, name, has_idx)
 
             ifaces = []
-            if name in self.request_names:
-                ifaces.append("McpRequest")
-            if name in self.notif_names:
-                ifaces.append("McpNotification")
-            if name in self.result_names:
-                ifaces.append("McpResponse")
             if name in structural_variant_parents:
                 ifaces.extend(structural_variant_parents[name])
             # Add extends parents for child interfaces (only when parent
@@ -3067,10 +2342,7 @@ class Generator:
                         if typ in self.inner_models:
                             typ = self.type_ref(typ)
                         comps.append((typ, fname, optional, field_jsdoc, json_name))
-                    if name in self.result_names:
-                        self.add_model(name, comps, ["McpResponse"], jsdoc=exp.get("jsdoc"))
-                    else:
-                        self.add_model(name, comps, jsdoc=exp.get("jsdoc"))
+                    self.add_model(name, comps, jsdoc=exp.get("jsdoc"))
                     continue
 
             # String literals + | string → no model needed (resolve_type returns String)
@@ -3121,14 +2393,7 @@ class Generator:
                         doc = f"the {flattened} variant whose properties are inlined into this object"
                         comps.insert(0, (flattened, field, False, doc, None))
                         self.flattened_unions[name] = (flattened, field)
-                    ifaces = []
-                    if name in self.request_names:
-                        ifaces.append("McpRequest")
-                    if name in self.notif_names:
-                        ifaces.append("McpNotification")
-                    if name in self.result_names:
-                        ifaces.append("McpResponse")
-                    self.add_model(name, comps, ifaces if ifaces else None, jsdoc=exp.get("jsdoc"))
+                    self.add_model(name, comps, jsdoc=exp.get("jsdoc"))
 
         # 5. Anonymous types (handled as inner classes by append_inner_classes during add_model)
         # Safety net: handle any orphaned anon types (without owning_type)
@@ -3152,63 +2417,13 @@ class Generator:
                     comps, _ = self.get_components(fields, anon_name)
                     self.add_model(anon_name, comps)
 
-        # 6-7. Message hierarchy lives in the base package (sealed there), not in extensions
-        if not self.base_package:
-            self.add_message_hierarchy()
-
-        # 8. Codec interface + codecs for all models
+        # 6. Codecs for all models, and their registry
         if not self.skip_codecs:
-            if not self.base_package:
-                self.add_codec_support()
-                self.add_codec_interface()
             self.add_model_codecs()
-
-        # 9. Protocol registries
-        if self.base_package:
-            if not self.skip_codecs:
-                self.add_codec_registry()
-                self.import_base_codecs()
-        elif not self.skip_protocol:
-            self.add_protocol_version()
-            self.add_method_registry()
-            self.add_descriptors()
             self.add_codec_registry()
+        self.finalize_imports()
 
         self.write_outputs()
-
-    def add_message_hierarchy(self):
-        # 6. UnknownRequest
-        self.add_model(
-            "UnknownRequest",
-            [
-                (
-                    self.field_type_mappings.get("UnknownRequest.id", self.unknown_java_type),
-                    "id",
-                    True,
-                    "",
-                    "id",
-                ),
-                ("String", "method", False, "", "method"),
-                (
-                    self.field_type_mappings.get("UnknownRequest.params", self.unknown_java_type),
-                    "params",
-                    True,
-                    "",
-                    "params",
-                ),
-            ],
-            ["McpRequest"],
-        )
-
-        # 7. Message hierarchy interfaces
-        hierarchy = [
-            ("McpMessage", None, ["McpRequest", "McpNotification", "McpResponse"]),
-            ("McpRequest", "McpMessage", sorted(self.request_names) + ["UnknownRequest"]),
-            ("McpNotification", "McpMessage", sorted(self.notif_names)),
-            ("McpResponse", "McpMessage", sorted(self.result_names)),
-        ]
-        for cls, super_iface, permits in hierarchy:
-            self.add_interface(cls, permits if permits else None, super_iface)
 
     def add_model_codecs(self):
         for model_name in list(self.model_files.keys()):
@@ -3245,34 +2460,57 @@ class Generator:
                     if variant_field_map:
                         self.add_deduction_codec(model_name, variant_field_map)
                     continue
-            if model_name in (
-                "McpMessage",
-                "McpRequest",
-                "McpNotification",
-                "McpResponse",
-            ):
-                continue
             if model_name in self.codec_files:
                 continue
             self.add_codec(model_name)
 
-    def import_base_codecs(self):
-        """Adds imports of the base package's Codec/CodecSupport to every generated codec."""
-        base_codecs = f"{self.base_package}.codecs"
-        for name, content in self.codec_files.items():
-            needed = set()
-            if re.search(r"\bCodec<", content):
-                needed.add(f"import {base_codecs}.Codec;")
-            if "CodecSupport." in content:
-                needed.add(f"import {base_codecs}.CodecSupport;")
-            lines = content.split("\n")
-            import_idx = [i for i, line in enumerate(lines) if line.startswith("import ")]
-            first, last = import_idx[0], import_idx[-1]
-            imports = sorted(set(lines[first : last + 1]) | needed)
-            self.codec_files[name] = "\n".join(lines[:first] + imports + lines[last + 1 :])
+    def finalize_imports(self):
+        """Imports core's Codec/CodecSupport and replaces body FQNs with imports where the simple name is free."""
+        for files in (self.codec_files, self.model_files):
+            local_names = {name for name in files if "." not in name}
+            for name, content in files.items():
+                if not content:
+                    continue
+                needed = set()
+                if files is self.codec_files:
+                    if re.search(r"\bCodec<", content):
+                        needed.add(f"import {CORE_CODEC_PACKAGE}.Codec;")
+                    if "CodecSupport." in content:
+                        needed.add(f"import {CORE_CODEC_PACKAGE}.CodecSupport;")
+                files[name] = self.shorten_fqns(content, needed, local_names)
+
+    @staticmethod
+    def shorten_fqns(content, extra_imports, local_names):
+        lines = content.split("\n")
+        import_idx = [i for i, line in enumerate(lines) if line.startswith("import ")]
+        first, last = import_idx[0], import_idx[-1]
+        imports = {line for line in lines[first : last + 1] if line.startswith("import ")} | extra_imports
+        owners = {
+            imp[len("import ") : -1].rsplit(".", 1)[1]: imp[len("import ") : -1]
+            for imp in imports
+            if not imp.startswith("import static ")
+        }
+
+        def shorten(m):
+            fqn, simple = m.group(1) + m.group(2), m.group(2)
+            if simple in local_names or owners.get(simple, fqn) != fqn:
+                return fqn
+            owners[simple] = fqn
+            imports.add(f"import {fqn};")
+            return simple
+
+        body = FQN_PATTERN.sub(shorten, "\n".join(lines[last + 1 :]))
+        return "\n".join(lines[:first] + sorted(imports) + [body])
 
     def write_outputs(self):
-        # 10. Write files
+        # 10. Write files, first pruning generated files this run no longer produces
+        for directory, names in (
+            (self.dir_models, self.model_files),
+            (self.dir_codecs, self.codec_files),
+            # The package root held since-removed protocol files (e.g. McpMethodDispatch).
+            (os.path.dirname(self.dir_models), {}),
+        ):
+            self.prune_stale(directory, names)
         for name, content in self.model_files.items():
             if not content:
                 continue
@@ -3285,13 +2523,8 @@ class Generator:
             self.write_file(path, content)
             if VERBOSE:
                 print(f"  CODEC  {name}.java")
-        for name, content in self.protocol_files.items():
-            path = os.path.join(self.dir_protocol, f"{name}.java")
-            self.write_file(path, content)
-            if VERBOSE:
-                print(f"  PROTO  {name}.java")
         print(
-            f"\nGenerated {len(self.model_files)} models, {len(self.codec_files)} codecs, {len(self.protocol_files)} protocol files"
+            f"\nGenerated {len(self.model_files)} models and {len(self.codec_files)} codecs"
         )
 
 
@@ -3308,7 +2541,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--pkg-default",
         default=DEFAULT_PKG,
-        help="Default package (appended with .models/.codecs/.protocol)",
+        help="Default package (appended with .models/.codecs)",
     )
     parser.add_argument(
         "--pkg-models",
@@ -3319,11 +2552,6 @@ if __name__ == "__main__":
         "--pkg-codecs",
         default=None,
         help="Package for generated codecs (empty to skip)",
-    )
-    parser.add_argument(
-        "--pkg-protocol",
-        default=None,
-        help="Package for generated protocol files (empty to skip)",
     )
     parser.add_argument(
         "--unknown-type",
@@ -3347,13 +2575,7 @@ if __name__ == "__main__":
     pkg = args.pkg_default
     pkg_models = args.pkg_models or f"{pkg}.models"
     pkg_codecs = args.pkg_codecs if args.pkg_codecs is not None else f"{pkg}.codecs"
-    pkg_protocol = (
-        args.pkg_protocol if args.pkg_protocol is not None else f"{pkg}.protocol"
-    )
-
-    cache_path = _cache_path_for(
-        args.ts, args.base_dir, pkg_models, pkg_codecs, pkg_protocol
-    )
+    cache_path = _cache_path_for(args.ts, args.base_dir, pkg_models, pkg_codecs)
     fingerprint = _build_fingerprint(args.ts, args.config, args.unknown_type)
 
     if not args.force and _is_cache_fresh(_load_cache(cache_path), fingerprint):
@@ -3374,7 +2596,6 @@ if __name__ == "__main__":
             base_dir=args.base_dir,
             pkg_models=pkg_models,
             pkg_codecs=pkg_codecs,
-            pkg_protocol=pkg_protocol,
             unknown_type=args.unknown_type,
             type_mappings=type_mappings,
             additional_properties=additional_properties,
@@ -3383,5 +2604,5 @@ if __name__ == "__main__":
         )
         gen.generate()
 
-        output_dirs = [d for d in (gen.dir_models, gen.dir_codecs, gen.dir_protocol) if d]
+        output_dirs = [d for d in (gen.dir_models, gen.dir_codecs) if d]
         _save_cache(cache_path, fingerprint, output_dirs)

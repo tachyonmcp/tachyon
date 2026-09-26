@@ -45,7 +45,7 @@ final class McpToolMapper {
                 execution,
                 d.outputSchema() != null ? d.outputSchema().json() : null,
                 toProtocolToolAnnotations(d.annotations()),
-                JsonUtils.toJsonNodeMap(d.meta()),
+                JsonUtils.toObjectTree(d.meta()),
                 d.name(),
                 d.title(),
                 toProtocolIcons(d.icons()));

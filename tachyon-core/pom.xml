@@ -20,6 +20,7 @@
     <properties>
         <automatic.module.name>dev.tachyonmcp.core</automatic.module.name>
         <ts2java.skip>false</ts2java.skip>
+        <jmh.args />
     </properties>
 
     <dependencies>
@@ -149,8 +150,6 @@
                                 <argument>${project.basedir}/protocol/mcp-2025-11-25.ts</argument>
                                 <argument>--pkg-default</argument>
                                 <argument>dev.tachyonmcp.core.protocol.mcp.v2025_11_25</argument>
-                                <argument>--pkg-protocol</argument>
-                                <argument>dev.tachyonmcp.core.protocol.mcp.v2025_11_25</argument>
                                 <argument>--config</argument>
                                 <argument>${project.basedir}/protocol/mcp-2025-11-25_config.json</argument>
                             </arguments>
@@ -170,8 +169,6 @@
                                 <argument>--ts</argument>
                                 <argument>${project.basedir}/protocol/mcp-2026-07-28.ts</argument>
                                 <argument>--pkg-default</argument>
-                                <argument>dev.tachyonmcp.core.protocol.mcp.v2026_07_28</argument>
-                                <argument>--pkg-protocol</argument>
                                 <argument>dev.tachyonmcp.core.protocol.mcp.v2026_07_28</argument>
                                 <argument>--config</argument>
                                 <argument>${project.basedir}/protocol/mcp-2026-07-28_config.json</argument>
@@ -266,6 +263,8 @@
                                 <configuration>
                                     <classpathScope>test</classpathScope>
                                     <mainClass>dev.tachyonmcp.core.BenchmarkGate</mainClass>
+                                    <!-- Not exec.args: that property also feeds every exec:exec (ts2java codegen). -->
+                                    <commandlineArgs>${jmh.args}</commandlineArgs>
                                     <systemProperties>
                                         <systemProperty>
                                             <!-- JMH's real @Fork spawns a child JVM and builds its -cp from this

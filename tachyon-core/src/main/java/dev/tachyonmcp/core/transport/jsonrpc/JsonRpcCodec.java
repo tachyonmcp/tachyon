@@ -1,9 +1,10 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
 package dev.tachyonmcp.core.transport.jsonrpc;
 
-import static dev.tachyonmcp.core.server.json.JsonUtils.FACTORY;
+import static dev.tachyonmcp.core.protocol.codec.CodecSupport.FACTORY;
 
 import dev.tachyonmcp.api.server.domain.RequestId;
+import dev.tachyonmcp.core.protocol.codec.CodecSupport;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufInputStream;
 import java.io.ByteArrayOutputStream;
@@ -24,7 +25,6 @@ import tools.jackson.core.JsonToken;
 import tools.jackson.core.ObjectReadContext;
 import tools.jackson.core.ObjectWriteContext;
 import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.node.JsonNodeFactory;
 
 /** Low-level JSON-RPC 2.0 codec: parse and serialize messages to/from Netty {@link ByteBuf}. */
 public final class JsonRpcCodec {
@@ -267,35 +267,7 @@ public final class JsonRpcCodec {
 
     /** Reads the current JSON value as a {@link JsonNode}. */
     public static JsonNode readTreeValue(JsonParser p) throws IOException {
-        return switch (p.currentToken()) {
-            case START_OBJECT -> readObjectNode(p);
-            case START_ARRAY -> readArrayNode(p);
-            case VALUE_STRING -> JsonNodeFactory.instance.stringNode(p.getString());
-            case VALUE_NUMBER_INT -> JsonNodeFactory.instance.numberNode(p.getLongValue());
-            case VALUE_NUMBER_FLOAT -> JsonNodeFactory.instance.numberNode(p.getDoubleValue());
-            case VALUE_TRUE -> JsonNodeFactory.instance.booleanNode(true);
-            case VALUE_FALSE -> JsonNodeFactory.instance.booleanNode(false);
-            case VALUE_NULL -> JsonNodeFactory.instance.nullNode();
-            default -> throw new IOException("Unexpected token: " + p.currentToken());
-        };
-    }
-
-    private static JsonNode readObjectNode(JsonParser p) throws IOException {
-        var node = JsonNodeFactory.instance.objectNode();
-        while (p.nextToken() != JsonToken.END_OBJECT) {
-            var key = p.currentName();
-            p.nextToken();
-            node.set(key, readTreeValue(p));
-        }
-        return node;
-    }
-
-    private static JsonNode readArrayNode(JsonParser p) throws IOException {
-        var node = JsonNodeFactory.instance.arrayNode();
-        while (p.nextToken() != JsonToken.END_ARRAY) {
-            node.add(readTreeValue(p));
-        }
-        return node;
+        return CodecSupport.readWireTree(p);
     }
 
     /** Deserializes a JSON string to a generic Java object (Map, List, String, Number, Boolean, or null). */

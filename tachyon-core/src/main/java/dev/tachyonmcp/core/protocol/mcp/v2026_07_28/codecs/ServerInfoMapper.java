@@ -49,7 +49,7 @@ class ServerInfoMapper {
             builder.logging(EMPTY_NODE);
         }
         if (src.experimental() != null) {
-            builder.experimental(JsonUtils.toJsonNodeMap(src.experimental().asMap()));
+            builder.experimental(JsonUtils.toObjectTree(src.experimental().asMap()));
         }
 
         if (src.prompts() != null) {

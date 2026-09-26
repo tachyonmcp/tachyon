@@ -240,7 +240,7 @@ public final class SkillsExtension implements ServerExtension {
     private static Skill skillEntry(SkillsRegistry.Skill skill) {
         return new Skill(
                 skill.skillUri(),
-                JsonUtils.toJsonNodeMap(skill.frontmatter()),
+                JsonUtils.toObjectTree(skill.frontmatter()),
                 skill.files().stream()
                         .map(file -> new SkillResource(file.uri(), file.digest(), file.size()))
                         .toList());

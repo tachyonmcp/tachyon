@@ -74,9 +74,9 @@ class ExtensionMethodRoutingTest {
 
     private void negotiateExtension() throws Exception {
         var handler = server.getHandler("initialize");
-        var caps = ClientCapabilities.builder()
-                .extensions(Map.of("com.test/ext", JsonNodeFactory.instance.objectNode()))
-                .build();
+        var extensions = JsonNodeFactory.instance.objectNode();
+        extensions.putObject("com.test/ext");
+        var caps = ClientCapabilities.builder().extensions(extensions).build();
         var params = InitializeRequestParams.builder()
                 .protocolVersion("2025-11-25")
                 .capabilities(caps)

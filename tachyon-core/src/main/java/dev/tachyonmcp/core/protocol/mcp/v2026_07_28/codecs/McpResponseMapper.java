@@ -27,6 +27,8 @@ import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
 import dev.tachyonmcp.api.server.features.tools.ToolDescriptor;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
 import dev.tachyonmcp.core.protocol.ProtocolRequestMapper.SubscriptionListenRequest;
+import dev.tachyonmcp.core.protocol.codec.Codec;
+import dev.tachyonmcp.core.protocol.codec.CodecSupport;
 import dev.tachyonmcp.core.protocol.mcp.v2026_07_28.McpProtocol;
 import dev.tachyonmcp.core.protocol.mcp.v2026_07_28.models.BlobResourceContents;
 import dev.tachyonmcp.core.protocol.mcp.v2026_07_28.models.CallToolResult;
@@ -74,6 +76,8 @@ import org.jspecify.annotations.Nullable;
 import tools.jackson.core.JsonEncoding;
 import tools.jackson.core.ObjectWriteContext;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.JsonNodeFactory;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Maps the modern MCP discovery and empty response shapes.
@@ -139,18 +143,20 @@ public final class McpResponseMapper extends dev.tachyonmcp.core.protocol.mcp.v2
             Map<String, JsonObject> registeredExtensions) {
         var capsBuilder = ServerInfoMapper.toServerCapabilities(capabilities);
         if (!registeredExtensions.isEmpty()) {
-            capsBuilder.extensions(registeredExtensions.entrySet().stream()
-                    .collect(java.util.stream.Collectors.toMap(
-                            Map.Entry::getKey, entry -> JsonUtils.parse(entry.getValue()))));
+            var extensions = JsonNodeFactory.instance.objectNode();
+            registeredExtensions.forEach((id, settings) -> extensions.set(id, JsonUtils.parse(settings)));
+            capsBuilder.extensions(extensions);
         }
         var implementation = ServerInfoMapper.toImplementation(serverIdentity);
-        var meta = Map.of("io.modelcontextprotocol/serverInfo", encodeToTree(Implementation.class, implementation));
+        var meta = JsonNodeFactory.instance.objectNode();
+        meta.set("io.modelcontextprotocol/serverInfo", encodeToTree(Implementation.class, implementation));
         // The schema models server identity only via the optional
         // _meta["io.modelcontextprotocol/serverInfo"] key (see `meta` above), but the pinned
         // conformance suite still requires a top-level `serverInfo` field too. `Result` permits
         // arbitrary extra keys (`[key: string]: unknown`), so mirror it there via
         // additionalProperties for conformance, in addition to the spec-correct `_meta` location.
-        var additionalProperties = Map.of("serverInfo", encodeToTree(Implementation.class, implementation));
+        var additionalProperties = JsonNodeFactory.instance.objectNode();
+        additionalProperties.set("serverInfo", encodeToTree(Implementation.class, implementation));
         return new DiscoverResult(
                 supportedVersions,
                 capsBuilder.build(),
@@ -169,7 +175,7 @@ public final class McpResponseMapper extends dev.tachyonmcp.core.protocol.mcp.v2
     public Object completeResult(CompletionResult result) {
         return new CompleteResult(
                 new CompleteResult.Completion(List.copyOf(result.values()), result.total(), result.hasMore()),
-                JsonUtils.toJsonNodeMap(result.meta()),
+                JsonUtils.toObjectTree(result.meta()),
                 COMPLETE,
                 null);
     }
@@ -226,13 +232,13 @@ public final class McpResponseMapper extends dev.tachyonmcp.core.protocol.mcp.v2
             Map<String, ? extends InputRequest> inputRequests,
             @Nullable String requestState,
             @Nullable Map<String, Object> meta) {
-        return inputRequired(inputRequests, requestState, JsonUtils.toJsonNodeMap(meta));
+        return inputRequired(inputRequests, requestState, JsonUtils.toObjectTree(meta));
     }
 
     private static Object inputRequired(
             @Nullable Map<String, ? extends InputRequest> inputRequests,
             @Nullable String requestState,
-            @Nullable Map<String, JsonNode> meta) {
+            @Nullable ObjectNode meta) {
         return new InputRequiredResult(encodedInputRequests(inputRequests), requestState, meta, INPUT_REQUIRED, null);
     }
 
@@ -247,9 +253,9 @@ public final class McpResponseMapper extends dev.tachyonmcp.core.protocol.mcp.v2
         if (inputRequests == null) {
             return null;
         }
-        Map<String, JsonNode> encoded = new LinkedHashMap<>();
+        var encoded = JsonNodeFactory.instance.objectNode();
         for (var entry : inputRequests.entrySet()) {
-            encoded.put(entry.getKey(), encodeInputRequest(entry.getValue()));
+            encoded.set(entry.getKey(), encodeInputRequest(entry.getValue()));
         }
         return new InputRequests(encoded);
     }
@@ -284,7 +290,7 @@ public final class McpResponseMapper extends dev.tachyonmcp.core.protocol.mcp.v2
         return new GetPromptResult(
                 description,
                 messages.stream().map(McpResponseMapper::toPromptMessage).toList(),
-                JsonUtils.toJsonNodeMap(meta),
+                JsonUtils.toObjectTree(meta),
                 COMPLETE,
                 null);
     }
@@ -355,13 +361,13 @@ public final class McpResponseMapper extends dev.tachyonmcp.core.protocol.mcp.v2
         return requested ? Boolean.TRUE : null;
     }
 
-    private static Map<String, JsonNode> subscriptionIdMeta(RequestId subscriptionId) {
+    private static ObjectNode subscriptionIdMeta(RequestId subscriptionId) {
         Object rawId =
                 switch (subscriptionId) {
                     case RequestId.StringValue(var v) -> v;
                     case RequestId.NumericValue(var v) -> v;
                 };
-        return Objects.requireNonNull(JsonUtils.toJsonNodeMap(Map.of(SUBSCRIPTION_ID_META_KEY, rawId)));
+        return Objects.requireNonNull(JsonUtils.toObjectTree(Map.of(SUBSCRIPTION_ID_META_KEY, rawId)));
     }
 
     /**
@@ -411,7 +417,7 @@ public final class McpResponseMapper extends dev.tachyonmcp.core.protocol.mcp.v2
                         : JsonSchema.objectSchema().json(),
                 d.outputSchema() != null ? d.outputSchema().json() : null,
                 toToolAnnotations(d.annotations()),
-                JsonUtils.toJsonNodeMap(d.meta()),
+                JsonUtils.toObjectTree(d.meta()),
                 d.name(),
                 d.title(),
                 toIcons(d.icons()));
@@ -424,7 +430,7 @@ public final class McpResponseMapper extends dev.tachyonmcp.core.protocol.mcp.v2
                 d.mimeType(),
                 toAnnotations(d.annotations()),
                 d.size(),
-                JsonUtils.toJsonNodeMap(d.meta()),
+                JsonUtils.toObjectTree(d.meta()),
                 d.name(),
                 d.title(),
                 toIcons(d.icons()));
@@ -436,7 +442,7 @@ public final class McpResponseMapper extends dev.tachyonmcp.core.protocol.mcp.v2
                 d.description(),
                 d.mimeType(),
                 toAnnotations(d.annotations()),
-                JsonUtils.toJsonNodeMap(d.meta()),
+                JsonUtils.toObjectTree(d.meta()),
                 d.name(),
                 d.title(),
                 toIcons(d.icons()));
@@ -445,9 +451,9 @@ public final class McpResponseMapper extends dev.tachyonmcp.core.protocol.mcp.v2
     private static ResourceContents toResourceContents(dev.tachyonmcp.api.server.domain.ResourceContents domain) {
         return switch (domain) {
             case dev.tachyonmcp.api.server.domain.TextResourceContents t ->
-                new TextResourceContents(t.text(), t.uri(), t.mimeType(), JsonUtils.toJsonNodeMap(t.meta()));
+                new TextResourceContents(t.text(), t.uri(), t.mimeType(), JsonUtils.toObjectTree(t.meta()));
             case dev.tachyonmcp.api.server.domain.BlobResourceContents b ->
-                new BlobResourceContents(b.blob(), b.uri(), b.mimeType(), JsonUtils.toJsonNodeMap(b.meta()));
+                new BlobResourceContents(b.blob(), b.uri(), b.mimeType(), JsonUtils.toObjectTree(b.meta()));
         };
     }
 
@@ -458,14 +464,14 @@ public final class McpResponseMapper extends dev.tachyonmcp.core.protocol.mcp.v2
                         .map(a -> new PromptArgument(a.description(), a.required(), a.name(), a.title()))
                         .toList();
         return new Prompt(
-                d.description(), arguments, JsonUtils.toJsonNodeMap(d.meta()), d.name(), d.title(), toIcons(d.icons()));
+                d.description(), arguments, JsonUtils.toObjectTree(d.meta()), d.name(), d.title(), toIcons(d.icons()));
     }
 
     private static CallToolResult buildCallToolResult(
             List<ContentBlock> content,
             @Nullable Object structuredValue,
             @Nullable Boolean isError,
-            @Nullable Map<String, JsonNode> meta) {
+            @Nullable ObjectNode meta) {
         var blocks = new ArrayList<>(
                 content.stream().map(McpResponseMapper::toContentBlock).toList());
         JsonNode structured = null;
@@ -487,27 +493,27 @@ public final class McpResponseMapper extends dev.tachyonmcp.core.protocol.mcp.v2
         return switch (domain) {
             case dev.tachyonmcp.api.server.domain.TextContent t ->
                 new dev.tachyonmcp.core.protocol.mcp.v2026_07_28.models.TextContent(
-                        "text", t.text(), toAnnotations(t.annotations()), JsonUtils.toJsonNodeMap(t.meta()));
+                        "text", t.text(), toAnnotations(t.annotations()), JsonUtils.toObjectTree(t.meta()));
             case dev.tachyonmcp.api.server.domain.ImageContent i ->
                 new dev.tachyonmcp.core.protocol.mcp.v2026_07_28.models.ImageContent(
                         "image",
                         i.data(),
                         i.mimeType(),
                         toAnnotations(i.annotations()),
-                        JsonUtils.toJsonNodeMap(i.meta()));
+                        JsonUtils.toObjectTree(i.meta()));
             case dev.tachyonmcp.api.server.domain.AudioContent a ->
                 new dev.tachyonmcp.core.protocol.mcp.v2026_07_28.models.AudioContent(
                         "audio",
                         a.data(),
                         a.mimeType(),
                         toAnnotations(a.annotations()),
-                        JsonUtils.toJsonNodeMap(a.meta()));
+                        JsonUtils.toObjectTree(a.meta()));
             case dev.tachyonmcp.api.server.domain.EmbeddedResource e ->
                 new dev.tachyonmcp.core.protocol.mcp.v2026_07_28.models.EmbeddedResource(
                         "resource",
                         toResourceContents(e.resource()),
                         toAnnotations(e.annotations()),
-                        JsonUtils.toJsonNodeMap(e.meta()));
+                        JsonUtils.toObjectTree(e.meta()));
             case dev.tachyonmcp.api.server.domain.ResourceLink r ->
                 new dev.tachyonmcp.core.protocol.mcp.v2026_07_28.models.ResourceLink(
                         "resource_link",
@@ -519,7 +525,7 @@ public final class McpResponseMapper extends dev.tachyonmcp.core.protocol.mcp.v2
                         r.mimeType(),
                         toAnnotations(r.annotations()),
                         r.size(),
-                        JsonUtils.toJsonNodeMap(r.meta()));
+                        JsonUtils.toObjectTree(r.meta()));
         };
     }
 
@@ -576,7 +582,7 @@ public final class McpResponseMapper extends dev.tachyonmcp.core.protocol.mcp.v2
 
     private static <T> JsonNode encodeToTree(Class<T> type, T value) {
         try (var out = new ByteArrayOutputStream(256);
-                var gen = JsonUtils.FACTORY.createGenerator(ObjectWriteContext.empty(), out, JsonEncoding.UTF8)) {
+                var gen = CodecSupport.FACTORY.createGenerator(ObjectWriteContext.empty(), out, JsonEncoding.UTF8)) {
             CodecRegistry.<T>codecFor(type).encode(gen, value);
             gen.flush();
             return JsonUtils.parseJsonNode(out.toString(StandardCharsets.UTF_8));

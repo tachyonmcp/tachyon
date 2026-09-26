@@ -7,12 +7,31 @@ import static org.assertj.core.api.Assertions.assertThat;
 import dev.tachyonmcp.api.server.domain.RequestId;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
+import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import tools.jackson.databind.JsonNode;
 
 class JsonRpcCodecTest {
+
+    @Test
+    void parseRequestKeepsIntegersWiderThanLongAndWidensTheRest() {
+        // language=JSON
+        var json = """
+            {"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"big":12345678901234567890,"small":7,"ratio":0.5}}
+            """;
+
+        var message = JsonRpcCodec.parseRequest(Unpooled.copiedBuffer(json, StandardCharsets.UTF_8));
+
+        assertThat(message).isInstanceOfSatisfying(JsonRpcMessage.Request.class, request -> {
+            var params = (JsonNode) request.params();
+            assertThat(params.get("big").bigIntegerValue()).isEqualTo(new BigInteger("12345678901234567890"));
+            assertThat(params.get("small").isLong()).isTrue();
+            assertThat(params.get("ratio").doubleValue()).isEqualTo(0.5);
+        });
+    }
 
     @Test
     void serializeNotificationAsStringContainsRequiredFields() {

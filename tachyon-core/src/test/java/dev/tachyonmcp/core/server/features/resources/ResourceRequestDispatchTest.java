@@ -18,8 +18,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.JsonNodeFactory;
 
 class ResourceRequestDispatchTest {
 
@@ -36,7 +35,7 @@ class ResourceRequestDispatchTest {
                     captured.set(request);
                     return TextResourceContents.of(request.uri(), "meta", "text/plain");
                 });
-        Map<String, JsonNode> meta = Map.of("trace-id", new ObjectMapper().readTree("\"trace-42\""));
+        var meta = JsonNodeFactory.instance.objectNode().put("trace-id", "trace-42");
 
         runInVirtualThread(() -> decodeAndHandle(
                 handlers.get("resources/read"),

@@ -23,6 +23,8 @@ import dev.tachyonmcp.api.server.features.tools.ToolResult;
 import dev.tachyonmcp.api.server.features.tools.ToolResult.InputRequired;
 import dev.tachyonmcp.api.server.features.tools.ToolResult.Success;
 import dev.tachyonmcp.core.protocol.ProtocolResponseMapper;
+import dev.tachyonmcp.core.protocol.codec.Codec;
+import dev.tachyonmcp.core.protocol.codec.CodecSupport;
 import dev.tachyonmcp.core.protocol.mcp.v2025_11_25.McpProtocol;
 import dev.tachyonmcp.core.protocol.mcp.v2025_11_25.models.CallToolResult;
 import dev.tachyonmcp.core.protocol.mcp.v2025_11_25.models.CompleteResult;
@@ -51,6 +53,7 @@ import org.jspecify.annotations.Nullable;
 import tools.jackson.core.JsonGenerator;
 import tools.jackson.core.JsonParser;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.JsonNodeFactory;
 import tools.jackson.databind.node.ObjectNode;
 
 /** {@link ProtocolResponseMapper} for MCP 2025-11-25. */
@@ -109,7 +112,7 @@ public class McpResponseMapper implements ProtocolResponseMapper {
                         List.copyOf(Objects.requireNonNull(result.values(), "values")),
                         result.total(),
                         result.hasMore()),
-                JsonUtils.toJsonNodeMap(result.meta()),
+                JsonUtils.toObjectTree(result.meta()),
                 null);
     }
 
@@ -118,9 +121,9 @@ public class McpResponseMapper implements ProtocolResponseMapper {
         var capsBuilder = ServerInfoMapper.toServerCapabilities(response.capabilities());
         if (response.registeredExtensions() != null
                 && !response.registeredExtensions().isEmpty()) {
-            capsBuilder.extensions(response.registeredExtensions().entrySet().stream()
-                    .collect(java.util.stream.Collectors.toMap(
-                            Map.Entry::getKey, entry -> JsonUtils.parse(entry.getValue()))));
+            var extensions = JsonNodeFactory.instance.objectNode();
+            response.registeredExtensions().forEach((id, settings) -> extensions.set(id, JsonUtils.parse(settings)));
+            capsBuilder.extensions(extensions);
         }
         return new InitializeResult(
                 response.protocolVersion(),
@@ -149,12 +152,12 @@ public class McpResponseMapper implements ProtocolResponseMapper {
         };
     }
 
-    protected static @Nullable Map<String, JsonNode> resolveMeta(ToolResult result) {
+    protected static @Nullable ObjectNode resolveMeta(ToolResult result) {
         var meta = result.meta();
-        return meta == null || meta.isEmpty() ? null : JsonUtils.toJsonNodeMap(meta);
+        return meta == null || meta.isEmpty() ? null : JsonUtils.toObjectTree(meta);
     }
 
-    private Object wireSuccess(Success s, @Nullable Map<String, JsonNode> meta) {
+    private Object wireSuccess(Success s, @Nullable ObjectNode meta) {
         return buildCallToolResult(s.content(), s.structuredValue(), null, meta);
     }
 
@@ -167,10 +170,10 @@ public class McpResponseMapper implements ProtocolResponseMapper {
             List<ContentBlock> content,
             @Nullable Object structuredValue,
             @Nullable Boolean isError,
-            @Nullable Map<String, JsonNode> meta) {
+            @Nullable ObjectNode meta) {
         var blocks = new java.util.ArrayList<>(
                 content.stream().map(McpToolMapper::toProtocolContentBlock).toList());
-        Map<String, JsonNode> structured = null;
+        ObjectNode structured = null;
         if (structuredValue != null) {
             JsonNode node =
                     switch (structuredValue) {
@@ -181,13 +184,8 @@ public class McpResponseMapper implements ProtocolResponseMapper {
             // 2025-11-25's structuredContent is object-only on the wire; array/scalar values (only
             // representable from 2026-07-28 onward) fall back to the backwards-compat text block
             // below instead of being encoded as structuredContent.
-            if (node.isObject()) {
-                var objNode = (ObjectNode) node;
-                var map = new LinkedHashMap<String, JsonNode>();
-                for (var entry : objNode.properties()) {
-                    map.put(entry.getKey(), entry.getValue());
-                }
-                structured = map;
+            if (node instanceof ObjectNode object) {
+                structured = object;
             }
             // MCP: a tool returning structured content SHOULD also return the serialized JSON in a
             // text block (backwards-compat). Inject it when the handler supplied no text block.
@@ -232,7 +230,7 @@ public class McpResponseMapper implements ProtocolResponseMapper {
             @Nullable String description, List<PromptMessage> messages, @Nullable Map<String, Object> meta) {
         var protocolMessages =
                 messages.stream().map(McpPromptMapper::toProtocolMessage).toList();
-        return new GetPromptResult(description, protocolMessages, JsonUtils.toJsonNodeMap(meta), null);
+        return new GetPromptResult(description, protocolMessages, JsonUtils.toObjectTree(meta), null);
     }
 
     @Override
@@ -274,7 +272,7 @@ public class McpResponseMapper implements ProtocolResponseMapper {
     public Object getTaskPayloadResult(@Nullable TaskResult result, String taskId) {
         return switch (result) {
             case null ->
-                new CallToolResult(List.of(), null, null, JsonUtils.toJsonNodeMap(relatedTaskMeta(null, taskId)), null);
+                new CallToolResult(List.of(), null, null, JsonUtils.toObjectTree(relatedTaskMeta(null, taskId)), null);
             case TaskResult.Completed c ->
                 switch (c.result()) {
                     case ToolResult.Success s ->
@@ -282,10 +280,10 @@ public class McpResponseMapper implements ProtocolResponseMapper {
                                 s.content(),
                                 s.structuredValue(),
                                 null,
-                                JsonUtils.toJsonNodeMap(relatedTaskMeta(s.meta(), taskId)));
+                                JsonUtils.toObjectTree(relatedTaskMeta(s.meta(), taskId)));
                     case ToolResult.Error e ->
                         buildCallToolResult(
-                                e.content(), null, true, JsonUtils.toJsonNodeMap(relatedTaskMeta(e.meta(), taskId)));
+                                e.content(), null, true, JsonUtils.toObjectTree(relatedTaskMeta(e.meta(), taskId)));
                     default ->
                         throw new IllegalStateException("unreachable: TaskResult.Completed cannot nest " + c.result());
                 };
@@ -306,13 +304,13 @@ public class McpResponseMapper implements ProtocolResponseMapper {
             Map<String, ? extends InputRequest> inputRequests,
             @Nullable String requestState,
             @Nullable Map<String, Object> meta) {
-        return new InputRequiredPayload(inputRequests, requestState, JsonUtils.toJsonNodeMap(meta));
+        return new InputRequiredPayload(inputRequests, requestState, JsonUtils.toObjectTree(meta));
     }
 
     private record InputRequiredPayload(
             @Nullable Map<String, ? extends InputRequest> inputRequests,
             @Nullable String requestState,
-            @Nullable Map<String, JsonNode> meta) {}
+            @Nullable ObjectNode meta) {}
 
     private static final class InputRequiredPayloadCodec implements Codec<InputRequiredPayload> {
 
@@ -338,9 +336,8 @@ public class McpResponseMapper implements ProtocolResponseMapper {
                 gen.writeStringProperty("requestState", value.requestState());
             }
             if (value.meta() != null) {
-                gen.writeObjectPropertyStart("_meta");
-                CodecSupport.writeTreeEntries(gen, value.meta());
-                gen.writeEndObject();
+                gen.writeName("_meta");
+                CodecSupport.writeTree(gen, value.meta());
             }
             gen.writeEndObject();
         }

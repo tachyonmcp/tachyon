@@ -5,6 +5,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import org.jspecify.annotations.Nullable;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -17,10 +18,11 @@ import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Converting a {@code _meta}-style {@code Map<String, ?>} into the {@code Map<String, JsonNode>}
- * generated protocol records carry: {@link JsonUtils#toJsonNodeMap} (direct {@code JsonNodeFactory}
+ * generated protocol records carry: {@link JsonUtils#toObjectTree} (direct {@code JsonNodeFactory}
  * trees) against the per-entry {@code valueToTree} it replaced. Whole-map {@code convertValue} and
  * {@code valueToTree} measured slower than both.
  */
@@ -59,7 +61,7 @@ public class JsonNodeMapBenchmark {
         };
     }
 
-    /** The previous {@code toJsonNodeMap}: one {@code valueToTree} buffer round trip per entry. */
+    /** The previous {@code toObjectTree}: one {@code valueToTree} buffer round trip per entry. */
     @Benchmark
     public Map<String, JsonNode> valueToTreePerEntry() {
         var result = new LinkedHashMap<String, JsonNode>(values.size());
@@ -68,7 +70,7 @@ public class JsonNodeMapBenchmark {
     }
 
     @Benchmark
-    public Map<String, JsonNode> toJsonNodeMap() {
-        return JsonUtils.toJsonNodeMap(values);
+    public @Nullable ObjectNode toObjectTree() {
+        return JsonUtils.toObjectTree(values);
     }
 }

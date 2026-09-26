@@ -5,6 +5,7 @@ import static dev.tachyonmcp.core.test.TestUtils.decodeAndHandle;
 import static dev.tachyonmcp.core.test.TestUtils.decodeAndHandleAsync;
 import static dev.tachyonmcp.core.test.TestUtils.newEngine;
 import static dev.tachyonmcp.core.test.TestUtils.parseJson;
+import static dev.tachyonmcp.core.test.TestUtils.properties;
 import static dev.tachyonmcp.core.test.VirtualThreads.runInVirtualThread;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -895,7 +896,8 @@ class DefaultToolRegistryTest {
             assertThat(result).isInstanceOf(CallToolResult.class);
             // structuredContent should contain both "message" and "count"
             assertThat(((CallToolResult) result).structuredContent()).isNotNull();
-            assertThat(((CallToolResult) result).structuredContent()).containsKeys("message", "count");
+            assertThat(properties(((CallToolResult) result).structuredContent()))
+                    .containsKeys("message", "count");
         }
     }
 
@@ -923,7 +925,8 @@ class DefaultToolRegistryTest {
             var result = runInVirtualThread(() -> decodeAndHandle(callHandler, ctx, params));
             assertThat(result).isInstanceOf(CallToolResult.class);
             assertThat(((CallToolResult) result).structuredContent()).isNotNull();
-            assertThat(((CallToolResult) result).structuredContent()).containsOnlyKeys("jsonField", "plainField");
+            assertThat(properties(((CallToolResult) result).structuredContent()))
+                    .containsOnlyKeys("jsonField", "plainField");
         }
     }
 

@@ -1,6 +1,7 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
 package dev.tachyonmcp.core.protocol.mcp.v2025_11_25.codecs;
 
+import static dev.tachyonmcp.core.test.TestUtils.properties;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -32,10 +33,11 @@ class McpTaskMapperTest {
         var entry = entry(TaskState.WORKING);
         var expected = JsonNodeFactory.instance.stringNode("abc");
 
-        assertThat(McpTaskMapper.toGetTaskResult(entry)._meta()).containsEntry("trace", expected);
-        assertThat(McpTaskMapper.toCancelTaskResult(entry)._meta()).containsEntry("trace", expected);
-        assertThat(McpTaskMapper.toCreateTaskResult(entry)._meta()).containsEntry("trace", expected);
-        assertThat(McpTaskMapper.toStatusNotification(entry)._meta()).containsEntry("trace", expected);
+        assertThat(properties(McpTaskMapper.toGetTaskResult(entry)._meta())).containsEntry("trace", expected);
+        assertThat(properties(McpTaskMapper.toCancelTaskResult(entry)._meta())).containsEntry("trace", expected);
+        assertThat(properties(McpTaskMapper.toCreateTaskResult(entry)._meta())).containsEntry("trace", expected);
+        assertThat(properties(McpTaskMapper.toStatusNotification(entry)._meta()))
+                .containsEntry("trace", expected);
     }
 
     @Test

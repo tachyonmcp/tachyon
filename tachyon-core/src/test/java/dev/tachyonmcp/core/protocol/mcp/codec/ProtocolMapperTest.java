@@ -1,6 +1,7 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
 package dev.tachyonmcp.core.protocol.mcp.codec;
 
+import static dev.tachyonmcp.core.test.TestUtils.properties;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.tachyonmcp.core.protocol.mcp.v2025_11_25.codecs.CodecRegistry;
@@ -88,7 +89,7 @@ class ProtocolMapperTest {
         var json = JsonRpcCodec.writeValueAsString(map);
         var params = ProtocolCodecUtil.decodeWithCodec(json, CallToolRequestParams.class);
         assertThat(params.name()).isEqualTo("my-tool");
-        assertThat(params.arguments()).containsKey("key");
+        assertThat(properties(params.arguments())).containsKey("key");
     }
 
     @Test

@@ -49,11 +49,12 @@ class TasksCodecRoundTripTest {
         });
         assertThat(roundTrip(inputRequired)).isInstanceOfSatisfying(InputRequiredTask.class, t -> {
             assertThat(t.ttlMs()).isNull();
-            assertThat(t.inputRequests().additionalProperties()).containsOnlyKeys("ask");
+            assertThat(t.inputRequests().additionalProperties().propertyNames()).containsOnly("ask");
         });
         assertThat(roundTrip(completed))
                 .isInstanceOfSatisfying(
-                        CompletedTask.class, t -> assertThat(t.result()).containsOnlyKeys("content"));
+                        CompletedTask.class,
+                        t -> assertThat(t.result().propertyNames()).containsOnly("content"));
         assertThat(roundTrip(failed)).isInstanceOfSatisfying(FailedTask.class, t -> {
             assertThat(t.error().message()).isEqualTo("boom");
             assertThat(t.error().code()).isEqualTo(-32603);
@@ -71,7 +72,7 @@ class TasksCodecRoundTripTest {
 
         assertThat(result.status()).isEqualTo(TaskStatus.WORKING);
         assertThat(result.resultType()).isEqualTo("task");
-        assertThat(result._meta()).containsOnlyKeys("trace");
+        assertThat(result._meta().propertyNames()).containsOnly("trace");
         assertThat(result.ttlMs()).isNull();
         assertThatJson(text(codec.encodeToBytes(result))).isEqualTo(json);
     }
@@ -105,7 +106,7 @@ class TasksCodecRoundTripTest {
         var result = codec.decodeFromBytes(bytes(json));
 
         assertThat(result.resultType()).isEqualTo("complete");
-        assertThat(result._meta()).containsOnlyKeys("trace");
+        assertThat(result._meta().propertyNames()).containsOnly("trace");
         assertThat(result.detailedTask()).isInstanceOfSatisfying(FailedTask.class, t -> {
             assertThat(t.taskId()).isEqualTo("t4");
             assertThat(t.ttlMs()).isEqualTo(1000L);
@@ -127,8 +128,8 @@ class TasksCodecRoundTripTest {
         assertThat(params.detailedTask())
                 .isInstanceOfSatisfying(
                         CancelledTask.class, t -> assertThat(t.taskId()).isEqualTo("t5"));
-        assertThat(params._meta()).containsOnlyKeys("io.modelcontextprotocol/subscriptionId");
-        assertThat(params.additionalProperties()).containsOnlyKeys("custom");
+        assertThat(params._meta().propertyNames()).containsOnly("io.modelcontextprotocol/subscriptionId");
+        assertThat(params.additionalProperties().propertyNames()).containsOnly("custom");
         assertThat(params.additionalProperties().get("custom").intValue()).isEqualTo(1);
         assertThatJson(text(codec.encodeToBytes(notification))).isEqualTo(json);
     }

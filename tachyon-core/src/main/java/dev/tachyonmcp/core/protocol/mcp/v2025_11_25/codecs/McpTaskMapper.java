@@ -39,7 +39,7 @@ final class McpTaskMapper {
 
     static GetTaskResult toGetTaskResult(TaskSnapshot entry) {
         return new GetTaskResult(
-                JsonUtils.toJsonNodeMap(entry.meta()),
+                JsonUtils.toObjectTree(entry.meta()),
                 entry.taskId(),
                 toWireStatus(entry.status()),
                 entry.statusMessage(),
@@ -51,7 +51,7 @@ final class McpTaskMapper {
 
     public static CancelTaskResult toCancelTaskResult(TaskSnapshot entry) {
         return new CancelTaskResult(
-                JsonUtils.toJsonNodeMap(entry.meta()),
+                JsonUtils.toObjectTree(entry.meta()),
                 entry.taskId(),
                 toWireStatus(entry.status()),
                 entry.statusMessage(),
@@ -62,12 +62,12 @@ final class McpTaskMapper {
     }
 
     static CreateTaskResult toCreateTaskResult(TaskSnapshot entry) {
-        return new CreateTaskResult(toTaskProto(entry), JsonUtils.toJsonNodeMap(entry.meta()), null);
+        return new CreateTaskResult(toTaskProto(entry), JsonUtils.toObjectTree(entry.meta()), null);
     }
 
     static TaskStatusNotificationParams toStatusNotification(TaskSnapshot entry) {
         return new TaskStatusNotificationParams(
-                JsonUtils.toJsonNodeMap(entry.meta()),
+                JsonUtils.toObjectTree(entry.meta()),
                 entry.taskId(),
                 toWireStatus(entry.status()),
                 entry.statusMessage(),
