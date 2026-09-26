@@ -3,6 +3,7 @@ package dev.tachyonmcp.core.protocol.mcp.v2025_11_25.codecs;
 
 import dev.tachyonmcp.core.protocol.codec.CodecSupport;
 import tools.jackson.core.JsonToken;
+import tools.jackson.databind.exc.MismatchedInputException;
 
 /** Decoding helpers built on {@link CodecRegistry}. */
 public final class ProtocolCodecUtil {
@@ -16,14 +17,14 @@ public final class ProtocolCodecUtil {
      * @param targetType the model type to decode into
      * @param <T>        the model type
      * @return the decoded instance
-     * @throws IllegalArgumentException if {@code json} is not a JSON object
-     * @throws tools.jackson.core.JacksonException if {@code json} is malformed
+     * @throws tools.jackson.core.JacksonException if {@code json} is malformed or not a JSON object
      */
     public static <T> T decodeWithCodec(String json, Class<T> targetType) {
         var codec = CodecRegistry.codecFor(targetType);
         try (var p = CodecSupport.createParser(json)) {
             if (p.nextToken() != JsonToken.START_OBJECT) {
-                throw new IllegalArgumentException("Expected JSON object for " + targetType.getSimpleName());
+                throw MismatchedInputException.from(
+                        p, targetType, "Expected JSON object for " + targetType.getSimpleName());
             }
             return codec.decode(p);
         }

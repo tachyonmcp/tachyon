@@ -3,6 +3,7 @@ package dev.tachyonmcp.core.protocol.mcp.codec;
 
 import static dev.tachyonmcp.core.test.TestUtils.properties;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.tachyonmcp.core.protocol.mcp.v2025_11_25.codecs.CodecRegistry;
 import dev.tachyonmcp.core.protocol.mcp.v2025_11_25.codecs.ProtocolCodecUtil;
@@ -24,6 +25,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.exc.MismatchedInputException;
 import tools.jackson.databind.node.JsonNodeFactory;
 
 class ProtocolMapperTest {
@@ -112,6 +114,17 @@ class ProtocolMapperTest {
         var json = JsonRpcCodec.writeValueAsString(map);
         var params = ProtocolCodecUtil.decodeWithCodec(json, CallToolRequestParams.class);
         assertThat(params.name()).isEqualTo("tool");
+    }
+
+    @Test
+    void nonObjectInputFailsWithJacksonMismatch() {
+        assertThatThrownBy(() -> ProtocolCodecUtil.decodeWithCodec("[1]", CallToolRequestParams.class))
+                .isInstanceOf(MismatchedInputException.class)
+                .hasMessageContaining("Expected JSON object for CallToolRequestParams");
+        assertThatThrownBy(() -> CodecRegistry.codecFor(CallToolRequestParams.class)
+                        .decodeFromBytes("\"tool\"".getBytes(StandardCharsets.UTF_8)))
+                .isInstanceOf(MismatchedInputException.class)
+                .hasMessageContaining("Expected JSON object");
     }
 
     @Test

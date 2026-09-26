@@ -3,7 +3,7 @@ title: Protocol versions
 tags: [concept, protocol, mcp]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/, tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/codec/, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/http/McpHeaderMatchHandler.java, tachyon-core/src/main/resources/META-INF/services/dev.tachyonmcp.core.protocol.Protocol, tachyon-core/ts2java.py, tachyon-core/protocol/, tachyon-core/pom.xml, extensions/tachyon-extensions-tasks/protocol/, extensions/tachyon-extensions-tasks/pom.xml]
 updated: 2026-09-26
-commit: d4cd5641
+commit: 31900e6a
 ---
 
 # 🔀 Protocol versions
@@ -84,7 +84,7 @@ Header names `McpHeaderNames` `McpHeaderNames#MCP_SESSION_ID`: `MCP-Session-Id`,
 
 - Wire models + streaming Jackson codecs generated from TypeScript schema: `tachyon-core/protocol/mcp-2025-11-25.ts`, `mcp-2026-07-28.ts` + `*_config.json`.
 - Generator `tachyon-core/ts2java.py`: records (no Jackson annotations; databind never touches them) + one streaming codec per model + a `CodecRegistry` per package. Output `target/generated-sources/ts2java/java` (source root via `pom.xml`); packages `dev.tachyonmcp.core.protocol.mcp.v20xx.models`, `...codecs`. Files the run no longer produces are deleted (`Generator#prune_stale`).
-- Codecs implement core's hand-written streaming contract, [Codec](../../tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/codec/Codec.java) + [CodecSupport](../../tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/codec/CodecSupport.java) (`dev.tachyonmcp.core.protocol.codec`): one `JsonFactory`, no `ObjectMapper`. `Codec#encodeProperties` writes a value's properties into an open object; generated codecs override it, unions dispatch it to the variant.
+- Codecs implement core's hand-written streaming contract, [Codec](../../tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/codec/Codec.java) + [CodecSupport](../../tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/codec/CodecSupport.java) (`dev.tachyonmcp.core.protocol.codec`): one `JsonFactory`, no `ObjectMapper`. `Codec#encodeProperties` writes a value's properties into an open object; generated codecs override it, unions dispatch it to the variant. A non-object input to `Codec#decodeFromBytes` / `ProtocolCodecUtil#decodeWithCodec` fails with Jackson's `MismatchedInputException`.
 - JSON objects (index signatures, `_meta`, `additionalProperties`, `*MetaObject`) are `ObjectNode`; a `java.util.Map` field fails generation. `RequestId`/`ProgressToken` map to `JsonNode` (numeric ids stay numbers). Body FQNs become imports unless the simple name clashes (`Generator#finalize_imports`).
 - ⚠️ Generated code not in git. Handwritten mappers live next to generated codecs in `codecs/`.
 - Revapi ignores generated classes (commit `3cc96c5f`).

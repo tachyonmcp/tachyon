@@ -4,11 +4,16 @@ package dev.tachyonmcp.core.transport.jsonrpc;
 import static net.javacrumbs.jsonunit.assertj.JsonAssertions.assertThatJson;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import dev.tachyonmcp.core.protocol.codec.Codec;
+import dev.tachyonmcp.core.protocol.mcp.v2025_11_25.codecs.CodecRegistry;
+import dev.tachyonmcp.core.protocol.mcp.v2025_11_25.models.ModelHint;
 import dev.tachyonmcp.core.protocol.mcp.v2026_07_28.models.CompleteResult;
 import dev.tachyonmcp.core.protocol.mcp.v2026_07_28.models.TextContent;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import tools.jackson.core.JsonGenerator;
+import tools.jackson.core.JsonParser;
 import tools.jackson.databind.node.JsonNodeFactory;
 
 /**
@@ -35,6 +40,29 @@ class GeneratedModelSerializationTest {
                           "completion": {"values": ["a", "b"], "total": 2},
                           "resultType": "complete"
                         }""");
+    }
+
+    @Test
+    void runtimeOverrideWithNonPublicCodecIsUsed() {
+        var generated = CodecRegistry.codecFor(ModelHint.class);
+        CodecRegistry.registerOverride(ModelHint.class, new Codec<>() {
+            @Override
+            public ModelHint decode(JsonParser parser) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public void encode(JsonGenerator gen, ModelHint value) {
+                gen.writeString("hint:" + value.name());
+            }
+        });
+        try {
+            assertThat(JsonRpcCodec.writeValueAsString(List.of(new ModelHint("claude"))))
+                    .isEqualTo("[\"hint:claude\"]");
+        } finally {
+            CodecRegistry.registerOverride(ModelHint.class, generated);
+        }
+        assertThatJson(JsonRpcCodec.writeValueAsString(new ModelHint("claude"))).isEqualTo("{\"name\":\"claude\"}");
     }
 
     @Test

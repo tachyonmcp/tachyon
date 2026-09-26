@@ -183,7 +183,7 @@ public final class JsonRpcCodec {
         return parseMessage(p);
     }
 
-    private static JsonRpcMessage parseMessage(JsonParser p) throws IOException {
+    private static JsonRpcMessage parseMessage(JsonParser p) {
         RequestId id = null;
         String method = null;
         Object paramsObj = null;
@@ -266,7 +266,7 @@ public final class JsonRpcCodec {
     }
 
     /** Reads the current JSON value as a {@link JsonNode}. */
-    public static JsonNode readTreeValue(JsonParser p) throws IOException {
+    public static JsonNode readTreeValue(JsonParser p) {
         return CodecSupport.readWireTree(p);
     }
 

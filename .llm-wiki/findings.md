@@ -2,8 +2,8 @@
 title: Findings
 tags: [meta, findings]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/]
-updated: 2026-09-25
-commit: cbfbcd7f
+updated: 2026-09-26
+commit: 31900e6a
 ---
 
 # 🔎 Findings
@@ -22,6 +22,7 @@ Spotted while reading code. Runtime verification noted per finding. Fixed in cod
 - ⚠️ One `subscriptions/listen` request costs one connector `get` per named task id, sequentially on its handler thread; the only bound is `maxContentLength` (1 MB), so one request can fan out to thousands of backend lookups. Cap the id count if connectors are expensive. `DefaultTaskRegistry#readableTaskIds`
 - 🪶 A publish racing janitor eviction can land on the evicted entry: `putIfAbsent` returned it, then `TaskEntry#evictIfExpired` removed it before `TaskEntry#publish`. The status is still sent, but the newer revision is not cached. Benign: the cache is a projection and the next `tasks/get` re-caches the connector's snapshot. Pre-existing (the old `entries.get` path had the same window). `DefaultTaskRegistry#publish`
 - ⚠️ Task cache is unbounded for non-terminal tasks without `ttl`: the janitor evicts entries past `ttl` or terminal past keepAlive (`TaskEntry#isExpired`). An abandoned `working` task with `ttl = null` stays forever. `DefaultTaskRegistry#runJanitorSweep`
+- ⚠️ SEP-2640 `"resources": "dynamic"` unsupported. The schema carries `SkillResource[] | "dynamic"`, but `skills-2026-07-28_config.json` maps `Skill.resources` to `List<SkillResource>`, and `SkillsRegistry.Skill` has no dynamic flag, so a generated-content skill can't be served. Fix needs both: a wire model for the union (generator support or a `JsonNode` mapping) and a registry API for dynamic skills. `SkillsExtension#skillEntry`
 - 🪶 Task notifications are sent under the per-task `TaskEntry` lock (for ordering). SSE sends never park (session status offers, `DefaultTachyonServer#notifyTaskStatus`), but a custom `SessionEventStore#append` that blocks (remote store) serializes publishers of that task behind its I/O. `TaskEntry#notifyIfNewer`
 
 ## 🪶 Polish

@@ -1,9 +1,9 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
 package dev.tachyonmcp.core.transport.jsonrpc;
 
+import dev.tachyonmcp.core.protocol.codec.Codec;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
-import java.lang.invoke.MethodType;
 import java.lang.reflect.UndeclaredThrowableException;
 import org.jspecify.annotations.Nullable;
 import tools.jackson.core.JsonGenerator;
@@ -26,22 +26,6 @@ final class GeneratedCodecs {
         }
     };
 
-    /** The codec's {@code encode(JsonGenerator, Object)}, keyed by codec class. */
-    private static final ClassValue<MethodHandle> ENCODERS = new ClassValue<>() {
-        @Override
-        protected MethodHandle computeValue(Class<?> codecType) {
-            try {
-                return MethodHandles.publicLookup()
-                        .findVirtual(
-                                codecType,
-                                "encode",
-                                MethodType.methodType(void.class, JsonGenerator.class, Object.class));
-            } catch (ReflectiveOperationException e) {
-                throw new IllegalStateException("Not a generated codec: " + codecType.getName(), e);
-            }
-        }
-    };
-
     private GeneratedCodecs() {}
 
     /**
@@ -55,11 +39,12 @@ final class GeneratedCodecs {
             return false;
         }
         try {
-            var codec = (Object) lookup.invoke();
+            @SuppressWarnings("unchecked")
+            var codec = (@Nullable Codec<Object>) lookup.invoke();
             if (codec == null) {
                 return false;
             }
-            ENCODERS.get(codec.getClass()).invoke(codec, gen, value);
+            codec.encode(gen, value);
             return true;
         } catch (RuntimeException | Error e) {
             throw e;

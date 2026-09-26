@@ -6,6 +6,7 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.core.JsonGenerator;
 import tools.jackson.core.JsonParser;
 import tools.jackson.core.JsonToken;
+import tools.jackson.databind.exc.MismatchedInputException;
 import tools.jackson.databind.util.TokenBuffer;
 
 /**
@@ -72,12 +73,12 @@ public interface Codec<T> {
      *
      * @param data the UTF-8 encoded JSON object
      * @return the decoded value
-     * @throws JacksonException on parse failure
+     * @throws JacksonException on parse failure, or when {@code data} is not a JSON object
      */
     default T decodeFromBytes(byte[] data) {
         try (var parser = CodecSupport.createParser(data)) {
             if (parser.nextToken() != JsonToken.START_OBJECT) {
-                throw new IllegalArgumentException("Expected JSON object");
+                throw MismatchedInputException.from(parser, Object.class, "Expected JSON object");
             }
             return decode(parser);
         }
