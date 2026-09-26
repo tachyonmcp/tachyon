@@ -15,10 +15,11 @@
     <artifactId>tachyon-extensions-skills</artifactId>
 
     <name>Tachyon MCP Extensions - Skills</name>
-    <description>Agent Skills extension (skill:// resources) for MCP servers</description>
+    <description>Agent Skills extension (skill:// resources) for MCP servers (SEP-2640)</description>
 
     <properties>
         <automatic.module.name>dev.tachyonmcp.extensions.skills</automatic.module.name>
+        <ts2java.skip>false</ts2java.skip>
     </properties>
 
     <dependencies>
@@ -52,6 +53,50 @@
 
     <build>
         <plugins>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>build-helper-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>add-generated-sources</id>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>add-source</goal>
+                        </goals>
+                        <configuration>
+                            <sources>
+                                <source>${project.build.directory}/generated-sources/ts2java/java</source>
+                            </sources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>generate-skills-2026-07-28</id>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <configuration>
+                            <skip>${ts2java.skip}</skip>
+                            <executable>python3</executable>
+                            <arguments>
+                                <argument>${maven.multiModuleProjectDirectory}/tachyon-core/ts2java.py</argument>
+                                <argument>--ts</argument>
+                                <argument>${project.basedir}/protocol/skills-2026-07-28.ts</argument>
+                                <argument>--pkg-default</argument>
+                                <argument>dev.tachyonmcp.extensions.skills.protocol.v2026_07_28</argument>
+                                <argument>--config</argument>
+                                <argument>${project.basedir}/protocol/skills-2026-07-28_config.json</argument>
+                            </arguments>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>

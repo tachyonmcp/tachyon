@@ -170,7 +170,7 @@ class TsParser:
                 i += m.end()
                 continue
             m = re.match(
-                r"export\s+interface\s+(\w+)(?:\s+extends\s+([^{]+))?\s*\{",
+                r"(?:export\s+)?interface\s+(\w+)(?:\s+extends\s+([^{]+))?\s*\{",
                 text[i:],
             )
             if m:
@@ -464,7 +464,7 @@ class JavadocFormatter:
         for line in lines:
             s = line.strip()
             if s.startswith("/**"):
-                continue
+                s = s[3:].strip()
             if s.endswith("*/"):
                 s = s[:-2].strip()
             if s.startswith("*"):

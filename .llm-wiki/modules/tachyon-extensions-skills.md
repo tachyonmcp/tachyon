@@ -1,9 +1,9 @@
 ---
 title: tachyon-extensions-skills
 tags: [module, extensions, skills]
-sources: [extensions/tachyon-extensions-skills/src/main/java/dev/tachyonmcp/extensions/skills/, extensions/tachyon-extensions-skills/src/main/resources/]
-updated: 2026-09-22
-commit: cedec4fd
+sources: [extensions/tachyon-extensions-skills/src/main/java/dev/tachyonmcp/extensions/skills/, extensions/tachyon-extensions-skills/src/main/resources/, extensions/tachyon-extensions-skills/protocol/, extensions/tachyon-extensions-skills/pom.xml]
+updated: 2026-09-26
+commit: 66106c6b
 ---
 
 # 🎓 tachyon-extensions-skills
@@ -24,6 +24,8 @@ Verdict: standalone module (split out of `tachyon-extensions`) exposing `SKILL.m
 | builder | `registry(...)`, `cacheTtlMs ≥ 0`, `cacheScope public\|private` | [SkillsExtension.Builder](../../extensions/tachyon-extensions-skills/src/main/java/dev/tachyonmcp/extensions/skills/SkillsExtension.java) |
 
 Skill model `SkillsRegistry.Skill(skillPath, frontmatter, files)`, `SkillFile(relativePath, uri, mimeType, sha256 digest, size)`; `skillUri = skill://<path>/SKILL.md` `Skill`.
+
+Wire entry (`skills/list` items, `skills/get` `skill`): generated `Skill(uri, frontmatter, resources)` + `SkillResource(uri, digest, size)` from `protocol/skills-2026-07-28.ts` (ts2java extension mode, package `dev.tachyonmcp.extensions.skills.protocol.v2026_07_28`). Returned as records inside the result maps; core's generic writer encodes them with the extension codecs `SkillsExtension#skillEntry`, `GeneratedCodecs#encode`. Result envelopes (`skills`, `resultType`, `ttlMs`, `cacheScope`; directory `resources`) stay maps: not in the schema. Config maps `Skill.resources` → `List<SkillResource>`, so `"dynamic"` is not representable.
 
 ## 📂 Registries
 
