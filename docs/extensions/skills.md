@@ -22,10 +22,9 @@ import dev.tachyonmcp.extensions.skills.SkillsExtension;
 import java.nio.file.Path;
 
 var server = TachyonServer.builder()
-        .withExtensions(SkillsExtension.builder()
-                .registry(new FilesystemSkillsRegistry(Path.of("skills")))            // every subdirectory with a SKILL.md
-                .registry(new ClasspathSkillsRegistry("bundled-skills"))        // same, packaged inside the jar
-                .build())
+        .withExtension(SkillsExtension.class, skills -> skills
+                .registry(new FilesystemSkillsRegistry(Path.of("skills")))      // every subdirectory with a SKILL.md
+                .registry(new ClasspathSkillsRegistry("bundled-skills")))       // same, packaged inside the jar
         .port(8080)
         .build();
 server.start();
@@ -34,6 +33,9 @@ server.start();
 Skills extension ID is `io.modelcontextprotocol/skills`. By default any client can call its methods,
 declared or not; strict [negotiation](#extension-negotiation) is opt-in. Skill files remain
 available through the standard Resources API.
+
+⚠️ `SkillsExtension.builder()...build()` passed to `withExtensions(...)` is deprecated for removal.
+Use `withExtension(SkillsExtension.class, skills -> ...)`: each server builds its own instance.
 
 ## Skill directory layout
 
@@ -92,10 +94,9 @@ registry — not the builder — resolves where skills come from; the builder ju
 The explicit-path constructors let you namespace skills instead of using the bare directory name:
 
 ```java
-SkillsExtension.builder()
+.withExtension(SkillsExtension.class, skills -> skills
         .registry(new FilesystemSkillsRegistry(Path.of("skills/git-workflow"), "team/git-workflow"))
-        .registry(new ClasspathSkillsRegistry("skills/pdf-processing", "acme/pdf-processing"))
-        .build();
+        .registry(new ClasspathSkillsRegistry("skills/pdf-processing", "acme/pdf-processing")))
 ```
 
 This serves `skill://team/git-workflow/SKILL.md` and `skill://acme/pdf-processing/SKILL.md`; `resources/directory/read` on `skill://` then lists `team` and `acme` as namespace directories.
@@ -198,10 +199,9 @@ such as MCP Inspector that don't declare the extension, and stateless servers se
 To reject clients that don't declare the extension, opt in to `REQUIRED`:
 
 ```java
-SkillsExtension.builder()
+.withExtension(SkillsExtension.class, skills -> skills
         .registry(new ClasspathSkillsRegistry("skills"))
-        .negotiation(ExtensionNegotiation.REQUIRED)
-        .build();
+        .negotiation(ExtensionNegotiation.REQUIRED))
 ```
 
 Those clients then get Missing Required Client Capability from the three extension methods

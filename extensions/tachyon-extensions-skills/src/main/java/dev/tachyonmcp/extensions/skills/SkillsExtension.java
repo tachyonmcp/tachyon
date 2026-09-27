@@ -7,9 +7,12 @@ import dev.tachyonmcp.api.server.domain.BlobResourceContents;
 import dev.tachyonmcp.api.server.domain.ResourceContents;
 import dev.tachyonmcp.api.server.domain.TextResourceContents;
 import dev.tachyonmcp.api.server.extensions.AdvertiseMode;
+import dev.tachyonmcp.api.server.extensions.ConfigurableExtension;
+import dev.tachyonmcp.api.server.extensions.ExtensionBuilder;
 import dev.tachyonmcp.api.server.extensions.ExtensionContext;
 import dev.tachyonmcp.api.server.extensions.ExtensionNegotiation;
 import dev.tachyonmcp.api.server.extensions.ExtensionSettings;
+import dev.tachyonmcp.api.server.extensions.ProvidedBy;
 import dev.tachyonmcp.api.server.extensions.ServerExtension;
 import dev.tachyonmcp.api.server.features.resources.ResourceDescriptor;
 import dev.tachyonmcp.core.server.domain.ServerErrors;
@@ -38,14 +41,14 @@ import org.jspecify.annotations.Nullable;
  *
  * <pre>{@code
  * TachyonServer.builder()
- *         .withExtensions(SkillsExtension.builder()
+ *         .withExtension(SkillsExtension.class, skills -> skills
  *                 .registry(new FilesystemSkillsRegistry(Path.of("skills")))
- *                 .registry(new ClasspathSkillsRegistry("bundled-skills"))
- *                 .build())
+ *                 .registry(new ClasspathSkillsRegistry("bundled-skills")))
  *         .build();
  * }</pre>
  */
-public final class SkillsExtension implements ServerExtension {
+@ProvidedBy(SkillsExtensionProvider.class)
+public final class SkillsExtension implements ConfigurableExtension<SkillsExtension.Builder> {
 
     /** Extension identifier per SEP-2640. */
     public static final String ID = "io.modelcontextprotocol/skills";
@@ -78,12 +81,16 @@ public final class SkillsExtension implements ServerExtension {
     }
 
     /**
-     * Creates a new {@link SkillsExtension} builder.
+     * Creates a builder for a standalone extension instance registered with
+     * {@code ServerBuilder.withExtensions(...)}.
      *
      * @return a new builder
+     * @deprecated Configure through {@code ServerBuilder.withExtension(SkillsExtension.class, skills
+     *     -> skills.registry(...))}, so each server builds its own instance.
      */
-    public static Builder builder() {
-        return new Builder();
+    @Deprecated(forRemoval = true)
+    public static InstanceBuilder builder() {
+        return new InstanceBuilder();
     }
 
     @Override
@@ -259,16 +266,15 @@ public final class SkillsExtension implements ServerExtension {
         return path.isEmpty() ? null : path;
     }
 
-    /** Configures and builds a {@link SkillsExtension}. */
-    public static final class Builder {
+    /** Configures a {@link SkillsExtension}. */
+    public static final class Builder implements ExtensionBuilder<SkillsExtension> {
 
         private final List<SkillsRegistry> registries = new ArrayList<>();
         private long cacheTtlMs = 0;
         private String cacheScope = "public";
         private ExtensionNegotiation negotiation = ExtensionNegotiation.OPTIONAL;
 
-        /** Creates a builder with default settings. */
-        public Builder() {}
+        Builder() {}
 
         /**
          * Adds a skill registry. Construct {@link FilesystemSkillsRegistry} or
@@ -337,8 +343,111 @@ public final class SkillsExtension implements ServerExtension {
          *
          * @return the configured extension
          */
+        @Override
         public SkillsExtension build() {
             return new SkillsExtension(registries, cacheTtlMs, cacheScope, negotiation);
+        }
+    }
+
+    /**
+     * Builds a standalone skills extension for {@code ServerBuilder.withExtensions(...)}.
+     *
+     * @deprecated Configure through {@code ServerBuilder.withExtension(SkillsExtension.class, ...)}.
+     */
+    @Deprecated(forRemoval = true)
+    public static final class InstanceBuilder {
+
+        private final Builder delegate = new Builder();
+
+        private InstanceBuilder() {}
+
+        /**
+         * Adds a skill registry.
+         *
+         * @param registry the skill registry
+         * @return this builder
+         * @see Builder#registry(SkillsRegistry)
+         */
+        public InstanceBuilder registry(SkillsRegistry registry) {
+            delegate.registry(registry);
+            return this;
+        }
+
+        /**
+         * Sets the {@code ttlMs} cache-freshness hint of {@code skills/list} results.
+         *
+         * @param cacheTtlMs milliseconds to consider the listing fresh; must be {@code >= 0}
+         * @return this builder
+         * @see Builder#cacheTtlMs(long)
+         */
+        public InstanceBuilder cacheTtlMs(long cacheTtlMs) {
+            delegate.cacheTtlMs(cacheTtlMs);
+            return this;
+        }
+
+        /**
+         * Sets the {@code cacheScope} of {@code skills/list} results.
+         *
+         * @param cacheScope {@code "public"} or {@code "private"}
+         * @return this builder
+         * @see Builder#cacheScope(String)
+         */
+        public InstanceBuilder cacheScope(String cacheScope) {
+            delegate.cacheScope(cacheScope);
+            return this;
+        }
+
+        /**
+         * Sets whether clients must declare the extension before calling its methods.
+         *
+         * @param negotiation the negotiation policy
+         * @return this builder
+         * @see Builder#negotiation(ExtensionNegotiation)
+         */
+        public InstanceBuilder negotiation(ExtensionNegotiation negotiation) {
+            delegate.negotiation(negotiation);
+            return this;
+        }
+
+        /**
+         * Builds a standalone extension instance for {@code ServerBuilder.withExtensions(...)}.
+         *
+         * @return the configured extension
+         */
+        public ServerExtension build() {
+            return new Standalone(delegate.build());
+        }
+    }
+
+    /**
+     * Wraps a {@link SkillsExtension} as a plain {@link ServerExtension}, which
+     * {@code withExtensions(...)} accepts; that method rejects {@link ConfigurableExtension} instances.
+     */
+    private record Standalone(SkillsExtension extension) implements ServerExtension {
+
+        @Override
+        public String extensionId() {
+            return extension.extensionId();
+        }
+
+        @Override
+        public ExtensionNegotiation negotiation() {
+            return extension.negotiation();
+        }
+
+        @Override
+        public AdvertiseMode advertiseMode() {
+            return extension.advertiseMode();
+        }
+
+        @Override
+        public ExtensionSettings serverSettings() {
+            return extension.serverSettings();
+        }
+
+        @Override
+        public void bootstrap(ExtensionContext server) {
+            extension.bootstrap(server);
         }
     }
 }

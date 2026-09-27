@@ -8,10 +8,13 @@ import static dev.tachyonmcp.testkit.JsonRpcResponseAssert.assertThat;
 import static net.javacrumbs.jsonunit.assertj.JsonAssertions.assertThatJson;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import dev.tachyonmcp.api.server.extensions.ConfigurableExtension;
 import dev.tachyonmcp.api.server.extensions.ExtensionNegotiation;
+import dev.tachyonmcp.api.server.extensions.ServerExtension;
 import dev.tachyonmcp.core.server.features.resources.MimeTypes;
 import dev.tachyonmcp.testkit.Mcp20251125Client;
 import dev.tachyonmcp.testkit.Mcp20260728Client;
+import dev.tachyonmcp.testkit.McpTestServers;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -55,8 +58,7 @@ class SkillsExtensionE2eTest {
 
     @Test
     void classpathSkillsListedWithDigests() throws Exception {
-        try (var server = startServer(
-                        SkillsExtension.builder().registry(combinedRegistry).build());
+        try (var server = startServer(skills -> skills.registry(combinedRegistry));
                 var client = createClient(server.port())) {
             // language=JSON
             var list = client.sendRpc("""
@@ -107,11 +109,9 @@ class SkillsExtensionE2eTest {
 
     @Test
     void skillsListHonorsConfiguredCacheTtlAndScope() throws Exception {
-        try (var server = startServer(SkillsExtension.builder()
-                        .registry(classpathSkillsRegistry)
+        try (var server = startServer(skills -> skills.registry(classpathSkillsRegistry)
                         .cacheTtlMs(60_000)
-                        .cacheScope("private")
-                        .build());
+                        .cacheScope("private"));
                 var client = createClient(server.port())) {
             // language=JSON
             var list = client.sendRpc("""
@@ -125,10 +125,31 @@ class SkillsExtensionE2eTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
+    void deprecatedInstanceBuilderStillRegistersThroughWithExtensions() throws Exception {
+        var extension = SkillsExtension.builder()
+                .registry(classpathSkillsRegistry)
+                .cacheTtlMs(1_000)
+                .build();
+        assertThat(extension).isNotInstanceOf(ConfigurableExtension.class);
+        try (var server = McpTestServers.start(builder -> builder.withExtensions(extension), it -> {});
+                var client = createClient(server.port())) {
+            // language=JSON
+            var list = client.sendRpc("""
+                    {"jsonrpc":"2.0","id":1,"method":"skills/list"}
+                """);
+            final var result = assertThat(list).isSuccess().result();
+            assertThat(result.path("ttlMs").asLong()).isEqualTo(1_000L);
+            assertThat(result.path("skills").findValuesAsString("uri")).contains("skill://pdf-processing/SKILL.md");
+            assertThat(server.extensions())
+                    .extracting(ServerExtension::extensionId)
+                    .containsExactly(SkillsExtension.ID);
+        }
+    }
+
+    @Test
     void classpathSkillGetReturnsRequestedSkill() throws Exception {
-        try (var server = startServer(SkillsExtension.builder()
-                        .registry(classpathSkillsRegistry)
-                        .build());
+        try (var server = startServer(skills -> skills.registry(classpathSkillsRegistry));
                 var client = createClient(server.port())) {
             // language=JSON
             var get = client.sendRpc("""
@@ -158,9 +179,7 @@ class SkillsExtensionE2eTest {
 
     @Test
     void classpathSkillFileReadAsTextResource() throws Exception {
-        try (final var server = startServer(SkillsExtension.builder()
-                        .registry(filesystemSkillsRegistry)
-                        .build());
+        try (final var server = startServer(skills -> skills.registry(filesystemSkillsRegistry));
                 var client = createClient(server.port())) {
             // language=JSON
             var read = client.sendRpc("""
@@ -182,9 +201,7 @@ class SkillsExtensionE2eTest {
 
     @Test
     void classpathSkillDirectoryListsRootChildren() throws Exception {
-        try (final var server = startServer(SkillsExtension.builder()
-                        .registry(classpathSkillsRegistry)
-                        .build());
+        try (final var server = startServer(skills -> skills.registry(classpathSkillsRegistry));
                 final var client = createClient(server.port())) {
             // language=JSON
             var directory = client.sendRpc("""
@@ -210,9 +227,7 @@ class SkillsExtensionE2eTest {
 
     @Test
     void classpathSkillDirectoryListsNestedChildren() throws Exception {
-        try (final var server = startServer(SkillsExtension.builder()
-                        .registry(classpathSkillsRegistry)
-                        .build());
+        try (final var server = startServer(skills -> skills.registry(classpathSkillsRegistry));
                 final var client = createClient(server.port())) {
             // language=JSON
             var nestedDirectory = client.sendRpc("""
@@ -236,9 +251,7 @@ class SkillsExtensionE2eTest {
 
     @Test
     void fileSystemSkillsServed() throws Exception {
-        try (final var server = startServer(SkillsExtension.builder()
-                        .registry(filesystemSkillsRegistry)
-                        .build());
+        try (final var server = startServer(skills -> skills.registry(filesystemSkillsRegistry));
                 var client = createClient(server.port())) {
             // language=JSON
             var response = client.sendRpc("""
@@ -288,11 +301,9 @@ class SkillsExtensionE2eTest {
 
     @Test
     void singleSkillsUnderExplicitPaths() throws Exception {
-        try (final var server = startServer(SkillsExtension.builder()
-                        .registry(new FilesystemSkillsRegistry(
+        try (final var server = startServer(skills -> skills.registry(new FilesystemSkillsRegistry(
                                 filesystemSkillsDir.resolve("git-workflow"), "team/git-workflow"))
-                        .registry(new ClasspathSkillsRegistry("skills/pdf-processing", "acme/pdf-processing"))
-                        .build());
+                        .registry(new ClasspathSkillsRegistry("skills/pdf-processing", "acme/pdf-processing")));
                 var client = createClient(server.port())) {
             // language=JSON
             var response = client.sendRpc("""
@@ -343,10 +354,9 @@ class SkillsExtensionE2eTest {
     @Test
     void sameNamedSkillsUnderDifferentNamespacesAreBothListedAndReadableOn20260728() throws Exception {
         var gitWorkflowDir = filesystemSkillsDir.resolve("git-workflow");
-        try (final var server = startServer(SkillsExtension.builder()
-                        .registry(new FilesystemSkillsRegistry(gitWorkflowDir, "team/git-workflow"))
-                        .registry(new FilesystemSkillsRegistry(gitWorkflowDir, "acme/git-workflow"))
-                        .build());
+        try (final var server = startServer(
+                        skills -> skills.registry(new FilesystemSkillsRegistry(gitWorkflowDir, "team/git-workflow"))
+                                .registry(new FilesystemSkillsRegistry(gitWorkflowDir, "acme/git-workflow")));
                 final var client = createClient(server.port())) {
 
             // skills/list: both present in registration order, each keeping its own frontmatter name
@@ -534,10 +544,9 @@ class SkillsExtensionE2eTest {
     @Test
     void sameNamedSkillsUnderDifferentNamespacesAreBothListedAndReadableOn20251125() throws Exception {
         var gitWorkflowDir = filesystemSkillsDir.resolve("git-workflow");
-        try (final var server = startServer(SkillsExtension.builder()
-                        .registry(new FilesystemSkillsRegistry(gitWorkflowDir, "team/git-workflow"))
-                        .registry(new FilesystemSkillsRegistry(gitWorkflowDir, "acme/git-workflow"))
-                        .build());
+        try (final var server = startServer(
+                        skills -> skills.registry(new FilesystemSkillsRegistry(gitWorkflowDir, "team/git-workflow"))
+                                .registry(new FilesystemSkillsRegistry(gitWorkflowDir, "acme/git-workflow")));
                 final var client = new Mcp20251125Client(server.port())) {
             client.initialize();
 
@@ -622,11 +631,9 @@ class SkillsExtensionE2eTest {
 
     @Test
     void rootDirectoryListsNamespaces() throws Exception {
-        try (final var server = startServer(SkillsExtension.builder()
-                        .registry(new FilesystemSkillsRegistry(
+        try (final var server = startServer(skills -> skills.registry(new FilesystemSkillsRegistry(
                                 filesystemSkillsDir.resolve("git-workflow"), "team/git-workflow"))
-                        .registry(new ClasspathSkillsRegistry("skills/pdf-processing", "acme/pdf-processing"))
-                        .build());
+                        .registry(new ClasspathSkillsRegistry("skills/pdf-processing", "acme/pdf-processing")));
                 final var client = createClient(server.port())) {
             var root = client.sendRpc("""
                 {"jsonrpc":"2.0","id":1,"method":"resources/directory/read","params":{"uri":"skill://"}}
@@ -667,13 +674,13 @@ class SkillsExtensionE2eTest {
 
     @Test
     void requiredNegotiationRejectsSkillMethodsButKeepsResourcesForUndeclaredClient() throws Exception {
-        var extension = SkillsExtension.builder()
-                .registry(new ClasspathSkillsRegistry("skills"))
-                .negotiation(ExtensionNegotiation.REQUIRED)
-                .build();
-        assertThat(extension.negotiation()).isEqualTo(ExtensionNegotiation.REQUIRED);
-        try (final var server = startServer(extension);
+        try (final var server = startServer(skills -> skills.registry(new ClasspathSkillsRegistry("skills"))
+                        .negotiation(ExtensionNegotiation.REQUIRED));
                 final var client = new Mcp20260728Client(server.port())) {
+            assertThat(server.extension(SkillsExtension.class))
+                    .get()
+                    .extracting(SkillsExtension::negotiation)
+                    .isEqualTo(ExtensionNegotiation.REQUIRED);
             // SEP-2133: known extension method without client declaration -> -32021, not -32601
             // language=JSON
             var missingSkills = new ObjectMapper().readTree("""
@@ -762,9 +769,7 @@ class SkillsExtensionE2eTest {
 
     @Test
     void skillResourceRemainsReadableOnLegacyProtocolWithoutExtensionNegotiation() throws Exception {
-        try (final var server = startServer(SkillsExtension.builder()
-                        .registry(new ClasspathSkillsRegistry("skills"))
-                        .build());
+        try (final var server = startServer(skills -> skills.registry(new ClasspathSkillsRegistry("skills")));
                 final var client = new Mcp20251125Client(server.port())) {
             client.initialize();
 
@@ -791,9 +796,7 @@ class SkillsExtensionE2eTest {
 
     @Test
     void unknownSkillsAndDirectoriesFail() throws Exception {
-        try (final var server = startServer(SkillsExtension.builder()
-                        .registry(classpathSkillsRegistry)
-                        .build());
+        try (final var server = startServer(skills -> skills.registry(classpathSkillsRegistry));
                 final var client = createClient(server.port())) {
             var get = client.post("""
                 {"jsonrpc":"2.0","id":1,"method":"skills/get","params":{"uri":"skill://nope/SKILL.md"}}
@@ -814,9 +817,7 @@ class SkillsExtensionE2eTest {
 
     @Test
     void resourcesListMatchesFixtures() throws Exception {
-        try (final var server = startServer(SkillsExtension.builder()
-                        .registry(classpathSkillsRegistry)
-                        .build());
+        try (final var server = startServer(skills -> skills.registry(classpathSkillsRegistry));
                 final var client = createClient(server.port())) {
             var mapper = new ObjectMapper();
             var digestsByUri = digestsByUri(client, mapper);
@@ -854,12 +855,12 @@ class SkillsExtensionE2eTest {
 
     @Test
     void defaultNegotiationServesSkillMethodsToUndeclaredClient() throws Exception {
-        var extension = SkillsExtension.builder()
-                .registry(new ClasspathSkillsRegistry("skills"))
-                .build();
-        assertThat(extension.negotiation()).isEqualTo(ExtensionNegotiation.OPTIONAL);
-        try (final var server = startServer(extension);
+        try (final var server = startServer(skills -> skills.registry(new ClasspathSkillsRegistry("skills")));
                 final var client = new Mcp20260728Client(server.port())) {
+            assertThat(server.extension(SkillsExtension.class))
+                    .get()
+                    .extracting(SkillsExtension::negotiation)
+                    .isEqualTo(ExtensionNegotiation.OPTIONAL);
 
             var get = client.sendRpc("""
                 {"jsonrpc":"2.0","id":1,"method":"skills/get","params":{"uri":"skill://pdf-processing/SKILL.md"}}

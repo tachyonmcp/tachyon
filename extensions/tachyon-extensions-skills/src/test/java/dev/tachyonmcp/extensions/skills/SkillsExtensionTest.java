@@ -11,6 +11,7 @@ import dev.tachyonmcp.core.protocol.mcp.v2025_11_25.models.ClientCapabilities;
 import dev.tachyonmcp.core.protocol.mcp.v2025_11_25.models.InitializeRequestParams;
 import dev.tachyonmcp.core.server.McpDispatcher;
 import dev.tachyonmcp.core.server.RpcMethodHandler;
+import dev.tachyonmcp.core.server.TachyonServer;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
 import dev.tachyonmcp.core.server.session.DefaultDispatchContext;
 import dev.tachyonmcp.core.server.session.DispatchContext;
@@ -27,15 +28,14 @@ class SkillsExtensionTest {
 
     @BeforeEach
     void setUp() {
-        server = (ServerEngine) SkillTestFixtures.startServer(SkillsExtension.builder()
-                .registry(new FilesystemSkillsRegistry(SkillTestFixtures.classpathSkillsDir))
-                .build());
+        server = (ServerEngine) SkillTestFixtures.startServer(
+                skills -> skills.registry(new FilesystemSkillsRegistry(SkillTestFixtures.classpathSkillsDir)));
         dispatcher = new McpDispatcher(server, server.executor());
     }
 
     @Test
     void advertisesExtensionAndDirectoryRead() {
-        var extension = (SkillsExtension) server.extensions().getFirst();
+        var extension = server.extension(SkillsExtension.class).orElseThrow();
         assertThat(extension.extensionId()).isEqualTo(SkillsExtension.ID);
         assertThat(extension.serverSettings().values().boolValue("directoryRead"))
                 .isTrue();
@@ -70,9 +70,11 @@ class SkillsExtensionTest {
     @Test
     void rejectsDuplicateSkillPathAtConfiguration() {
         var gitWorkflowDir = SkillTestFixtures.filesystemSkillsDir.resolve("git-workflow");
-        var builder = SkillsExtension.builder()
-                .registry(new FilesystemSkillsRegistry(gitWorkflowDir, "git-workflow"))
-                .registry(new FilesystemSkillsRegistry(gitWorkflowDir, "git-workflow"));
+        var builder = TachyonServer.builder()
+                .withExtension(
+                        SkillsExtension.class,
+                        skills -> skills.registry(new FilesystemSkillsRegistry(gitWorkflowDir, "git-workflow"))
+                                .registry(new FilesystemSkillsRegistry(gitWorkflowDir, "git-workflow")));
 
         assertThatThrownBy(builder::build)
                 .isInstanceOf(IllegalArgumentException.class)
