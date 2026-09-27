@@ -48,7 +48,7 @@ Create an empty `greeting-server` directory with this `pom.xml`:
             <dependency>
                 <groupId>dev.tachyonmcp</groupId>
                 <artifactId>tachyon-bom</artifactId>
-                <version>1.0.0-beta.30</version>
+                <version>${tachyon.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>

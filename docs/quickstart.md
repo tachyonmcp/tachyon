@@ -10,7 +10,8 @@ description: |-
 
 Run a server with one `greet` tool at `http://127.0.0.1:8080/mcp`. Send a name and get a personal
 greeting back. Choose Maven or Gradle below. For Kotlin, start with the
-[Kotlin tools examples](kotlin/#tool-handlers).
+[Kotlin tools examples](kotlin/#tool-handlers). Working with a coding agent? Install the
+[`tachyon-mcp` skill](agent-skill.md) first.
 
 ## Prerequisites
 
@@ -115,7 +116,7 @@ plugins {
 repositories { mavenCentral() }
 
 dependencies {
-    implementation(platform("dev.tachyonmcp:tachyon-bom:1.0.0-beta.30"))
+    implementation(platform("dev.tachyonmcp:tachyon-bom:${tachyon.version}"))
     implementation("dev.tachyonmcp:tachyon-core")
 }
 
@@ -281,6 +282,17 @@ MCP 2026-07-28 returns this error with HTTP `400`, so `--fail-with-body` prints 
 > both with HTTP `200`. Inspect the JSON-RPC `error` field and, for tool results, `isError`.
 
 </details>
+
+## Build with a coding agent
+
+Let Claude Code, Codex, Cursor, or another coding agent extend this server. Install the
+`tachyon-mcp` skill so it knows the Tachyon API:
+
+```bash
+npx skills add tachyonmcp/tachyon --skill tachyon-mcp
+```
+
+See [Agent skill](agent-skill.md) for install options and example prompts.
 
 ## Executable coverage
 

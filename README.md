@@ -123,7 +123,8 @@ is separate from the server-side `SkillsExtension` described above.
 npx skills add tachyonmcp/tachyon --skill tachyon-mcp
 ```
 
-Its Java and Kotlin examples are compiled during the project build to keep them current.
+Its Java and Kotlin examples are compiled during the project build to keep them current. See the
+[agent skill guide](docs/agent-skill.md) for install options and example prompts.
 
 ## License
 

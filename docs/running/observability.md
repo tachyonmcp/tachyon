@@ -61,7 +61,7 @@ In the quickstart `build.gradle.kts`, extend `dependencies`:
 
 ```kotlin
 dependencies {
-    implementation(platform("dev.tachyonmcp:tachyon-bom:1.0.0-beta.30"))
+    implementation(platform("dev.tachyonmcp:tachyon-bom:${tachyon.version}"))
     implementation(platform("io.opentelemetry:opentelemetry-bom:1.65.0"))
     implementation("dev.tachyonmcp:tachyon-core")
     implementation("dev.tachyonmcp:tachyon-opentelemetry")
