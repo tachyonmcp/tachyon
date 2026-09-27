@@ -16,7 +16,10 @@ import dev.tachyonmcp.core.server.domain.ServerErrors;
 import dev.tachyonmcp.core.server.features.tasks.TasksExtensionSupport;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
 import dev.tachyonmcp.core.server.session.DispatchContext;
+import dev.tachyonmcp.extensions.tasks.engine.TaskAwaitException;
 import dev.tachyonmcp.extensions.tasks.engine.TaskEngine;
+import java.util.Locale;
+import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
 /** JSON-RPC adapters for task operations. */
@@ -47,6 +50,17 @@ final class TaskMethodHandlers {
     /** The connector's answer for an id it does not know or will not show this caller. */
     private static ServerError taskNotFound(String action) {
         return ServerErrors.invalidParams("Failed to " + action + " task: Task not found");
+    }
+
+    /** 2025-11-25 Tasks § Task Cancellation and § Error Handling messages for an ended legacy wait. */
+    private static ServerError waitFailed(String action, TaskAwaitException e) {
+        return switch (e.reason()) {
+            case TERMINAL ->
+                ServerErrors.invalidParams("Cannot " + action + " task: already in terminal status '"
+                        + Objects.requireNonNull(e.status()).name().toLowerCase(Locale.ROOT) + "'");
+            case EXPIRED -> ServerErrors.invalidParams("Failed to " + action + " task: Task has expired");
+            case TIMED_OUT -> ServerErrors.internalError("Failed to " + action + " task: " + e.getMessage());
+        };
     }
 
     private static void requireGate(@Nullable ServerError gate) {
@@ -127,26 +141,23 @@ final class TaskMethodHandlers {
 
         @Override
         public Object handle(DispatchContext context, TaskCancelRequest request) throws Exception {
-            var connector = registry.connector();
-            try {
-                connector.cancel().apply(context, request);
-            } catch (TaskNotFoundException e) {
-                return taskNotFound("cancel");
-            }
             if (!context.requestMapper().supportsLegacyTaskAugmentation()) {
+                try {
+                    registry.connector().cancel().apply(context, request);
+                } catch (TaskNotFoundException e) {
+                    return taskNotFound("cancel");
+                }
                 return context.responseMapper().emptyResult();
             }
-            var getRequest = TaskGetRequest.builder()
-                    .taskId(request.taskId())
-                    .meta(request.meta())
-                    .build();
-            final TaskSnapshot snapshot;
+            final TaskSnapshot cancelled;
             try {
-                snapshot = connector.get().apply(context, getRequest);
+                cancelled = registry.cancelAndAwait(context, request);
             } catch (TaskNotFoundException e) {
-                return taskNotFound("retrieve");
+                return taskNotFound("cancel");
+            } catch (TaskAwaitException e) {
+                return waitFailed("cancel", e);
             }
-            return context.responseMapper().cancelTaskResult(registry.publish(snapshot));
+            return context.responseMapper().cancelTaskResult(cancelled);
         }
     }
 
@@ -164,17 +175,14 @@ final class TaskMethodHandlers {
 
         @Override
         public Object handle(DispatchContext context, TaskAwaitResultRequest request) throws Exception {
-            var connector = registry.connector();
-            if (connector.awaitResult() == null) {
-                return ServerErrors.methodNotFound("Method not found");
-            }
-            final TaskSnapshot awaited;
+            final TaskSnapshot snapshot;
             try {
-                awaited = connector.awaitResult().apply(context, request);
+                snapshot = registry.awaitResult(context, request);
             } catch (TaskNotFoundException e) {
                 return taskNotFound("retrieve");
+            } catch (TaskAwaitException e) {
+                return waitFailed("retrieve", e);
             }
-            var snapshot = registry.publish(awaited);
             return context.responseMapper().getTaskPayloadResult(snapshot.result(), snapshot.taskId());
         }
     }

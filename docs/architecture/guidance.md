@@ -136,17 +136,17 @@ The modern Tasks extension is atomic: `get`, `cancel`, and `update` are all requ
 partial connector objects and runtime `UnsupportedOperationException` paths. Only legacy operations
 remain optional.
 
-Declare the connector together with the Tasks capability. Calling `tasks(...)` enables the feature,
-registers the connector, and auto-registers the `io.modelcontextprotocol/tasks` wire extension in one
-call; there is no root `ServerBuilder.taskExecutionEngine(...)` setter and no separate
-`.withExtensions(TasksExtension.instance())` call:
+Tasks live in `tachyon-extensions-tasks`. Register `TasksExtension` by class; its builder takes the
+connector. There is no capability switch, no root `ServerBuilder.taskExecutionEngine(...)` setter, and
+no instance registration (`withExtensions` rejects a `ConfigurableExtension`):
 
 ```java
-CapabilitiesConfig.Builder tasks(TaskConnector connector);
+ServerBuilder withExtension(Class<TasksExtension> type, Consumer<TasksExtension.Builder> configurer);
 ```
 
-This keeps capability advertisement, extension registration, and the connector atomic. Building must
-reject a task-producing tool without a configured connector. `noTasks()` remains the explicit opt-out.
+Registering the extension is the only switch: it advertises the `io.modelcontextprotocol/tasks` wire
+extension, installs the task methods, and binds the connector in one place. Building must reject a
+missing connector and a task-producing tool without the extension.
 
 There is no default or in-process engine. `TaskConnector` is the user/integration SPI. A
 task-producing handler starts external work itself and returns its initial snapshot. Tachyon must
@@ -166,8 +166,12 @@ var tasks = TaskConnector.builder()
         .build();
 ```
 
-`awaitResult` may block in the external client's supported wait operation. Tachyon must not
-emulate it with a local completion future or a polling loop.
+`awaitResult` may block in the external client's supported wait operation. Without it, Tachyon
+serves the blocking `tasks/result` by calling `get` until the task is terminal, sleeping for the
+snapshot's `pollInterval` (else `resultPollInterval`, default 1s) between calls. The wait ends with
+"Task has expired" once the task `ttl` elapses, or with an internal error after `resultMaxWait`
+(default 5 min). MCP 2025-11-25 requires `tasks/result`
+for every accepted task, so a modern-only connector must still serve legacy clients.
 
 The Tasks facade owns only projection publication and lookup:
 
@@ -193,12 +197,12 @@ authoritative for `tasks/get`; a successful
 snapshot is published before mapping the response. A refresh failure must not silently invent a
 state. A cached snapshot may be used only under an explicit stale-read policy.
 
-Configure one connector while declaring the capability. The connector is an infrastructure
+Configure one connector while registering the extension. The connector is an infrastructure
 dependency, not a task executor or task-handler registration:
 
 ```java
 var server = TachyonServer.builder()
-        .capabilities(c -> c.tasks(taskConnector))
+        .withExtension(TasksExtension.class, t -> t.connector(taskConnector))
         .port(8080)
         .build();
 ```
@@ -206,7 +210,7 @@ var server = TachyonServer.builder()
 Kotlin follows the Java source of truth:
 
 ```kotlin
-capabilities {
+buildServer {
     tasks(taskConnector)
 }
 ```

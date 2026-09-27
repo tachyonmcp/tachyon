@@ -9,8 +9,11 @@ import dev.tachyonmcp.api.runtime.InteractionContext;
  * Waits through the external system until an authoritative terminal projection is available, for
  * the legacy (pre-SEP-2663) blocking {@code tasks/result}.
  *
- * <p>May block in the external client's supported wait operation. Must not be emulated with a
- * local completion future or a polling loop.
+ * <p>May block in the external client's supported wait operation. Optional: without it, Tachyon
+ * serves {@code tasks/result} by calling {@link TaskGetFn} until the task is terminal, sleeping for
+ * the snapshot's {@code pollInterval} (else a configured default) between calls, bounded by the
+ * task's {@code ttl} and a configured maximum wait. Set it when the external system offers a cheaper
+ * wait than repeated lookups; it then owns its wait bound.
  */
 @FunctionalInterface
 @ExperimentalApi

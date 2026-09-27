@@ -23,7 +23,7 @@ Verdict: Tachyon does **not** run tasks. External system owns execution via `Tas
 | `TaskRoute` / `TaskEvents` (engine) | opaque delivery address (`NONE`) / status + progress listener | `TaskRoute`, `TaskEvents` |
 | `McpTaskBinding` (MCP binding) | core `TaskRuntime` + `TaskEvents` ⇒ `notifyTaskStatus`/`notifyTaskProgress`, 2025 capability | `McpTaskBinding` |
 | `McpTaskRoute` | MCP route: sessionId + progressToken; `of(null,null)` ⇒ `NONE` | `McpTaskRoute` |
-| `TasksExtension` (module `tachyon-extensions-tasks`, `@ProvidedBy(TasksExtensionProvider)`) | id `io.modelcontextprotocol/tasks`, `ALWAYS`; `tasks()` ⇒ engine; builder: connector (required), pageSize, keepAlive, pollInterval | `TasksExtension` |
+| `TasksExtension` (module `tachyon-extensions-tasks`, `@ProvidedBy(TasksExtensionProvider)`) | id `io.modelcontextprotocol/tasks`, `ALWAYS`; `tasks()` ⇒ engine; builder: connector (required), pageSize, keepAlive, pollInterval, resultPollInterval, resultMaxWait | `TasksExtension` |
 | `TasksExtensionProvider` (`@InternalApi`) | creates `Builder`; `EngineBinding` ⇒ `TasksExtension#attach` | `TasksExtensionProvider` |
 | `TaskRuntime` (core seam, `@InternalApi`) | what tool/subscription handlers need; `NONE` when no extension | `TaskRuntime` |
 | `TasksExtensionSupport` (core, `@InternalApi`) | id + per-request gate `requireDeclared` | `TasksExtensionSupport` |
@@ -34,7 +34,7 @@ Boundary: `engine` imports no protocol types, enforced by `EngineBoundaryTest` (
 
 `withExtension(TasksExtension.class, t -> t.connector(c))` ⇒ registered = enabled; no capability switch, no auto-registration. No connector ⇒ ISE `TasksExtension.Builder#build`; `TaskEngineSettings` validates pageSize/pollInterval > 0, keepAlive default **5 min** (`TaskEngineSettings#DEFAULT_KEEP_ALIVE`). Kotlin: `tasks(connector) { }` on `TachyonServerBuilder`. Runtime access: `server.extension(TasksExtension.class).orElseThrow().tasks()`. Bootstrap `TasksExtension#attach`: engine ⇒ `McpTaskBinding` listener ⇒ `ServerEngine#installTaskRuntime` ⇒ `TaskMethodHandlers#register` ⇒ list_changed wiring ⇒ janitor start.
 
-Startup check: any `REQUIRED` tool w/o tasks extension (`TaskRuntime#executionConfigured`) ⇒ `IllegalStateException("Task-producing tools require a TaskConnector")`; `OPTIONAL` w/o connector ⇒ warn `DefaultTachyonServer#validateConfiguration`.
+Startup check: any `REQUIRED` tool w/o tasks extension (`TaskRuntime#executionConfigured`) ⇒ `IllegalStateException("Task-producing tools require TasksExtension")`; `OPTIONAL` w/o connector ⇒ warn `DefaultTachyonServer#validateConfiguration`.
 
 ## 🔁 Task-producing tool call
 
@@ -42,7 +42,7 @@ Startup check: any `REQUIRED` tool w/o tasks extension (`TaskRuntime#executionCo
 
 | Protocol | Rule |
 |---|---|
-| 2025-11-25 (legacy augmentation) | client sends task-augmented call; `FORBIDDEN`+augmented ⇒ invalid params; `REQUIRED`+plain ⇒ invalid params |
+| 2025-11-25 (legacy augmentation) | client sends task-augmented call; `FORBIDDEN`/absent + augmented ⇒ -32601; `REQUIRED` + plain ⇒ -32601 (§ Tool-Level Negotiation) |
 | 2026-07-28 | no augmentation flag; `REQUIRED` ⇒ tasks extension must be declared (else -32021) |
 
 Tool returns `ToolResult.task(snapshot)` ⇒ checks (not FORBIDDEN, legacy must be augmented, connector configured, extension declared on modern) ⇒ `taskRuntime().publish(snapshot, context.sessionId(), progressToken)` ⇒ `McpTaskRoute.of(...)` (explicit: async tools map off the dispatch thread); never refused ⇒ `createTaskResult`, observation outcome `TaskHandoff`. Non-task result for REQUIRED/augmented ⇒ internal error.
@@ -73,6 +73,8 @@ Route = server-local delivery state in `TaskEntry` (set once by `TaskEngine#publ
 - Snapshots map straight to wire types (`McpTaskMapper`): one missed mapper leaks a session id.
 - 2026-07-28 has no sessions; the spec binds tasks to the authorization context, not a transport session. A future principal owner is a separate `TaskEntry` field, not the route.
 
+Legacy sticky `cancelled` (2025-11-25 § Task Cancellation 2–3: status ≠ execution) also belongs to the connector: `get` should report `cancelled` once `cancel` is accepted; Tachyon never pins it in the cache (not durable, overwritten by higher revisions) and only waits `TaskEngine#cancelAndAwait`.
+
 Durable access control (eviction, restart, multi-node) belongs to the connector: every `Task*Fn` gets `InteractionContext`; the engine stores its own owner key and authorizes `get`/`cancel`/`update`/`list`.
 
 ## 🌐 Method map
@@ -83,8 +85,8 @@ Durable access control (eviction, restart, multi-node) belongs to the connector:
 |---|---|---|---|
 | `tasks/list` | legacy only | `list` (null ⇒ method not found) | read only: connector scopes by caller (`TaskListFn#apply`), `withDefaults`; never cached, no notification |
 | `tasks/get` | modern: extension declared | `get`; `TaskNotFoundException` ⇒ invalid params | `getTaskResult` |
-| `tasks/cancel` | modern: extension | `cancel` then (legacy) `get` | modern empty / legacy snapshot |
-| `tasks/result` | legacy only | `awaitResult` (blocking) | tool call payload |
+| `tasks/cancel` | modern: extension | modern: `cancel` (fire-and-forget); legacy: `TaskEngine#cancelAndAwait` = `get` (terminal ⇒ -32602, no cancel) ⇒ `cancel` ⇒ poll `get` like `tasks/result` | modern empty / legacy `cancelled` snapshot; other terminal ⇒ -32602 "Cannot cancel task: already in terminal status", ttl ⇒ -32602 expired, `resultMaxWait` ⇒ -32603 |
+| `tasks/result` | legacy only | `awaitResult` (blocking); unset ⇒ `get` until terminal, sleeping snapshot `pollInterval` else `resultPollInterval` (1s), each poll published; ttl elapsed ⇒ -32602 "Task has expired", `resultMaxWait` (5min) ⇒ -32603 via `TaskAwaitException` `TaskEngine#awaitResult` | tool call payload, or the task's JSON-RPC error |
 | `tasks/update` | modern only + extension | `update(inputResponses)` | empty |
 
 Gates thrown from `decode` as `RequestMappingException` `RequestMappingException`.

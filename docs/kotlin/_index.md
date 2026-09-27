@@ -523,7 +523,8 @@ Available via `ToolScope.arguments` (or `PromptScope.arguments`):
 | Scope | Builder method | Properties |
 |---|---|---|
 | `ServerInfoScope` | `info { }` | `name`, `version`, `description`, `title`, `instructions` |
-| `CapabilitiesScope` | `capabilities { }` | `tools()`, `resources()`, `prompts()`, `tasks(connector)`, `logging`, `completionsMode` |
+| `CapabilitiesScope` | `capabilities { }` | `tools()`, `resources()`, `prompts()`, `logging`, `completionsMode` |
+| `TasksScope` | `tasks(connector) { }` | `pageSize`, `keepAlive`, `pollInterval`, `resultPollInterval`, `resultMaxWait` |
 | `NetworkScope` | `network { }` | `host`, `port`, `endpointPath`, `allowedOrigins`, `allowedHeaders`, `allowedHosts`, `maxContentLength`, `maxPipelinedRequests`, `maxPendingSseBytes` |
 | `SessionScope` | `session { }` | `enable()`, `sessionTtl`, `sessionIdGenerator` |
 | `RuntimeScope` | `runtime { }` | `shutdownGracePeriod`, `requestTimeout`, `clock` |

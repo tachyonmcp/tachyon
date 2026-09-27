@@ -468,15 +468,14 @@ aliases are deprecated for removal — migrate any code still calling them.
 
 Configured via `capabilities { }` / `CapabilitiesConfig.Builder`. Each MCP capability has its own
 config type, nested under `capabilities`: `tools` and `prompts` share `FeatureConfig`
-(`mode`, `listChanged`, `pageSize`); `resources` uses `ResourcesConfig` (adds `subscribe`); `tasks`
-uses `TasksConfig`, which binds the external `TaskConnector` and server-side projection settings.
-The legacy `list` flag and modern `cancel`/`requests` flags are derived from that connector.
+(`mode`, `listChanged`, `pageSize`); `resources` uses `ResourcesConfig` (adds `subscribe`). Tasks are
+not a capability setting: register [`TasksExtension`](../extensions/tasks.md), which advertises the
+`tasks` capability from its connector.
 
 | Sub-config | Fields | Default |
 |---|---|---|
 | `tools` / `prompts` (`FeatureConfig`) | `mode`, `listChanged`, `pageSize` | `AUTO`, `false`, `50` |
 | `resources` (`ResourcesConfig`) | `mode`, `listChanged`, `pageSize`, `subscribe` | `AUTO`, `false`, `50`, `false` |
-| `tasks` (`TasksConfig`) | `enabled`, `connector`, derived `list`/`cancel`/`requests`, `pageSize`, `keepAlive`, `pollInterval` | `false`, none, `50`, `5m`, none |
 | — | `completions`, `logging` | `AUTO`, `false` |
 
 `mode`:
@@ -484,16 +483,11 @@ The legacy `list` flag and modern `cancel`/`requests` flags are derived from tha
 - **`ON`** — advertised from `initialize`, even with zero handlers registered yet (needed for dynamic registration + `list_changed` after startup).
 - **`OFF`** — never advertised, **and registration becomes a no-op**: `tools().register(...)`, `resources().register(...)`, and `prompts().register(...)` are silently skipped (logged at `debug`).
 
-`tasks.enabled` works the same as `mode == ON` for tools/resources/prompts, except the `tasks`
-capability is *also* advertised — regardless of `enabled` — whenever a registered tool declares
-task augmentation support (`ToolDescriptor.taskSupport()`).
-
 ```java
 var server = TachyonServer.builder()
     .capabilities(c -> c
         .tools(FeatureConfig.builder().mode(Mode.ON).listChanged(true).build())
         .resources(ResourcesConfig.builder().mode(Mode.ON).subscribe(true).build())
-        .tasks(TasksConfig.builder().enabled(true).connector(taskConnector).build())
         .completions()
         .logging())
     .port(8080)
@@ -506,7 +500,6 @@ TachyonServer(port = 8080) {
     capabilities {
         tools { mode = Mode.ON; listChanged = true }
         resources { mode = Mode.ON; subscribe = true }
-        tasks(taskConnector)
         completions = true
         logging = true
     }

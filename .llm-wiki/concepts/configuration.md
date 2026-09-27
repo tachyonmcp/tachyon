@@ -17,7 +17,7 @@ Verdict: `ServerBuilder` exposes grouped `Consumer<X.Builder>` configurers + sho
 | Method | Target | Notes |
 |---|---|---|
 | `info` | [ServerIdentity.Builder](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/config/ServerIdentity.java) (api, Immutables) | name `tachyon-mcp`, version `0.1`, title, description, websiteUrl, instructions, icons [ServerIdentity](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/config/ServerIdentity.java) |
-| `capabilities` | [CapabilitiesConfig.Builder](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/CapabilitiesConfig.java) | per-feature mode/listChanged/pageSize, completions, logging, tasks |
+| `capabilities` | [CapabilitiesConfig.Builder](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/CapabilitiesConfig.java) | per-feature mode/listChanged/pageSize, completions, logging |
 | `session` | [SessionConfig.Builder](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/SessionConfig.java) | flat: ttl, janitor, stores, id generator — **any option enables sessions**; `enabled()` = defaults-on; opt-out is `ServerBuilder#stateless` `SessionConfig.Builder#build` |
 | `network` | [NetworkConfig.Builder](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/NetworkConfig.java) | host/port/address, endpoint, idle, body size, pipelining depth, CORS, allowedHosts, ioEngine, heartbeat |
 | `runtime` | [RuntimeConfig.Builder](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/config/RuntimeConfig.java) (api) | shutdown grace, request timeout, clock |
@@ -60,7 +60,7 @@ Verdict: `ServerBuilder` exposes grouped `Consumer<X.Builder>` configurers + sho
 - `SessionConfig`: configuring an option *is* the opt-in — `build()` returns `STATELESS` only when nothing was set `SessionConfig.Builder#build`. `enabled` is tri-state inside the builder (unset / on / off); only the `@Deprecated(forRemoval)` `Builder#enabled(boolean)`, reached through [ServerBuilder#stateless](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/ServerBuilder.java), pins it off — so off + option ⇒ ISE `SessionConfig#SESSION_OPTIONS_REQUIRE_ENABLED` is the one representable contradiction. The record's compact ctor holds the same invariant for direct construction. Binary-compatible with beta.28: identical `Builder` signatures, `enabled()` added, no revapi waivers.
 - `build()` takes its session stores from the `ServerConfig` it publishes, so `TachyonServer#config` and the running server share one `SessionConfig` `DefaultServerBuilder#build`. Stateless ⇒ no stores at all → [[sessions]].
 - `NetworkConfig.Builder`: `address()` XOR `host()/port()` ⇒ ISE `Builder#Builder`.
-- `CapabilitiesConfig`: tasks enabled w/o connector ⇒ ISE `Builder#validateTaskConnector`.
+- `TasksExtension`: registered w/o connector ⇒ ISE `TasksExtension.Builder#build`; `resultPollInterval`/`resultMaxWait` must be > 0 `TaskEngineSettings`.
 - page sizes must be > 0; `maxContentLength` > 0; `maxPipelinedRequests` >= 0 (`0` disables pipelining) `NetworkConfig.Builder#maxPipelinedRequests`; `maxPendingSseBytes` >= 0 (default 64 KiB, `0` disables buffering; per POST-SSE stream budget → [[sse-streams]]) `NetworkConfig.Builder#maxPendingSseBytes`; `pollInterval` > 0.
 - `allowedHosts` entries: bare authority only, no URL syntax ⇒ IAE at pipeline construction → [[security-guards]].
 

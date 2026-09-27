@@ -6,8 +6,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 
+import dev.tachyonmcp.api.server.domain.ServerError;
 import dev.tachyonmcp.api.server.domain.TaskResult;
 import dev.tachyonmcp.api.server.features.tasks.TaskConnector;
+import dev.tachyonmcp.api.server.features.tasks.TaskGetFn;
+import dev.tachyonmcp.api.server.features.tasks.TaskNotFoundException;
 import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
 import dev.tachyonmcp.api.server.features.tasks.TaskState;
 import dev.tachyonmcp.core.server.TachyonServer;
@@ -18,6 +21,8 @@ import dev.tachyonmcp.testkit.TestTaskConnector;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
@@ -99,28 +104,219 @@ class TaskMethodsE2eTest {
         }
     }
 
+    // 2025-11-25 Tasks § Result Retrieval: tasks/result MUST block until the task is terminal, then
+    // return exactly what the underlying request would have returned.
     @Test
-    void legacyMethodsAreNotFoundWhenTheConnectorLacksTheirHooks() throws Exception {
-        var fixture = new TestTaskConnector().publish(working("task-1"));
+    void legacyResultWithoutAwaitHookPollsGetUntilTerminal() throws Exception {
+        var polls = new AtomicInteger();
+        var failure = new ServerError(ServerError.Kind.INTERNAL_ERROR, "workflow crashed");
         var modernOnly = TaskConnector.builder()
-                .get(fixture::refresh)
-                .cancel(fixture::cancel)
-                .update(fixture::submitInput)
+                .get((ctx, request) -> switch (request.taskId()) {
+                    case "task-1" ->
+                        polls.incrementAndGet() < 3 ? pollable(working("task-1")) : pollable(completed("task-1"));
+                    case "broken" -> TaskSnapshot.failed("broken", CREATED_AT, CREATED_AT, 2, failure);
+                    default -> throw new TaskNotFoundException(request.taskId());
+                })
+                .cancel((ctx, request) -> {})
+                .update((ctx, request) -> {})
                 .build();
         try (var server = startServer(modernOnly);
                 var client = new Mcp20251125Client(server.port())) {
             client.initialize();
 
+            // language=json
+            assertThatJson(client.post(rpc("tasks/result", "task-1")).body()).isEqualTo("""
+                    {
+                      "jsonrpc":"2.0",
+                      "id":1,
+                      "result":{
+                        "content":[{"type":"text","text":"{\\"output\\":\\"success\\"}"}],
+                        "structuredContent":{"output":"success"},
+                        "_meta":{"io.modelcontextprotocol/related-task":{"taskId":"task-1"}}
+                      }
+                    }
+                    """);
+            assertThat(polls).as("blocked through two working polls").hasValue(3);
+
+            // language=json
+            assertThatJson(client.post(rpc("tasks/result", "broken")).body()).isEqualTo("""
+                    {"jsonrpc":"2.0","id":1,"error":{"code":-32603,"message":"workflow crashed"}}
+                    """);
+            assertError(
+                    client.post(rpc("tasks/result", "missing")).body(),
+                    -32602,
+                    "Failed to retrieve task: " + NOT_FOUND);
             assertThatJson(client.post(rpc("tasks/list", null)).body())
+                    .as("tasks/list stays optional")
                     .inPath("$.error.code")
                     .isEqualTo(-32601);
-            assertThatJson(client.post(rpc("tasks/result", "task-1")).body())
-                    .inPath("$.error.code")
-                    .isEqualTo(-32601);
-            assertThatJson(client.post(rpc("tasks/get", "task-1")).body())
-                    .inPath("$.result.status")
-                    .isEqualTo("working");
         }
+    }
+
+    // 2025-11-25 Tasks § TTL: after ttl elapses the receiver MAY delete the task; example error
+    // "Failed to retrieve task: Task has expired".
+    @Test
+    void legacyResultStopsWaitingOnceTheTaskTtlHasElapsed() throws Exception {
+        var expiredWorking = TaskSnapshot.builder()
+                .from(working("task-1"))
+                .ttl(Duration.ofMinutes(1))
+                .build();
+        var connector = modernOnly((ctx, request) -> expiredWorking);
+        try (var server = startServer(connector);
+                var client = new Mcp20251125Client(server.port())) {
+            client.initialize();
+
+            // language=json
+            assertThatJson(client.post(rpc("tasks/result", "task-1")).body()).isEqualTo("""
+                    {"jsonrpc":"2.0","id":1,"error":{"code":-32602,"message":"Failed to retrieve task: Task has expired"}}
+                    """);
+        }
+    }
+
+    @Test
+    void legacyResultGivesUpAfterMaxWaitPollingAtTheConfiguredInterval() throws Exception {
+        var polls = new AtomicInteger();
+        var connector = modernOnly((ctx, request) -> {
+            polls.incrementAndGet();
+            return working("task-1");
+        });
+        try (var server = startServer(
+                        connector,
+                        t -> t.resultMaxWait(Duration.ofMillis(200)).resultPollInterval(Duration.ofMillis(20)));
+                var client = new Mcp20251125Client(server.port())) {
+            client.initialize();
+
+            // language=json
+            assertThatJson(client.post(rpc("tasks/result", "task-1")).body()).isEqualTo("""
+                    {"jsonrpc":"2.0","id":1,"error":{"code":-32603,
+                      "message":"Failed to retrieve task: no terminal status within PT0.2S"}}
+                    """);
+            assertThat(polls.get())
+                    .as("polled at resultPollInterval, not the 1s default")
+                    .isBetween(3, 12);
+        }
+    }
+
+    // 2025-11-25 Tasks § Task Cancellation 1: reject an already-terminal task with -32602.
+    @Test
+    void legacyCancelOfTerminalTaskIsRejectedWithoutCallingTheConnector() throws Exception {
+        var cancels = new AtomicInteger();
+        var connector = TaskConnector.builder()
+                .get((ctx, request) -> completed("task-1"))
+                .cancel((ctx, request) -> cancels.incrementAndGet())
+                .update((ctx, request) -> {})
+                .build();
+        try (var server = startServer(connector);
+                var client = new Mcp20251125Client(server.port())) {
+            client.initialize();
+
+            // language=json
+            assertThatJson(client.post(rpc("tasks/cancel", "task-1")).body()).isEqualTo("""
+                    {"jsonrpc":"2.0","id":1,"error":{"code":-32602,
+                      "message":"Cannot cancel task: already in terminal status 'completed'"}}
+                    """);
+            assertThat(cancels).hasValue(0);
+        }
+    }
+
+    // 2025-11-25 Tasks § Task Cancellation 2: transition to cancelled before sending the response,
+    // even when the connector's cancel only requests it.
+    @Test
+    void legacyCancelWaitsUntilAFireAndForgetConnectorSettles() throws Exception {
+        var requested = new AtomicBoolean();
+        var pollsAfterCancel = new AtomicInteger();
+        var connector = TaskConnector.builder()
+                .get((ctx, request) -> requested.get() && pollsAfterCancel.incrementAndGet() >= 3
+                        ? pollable(TaskSnapshot.builder()
+                                .from(working("task-1"))
+                                .status(TaskState.CANCELLED)
+                                .revision(2)
+                                .build())
+                        : pollable(working("task-1")))
+                .cancel((ctx, request) -> requested.set(true))
+                .update((ctx, request) -> {})
+                .build();
+        try (var server = startServer(connector);
+                var client = new Mcp20251125Client(server.port())) {
+            client.initialize();
+
+            // language=json
+            assertThatJson(client.post(rpc("tasks/cancel", "task-1")).body()).isEqualTo("""
+                    {"jsonrpc":"2.0","id":1,"result":{
+                      "taskId":"task-1",
+                      "status":"cancelled",
+                      "createdAt":"2026-08-27T07:00:00Z",
+                      "lastUpdatedAt":"2026-08-27T07:00:00Z",
+                      "ttl":null,
+                      "pollInterval":10
+                    }}
+                    """);
+            assertThat(pollsAfterCancel)
+                    .as("answered only once get reported cancelled")
+                    .hasValue(3);
+        }
+    }
+
+    // A cancel that loses the race to completion: the task is terminal, not cancelled.
+    @Test
+    void legacyCancelThatLosesTheRaceIsRejectedAsTerminal() throws Exception {
+        var requested = new AtomicBoolean();
+        var connector = TaskConnector.builder()
+                .get((ctx, request) -> requested.get() ? completed("task-1") : working("task-1"))
+                .cancel((ctx, request) -> requested.set(true))
+                .update((ctx, request) -> {})
+                .build();
+        try (var server = startServer(connector);
+                var client = new Mcp20251125Client(server.port())) {
+            client.initialize();
+
+            // language=json
+            assertThatJson(client.post(rpc("tasks/cancel", "task-1")).body()).isEqualTo("""
+                    {"jsonrpc":"2.0","id":1,"error":{"code":-32602,
+                      "message":"Cannot cancel task: already in terminal status 'completed'"}}
+                    """);
+        }
+    }
+
+    @Test
+    void legacyCancelGivesUpAfterMaxWaitWhileModernCancelStaysFireAndForget() throws Exception {
+        var cancels = new AtomicInteger();
+        var connector = TaskConnector.builder()
+                .get((ctx, request) -> working("task-1"))
+                .cancel((ctx, request) -> cancels.incrementAndGet())
+                .update((ctx, request) -> {})
+                .build();
+        try (var server = startServer(
+                        connector,
+                        t -> t.resultMaxWait(Duration.ofMillis(200)).resultPollInterval(Duration.ofMillis(20)));
+                var legacy = new Mcp20251125Client(server.port());
+                var modern = new Mcp20260728Client(server.port())
+                        .withExtensions(Map.of(TasksExtension.ID, JsonNodeFactory.instance.objectNode()))) {
+            legacy.initialize();
+
+            // language=json
+            assertThatJson(legacy.post(rpc("tasks/cancel", "task-1")).body()).isEqualTo("""
+                    {"jsonrpc":"2.0","id":1,"error":{"code":-32603,
+                      "message":"Failed to cancel task: no terminal status within PT0.2S"}}
+                    """);
+            // language=json
+            assertThatJson(modern.post(rpc("tasks/cancel", "task-1")).body()).isEqualTo("""
+                    {"jsonrpc":"2.0","id":1,"result":{"resultType":"complete"}}
+                    """);
+            assertThat(cancels).hasValue(2);
+        }
+    }
+
+    @Test
+    void resultWaitSettingsMustBePositive() {
+        var connector = new TestTaskConnector().connector();
+
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> build(t -> t.connector(connector).resultMaxWait(Duration.ZERO)))
+                .withMessage("resultMaxWait must be positive, got: PT0S");
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> build(t -> t.connector(connector).resultPollInterval(Duration.ofMillis(-1))))
+                .withMessage("resultPollInterval must be positive, got: PT-0.001S");
     }
 
     @Test
@@ -170,12 +366,32 @@ class TaskMethodsE2eTest {
     }
 
     private static TachyonServer startServer(TaskConnector connector) {
+        return startServer(connector, t -> {});
+    }
+
+    private static TachyonServer startServer(TaskConnector connector, Consumer<TasksExtension.Builder> configurer) {
         return McpTestServers.start(
-                builder -> builder.withExtension(TasksExtension.class, t -> t.connector(connector)), it -> {});
+                builder -> builder.withExtension(TasksExtension.class, t -> configurer.accept(t.connector(connector))),
+                it -> {});
+    }
+
+    private static TaskConnector modernOnly(TaskGetFn get) {
+        return TaskConnector.builder()
+                .get(get)
+                .cancel((ctx, request) -> {})
+                .update((ctx, request) -> {})
+                .build();
     }
 
     private static TaskSnapshot working(String taskId) {
         return TaskSnapshot.working(taskId, CREATED_AT, 1);
+    }
+
+    private static TaskSnapshot pollable(TaskSnapshot snapshot) {
+        return TaskSnapshot.builder()
+                .from(snapshot)
+                .pollInterval(Duration.ofMillis(10))
+                .build();
     }
 
     private static TaskSnapshot completed(String taskId) {

@@ -18,7 +18,7 @@ advertises the extensions it supports; a client declares the ones it uses. To bu
 
 | Extension | ID | Module | Enable with |
 |---|---|---|---|
-| [Tasks](../features/tasks.md) | `io.modelcontextprotocol/tasks` | `tachyon-core` | `.capabilities(c -> c.tasks(connector))`; registers the extension automatically |
+| [Tasks](tasks.md) | `io.modelcontextprotocol/tasks` | `tachyon-extensions-tasks` | `.withExtension(TasksExtension.class, t -> t.connector(connector))` |
 | [Skills](mcp-skills.md) | `io.modelcontextprotocol/skills` | `tachyon-extensions-skills` | `.withExtensions(SkillsExtension.builder()...build())` |
 
 ## Add an extension
@@ -44,8 +44,9 @@ var server = TachyonServer.builder()
 server.start();
 ```
 
-In the Kotlin DSL, use `extensions(...)` on the builder. Tasks need no `withExtensions` call;
-configuring a task connector enables them.
+In the Kotlin DSL, use `extensions(...)` on the builder. Configurable extensions such as
+[Tasks](tasks.md) are registered by class instead, with `withExtension(TasksExtension.class, …)` in
+Java or `tasks(connector) { }` in Kotlin; `withExtensions` rejects their instances.
 
 ## What clients must send
 
