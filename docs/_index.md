@@ -15,6 +15,7 @@ Start with a running server, add the features your application needs, then prepa
 - [Run your first server](quickstart.md) — build a Java server with Maven or Gradle and call its greeting tool with curl.
 - [Use Spring Boot](spring-boot/) — build a greeting tool from a Spring bean and call it with MCP Inspector.
 - [Explore the Kotlin DSL](kotlin/) — start a Kotlin server, configure it, and write suspend handlers.
+- [Build with an agent](agent-skill.md) — install the `tachyon-mcp` skill for Claude Code, Codex, or Cursor.
 - [Test a tool](testkit.md) — exercise a running server through an MCP client.
 
 ## Build
