@@ -33,12 +33,6 @@ public class TasksScope
             TasksExtension.DEFAULT_RESULT_POLL_INTERVAL
                 .toKotlinDuration()
 
-        /** Longest a blocking legacy `tasks/result` polls `get` before giving up. */
-        @LegacyApi
-        public var resultMaxWait: Duration =
-            TasksExtension.DEFAULT_RESULT_MAX_WAIT
-                .toKotlinDuration()
-
         internal fun applyTo(builder: TasksExtension.Builder) {
             builder
                 .connector(connector)
@@ -46,6 +40,5 @@ public class TasksScope
                 .keepAlive(keepAlive.toJavaDuration())
                 .pollInterval(pollInterval?.toJavaDuration())
                 .resultPollInterval(resultPollInterval.toJavaDuration())
-                .resultMaxWait(resultMaxWait.toJavaDuration())
         }
     }

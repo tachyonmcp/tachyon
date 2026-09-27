@@ -22,6 +22,9 @@ import dev.tachyonmcp.core.server.observability.Observation;
 import dev.tachyonmcp.core.transport.jsonrpc.JsonRpcCodec;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.atomic.AtomicReference;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,6 +41,8 @@ public class DefaultDispatchContext implements DispatchContext {
     private volatile @Nullable OutboundSseStream outboundStream;
     private volatile @Nullable LoggingLevel permittedLogLevel;
     private volatile Observation observation = Observation.NONE;
+    private volatile Session.@Nullable InFlightRequest inFlightRequest;
+    private final AtomicReference<@Nullable CompletableFuture<Void>> responseUndeliverable = new AtomicReference<>();
 
     public DefaultDispatchContext(ChannelContext channel, ServerEngine server) {
         this(channel, server, null);
@@ -169,6 +174,43 @@ public class DefaultDispatchContext implements DispatchContext {
                     new IllegalStateException("Server-to-client requests require a session (stateless mode)"));
         }
         return server.sendRequest(s, method, params, outboundStream);
+    }
+
+    /** Binds the session request this context dispatches, so its response signals follow the session. */
+    public void inFlightRequest(Session.InFlightRequest request) {
+        this.inFlightRequest = request;
+    }
+
+    /**
+     * The session's end while the request is in flight when a session is bound, else the outbound
+     * stream's close; bound on first call. Both registrations die with the request.
+     */
+    @Override
+    public CompletionStage<Void> responseUndeliverable() {
+        final var undeliverable = new CompletableFuture<Void>();
+        final var existing = responseUndeliverable.compareAndExchange(null, undeliverable);
+        if (existing != null) {
+            return existing.minimalCompletionStage();
+        }
+        final var inFlight = inFlightRequest;
+        final var stream = outboundStream();
+        if (inFlight != null) {
+            inFlight.sessionClosed().thenRun(() -> completeOnWorker(undeliverable));
+        } else if (session() == null && stream != null) {
+            stream.onClose(cause -> completeOnWorker(undeliverable));
+        }
+        return undeliverable.minimalCompletionStage();
+    }
+
+    /**
+     * Completes off the event loop and the session janitor: dependents run on the completing thread.
+     */
+    private void completeOnWorker(CompletableFuture<Void> undeliverable) {
+        try {
+            server.executor().execute(() -> undeliverable.complete(null));
+        } catch (RejectedExecutionException e) {
+            Thread.ofVirtual().name("tachyon-response-undeliverable").start(() -> undeliverable.complete(null));
+        }
     }
 
     @Override

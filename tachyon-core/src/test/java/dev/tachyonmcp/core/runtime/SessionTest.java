@@ -36,11 +36,22 @@ class SessionTest {
     @Test
     void closeSession() {
         session.activate();
+        var inFlight = session.attachRequest();
+        var done = session.attachRequest();
+        done.completed();
+
         assertThat(session.close()).isTrue();
         assertThat(session.state()).isEqualTo(SessionState.CLOSED);
         // E12 fix: connection must become NOOP after close to prevent write-after-remove
         assertThat(session.connection()).isSameAs(SseConnection.noop());
         assertThat(session.connection().isWritable()).isFalse();
+        assertThat(inFlight.sessionClosed()).isCompleted();
+        assertThat(done.sessionClosed())
+                .as("a completed request is no longer tracked")
+                .isNotCompleted();
+        assertThat(session.attachRequest().sessionClosed())
+                .as("attached after the close")
+                .isCompleted();
     }
 
     @Test

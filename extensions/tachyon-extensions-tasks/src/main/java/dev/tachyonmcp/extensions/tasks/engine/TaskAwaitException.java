@@ -3,7 +3,6 @@ package dev.tachyonmcp.extensions.tasks.engine;
 
 import dev.tachyonmcp.api.annotations.LegacyApi;
 import dev.tachyonmcp.api.server.features.tasks.TaskState;
-import java.time.Duration;
 import org.jspecify.annotations.Nullable;
 
 /** A legacy blocking wait on a task ended without the status it waited for. */
@@ -14,8 +13,6 @@ public final class TaskAwaitException extends Exception {
     public enum Reason {
         /** The task's {@code ttl} elapsed before it became terminal, so it may be gone. */
         EXPIRED,
-        /** The wait's bound passed before the task became terminal. */
-        TIMED_OUT,
         /** The task is terminal in another status than the wait needs, for example {@code completed} for a cancel. */
         TERMINAL
     }
@@ -34,10 +31,6 @@ public final class TaskAwaitException extends Exception {
 
     static TaskAwaitException expired(String taskId) {
         return new TaskAwaitException("Task " + taskId + " expired before it became terminal", Reason.EXPIRED, null);
-    }
-
-    static TaskAwaitException timedOut(Duration maxWait) {
-        return new TaskAwaitException("no terminal status within " + maxWait, Reason.TIMED_OUT, null);
     }
 
     static TaskAwaitException terminal(TaskState status) {

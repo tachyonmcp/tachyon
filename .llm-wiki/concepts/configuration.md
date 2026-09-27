@@ -3,7 +3,7 @@ title: Configuration
 tags: [concept, config, builder]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/server/ServerBuilder.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultServerBuilder.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/, tachyon-api/src/main/java/dev/tachyonmcp/api/server/config/]
 updated: 2026-09-27
-commit: 4316204b
+commit: a3cf5df7
 ---
 
 # 🎛️ Configuration
@@ -60,7 +60,7 @@ Verdict: `ServerBuilder` exposes grouped `Consumer<X.Builder>` configurers + sho
 - `SessionConfig`: configuring an option *is* the opt-in — `build()` returns `STATELESS` only when nothing was set `SessionConfig.Builder#build`. `enabled` is tri-state inside the builder (unset / on / off); only the `@Deprecated(forRemoval)` `Builder#enabled(boolean)`, reached through [ServerBuilder#stateless](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/ServerBuilder.java), pins it off — so off + option ⇒ ISE `SessionConfig#SESSION_OPTIONS_REQUIRE_ENABLED` is the one representable contradiction. The record's compact ctor holds the same invariant for direct construction. Binary-compatible with beta.28: identical `Builder` signatures, `enabled()` added, no revapi waivers.
 - `build()` takes its session stores from the `ServerConfig` it publishes, so `TachyonServer#config` and the running server share one `SessionConfig` `DefaultServerBuilder#build`. Stateless ⇒ no stores at all → [[sessions]].
 - `NetworkConfig.Builder`: `address()` XOR `host()/port()` ⇒ ISE `Builder#Builder`.
-- `TasksExtension`: registered w/o connector ⇒ ISE `TasksExtension.Builder#build`; `resultPollInterval`/`resultMaxWait` must be > 0 `TaskEngineSettings`.
+- `TasksExtension`: registered w/o connector ⇒ ISE `TasksExtension.Builder#build`; `resultPollInterval` must be > 0 `TaskEngineSettings`.
 - page sizes must be > 0; `maxContentLength` > 0; `maxPipelinedRequests` >= 0 (`0` disables pipelining) `NetworkConfig.Builder#maxPipelinedRequests`; `maxPendingSseBytes` >= 0 (default 64 KiB, `0` disables buffering; per POST-SSE stream budget → [[sse-streams]]) `NetworkConfig.Builder#maxPendingSseBytes`; `pollInterval` > 0.
 - `allowedHosts` entries: bare authority only, no URL syntax ⇒ IAE at pipeline construction → [[security-guards]].
 

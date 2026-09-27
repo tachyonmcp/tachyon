@@ -59,7 +59,6 @@ final class TaskMethodHandlers {
                 ServerErrors.invalidParams("Cannot " + action + " task: already in terminal status '"
                         + Objects.requireNonNull(e.status()).name().toLowerCase(Locale.ROOT) + "'");
             case EXPIRED -> ServerErrors.invalidParams("Failed to " + action + " task: Task has expired");
-            case TIMED_OUT -> ServerErrors.internalError("Failed to " + action + " task: " + e.getMessage());
         };
     }
 
@@ -151,7 +150,7 @@ final class TaskMethodHandlers {
             }
             final TaskSnapshot cancelled;
             try {
-                cancelled = registry.cancelAndAwait(context, request);
+                cancelled = registry.cancelAndAwait(context, request, context.responseUndeliverable());
             } catch (TaskNotFoundException e) {
                 return taskNotFound("cancel");
             } catch (TaskAwaitException e) {
@@ -177,7 +176,7 @@ final class TaskMethodHandlers {
         public Object handle(DispatchContext context, TaskAwaitResultRequest request) throws Exception {
             final TaskSnapshot snapshot;
             try {
-                snapshot = registry.awaitResult(context, request);
+                snapshot = registry.awaitResult(context, request, context.responseUndeliverable());
             } catch (TaskNotFoundException e) {
                 return taskNotFound("retrieve");
             } catch (TaskAwaitException e) {

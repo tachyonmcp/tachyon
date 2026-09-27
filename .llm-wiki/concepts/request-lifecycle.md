@@ -2,8 +2,8 @@
 title: Request lifecycle
 tags: [concept, dispatch]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/http/HttpPipeliningGate.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/ProtocolVersionHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/RpcMethodHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpInitializationHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpOperationHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tools/ToolMethodHandlers.java, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/HandlerFutures.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/PeekedBody.java]
-updated: 2026-09-25
-commit: 55b278f2
+updated: 2026-09-27
+commit: fae0c389
 ---
 
 # 🔄 Request lifecycle
@@ -62,6 +62,7 @@ Handler return value `ServerError` ⇒ error envelope (not exception) `ServerErr
 - Stateless server ignores notifications `McpDispatcher#dispatchNotification`.
 - Client JSON-RPC `Response`/`Error` (answer to server→client request: elicitation/sampling) ⇒ 202 + `completePendingRequest`/`failPendingRequest` with ownership check (session id stateful, channel id stateless) `McpOperationHandler#handlePostResponse`, `DefaultTachyonServer#failPendingRequest`.
 - Cancellation cancels `inboundRequests` future keyed `(sessionId, requestId)` → cascades to `FutureTask.cancel(true)` + handler stage cancel `McpDispatcher#invokeHandlerAsync`, `McpDispatcher#handleCancellation`.
+- Disconnect is **not** cancellation (2025-11-25 Transports): nothing is interrupted, handlers run to completion (`DisconnectIsNotCancellationTest`). `InteractionContext#responseUndeliverable` (`@ExperimentalApi`, memoized in `DefaultDispatchContext#responseUndeliverable`, completed on the server executor never the event loop or janitor, default never completes) is a signal only — session closed while the request is in flight (`Session.InFlightRequest#sessionClosed`), or, session-less, stream closed (no resume without a session: `StatelessValidatorHandler` rejects `Last-Event-ID`). Pure waits and handlers opt in (checkpoint stop, docs `features/tools.md`).
 
 ## 🧱 Handler contract
 

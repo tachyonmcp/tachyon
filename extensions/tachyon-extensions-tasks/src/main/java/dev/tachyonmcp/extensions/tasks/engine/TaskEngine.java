@@ -23,8 +23,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -159,36 +163,43 @@ public final class TaskEngine implements Tasks {
     /**
      * Blocks until the task is terminal and returns its snapshot, for the legacy blocking result.
      * Uses the connector's {@code awaitResult} when set, which owns its own wait bound; otherwise
-     * polls {@code get} as described for {@link #cancelAndAwait}. Blocks, so never call it on an
-     * event loop.
+     * polls {@code get} as described for {@link #cancelAndAwait}. Blocks, so never call it on an event
+     * loop.
      *
      * @param ctx the caller, passed to the connector
      * @param request the result request
+     * @param responseUndeliverable completes once the response can no longer be delivered; ends a polled
+     *     wait without touching the task
      * @return the terminal snapshot
      * @throws TaskNotFoundException if the connector does not know the task or hides it from {@code ctx}
-     * @throws TaskAwaitException if the task's {@code ttl} elapsed, or
-     *     {@link TaskEngineSettings#resultMaxWait()} passed, before it became terminal
+     * @throws TaskAwaitException if the task's {@code ttl} elapsed before it became terminal
+     * @throws CancellationException if {@code responseUndeliverable} completed first
      * @throws InterruptedException if interrupted while waiting between polls
      * @throws Exception if the connector fails
      */
     @LegacyApi
-    public TaskSnapshot awaitResult(InteractionContext ctx, TaskAwaitResultRequest request) throws Exception {
+    public TaskSnapshot awaitResult(
+            InteractionContext ctx, TaskAwaitResultRequest request, CompletionStage<Void> responseUndeliverable)
+            throws Exception {
         var awaitHook = settings.connector().awaitResult();
         if (awaitHook != null) {
             return publish(awaitHook.apply(ctx, request));
         }
-        return pollUntilTerminal(ctx, getRequest(request.taskId(), request.meta()));
+        return pollUntilTerminal(ctx, getRequest(request.taskId(), request.meta()), responseUndeliverable);
     }
 
     /**
      * Cancels a task and blocks until it is {@code cancelled}, for the legacy synchronous cancel.
      * The connector's cancel may settle later; this polls {@code get}, publishing every snapshot and
      * sleeping for its {@code pollInterval}, or {@link TaskEngineSettings#resultPollInterval()} when
-     * it suggests none, bounded by the task's {@code ttl} and {@link TaskEngineSettings#resultMaxWait()}.
+     * it suggests none, until the task is terminal, its {@code ttl} elapses, or {@code responseUndeliverable}
+     * completes.
      * Blocks, so never call it on an event loop.
      *
      * @param ctx the caller, passed to the connector
      * @param request the cancel request
+     * @param responseUndeliverable completes once the response can no longer be delivered; ends the wait,
+     *     the cancel already requested
      * @return the {@code cancelled} snapshot
      * @throws TaskNotFoundException if the connector does not know the task or hides it from {@code ctx}
      * @throws TaskAwaitException {@link TaskAwaitException.Reason#TERMINAL} if the task was already
@@ -198,7 +209,9 @@ public final class TaskEngine implements Tasks {
      * @throws Exception if the connector fails
      */
     @LegacyApi
-    public TaskSnapshot cancelAndAwait(InteractionContext ctx, TaskCancelRequest request) throws Exception {
+    public TaskSnapshot cancelAndAwait(
+            InteractionContext ctx, TaskCancelRequest request, CompletionStage<Void> responseUndeliverable)
+            throws Exception {
         var connector = settings.connector();
         var getRequest = getRequest(request.taskId(), request.meta());
         var current = publish(connector.get().apply(ctx, getRequest));
@@ -206,7 +219,7 @@ public final class TaskEngine implements Tasks {
             throw TaskAwaitException.terminal(current.status());
         }
         connector.cancel().apply(ctx, request);
-        var settled = pollUntilTerminal(ctx, getRequest);
+        var settled = pollUntilTerminal(ctx, getRequest, responseUndeliverable);
         if (settled.status() != TaskState.CANCELLED) {
             logger.debug("Cancel of task {} lost to terminal status {}", request.taskId(), settled.status());
             throw TaskAwaitException.terminal(settled.status());
@@ -214,27 +227,35 @@ public final class TaskEngine implements Tasks {
         return settled;
     }
 
-    private TaskSnapshot pollUntilTerminal(InteractionContext ctx, TaskGetRequest getRequest) throws Exception {
+    private TaskSnapshot pollUntilTerminal(
+            InteractionContext ctx, TaskGetRequest getRequest, CompletionStage<Void> responseUndeliverable)
+            throws Exception {
+        var undeliverable = responseUndeliverable.toCompletableFuture();
         var get = settings.connector().get();
-        var giveUpAt = clock.instant().plus(settings.resultMaxWait());
         while (true) {
             var snapshot = publish(get.apply(ctx, getRequest));
             if (snapshot.status().isTerminal()) {
                 return snapshot;
             }
-            var now = clock.instant();
-            var expiresAt = snapshot.ttl() != null ? snapshot.createdAt().plus(snapshot.ttl()) : null;
-            if (expiresAt != null && !now.isBefore(expiresAt)) {
-                throw TaskAwaitException.expired(getRequest.taskId());
+            var pause = snapshot.pollInterval() != null ? snapshot.pollInterval() : settings.resultPollInterval();
+            var ttl = snapshot.ttl();
+            if (ttl != null) {
+                var untilExpiry =
+                        Duration.between(clock.instant(), snapshot.createdAt().plus(ttl));
+                if (!untilExpiry.isPositive()) {
+                    throw TaskAwaitException.expired(getRequest.taskId());
+                }
+                if (untilExpiry.compareTo(pause) < 0) {
+                    pause = untilExpiry;
+                }
             }
-            if (!now.isBefore(giveUpAt)) {
-                throw TaskAwaitException.timedOut(settings.resultMaxWait());
+            try {
+                undeliverable.get(pause.toNanos(), TimeUnit.NANOSECONDS);
+                logger.debug("Response undeliverable, stopped waiting on task {}", getRequest.taskId());
+                throw new CancellationException("Response undeliverable");
+            } catch (TimeoutException e) {
+                // no terminal status yet: poll again
             }
-            var deadline = expiresAt != null && expiresAt.isBefore(giveUpAt) ? expiresAt : giveUpAt;
-            var pollInterval =
-                    snapshot.pollInterval() != null ? snapshot.pollInterval() : settings.resultPollInterval();
-            var untilDeadline = Duration.between(now, deadline);
-            Thread.sleep(pollInterval.compareTo(untilDeadline) < 0 ? pollInterval : untilDeadline);
         }
     }
 

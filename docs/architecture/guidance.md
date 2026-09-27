@@ -168,9 +168,9 @@ var tasks = TaskConnector.builder()
 
 `awaitResult` may block in the external client's supported wait operation. Without it, Tachyon
 serves the blocking `tasks/result` by calling `get` until the task is terminal, sleeping for the
-snapshot's `pollInterval` (else `resultPollInterval`, default 1s) between calls. The wait ends with
-"Task has expired" once the task `ttl` elapses, or with an internal error after `resultMaxWait`
-(default 5 min). MCP 2025-11-25 requires `tasks/result`
+snapshot's `pollInterval` (else `resultPollInterval`, default 1s) between calls. The wait has no time
+limit: it ends with "Task has expired" once the task `ttl` elapses, or silently once the response is
+undeliverable (`InteractionContext#responseUndeliverable`). MCP 2025-11-25 requires `tasks/result`
 for every accepted task, so a modern-only connector must still serve legacy clients.
 
 The Tasks facade owns only projection publication and lookup:

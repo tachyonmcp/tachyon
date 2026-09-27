@@ -100,7 +100,9 @@ public interface OutboundSseStream {
      * happens — client disconnect, {@link #close()}, or a dead socket detected on write. Used by a
      * long-lived handler (e.g. {@code subscriptions/listen}) to clean up stream-scoped state it
      * cannot otherwise learn about, and to distinguish a genuine transport failure from an ordinary
-     * close. Default is a no-op for transports with no close signal.
+     * close. A stream that ended as a plain response never reports: its kept-alive connection
+     * serves other requests by then. Registered after the close, the callback runs at once. Default
+     * is a no-op for transports with no close signal.
      *
      * @param callback invoked at most once, on an unspecified thread, with the failure cause when
      *                 the close was abnormal, or {@code null} for an ordinary close

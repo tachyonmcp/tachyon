@@ -133,6 +133,29 @@ instead receives a JSON-RPC error with code `-32602`, before the handler runs, a
 Unexpected handler exceptions produce `-32603` with the message `Tool handler failed`; 
 an `IllegalArgumentException` produces `-32602` with `Invalid params`. Internal exception messages are not returned to the client.
 
+## Disconnects and cancellation
+
+A dropped connection never stops a handler: MCP says disconnection is not cancellation, and a
+client on a live session may resume the stream. The handler runs to completion, side effects
+included. A client cancels with `notifications/cancelled`, which interrupts the handler thread.
+
+When the response can no longer be delivered, `context.responseUndeliverable()` completes: the session
+ended, or, without a session, the connection closed. Nothing is interrupted; long work may check
+it and stop at a safe point (experimental):
+
+```java
+server.tools().register(b -> b.name("reindex"), (context, request) -> {
+    var undeliverable = context.responseUndeliverable().toCompletableFuture();
+    for (var batch : batches()) {
+        if (undeliverable.isDone()) {
+            return ToolResult.text("stopped: nobody is waiting");
+        }
+        reindex(batch);
+    }
+    return ToolResult.text("done");
+});
+```
+
 ## Test the tool
 
 Start with the [Quickstart curl call](../quickstart.md#3-test-with-curl). Change the `name` argument

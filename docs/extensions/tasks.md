@@ -47,21 +47,29 @@ advertises the `io.modelcontextprotocol/tasks` wire extension. Legacy compatibil
 `.list(...)` and `.awaitResult(...)` support the pre-SEP-2663 (2025-11-25) wire only. Without `.list(...)`,
 `tasks/list` answers `-32601 Method not found`. Without `.awaitResult(...)`, `tasks/result` still works:
 Tachyon calls `get` until the task is terminal, waiting the snapshot's `pollInterval` (else
-`resultPollInterval`, default 1 second) between calls, then returns its result. The wait ends early:
+`resultPollInterval`, default 1 second) between calls, then returns its result. As the spec
+requires, the wait has no time limit. It ends only when:
 
 | Condition | `tasks/result` answer |
 |---|---|
+| task terminal | its result, or its JSON-RPC error |
 | task `ttl` elapsed while still running (2025-11-25 § TTL) | `-32602 Failed to retrieve task: Task has expired` |
-| `resultMaxWait` passed (default 5 minutes) | `-32603`, the client may ask again |
+| client sent `notifications/cancelled` for the request | none (cancelled) |
+| response undeliverable: session ended (`DELETE` or idle expiry) or, without a session, connection closed | none; the wait stops polling |
 
 ```java
 .withExtension(TasksExtension.class, tasks -> tasks
         .connector(connector)
-        .resultPollInterval(Duration.ofMillis(500))
-        .resultMaxWait(Duration.ofMinutes(10)))
+        .resultPollInterval(Duration.ofMillis(500)))
 ```
 
-A connector `.awaitResult(...)` replaces this loop and owns its own wait bound.
+The task itself is never touched: a dropped connection, an ended session or a released wait never
+cancels it (2025-11-25 Transports: disconnection SHOULD NOT be interpreted as cancellation). Only
+`tasks/cancel` stops a task. A dropped connection on a live session is not an end either: the client
+may resume the stream with `Last-Event-ID`, so the wait keeps polling. While a wait's connection is
+open, its session does not idle out.
+
+A connector `.awaitResult(...)` replaces this loop and owns its own wait, including any time limit.
 
 ## Return a task from a tool
 
@@ -101,7 +109,8 @@ answers, so for those clients Tachyon waits on top of the connector:
 | otherwise | `cancel(...)`, then `get(...)` until terminal, paced and bounded like `tasks/result` |
 | settles `cancelled` | the `cancelled` task |
 | settles `completed` or `failed` first | `-32602 Cannot cancel task: already in terminal status '<status>'` |
-| task `ttl` elapses / `resultMaxWait` passes | `-32602 … Task has expired` / `-32603` |
+| task `ttl` elapses | `-32602 … Task has expired` |
+| response undeliverable, as for `tasks/result` | none; the wait stops, the cancel stays requested |
 
 The wait runs on the request's virtual thread and sleeps between polls, so it holds no platform
 thread; each waiting cancel costs one `get(...)` per poll interval.

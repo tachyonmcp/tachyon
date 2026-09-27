@@ -19,15 +19,13 @@ import org.jspecify.annotations.Nullable;
  *                     suggest none when a snapshot omits one
  * @param resultPollInterval wait between {@code get} calls while awaiting a result without a
  *                     connector {@code awaitResult}, when the snapshot suggests no {@code pollInterval}
- * @param resultMaxWait longest a result wait polls {@code get} before giving up
  */
 public record TaskEngineSettings(
         TaskConnector connector,
         int pageSize,
         Duration keepAlive,
         @Nullable Duration pollInterval,
-        @LegacyApi Duration resultPollInterval,
-        @LegacyApi Duration resultMaxWait) {
+        @LegacyApi Duration resultPollInterval) {
 
     /** Default retention window for a terminal task's cached result. */
     public static final Duration DEFAULT_KEEP_ALIVE = Duration.ofMinutes(5);
@@ -36,15 +34,11 @@ public record TaskEngineSettings(
     @LegacyApi
     public static final Duration DEFAULT_RESULT_POLL_INTERVAL = Duration.ofSeconds(1);
 
-    /** Default longest wait for a result. */
-    @LegacyApi
-    public static final Duration DEFAULT_RESULT_MAX_WAIT = Duration.ofMinutes(5);
-
     /**
      * Validates the settings.
      *
-     * @throws IllegalArgumentException if {@code pageSize}, {@code pollInterval},
-     *     {@code resultPollInterval} or {@code resultMaxWait} is not positive
+     * @throws IllegalArgumentException if {@code pageSize}, {@code pollInterval} or
+     *     {@code resultPollInterval} is not positive
      */
     public TaskEngineSettings {
         Objects.requireNonNull(connector, "connector");
@@ -55,14 +49,9 @@ public record TaskEngineSettings(
         if (pollInterval != null && (pollInterval.isZero() || pollInterval.isNegative())) {
             throw new IllegalArgumentException("pollInterval must be positive, got: " + pollInterval);
         }
-        requirePositive("resultPollInterval", resultPollInterval);
-        requirePositive("resultMaxWait", resultMaxWait);
-    }
-
-    private static void requirePositive(String name, Duration value) {
-        Objects.requireNonNull(value, name);
-        if (value.isZero() || value.isNegative()) {
-            throw new IllegalArgumentException(name + " must be positive, got: " + value);
+        Objects.requireNonNull(resultPollInterval, "resultPollInterval");
+        if (resultPollInterval.isZero() || resultPollInterval.isNegative()) {
+            throw new IllegalArgumentException("resultPollInterval must be positive, got: " + resultPollInterval);
         }
     }
 

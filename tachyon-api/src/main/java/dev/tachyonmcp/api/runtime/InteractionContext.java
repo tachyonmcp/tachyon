@@ -4,6 +4,7 @@ package dev.tachyonmcp.api.runtime;
 import dev.tachyonmcp.api.annotations.ExperimentalApi;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -92,6 +93,27 @@ public interface InteractionContext {
      */
     @ExperimentalApi
     CompletableFuture<String> sendRequest(String method, Object params);
+
+    /**
+     * Returns a stage that completes once this request's response can no longer be delivered: its
+     * session ended, or, with no session to resume through, its connection closed.
+     *
+     * <p>A signal only: the handler is never interrupted. A disconnect from a live session does not
+     * complete it, because the client may resume the stream. Long-running work may stop at a safe
+     * checkpoint once it completes; a client that wants to cancel sends
+     * {@code notifications/cancelled} instead.
+     *
+     * <p>Completes on a server worker thread, never an I/O thread, so non-async dependents may
+     * block.
+     *
+     * <p>The default never completes, for contexts with no request behind them.
+     *
+     * @return a read-only stage that completes normally once the response is undeliverable
+     */
+    @ExperimentalApi
+    default CompletionStage<Void> responseUndeliverable() {
+        return new CompletableFuture<Void>().minimalCompletionStage();
+    }
 
     /**
      * Returns the value stored under {@code key}, or empty if never set.

@@ -3,7 +3,7 @@ title: Tasks
 tags: [concept, tasks, experimental]
 sources: [tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/tasks/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tasks/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tools/ToolMethodHandlers.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tools/DefaultToolRegistry.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java, extensions/tachyon-extensions-tasks/src/main/java/dev/tachyonmcp/extensions/tasks/, integrations/tachyon-tasks-temporal/]
 updated: 2026-09-27
-commit: 16ca0f84
+commit: 0c00a559
 ---
 
 # ⏳ Tasks
@@ -23,7 +23,7 @@ Verdict: Tachyon does **not** run tasks. External system owns execution via `Tas
 | `TaskRoute` / `TaskEvents` (engine) | opaque delivery address (`NONE`) / status + progress listener | `TaskRoute`, `TaskEvents` |
 | `McpTaskBinding` (MCP binding) | core `TaskRuntime` + `TaskEvents` ⇒ `notifyTaskStatus`/`notifyTaskProgress`, 2025 capability | `McpTaskBinding` |
 | `McpTaskRoute` | MCP route: sessionId + progressToken; `of(null,null)` ⇒ `NONE` | `McpTaskRoute` |
-| `TasksExtension` (module `tachyon-extensions-tasks`, `@ProvidedBy(TasksExtensionProvider)`) | id `io.modelcontextprotocol/tasks`, `ALWAYS`; `tasks()` ⇒ engine; builder: connector (required), pageSize, keepAlive, pollInterval, resultPollInterval, resultMaxWait | `TasksExtension` |
+| `TasksExtension` (module `tachyon-extensions-tasks`, `@ProvidedBy(TasksExtensionProvider)`) | id `io.modelcontextprotocol/tasks`, `ALWAYS`; `tasks()` ⇒ engine; builder: connector (required), pageSize, keepAlive, pollInterval, resultPollInterval | `TasksExtension` |
 | `TasksExtensionProvider` (`@InternalApi`) | creates `Builder`; `EngineBinding` ⇒ `TasksExtension#install`, `TasksExtension#attach` | `TasksExtensionProvider` |
 | `TaskRuntime` (core seam, `@InternalApi`) | what tool/subscription handlers need; `NONE` when no extension | `TaskRuntime` |
 | `TasksExtensionSupport` (core, `@InternalApi`) | id + per-request gate `requireDeclared` | `TasksExtensionSupport` |
@@ -85,11 +85,13 @@ Durable access control (eviction, restart, multi-node) belongs to the connector:
 |---|---|---|---|
 | `tasks/list` | legacy only | `list` (null ⇒ method not found) | read only: connector scopes by caller (`TaskListFn#apply`), `withDefaults`; never cached, no notification |
 | `tasks/get` | modern: extension declared | `get`; `TaskNotFoundException` ⇒ invalid params | `getTaskResult` |
-| `tasks/cancel` | modern: extension | modern: `cancel` (fire-and-forget); legacy: `TaskEngine#cancelAndAwait` = `get` (terminal ⇒ -32602, no cancel) ⇒ `cancel` ⇒ poll `get` like `tasks/result` | modern empty / legacy `cancelled` snapshot; other terminal ⇒ -32602 "Cannot cancel task: already in terminal status", ttl ⇒ -32602 expired, `resultMaxWait` ⇒ -32603 |
-| `tasks/result` | legacy only | `awaitResult` (blocking); unset ⇒ `get` until terminal, sleeping snapshot `pollInterval` else `resultPollInterval` (1s), each poll published; ttl elapsed ⇒ -32602 "Task has expired", `resultMaxWait` (5min) ⇒ -32603 via `TaskAwaitException` `TaskEngine#awaitResult` | tool call payload, or the task's JSON-RPC error |
+| `tasks/cancel` | modern: extension | modern: `cancel` (fire-and-forget); legacy: `TaskEngine#cancelAndAwait` = `get` (terminal ⇒ -32602, no cancel) ⇒ `cancel` ⇒ poll `get` like `tasks/result` | modern empty / legacy `cancelled` snapshot; other terminal ⇒ -32602 "Cannot cancel task: already in terminal status", ttl ⇒ -32602 expired; no time bound (a never-settling cancel waits until `responseUndeliverable`) |
+| `tasks/result` | legacy only | `awaitResult` (blocking); unset ⇒ `get` until terminal, sleeping snapshot `pollInterval` else `resultPollInterval` (1s), each poll published; ttl elapsed ⇒ -32602 "Task has expired" via `TaskAwaitException`; no time bound (spec: MUST block until terminal); `InteractionContext#responseUndeliverable` ⇒ stops polling, `CancellationException` ⇒ `Cancelled` outcome, task untouched `TaskEngine#awaitResult` | tool call payload, or the task's JSON-RPC error |
 | `tasks/update` | modern only + extension | `update(inputResponses)` | empty |
 
 Gates thrown from `decode` as `RequestMappingException` `RequestMappingException`.
+
+Wait release, never task cancel: disconnect on a live session keeps waiting (resumable via `Last-Event-ID`); session end or, without a session, connection close completes `responseUndeliverable` and the poll loop returns; `notifications/cancelled` interrupts. Only `tasks/cancel` stops a task. Scenarios: `LegacyResultWaitE2eTest`.
 
 ## 🔌 Temporal integration
 
