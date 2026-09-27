@@ -124,6 +124,20 @@ class TaskMethodsE2eTest {
     }
 
     @Test
+    void tasksExtensionIsCreatedOnlyThroughWithExtension() {
+        var instance = new TasksExtensionProvider()
+                .newBuilder()
+                .connector(new TestTaskConnector().connector())
+                .build();
+        var builder = TachyonServer.builder();
+
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> builder.withExtensions(instance))
+                .withMessage("Register " + TasksExtension.class.getName()
+                        + " with withExtension(TasksExtension.class, ...), not as an instance");
+    }
+
+    @Test
     void invalidConfigurationFailsTheBuild() {
         var connector = new TestTaskConnector().connector();
 

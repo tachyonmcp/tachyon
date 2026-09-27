@@ -4,6 +4,7 @@ package dev.tachyonmcp.core.server;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.tachyonmcp.api.server.extensions.AdvertiseMode;
 import dev.tachyonmcp.api.server.extensions.ServerExtension;
@@ -11,6 +12,8 @@ import dev.tachyonmcp.core.server.extensions.AnnotatedExtension;
 import dev.tachyonmcp.core.server.extensions.MisannotatedExtension;
 import dev.tachyonmcp.core.server.extensions.StubExtension;
 import dev.tachyonmcp.core.server.extensions.UnregisteredExtension;
+import java.util.ArrayList;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class WithExtensionTest {
@@ -161,5 +164,85 @@ class WithExtensionTest {
                 .isThrownBy(() -> builder.withExtension(MisannotatedExtension.class, b -> {}))
                 .withMessageContaining(MisannotatedExtension.class.getName())
                 .withMessageContaining("serves " + StubExtension.class.getName());
+    }
+
+    @Test
+    void configurableExtensionInstanceIsRejectedInFavourOfWithExtension() {
+        var instance = new StubExtension.Builder().option("bypass").build();
+        var builder = TachyonServer.builder();
+
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> builder.withExtensions(instance))
+                .withMessage("Register " + StubExtension.class.getName() + " with withExtension("
+                        + StubExtension.class.getSimpleName() + ".class, ...), not as an instance");
+    }
+
+    @Test
+    void throwingBootstrapFailsTheBuildAndShutsDownExtensionsAlreadyBootstrapped() {
+        var events = new ArrayList<String>();
+        var failure = new IllegalStateException("boom");
+        var builder = TachyonServer.builder()
+                .withExtensions(
+                        recording("test/first", events, null),
+                        recording("test/second", events, null),
+                        recording("test/broken", events, failure),
+                        recording("test/never", events, null));
+
+        assertThatThrownBy(builder::build).isSameAs(failure);
+
+        assertThat(events)
+                .as("the failing and later extensions never start; earlier ones unwind in reverse order")
+                .containsExactly(
+                        "bootstrap test/first",
+                        "bootstrap test/second",
+                        "bootstrap test/broken",
+                        "shutdown test/second",
+                        "shutdown test/first");
+    }
+
+    @Test
+    void shutdownFailureWhileUnwindingIsSuppressedNotMasked() {
+        var events = new ArrayList<String>();
+        var shutdownFailure = new IllegalStateException("cannot stop");
+        var failure = new IllegalStateException("boom");
+        var stubborn = recording("test/stubborn", events, null, shutdownFailure);
+        var builder = TachyonServer.builder().withExtensions(stubborn, recording("test/broken", events, failure));
+
+        assertThatThrownBy(builder::build).isSameAs(failure).hasSuppressedException(shutdownFailure);
+    }
+
+    private static ServerExtension recording(String id, List<String> events, RuntimeException bootstrapFailure) {
+        return recording(id, events, bootstrapFailure, null);
+    }
+
+    private static ServerExtension recording(
+            String id, List<String> events, RuntimeException bootstrapFailure, RuntimeException shutdownFailure) {
+        return new ServerExtension() {
+            @Override
+            public String extensionId() {
+                return id;
+            }
+
+            @Override
+            public AdvertiseMode advertiseMode() {
+                return AdvertiseMode.ALWAYS;
+            }
+
+            @Override
+            public void bootstrap(dev.tachyonmcp.api.server.extensions.ExtensionContext context) {
+                events.add("bootstrap " + id);
+                if (bootstrapFailure != null) {
+                    throw bootstrapFailure;
+                }
+            }
+
+            @Override
+            public void shutdown() {
+                events.add("shutdown " + id);
+                if (shutdownFailure != null) {
+                    throw shutdownFailure;
+                }
+            }
+        };
     }
 }

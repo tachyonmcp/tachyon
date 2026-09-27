@@ -254,6 +254,11 @@ final class DefaultServerBuilder implements ServerBuilder {
     }
 
     private void addExtension(ServerExtension extension) {
+        if (extension instanceof ConfigurableExtension<?>) {
+            var type = extension.getClass();
+            throw new IllegalArgumentException("Register " + type.getName() + " with withExtension("
+                    + type.getSimpleName() + ".class, ...), not as an instance");
+        }
         if (!extensionIds.add(extension.extensionId())) {
             throw new IllegalArgumentException("Duplicate extension ID: " + extension.extensionId());
         }
