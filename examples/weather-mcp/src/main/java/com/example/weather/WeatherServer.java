@@ -203,7 +203,7 @@ public final class WeatherServer {
                                             .thenApply(CompletionResult::of)
                                             .exceptionally(e -> CompletionResult.of(List.of()));
                                 }))
-                .session(session -> session.enabled(true))
+                .session(session -> session.enabled())
                 .build();
     }
 
