@@ -66,6 +66,7 @@ import io.netty.channel.ChannelPipeline;
 import io.netty.handler.codec.http.HttpRequest;
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -585,31 +586,57 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
     }
 
     private void bootstrapExtensions() {
-        for (var ext : extensions) {
-            for (var method : ext.methods()) {
-                extensionMethodOwners.put(method, ext.extensionId());
+        final var bootstrapped = new ArrayList<ServerExtension>();
+        try {
+            for (var ext : extensions) {
+                bootstrapExtension(ext);
+                bootstrapped.add(ext);
             }
-            extensionsById.put(ext.extensionId(), ext);
-            if (ext.negotiation() == ExtensionNegotiation.OPTIONAL) {
-                optionalNegotiationExtensionIds.add(ext.extensionId());
-            } else if (isStateless()) {
-                logger.warn(
-                        "Extension {} requires client negotiation, but sessions are disabled: "
-                                + "MCP 2025-11-25 clients may be rejected even after declaring it. Enable sessions or use OPTIONAL",
-                        ext.extensionId());
+        } catch (Throwable failure) {
+            unwindBootstrapped(bootstrapped, failure);
+            throw failure;
+        }
+    }
+
+    private void bootstrapExtension(ServerExtension ext) {
+        for (var method : ext.methods()) {
+            extensionMethodOwners.put(method, ext.extensionId());
+        }
+        extensionsById.put(ext.extensionId(), ext);
+        if (ext.negotiation() == ExtensionNegotiation.OPTIONAL) {
+            optionalNegotiationExtensionIds.add(ext.extensionId());
+        } else if (isStateless()) {
+            logger.warn(
+                    "Extension {} requires client negotiation, but sessions are disabled: "
+                            + "MCP 2025-11-25 clients may be rejected even after declaring it. Enable sessions or use OPTIONAL",
+                    ext.extensionId());
+        }
+        bootstrappingExtensionId = ext.extensionId();
+        try {
+            var binding = engineBindings.get(ext);
+            if (binding != null) {
+                bootstrap(binding, ext);
+            } else if (ext instanceof EngineExtension engineExtension) {
+                engineExtension.bootstrap((ServerEngine) this);
+            } else {
+                ext.bootstrap((ExtensionContext) this);
             }
-            bootstrappingExtensionId = ext.extensionId();
+        } finally {
+            bootstrappingExtensionId = null;
+        }
+    }
+
+    /**
+     * A failed bootstrap aborts construction before {@link #close()} can run, so the extensions that
+     * already started are shut down here, newest first. A shutdown error is attached to
+     * {@code failure} and never replaces it.
+     */
+    private static void unwindBootstrapped(List<ServerExtension> bootstrapped, Throwable failure) {
+        for (var ext : bootstrapped.reversed()) {
             try {
-                var binding = engineBindings.get(ext);
-                if (binding != null) {
-                    bootstrap(binding, ext);
-                } else if (ext instanceof EngineExtension engineExtension) {
-                    engineExtension.bootstrap((ServerEngine) this);
-                } else {
-                    ext.bootstrap((ExtensionContext) this);
-                }
-            } finally {
-                bootstrappingExtensionId = null;
+                ext.shutdown();
+            } catch (Throwable shutdownError) {
+                failure.addSuppressed(shutdownError);
             }
         }
     }

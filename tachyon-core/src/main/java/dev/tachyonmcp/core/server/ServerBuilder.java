@@ -93,6 +93,12 @@ public interface ServerBuilder {
     /**
      * Registers one or more {@link ServerExtension}s that need no configuration. For an extension
      * with options, use {@link #withExtension(Class, Consumer)}.
+     *
+     * @param extensions the extensions to register
+     * @return this builder
+     * @throws IllegalArgumentException if an extension is a {@link ConfigurableExtension}: those are
+     *     created by the server from {@link #withExtension(Class, Consumer)}, so each server builds
+     *     and bootstraps its own instance
      */
     ServerBuilder withExtensions(ServerExtension... extensions);
 
