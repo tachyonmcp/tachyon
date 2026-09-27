@@ -167,7 +167,7 @@ fun assembleServer(
             icons += Icon(LOGO, "image/png", listOf("256x256"))
             version = "1.0"
         }
-        session { enabled = true }
+        session { enable() }
         observability {
             slowRequestLogging()
             listener(McpOpenTelemetryListener.create(openTelemetry))

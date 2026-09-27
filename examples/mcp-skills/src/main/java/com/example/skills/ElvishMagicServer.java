@@ -50,11 +50,10 @@ public final class ElvishMagicServer {
                 .title("Elvish Magic Library")
                 .description("MCP server for fictional Elvish Agent Skills")
                 .version("1.0"))
-            .withExtensions(SkillsExtension.builder()
+            .withExtension(SkillsExtension.class, skills -> skills
                 .cacheScope("public")
                 .registry(new ClasspathSkillsRegistry("skills"))
-                .registry(new FilesystemSkillsRegistry(Path.of(System.getProperty("user.dir"),"src/data/skills")))
-                .build())
+                .registry(new FilesystemSkillsRegistry(Path.of(System.getProperty("user.dir"),"src/data/skills"))))
             .build();
     }
 }
