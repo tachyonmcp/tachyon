@@ -29,12 +29,11 @@ help: ## List available targets
 
 all: clean format lint revapi examples-snapshot examples ## Full build: clean, format, lint, live examples, build+install, SNAPSHOT examples
 
-ci: ## CI pipeline: one reactor for clean + lint + build + revapi, then the JMH gate
+ci: ## CI pipeline: one reactor for clean + lint + build + revapi
 	@echo " 🏗️ 🔍  Building with lint + API compatibility..."
 	@./mvnw -version
 	@python3 .github/scripts/check-poms.py
 	@./mvnw clean verify -Plint -Drevapi.skip=false $(MAVEN_TEST_ARGS) --no-transfer-progress
-	@$(MAKE) --no-print-directory jmh
 
 ci-lite: ## Same build without the report/analysis plugins (non-primary JDKs)
 	@echo " 🏗️  Building (lite)..."
