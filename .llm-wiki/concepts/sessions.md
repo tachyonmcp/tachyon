@@ -2,8 +2,8 @@
 title: Sessions
 tags: [concept, session, state]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/runtime/Session.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/session/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/SessionConfig.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultServerBuilder.java, tachyon-api/src/main/java/dev/tachyonmcp/api/server/session/SessionIdGenerator.java]
-updated: 2026-09-18
-commit: 6a895703
+updated: 2026-09-27
+commit: fae0c389
 ---
 
 # 🪪 Sessions
@@ -56,6 +56,8 @@ Stateless ⇒ `NoopSessionEventStore`: `append` discards, `drain` returns the cu
 
 - Defaults: TTL **30s**, janitor **5s** `SessionConfig#DEFAULT_SESSION_TTL`; `SessionConfig` compact ctor rejects session options when disabled `SessionConfig#STATELESS`.
 - Liveness bumped by: any request (`session.touch()` in dispatcher), any outbound byte (`SessionTouchHandler`), SSE heartbeat (15s default) — so open GET stream keeps session alive.
+- In-flight request ⇒ tracked from dispatch to completion: dispatcher `Session#attachRequest` per request ⇒ `Session.InFlightRequest`. Connected ⇒ not idle; its stream's close ⇒ `InFlightRequest#disconnected` (touches); completion ⇒ `InFlightRequest#completed` (untracks). Janitor expires only `Session#idle` sessions `SessionManager#sweep`. A disconnected waiter never pins its session.
+- `close` (local node only) completes each tracked `InFlightRequest#sessionClosed` ⇒ `InteractionContext#responseUndeliverable`. Registrations die with the request: long sessions accumulate nothing.
 - `DefaultTachyonServer` passes `config.runtime().clock()` + executor as persistence executor `DefaultTachyonServer#DefaultTachyonServer`.
 
 ## 📨 Server → client

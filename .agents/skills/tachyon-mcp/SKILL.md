@@ -172,12 +172,12 @@ Full: `resources/java/PromptFnExample.java`
 Configs: `FeatureConfig` (tools/prompts: `mode`, `listChanged`, `pageSize`), `ResourcesConfig` (+ `subscribe`).
 Tasks are no capability config: `.withExtension(TasksExtension.class, t -> t.connector(c))` (`tachyon-extensions-tasks`);
 builder: `connector` (required), `pageSize`, `keepAlive` (5 min, terminal result retention), `pollInterval`
-(none, wire-visible suggestion), `@LegacyApi` `resultPollInterval`/`resultMaxWait`. Kotlin: `tasks(connector) { }`.
+(none, wire-visible suggestion), `@LegacyApi` `resultPollInterval`. Kotlin: `tasks(connector) { }`.
 
 `TaskConnector.builder().get(fn).cancel(fn).update(fn).list(fn).awaitResult(fn).build()` — `get`,
 `cancel`, and `update` are required by the modern Tasks extension. `list`/`awaitResult` are optional
 (no `awaitResult` ⇒ `tasks/result` polls `get` at the snapshot's `pollInterval` else `resultPollInterval` 1s,
-bounded by task `ttl` ⇒ -32602 expired and `resultMaxWait` 5min ⇒ -32603). `cancel` is fire-and-forget; for
+no time bound; ends at task `ttl` ⇒ -32602 expired, or silently once the response is undeliverable). `cancel` is fire-and-forget; for
 2025-11-25 clients Tachyon rejects terminal tasks (-32602) and polls `get` the same way until `cancelled`
 and `@Deprecated(forRemoval = false)`: legacy MCP 2025-11-25
 (pre-SEP-2663) surface, kept for compatibility.

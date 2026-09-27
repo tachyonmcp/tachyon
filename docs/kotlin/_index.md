@@ -524,7 +524,7 @@ Available via `ToolScope.arguments` (or `PromptScope.arguments`):
 |---|---|---|
 | `ServerInfoScope` | `info { }` | `name`, `version`, `description`, `title`, `instructions` |
 | `CapabilitiesScope` | `capabilities { }` | `tools()`, `resources()`, `prompts()`, `logging`, `completionsMode` |
-| `TasksScope` | `tasks(connector) { }` | `pageSize`, `keepAlive`, `pollInterval`, `resultPollInterval`, `resultMaxWait` |
+| `TasksScope` | `tasks(connector) { }` | `pageSize`, `keepAlive`, `pollInterval`, `resultPollInterval` |
 | `NetworkScope` | `network { }` | `host`, `port`, `endpointPath`, `allowedOrigins`, `allowedHeaders`, `allowedHosts`, `maxContentLength`, `maxPipelinedRequests`, `maxPendingSseBytes` |
 | `SessionScope` | `session { }` | `enable()`, `sessionTtl`, `sessionIdGenerator` |
 | `RuntimeScope` | `runtime { }` | `shutdownGracePeriod`, `requestTimeout`, `clock` |

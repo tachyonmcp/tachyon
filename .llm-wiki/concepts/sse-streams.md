@@ -2,8 +2,8 @@
 title: SSE streams
 tags: [concept, transport, sse]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpInitializationHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/sse/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/OutboundSseStream.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/OutboundSseStreamMessageRouter.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpOperationHandler.java]
-updated: 2026-09-24
-commit: fcb51799
+updated: 2026-09-27
+commit: fae0c389
 ---
 
 # 📡 SSE streams
@@ -15,6 +15,7 @@ Verdict: two stream kinds. **POST-SSE** = per-request, lazy: JSON response unles
 | Type | Role | Proof |
 |---|---|---|
 | `OutboundSseStream` | transport-neutral: `start`, `started`, `writeEvent` (may block off I/O thread), `offerEvent` (never blocks), `comment`, `close`, `onClose`, `streamKey`, `channelId` | `OutboundSseStream` |
+| `onClose` | callbacks queued on the stream, run once by its single `closeFuture` listener; a stream ended as plain JSON drops the listener and its callbacks ⇒ keep-alive connections gather no per-request listeners; registered after the close ⇒ runs at once | `PostSseStream#onClose` |
 | `PostSseStream` | Netty impl, state machine `NEW/OPEN/CLOSED_UNOPENED/CLOSED_OPENED`, lifecycle on event loop, producer-side encode + byte budget | `PostSseStream` |
 | `NettySseConnection` | `SseConnection` for GET stream, close listener | `NettySseConnection` |
 | `SseManager` | open GET streams, priming, replay | `SseManager` |
