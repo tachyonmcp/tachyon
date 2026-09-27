@@ -309,7 +309,7 @@ overloads have been removed, use `.name(...)` on the builder instead. `.tool(nam
 
 ## Extensions
 
-SEP-2133. Stable: `ServerExtension`, `ExtensionContext`, `withExtension`. Built-ins: Tasks (`tachyon-extensions-tasks`, `.withExtension(TasksExtension.class, t -> t.connector(connector))`), Skills (`tachyon-extensions-skills`, `.withExtension(SkillsExtension.class, s -> s.registry(registry))`; `withExtensions(SkillsExtension.builder()...build())` deprecated).
+SEP-2133. Stable: `ServerExtension`, `ExtensionContext`, `withExtension`. Built-ins: Tasks (`tachyon-extensions-tasks`, `.withExtension(TasksExtension.class, t -> t.connector(connector))`), Skills (`tachyon-extensions-skills`, `.withExtension(SkillsExtension.class, s -> s.registry(registry))`).
 
 ```java
 public interface ServerExtension extends Extension<InteractionContext> {

@@ -34,8 +34,8 @@ Skills extension ID is `io.modelcontextprotocol/skills`. By default any client c
 declared or not; strict [negotiation](#extension-negotiation) is opt-in. Skill files remain
 available through the standard Resources API.
 
-⚠️ `SkillsExtension.builder()...build()` passed to `withExtensions(...)` is deprecated for removal.
-Use `withExtension(SkillsExtension.class, skills -> ...)`: each server builds its own instance.
+Register the extension with `withExtension(SkillsExtension.class, skills -> ...)`: each server builds
+its own instance. `SkillsExtension.builder()`, deprecated in 1.0.0-beta.32, is removed.
 
 ## Skill directory layout
 

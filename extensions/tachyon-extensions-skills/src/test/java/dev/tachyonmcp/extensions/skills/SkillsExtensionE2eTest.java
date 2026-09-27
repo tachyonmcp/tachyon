@@ -12,7 +12,6 @@ import dev.tachyonmcp.api.server.extensions.ExtensionNegotiation;
 import dev.tachyonmcp.core.server.features.resources.MimeTypes;
 import dev.tachyonmcp.testkit.Mcp20251125Client;
 import dev.tachyonmcp.testkit.Mcp20260728Client;
-import dev.tachyonmcp.testkit.McpTestServers;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -119,26 +118,6 @@ class SkillsExtensionE2eTest {
             assertThat(result.path("resultType").asString()).isEqualTo("complete");
             assertThat(result.path("ttlMs").asLong()).isEqualTo(60_000L);
             assertThat(result.path("cacheScope").asString()).isEqualTo("private");
-        }
-    }
-
-    @Test
-    @SuppressWarnings("removal")
-    void deprecatedBuilderInstanceStillRegistersThroughWithExtensions() throws Exception {
-        SkillsExtension extension = SkillsExtension.builder()
-                .registry(classpathSkillsRegistry)
-                .cacheTtlMs(1_000)
-                .build();
-        try (var server = McpTestServers.start(builder -> builder.withExtensions(extension), it -> {});
-                var client = createClient(server.port())) {
-            // language=JSON
-            var list = client.sendRpc("""
-                    {"jsonrpc":"2.0","id":1,"method":"skills/list"}
-                """);
-            final var result = assertThat(list).isSuccess().result();
-            assertThat(result.path("ttlMs").asLong()).isEqualTo(1_000L);
-            assertThat(result.path("skills").findValuesAsString("uri")).contains("skill://pdf-processing/SKILL.md");
-            assertThat(server.extension(SkillsExtension.class)).containsSame(extension);
         }
     }
 

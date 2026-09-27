@@ -2,7 +2,7 @@
 title: tachyon-extensions-skills
 tags: [module, extensions, skills]
 sources: [extensions/tachyon-extensions-skills/src/main/java/dev/tachyonmcp/extensions/skills/, extensions/tachyon-extensions-skills/src/main/resources/, extensions/tachyon-extensions-skills/protocol/, extensions/tachyon-extensions-skills/pom.xml, extensions/tachyon-extensions-skills/revapi.json]
-updated: 2026-09-27
+updated: 2026-09-28
 commit: 643738d5
 ---
 
@@ -16,7 +16,7 @@ Verdict: standalone module (split out of `tachyon-extensions`) exposing `SKILL.m
 
 | Aspect | Value | Proof |
 |---|---|---|
-| registration | `ConfigurableExtension` + `@ProvidedBy(SkillsExtensionProvider)` ⇒ `withExtension(SkillsExtension.class, b -> b.registry(...))`; 🗑️ deprecated `builder()` keeps its beta.31 binary signature (returns `Builder`, public ctor); its instance goes to `withExtensions(...)`, which accepts it because the provider is no `EngineBinding` (`ExtensionProviders#bindsEngine`) | [SkillsExtensionProvider](../../extensions/tachyon-extensions-skills/src/main/java/dev/tachyonmcp/extensions/skills/SkillsExtensionProvider.java), [SkillsExtension#builder](../../extensions/tachyon-extensions-skills/src/main/java/dev/tachyonmcp/extensions/skills/SkillsExtension.java) |
+| registration | `ConfigurableExtension` + `@ProvidedBy(SkillsExtensionProvider)` ⇒ `withExtension(SkillsExtension.class, b -> b.registry(...))` only: `Builder` ctor is package-private, created by the provider; no public factory | [SkillsExtensionProvider](../../extensions/tachyon-extensions-skills/src/main/java/dev/tachyonmcp/extensions/skills/SkillsExtensionProvider.java), [SkillsExtension.Builder](../../extensions/tachyon-extensions-skills/src/main/java/dev/tachyonmcp/extensions/skills/SkillsExtension.java) |
 | id | `io.modelcontextprotocol/skills` | [SkillsExtension#ID](../../extensions/tachyon-extensions-skills/src/main/java/dev/tachyonmcp/extensions/skills/SkillsExtension.java) |
 | advertise | `ALWAYS`, settings `{directoryRead: true}` | [SkillsExtension#advertiseMode](../../extensions/tachyon-extensions-skills/src/main/java/dev/tachyonmcp/extensions/skills/SkillsExtension.java), [SkillsExtension#serverSettings](../../extensions/tachyon-extensions-skills/src/main/java/dev/tachyonmcp/extensions/skills/SkillsExtension.java) |
 | negotiation | builder `negotiation(...)`, **default `OPTIONAL`** ⇒ serves undeclared clients (e.g. MCP Inspector, stateless 2025-11-25; same advertisement). `REQUIRED` opt-in ⇒ undeclared ⇒ missing required client capability: -32003 (2025-11-25), -32021 + HTTP 400 (2026-07-28); base `resources/list\|read` still served | [SkillsExtension#negotiation](../../extensions/tachyon-extensions-skills/src/main/java/dev/tachyonmcp/extensions/skills/SkillsExtension.java), [SkillsExtension.Builder#negotiation](../../extensions/tachyon-extensions-skills/src/main/java/dev/tachyonmcp/extensions/skills/SkillsExtension.java); codes in `McpResponseMapper` (v2025_11_25, v2026_07_28) |

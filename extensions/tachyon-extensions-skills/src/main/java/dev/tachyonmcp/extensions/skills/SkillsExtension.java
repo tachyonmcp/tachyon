@@ -79,19 +79,6 @@ public final class SkillsExtension implements ConfigurableExtension<SkillsExtens
         this.fileUris = Set.copyOf(uris);
     }
 
-    /**
-     * Creates a builder for a standalone extension instance registered with
-     * {@code ServerBuilder.withExtensions(...)}.
-     *
-     * @return a new builder
-     * @deprecated Configure through {@code ServerBuilder.withExtension(SkillsExtension.class, skills
-     *     -> skills.registry(...))}, so each server builds its own instance.
-     */
-    @Deprecated(forRemoval = true)
-    public static Builder builder() {
-        return new Builder();
-    }
-
     @Override
     public String extensionId() {
         return ID;
@@ -273,11 +260,8 @@ public final class SkillsExtension implements ConfigurableExtension<SkillsExtens
         private String cacheScope = "public";
         private ExtensionNegotiation negotiation = ExtensionNegotiation.OPTIONAL;
 
-        /**
-         * Creates a builder with default settings. Prefer
-         * {@code ServerBuilder.withExtension(SkillsExtension.class, ...)}, which creates it.
-         */
-        public Builder() {}
+        /** Created by {@link SkillsExtensionProvider} for {@code withExtension(SkillsExtension.class, ...)}. */
+        Builder() {}
 
         /**
          * Adds a skill registry. Construct {@link FilesystemSkillsRegistry} or

@@ -3,7 +3,27 @@
     "extension": "revapi.differences",
     "configuration": {
       "ignore": true,
-      "differences": []
+      "differences": [
+        {
+          "ignore": true,
+          "code": "java.method.removed",
+          "old": "method dev.tachyonmcp.extensions.skills.SkillsExtension.Builder dev.tachyonmcp.extensions.skills.SkillsExtension::builder()",
+          "justification": "Deprecated for removal in 1.0.0-beta.32. Register skills with withExtension(SkillsExtension.class, skills -> skills.registry(...)), so each server builds its own instance.",
+          "attachments": {
+            "since": "1.0.0"
+          }
+        },
+        {
+          "ignore": true,
+          "code": "java.method.visibilityReduced",
+          "old": "method void dev.tachyonmcp.extensions.skills.SkillsExtension.Builder::<init>()",
+          "new": "method void dev.tachyonmcp.extensions.skills.SkillsExtension.Builder::<init>()",
+          "justification": "SkillsExtension.Builder is created by SkillsExtensionProvider for withExtension(SkillsExtension.class, ...); the public constructor only served the removed standalone builder() path.",
+          "attachments": {
+            "since": "1.0.0"
+          }
+        }
+      ]
     }
   }
 ]
