@@ -11,12 +11,16 @@ import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpResponseStatus;
+import io.netty.handler.codec.http.HttpUtil;
 import io.netty.handler.codec.http.HttpVersion;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Guards against DNS-rebinding attacks by validating the {@code Host} and {@code Origin} headers.
@@ -28,6 +32,11 @@ import java.util.stream.Collectors;
  * <em>multiple</em> {@code Host} headers is rejected (RFC&nbsp;7230 §5.4), and a missing/blank {@code
  * Host} is rejected on HTTP/1.1+ (where {@code Host} is mandatory). HTTP/1.0, where {@code Host} is
  * optional, is exempt from the missing-Host rule.
+ *
+ * <p><b>Absolute-form.</b> An {@code http(s)://authority/path} request-target (RFC&nbsp;9112 §3.2.2)
+ * names the authority the server targets, so that authority, not {@code Host}, must pass the check
+ * above. A {@code Host} that differs from it is rejected with {@code 400 Bad Request} (§3.2). An
+ * accepted request is rewritten to origin-form, so later handlers only ever see a path.
  *
  * <p><b>Origin.</b> When present, {@code Origin} must be a serialized origin, {@code
  * http(s)://host[:port]} with no path, query, fragment or user info ({@link Origins#canonical}), and
@@ -110,7 +119,7 @@ public class DnsRebindingProtectionHandler extends ChannelInboundHandlerAdapter 
                 reject(ctx, msg);
                 return;
             }
-            var origin = origins.isEmpty() ? null : origins.get(0);
+            var origin = origins.isEmpty() ? null : origins.getFirst();
             if (origin != null && !isAllowedOrigin(origin)) {
                 reject(ctx, msg);
                 return;
@@ -121,7 +130,14 @@ public class DnsRebindingProtectionHandler extends ChannelInboundHandlerAdapter 
                 reject(ctx, msg);
                 return;
             }
-            var host = hosts.isEmpty() ? null : hosts.get(0);
+            var host = hosts.isEmpty() ? null : hosts.getFirst();
+            var target = absoluteFormTarget(req.uri());
+            var authority = target == null ? host : target.getRawAuthority();
+            if (target != null && host != null && !target.getRawAuthority().equalsIgnoreCase(host)) {
+                // RFC 9112 §3.2: Host must equal the absolute-form authority the server targets.
+                rejectAndClose(ctx, msg, HttpResponseStatus.BAD_REQUEST, "Bad Request");
+                return;
+            }
             if (host == null || host.isBlank()) {
                 // HTTP/1.1+ mandates Host; a DNS-rebinding guard must fail closed on its absence.
                 // HTTP/1.0 permits omitting it, so it is exempt.
@@ -129,12 +145,45 @@ public class DnsRebindingProtectionHandler extends ChannelInboundHandlerAdapter 
                     reject(ctx, msg);
                     return;
                 }
-            } else if (!isLocalhostAuthority(host) && !isAllowedHost(host)) {
+            }
+            if (authority != null
+                    && !authority.isBlank()
+                    && !isLocalhostAuthority(authority)
+                    && !isAllowedHost(authority)) {
                 reject(ctx, msg);
                 return;
             }
+            if (target != null) {
+                req.setUri(originForm(target));
+            }
         }
         ctx.fireChannelRead(msg);
+    }
+
+    /**
+     * Parses an {@code http(s)} absolute-form request-target (RFC 9112 §3.2.2). Returns {@code null}
+     * for origin-form, asterisk-form, other schemes, or unparseable targets: those never match the
+     * endpoint path, so {@link EndpointValidatorHandler} answers them {@code 404}.
+     */
+    private static @Nullable URI absoluteFormTarget(String uri) {
+        if (HttpUtil.isOriginForm(uri)) {
+            return null;
+        }
+        try {
+            var target = new URI(uri);
+            var scheme = target.getScheme();
+            var isHttp = "http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme);
+            return isHttp && target.getRawAuthority() != null ? target : null;
+        } catch (URISyntaxException e) {
+            return null;
+        }
+    }
+
+    private static String originForm(URI target) {
+        var path = target.getRawPath();
+        var query = target.getRawQuery();
+        var originPath = path == null || path.isEmpty() ? "/" : path;
+        return query == null ? originPath : originPath + '?' + query;
     }
 
     /**

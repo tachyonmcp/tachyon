@@ -2,8 +2,8 @@
 title: Netty pipeline
 tags: [concept, transport, netty]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/http/]
-updated: 2026-09-24
-commit: d2a0bdba
+updated: 2026-09-27
+commit: a3cf5df7
 ---
 
 # 🧪 Netty pipeline
@@ -30,7 +30,7 @@ Verdict: one static-order pipeline per channel. Every registered `Protocol`'s ha
 | – | `session-touch` | `SessionTouchHandler` | added lazily after `http` (ahead of `http-pipelining`) when session bound; every outbound write `touch()`es session `SessionTouchHandler#install` |
 | 3 | `http-pipelining` | `HttpPipeliningGate` (per channel) | one request in flight per connection: a pipelined request (and its content) is queued until the previous response's `LastHttpContent` is written, so responses leave in request order (RFC 9112 §9.3.2) — errors, JSON, 202 and POST-SSE alike. `1xx` doesn't complete a request. A final non-keep-alive response drops the queue **and** every later request: nothing runs unanswered `HttpPipeliningGate#write`. Cap `NetworkConfig#maxPipelinedRequests` (default 16, `0` = no pipelining) queued requests: one more ⇒ it and every later read are released unrun, and once the ones ahead are answered it gets `429 Too Many Requests` + `Connection: close` (no CORS: it never passed the guards), then the channel closes `HttpPipeliningGate#channelRead`, `HttpPipeliningGate#drain`. Owns `autoRead` → 🌊 Backpressure |
 | 4 | `http-keep-alive` | `HttpServerKeepAliveHandler` | honors `Connection`; responses set keep-alive intent |
-| 5 | `dns-rebinding` | `DnsRebindingProtectionHandler` | 403 → [[security-guards]] |
+| 5 | `dns-rebinding` | `DnsRebindingProtectionHandler` | 403; 400 absolute-form `Host` mismatch; rewrites accepted absolute-form to origin-form, so `mcp-endpoint` and later see a path only → [[security-guards]] |
 | 6 | `mcp-endpoint` | `EndpointValidatorHandler` | 404 path ≠ endpoint (trailing `/`, query ignored) `EndpointValidatorHandler#channelRead`. **Only** path check: every later handler and `Protocol#matches` trust it, so a custom `endpointPath` works end to end. Ahead of CORS ⇒ other paths get no CORS grant |
 | – | `cors-mcp-param` | `CorsPreflightHandler` | just before `cors`: canonicalizes the preflight Origin for Netty during the synchronous call, applies its original `CorsDecision` (including Vary on misses), then clears call-scoped state; appends requested `Mcp-Param-<token>` names to a granted preflight's `Access-Control-Allow-Headers` (no `*`) `CorsPreflightHandler#write` |
 | 7 | `cors` | `TachyonCorsHandler` | always (non-null `NettyServerConfig#corsConfig`, default `NettyServerConfig#defaultCorsConfig`); answers preflights synchronously with Netty's method/header logic and `CorsPreflightHandler`'s request decision; `write()` is a pass-through — writers apply the request's own `CorsDecision` (`TachyonCorsHandler#decide`) → [[security-guards]] |
