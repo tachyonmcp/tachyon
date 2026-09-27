@@ -6,21 +6,22 @@
       "differences": [
         {
           "ignore": true,
-          "code": "java.class.removed",
-          "old": "class dev.tachyonmcp.extensions.skills.PathSkillsRegistry",
-          "justification": "PathSkillsRegistry was replaced by FilesystemSkillsRegistry",
+          "code": "java.method.returnTypeChanged",
+          "old": "method dev.tachyonmcp.extensions.skills.SkillsExtension.Builder dev.tachyonmcp.extensions.skills.SkillsExtension::builder()",
+          "new": "method dev.tachyonmcp.extensions.skills.SkillsExtension.InstanceBuilder dev.tachyonmcp.extensions.skills.SkillsExtension::builder()",
+          "justification": "SkillsExtension is now a ConfigurableExtension registered with withExtension(SkillsExtension.class, ...). The deprecated builder() returns InstanceBuilder, whose build() yields a plain ServerExtension that withExtensions(...) still accepts. Fluent source compiles unchanged; callers must recompile.",
           "attachments": {
-            "since": "1.0.0-beta.22"
+            "since": "1.0.0-beta.32"
           }
         },
         {
           "ignore": true,
-          "code": "java.method.numberOfParametersChanged",
-          "old": "method void dev.tachyonmcp.extensions.skills.SkillsRegistry.SkillFile::<init>(java.lang.String, java.lang.String, java.lang.String, java.lang.String)",
-          "new": "method void dev.tachyonmcp.extensions.skills.SkillsRegistry.SkillFile::<init>(java.lang.String, java.lang.String, java.lang.String, java.lang.String, long)",
-          "justification": "SkillFile now carries the scanned resource size required by the skills/list and skills/get payloads.",
+          "code": "java.method.visibilityReduced",
+          "old": "method void dev.tachyonmcp.extensions.skills.SkillsExtension.Builder::<init>()",
+          "new": "method void dev.tachyonmcp.extensions.skills.SkillsExtension.Builder::<init>()",
+          "justification": "SkillsExtension.Builder is created by SkillsExtensionProvider for withExtension(SkillsExtension.class, ...). An instance it builds is a ConfigurableExtension, which withExtensions(...) rejects.",
           "attachments": {
-            "since": "1.0.0-beta.22"
+            "since": "1.0.0-beta.32"
           }
         }
       ]

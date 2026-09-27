@@ -18,8 +18,7 @@ class SkillsExtensionProbe {
     public static void main(String... args) throws InterruptedException {
         try (var server = TachyonServer.builder()
                 .port(8080)
-                .withExtensions(
-                        SkillsExtension.builder().registry(combinedRegistry).build())
+                .withExtension(SkillsExtension.class, skills -> skills.registry(combinedRegistry))
                 .build()) {
             server.start();
             new CountDownLatch(1).await();

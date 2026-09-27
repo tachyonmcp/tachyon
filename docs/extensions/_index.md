@@ -19,7 +19,7 @@ advertises the extensions it supports; a client declares the ones it uses. To bu
 | Extension | ID | Module | Enable with |
 |---|---|---|---|
 | [Tasks](tasks.md) | `io.modelcontextprotocol/tasks` | `tachyon-extensions-tasks` | `.withExtension(TasksExtension.class, t -> t.connector(connector))` |
-| [Skills](skills.md) | `io.modelcontextprotocol/skills` | `tachyon-extensions-skills` | `.withExtensions(SkillsExtension.builder()...build())` |
+| [Skills](skills.md) | `io.modelcontextprotocol/skills` | `tachyon-extensions-skills` | `.withExtension(SkillsExtension.class, s -> s.registry(registry))` |
 
 ## Add an extension
 
@@ -32,21 +32,21 @@ Add the extension's module. `tachyon-bom` manages its version:
 </dependency>
 ```
 
-Then register it on the server builder. `withExtensions` takes several extensions at once:
+Then register it on the server builder by class and configure its builder:
 
 ```java
 var server = TachyonServer.builder()
-        .withExtensions(SkillsExtension.builder()
-                .registry(new FilesystemSkillsRegistry(Path.of("skills")))
-                .build())
+        .withExtension(SkillsExtension.class, skills -> skills
+                .registry(new FilesystemSkillsRegistry(Path.of("skills"))))
         .port(8080)
         .build();
 server.start();
 ```
 
-In the Kotlin DSL, use `extensions(...)` on the builder. Configurable extensions such as
-[Tasks](tasks.md) are registered by class instead, with `withExtension(TasksExtension.class, …)` in
-Java or `tasks(connector) { }` in Kotlin; `withExtensions` rejects their instances.
+Configurable extensions ([Tasks](tasks.md), [Skills](skills.md)) are registered by class with
+`withExtension(Type.class, …)`; `withExtensions` takes ready-made instances of extensions that need no
+configuration and rejects configurable ones. Kotlin: `withExtension(SkillsExtension::class.java) {
+registry(registry) }`, `tasks(connector) { }` for Tasks, `extensions(...)` for instances.
 
 ## What clients must send
 

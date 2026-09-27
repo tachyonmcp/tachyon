@@ -6,6 +6,7 @@ import dev.tachyonmcp.testkit.Mcp20260728Client;
 import dev.tachyonmcp.testkit.McpTestServers;
 import java.nio.file.Path;
 import java.util.Map;
+import java.util.function.Consumer;
 import tools.jackson.databind.node.JsonNodeFactory;
 
 class SkillTestFixtures {
@@ -13,8 +14,8 @@ class SkillTestFixtures {
     static final Path filesystemSkillsDir = Path.of("./src/test/data/skills/");
     static final Path classpathSkillsDir = Path.of("./src/test/resources/skills/");
 
-    static TachyonServer startServer(SkillsExtension extension) {
-        return McpTestServers.start(builder -> builder.withExtensions(extension), it -> {});
+    static TachyonServer startServer(Consumer<SkillsExtension.Builder> skills) {
+        return McpTestServers.start(builder -> builder.withExtension(SkillsExtension.class, skills), it -> {});
     }
 
     static Mcp20260728Client createClient(int port) {

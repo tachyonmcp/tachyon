@@ -1,9 +1,9 @@
 ---
 title: tachyon-extensions-skills
 tags: [module, extensions, skills]
-sources: [extensions/tachyon-extensions-skills/src/main/java/dev/tachyonmcp/extensions/skills/, extensions/tachyon-extensions-skills/src/main/resources/, extensions/tachyon-extensions-skills/protocol/, extensions/tachyon-extensions-skills/pom.xml]
-updated: 2026-09-26
-commit: 66106c6b
+sources: [extensions/tachyon-extensions-skills/src/main/java/dev/tachyonmcp/extensions/skills/, extensions/tachyon-extensions-skills/src/main/resources/, extensions/tachyon-extensions-skills/protocol/, extensions/tachyon-extensions-skills/pom.xml, extensions/tachyon-extensions-skills/revapi.json]
+updated: 2026-09-27
+commit: 89be3224
 ---
 
 # 🎓 tachyon-extensions-skills
@@ -16,6 +16,7 @@ Verdict: standalone module (split out of `tachyon-extensions`) exposing `SKILL.m
 
 | Aspect | Value | Proof |
 |---|---|---|
+| registration | `ConfigurableExtension` + `@ProvidedBy(SkillsExtensionProvider)` ⇒ `withExtension(SkillsExtension.class, b -> b.registry(...))`; builder ctor package-private. 🗑️ deprecated `builder()` → `InstanceBuilder` whose `build()` wraps in private `Standalone` (plain `ServerExtension`, delegates) so `withExtensions(...)` still accepts it | [SkillsExtensionProvider](../../extensions/tachyon-extensions-skills/src/main/java/dev/tachyonmcp/extensions/skills/SkillsExtensionProvider.java), [SkillsExtension#builder](../../extensions/tachyon-extensions-skills/src/main/java/dev/tachyonmcp/extensions/skills/SkillsExtension.java), [SkillsExtension.InstanceBuilder](../../extensions/tachyon-extensions-skills/src/main/java/dev/tachyonmcp/extensions/skills/SkillsExtension.java) |
 | id | `io.modelcontextprotocol/skills` | [SkillsExtension#ID](../../extensions/tachyon-extensions-skills/src/main/java/dev/tachyonmcp/extensions/skills/SkillsExtension.java) |
 | advertise | `ALWAYS`, settings `{directoryRead: true}` | [SkillsExtension#advertiseMode](../../extensions/tachyon-extensions-skills/src/main/java/dev/tachyonmcp/extensions/skills/SkillsExtension.java), [SkillsExtension#serverSettings](../../extensions/tachyon-extensions-skills/src/main/java/dev/tachyonmcp/extensions/skills/SkillsExtension.java) |
 | negotiation | builder `negotiation(...)`, **default `OPTIONAL`** ⇒ serves undeclared clients (e.g. MCP Inspector, stateless 2025-11-25; same advertisement). `REQUIRED` opt-in ⇒ undeclared ⇒ missing required client capability: -32003 (2025-11-25), -32021 + HTTP 400 (2026-07-28); base `resources/list\|read` still served | [SkillsExtension#negotiation](../../extensions/tachyon-extensions-skills/src/main/java/dev/tachyonmcp/extensions/skills/SkillsExtension.java), [SkillsExtension.Builder#negotiation](../../extensions/tachyon-extensions-skills/src/main/java/dev/tachyonmcp/extensions/skills/SkillsExtension.java); codes in `McpResponseMapper` (v2025_11_25, v2026_07_28) |
@@ -44,6 +45,6 @@ Validation `SkillsScanner.buildSkill`: `SKILL.md` required, YAML frontmatter (Sn
 
 ## 🪶 Backward compat
 
-Split out of `tachyon-extensions` (`[[tachyon-extensions]]`); no revapi baseline yet for this artifact (skipped, same as `integrations/*` modules until first release). `extensions/tachyon-extensions/revapi.json` waives the resulting `java.class.removed` diffs for the moved public types.
+Split out of `tachyon-extensions` (`[[tachyon-extensions]]`); revapi checks this artifact against `api.oldVersion` (`revapi-maven-plugin` in its `pom.xml`); waivers in `extensions/tachyon-extensions-skills/revapi.json`. `extensions/tachyon-extensions/revapi.json` waives the resulting `java.class.removed` diffs for the moved public types.
 
 Related: [[tachyon-extensions]], [[extensions]].
