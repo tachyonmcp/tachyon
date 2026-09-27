@@ -13,14 +13,18 @@ import java.util.List;
 
 /**
  * Test-only extension found through {@link ProvidedBy} alone (no service file), whose provider
- * bootstraps it on the engine.
+ * installs and bootstraps it on the engine. Every lifecycle call lands in {@link #events}.
  */
 @ProvidedBy(AnnotatedExtension.Provider.class)
 public final class AnnotatedExtension implements ConfigurableExtension<AnnotatedExtension.Builder> {
 
     public static final String ID = "test/annotated";
 
-    public final List<String> bootstraps = new ArrayList<>();
+    public final List<String> events;
+
+    private AnnotatedExtension(List<String> events) {
+        this.events = events;
+    }
 
     @Override
     public String extensionId() {
@@ -34,13 +38,25 @@ public final class AnnotatedExtension implements ConfigurableExtension<Annotated
 
     @Override
     public void bootstrap(ExtensionContext context) {
-        bootstraps.add("context");
+        events.add("context");
+    }
+
+    @Override
+    public void shutdown() {
+        events.add("shutdown");
     }
 
     public static final class Builder implements ExtensionBuilder<AnnotatedExtension> {
+        private List<String> events = new ArrayList<>();
+
+        public Builder events(List<String> events) {
+            this.events = events;
+            return this;
+        }
+
         @Override
         public AnnotatedExtension build() {
-            return new AnnotatedExtension();
+            return new AnnotatedExtension(events);
         }
     }
 
@@ -57,8 +73,13 @@ public final class AnnotatedExtension implements ConfigurableExtension<Annotated
         }
 
         @Override
+        public void install(AnnotatedExtension extension, ServerEngine engine) {
+            extension.events.add("install");
+        }
+
+        @Override
         public void bootstrap(AnnotatedExtension extension, ServerEngine engine) {
-            extension.bootstraps.add("binding");
+            extension.events.add("binding");
         }
     }
 }

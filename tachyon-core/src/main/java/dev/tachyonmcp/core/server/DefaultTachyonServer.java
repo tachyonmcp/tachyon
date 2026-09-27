@@ -555,19 +555,37 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
     }
 
     @SuppressWarnings("unchecked")
+    private <E extends ServerExtension> void install(EngineBinding<E> binding, ServerExtension extension) {
+        binding.install((E) extension, this);
+    }
+
+    @SuppressWarnings("unchecked")
     private <E extends ServerExtension> void bootstrap(EngineBinding<E> binding, ServerExtension extension) {
         binding.bootstrap((E) extension, this);
     }
 
+    /**
+     * Installs every engine binding's runtimes, then bootstraps extensions in registration order, so
+     * a feature registered during bootstrap finds the runtimes it needs whatever the builder order.
+     */
     private void bootstrapExtensions() {
-        final var bootstrapped = new ArrayList<ServerExtension>();
+        final var started = new ArrayList<ServerExtension>();
         try {
             for (var ext : extensions) {
+                var binding = engineBindings.get(ext);
+                if (binding != null) {
+                    install(binding, ext);
+                    started.add(ext);
+                }
+            }
+            for (var ext : extensions) {
                 bootstrapExtension(ext);
-                bootstrapped.add(ext);
+                if (!engineBindings.containsKey(ext)) {
+                    started.add(ext);
+                }
             }
         } catch (Throwable failure) {
-            unwindBootstrapped(bootstrapped, failure);
+            unwindStarted(started, failure);
             throw failure;
         }
     }
@@ -601,12 +619,13 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
     }
 
     /**
-     * A failed bootstrap aborts construction before {@link #close()} can run, so the extensions that
-     * already started are shut down here, newest first. A shutdown error is attached to
+     * A failed install or bootstrap aborts construction before {@link #close()} can run, so the
+     * extensions that already started are shut down here, newest first. An installed binding counts
+     * as started, so it unwinds after the extensions that bootstrapped. A shutdown error is attached to
      * {@code failure} and never replaces it.
      */
-    private static void unwindBootstrapped(List<ServerExtension> bootstrapped, Throwable failure) {
-        for (var ext : bootstrapped.reversed()) {
+    private static void unwindStarted(List<ServerExtension> started, Throwable failure) {
+        for (var ext : started.reversed()) {
             try {
                 ext.shutdown();
             } catch (Throwable shutdownError) {

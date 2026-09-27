@@ -83,18 +83,26 @@ public final class TasksExtension implements ConfigurableExtension<TasksExtensio
         return current;
     }
 
-    /** Starts this server's engine and serves the MCP task methods; called by {@link TasksExtensionProvider}. */
-    void attach(ServerEngine server) {
+    /**
+     * Creates this server's engine and installs it as the task runtime, before any extension
+     * registers task-capable tools; called by {@link TasksExtensionProvider}.
+     */
+    void install(ServerEngine server) {
         var created = new TaskEngine(settings, server.config().runtime().clock());
         var binding = new McpTaskBinding(server, created);
         created.addListener(binding);
         server.installTaskRuntime(binding);
+        engine = created;
+    }
+
+    /** Serves the MCP task methods and starts the engine; called by {@link TasksExtensionProvider}. */
+    void attach(ServerEngine server) {
+        var created = Objects.requireNonNull(engine, "install runs before attach");
         TaskMethodHandlers.register(server, created);
         if (settings.list()) {
             created.onChange(() -> server.broadcastNotification("notifications/tasks/list_changed", Map.of()));
         }
         created.start();
-        engine = created;
     }
 
     @Override

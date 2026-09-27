@@ -147,9 +147,9 @@ class WithExtensionTest {
                 .withExtension(AnnotatedExtension.class, b -> {})
                 .build()) {
             var extension = server.extension(AnnotatedExtension.class).orElseThrow();
-            assertThat(extension.bootstraps)
+            assertThat(extension.events)
                     .as("the provider's engine binding replaces the public ExtensionContext bootstrap")
-                    .containsExactly("binding");
+                    .containsExactly("install", "binding");
             assertThat(server.extensions())
                     .extracting(ServerExtension::extensionId)
                     .contains(AnnotatedExtension.ID);
@@ -198,6 +198,36 @@ class WithExtensionTest {
                         "bootstrap test/broken",
                         "shutdown test/second",
                         "shutdown test/first");
+    }
+
+    @Test
+    void bindingsInstallBeforeAnyExtensionBootstrapsWhateverTheBuilderOrder() {
+        var events = new ArrayList<String>();
+
+        try (var ignored = TachyonServer.builder()
+                .withExtensions(recording("test/direct", events, null))
+                .withExtension(AnnotatedExtension.class, b -> b.events(events))
+                .build()) {
+            assertThat(events)
+                    .as("a direct extension bootstraps first, yet a configured binding has already installed")
+                    .containsExactly("install", "bootstrap test/direct", "binding");
+        }
+    }
+
+    @Test
+    void bootstrapFailureShutsDownExtensionsThatOnlyInstalled() {
+        var events = new ArrayList<String>();
+        var failure = new IllegalStateException("boom");
+        var builder = TachyonServer.builder()
+                .withExtensions(recording("test/first", events, null), recording("test/broken", events, failure))
+                .withExtension(AnnotatedExtension.class, b -> b.events(events));
+
+        assertThatThrownBy(builder::build).isSameAs(failure);
+
+        assertThat(events)
+                .as("the installed binding never bootstraps but still unwinds, after the bootstrapped ones")
+                .containsExactly(
+                        "install", "bootstrap test/first", "bootstrap test/broken", "shutdown test/first", "shutdown");
     }
 
     @Test
