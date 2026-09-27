@@ -315,11 +315,19 @@ class SessionManagerTest {
         var store = new InMemorySessionStore();
         var manager = manager(store);
         var session = manager.createSession("s1");
+        var request = session.attachRequest();
 
+        manager.sweep(-1);
+        assertThat(session.state())
+                .as("a request whose requestor is connected keeps its session")
+                .isNotEqualTo(SessionState.CLOSED);
+
+        request.disconnected();
         manager.sweep(-1);
 
         assertThat(session.state()).isEqualTo(SessionState.CLOSED);
         assertThat(store.find("s1")).isEmpty();
+        assertThat(request.sessionClosed()).isCompleted();
     }
 
     @Test

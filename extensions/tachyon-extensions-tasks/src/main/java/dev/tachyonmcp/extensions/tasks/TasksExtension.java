@@ -47,10 +47,6 @@ public final class TasksExtension implements ConfigurableExtension<TasksExtensio
     @LegacyApi
     public static final Duration DEFAULT_RESULT_POLL_INTERVAL = TaskEngineSettings.DEFAULT_RESULT_POLL_INTERVAL;
 
-    /** Default longest wait of a blocking legacy {@code tasks/result}. */
-    @LegacyApi
-    public static final Duration DEFAULT_RESULT_MAX_WAIT = TaskEngineSettings.DEFAULT_RESULT_MAX_WAIT;
-
     private final TaskEngineSettings settings;
     private volatile @Nullable TaskEngine engine;
 
@@ -121,7 +117,6 @@ public final class TasksExtension implements ConfigurableExtension<TasksExtensio
         private Duration keepAlive = DEFAULT_KEEP_ALIVE;
         private @Nullable Duration pollInterval;
         private Duration resultPollInterval = TaskEngineSettings.DEFAULT_RESULT_POLL_INTERVAL;
-        private Duration resultMaxWait = TaskEngineSettings.DEFAULT_RESULT_MAX_WAIT;
 
         Builder() {}
 
@@ -180,6 +175,9 @@ public final class TasksExtension implements ConfigurableExtension<TasksExtensio
          * Sets the wait between {@code get} calls that serve a blocking legacy {@code tasks/result}
          * without a connector {@code awaitResult}, and a legacy {@code tasks/cancel} waiting for
          * {@code cancelled}, when the snapshot suggests no {@code pollInterval}. Default is 1 second.
+         * The wait has no time bound: it ends when the task is terminal, its {@code ttl} elapses, or
+         * the response can no longer be delivered (session ended; without a session, connection
+         * closed). A connector {@code awaitResult} replaces the polling and owns its wait.
          * Legacy: MCP 2025-11-25 only; 2026-07-28 has no {@code tasks/result} and a fire-and-forget
          * {@code tasks/cancel}.
          *
@@ -189,23 +187,6 @@ public final class TasksExtension implements ConfigurableExtension<TasksExtensio
         @LegacyApi
         public Builder resultPollInterval(Duration resultPollInterval) {
             this.resultPollInterval = Objects.requireNonNull(resultPollInterval, "resultPollInterval");
-            return this;
-        }
-
-        /**
-         * Sets the longest a blocking legacy {@code tasks/result} or {@code tasks/cancel} polls
-         * {@code get} before answering an internal error; the client may ask again. Default is 5
-         * minutes. A task whose
-         * {@code ttl} elapses first ends the wait with "Task has expired". Does not bound a connector
-         * {@code awaitResult}, which owns its wait. Legacy: MCP 2025-11-25 only, where giving up
-         * deliberately relaxes the spec's block-until-terminal rule.
-         *
-         * @param resultMaxWait a positive duration
-         * @return this builder
-         */
-        @LegacyApi
-        public Builder resultMaxWait(Duration resultMaxWait) {
-            this.resultMaxWait = Objects.requireNonNull(resultMaxWait, "resultMaxWait");
             return this;
         }
 
@@ -221,8 +202,8 @@ public final class TasksExtension implements ConfigurableExtension<TasksExtensio
             if (connector == null) {
                 throw new IllegalStateException("TasksExtension requires a TaskConnector");
             }
-            return new TasksExtension(new TaskEngineSettings(
-                    connector, pageSize, keepAlive, pollInterval, resultPollInterval, resultMaxWait));
+            return new TasksExtension(
+                    new TaskEngineSettings(connector, pageSize, keepAlive, pollInterval, resultPollInterval));
         }
     }
 }

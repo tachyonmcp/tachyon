@@ -29,6 +29,7 @@ import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -111,7 +112,11 @@ public final class PostSseStream implements OutboundSseStream {
     private final long maxPendingBytes;
     private final long maxOfferedBytes;
     private final CompletableFuture<Void> startCompletion = new CompletableFuture<>();
-    private final ChannelFutureListener channelClosed = ignored -> discardQueued();
+    private final ConcurrentLinkedQueue<Consumer<@Nullable Throwable>> closeCallbacks = new ConcurrentLinkedQueue<>();
+    private final ChannelFutureListener channelClosed = ignored -> {
+        discardQueued();
+        runCloseCallbacks();
+    };
     private volatile State state = State.NEW;
     private @Nullable ChannelFuture closeWrite;
     private final ChannelFutureListener writeFailureListener = this::closeOnWriteFailure;
@@ -264,9 +269,30 @@ public final class PostSseStream implements OutboundSseStream {
         return completion;
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Handed out by this stream's single close listener, which a stream answered as plain JSON
+     * drops: the kept-alive connection then serves other requests, so its later close is not this
+     * stream's, and no request leaves a listener behind on it.
+     */
     @Override
     public void onClose(Consumer<@Nullable Throwable> callback) {
-        channel.closeFuture().addListener(f -> callback.accept(ChannelHandlerUtils.closeFailure(channel)));
+        if (state == State.CLOSED_UNOPENED) return;
+        closeCallbacks.add(callback);
+        if (channel.closeFuture().isDone()) runCloseCallbacks();
+    }
+
+    private void runCloseCallbacks() {
+        final var cause = ChannelHandlerUtils.closeFailure(channel);
+        Consumer<@Nullable Throwable> callback;
+        while ((callback = closeCallbacks.poll()) != null) {
+            try {
+                callback.accept(cause);
+            } catch (RuntimeException e) {
+                logger.warn("POST-SSE close callback failed: channel={}", channel.id(), e);
+            }
+        }
     }
 
     /**

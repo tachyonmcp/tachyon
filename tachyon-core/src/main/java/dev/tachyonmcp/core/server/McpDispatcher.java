@@ -386,7 +386,7 @@ public class McpDispatcher {
             String method,
             Object rawParams,
             @Nullable OutboundSseStream outboundSseStream,
-            DispatchContext context,
+            DefaultDispatchContext context,
             @Nullable Session session,
             RpcMethodHandler<I, O> handler) {
         var paramsStr = rawParams instanceof Map || rawParams instanceof List
@@ -448,6 +448,12 @@ public class McpDispatcher {
         completion.whenComplete((result, error) -> {
             if (completion.isCancelled()) task.cancel(true);
         });
+        if (session != null) {
+            final var inFlight = session.attachRequest();
+            context.inFlightRequest(inFlight);
+            completion.whenComplete((result, error) -> inFlight.completed());
+            if (outboundSseStream != null) outboundSseStream.onClose(cause -> inFlight.disconnected());
+        }
         try {
             executor.execute(task);
         } catch (RuntimeException e) {

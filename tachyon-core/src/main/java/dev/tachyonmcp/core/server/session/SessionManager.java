@@ -161,12 +161,12 @@ public final class SessionManager implements AutoCloseable {
         logger.debug("Session janitor started (interval={}ms, ttl={}ms)", interval.toMillis(), ttlNanos / 1_000_000);
     }
 
-    /** One janitor pass: closes and evicts local sessions that are closed or idle past the TTL. */
+    /** One janitor pass: closes and evicts local sessions that are closed, or idle past the TTL with no attached request. */
     void sweep(long ttlNanos) {
         var now = System.nanoTime();
         for (var session : sessions.values()) {
             try {
-                var expired = now - session.lastActivityNanos() > ttlNanos;
+                var expired = session.idle() && now - session.lastActivityNanos() > ttlNanos;
                 if (session.state() == SessionState.CLOSED || expired) {
                     removeIfCurrent(session);
                 }

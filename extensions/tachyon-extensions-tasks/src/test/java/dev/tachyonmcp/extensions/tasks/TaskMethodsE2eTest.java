@@ -174,26 +174,22 @@ class TaskMethodsE2eTest {
     }
 
     @Test
-    void legacyResultGivesUpAfterMaxWaitPollingAtTheConfiguredInterval() throws Exception {
+    void legacyResultPollsAtTheConfiguredInterval() throws Exception {
         var polls = new AtomicInteger();
-        var connector = modernOnly((ctx, request) -> {
-            polls.incrementAndGet();
-            return working("task-1");
-        });
-        try (var server = startServer(
-                        connector,
-                        t -> t.resultMaxWait(Duration.ofMillis(200)).resultPollInterval(Duration.ofMillis(20)));
+        var connector =
+                modernOnly((ctx, request) -> polls.incrementAndGet() < 10 ? working("task-1") : completed("task-1"));
+        try (var server = startServer(connector, t -> t.resultPollInterval(Duration.ofMillis(20)));
                 var client = new Mcp20251125Client(server.port())) {
             client.initialize();
+            var started = System.nanoTime();
 
-            // language=json
-            assertThatJson(client.post(rpc("tasks/result", "task-1")).body()).isEqualTo("""
-                    {"jsonrpc":"2.0","id":1,"error":{"code":-32603,
-                      "message":"Failed to retrieve task: no terminal status within PT0.2S"}}
-                    """);
-            assertThat(polls.get())
-                    .as("polled at resultPollInterval, not the 1s default")
-                    .isBetween(3, 12);
+            assertThatJson(client.post(rpc("tasks/result", "task-1")).body())
+                    .inPath("$.result.structuredContent")
+                    .isEqualTo("{\"output\":\"success\"}");
+            assertThat(Duration.ofNanos(System.nanoTime() - started))
+                    .as("9 pauses at resultPollInterval, not the 1s default")
+                    .isLessThan(Duration.ofSeconds(5));
+            assertThat(polls).hasValue(10);
         }
     }
 
@@ -279,41 +275,9 @@ class TaskMethodsE2eTest {
     }
 
     @Test
-    void legacyCancelGivesUpAfterMaxWaitWhileModernCancelStaysFireAndForget() throws Exception {
-        var cancels = new AtomicInteger();
-        var connector = TaskConnector.builder()
-                .get((ctx, request) -> working("task-1"))
-                .cancel((ctx, request) -> cancels.incrementAndGet())
-                .update((ctx, request) -> {})
-                .build();
-        try (var server = startServer(
-                        connector,
-                        t -> t.resultMaxWait(Duration.ofMillis(200)).resultPollInterval(Duration.ofMillis(20)));
-                var legacy = new Mcp20251125Client(server.port());
-                var modern = new Mcp20260728Client(server.port())
-                        .withExtensions(Map.of(TasksExtension.ID, JsonNodeFactory.instance.objectNode()))) {
-            legacy.initialize();
-
-            // language=json
-            assertThatJson(legacy.post(rpc("tasks/cancel", "task-1")).body()).isEqualTo("""
-                    {"jsonrpc":"2.0","id":1,"error":{"code":-32603,
-                      "message":"Failed to cancel task: no terminal status within PT0.2S"}}
-                    """);
-            // language=json
-            assertThatJson(modern.post(rpc("tasks/cancel", "task-1")).body()).isEqualTo("""
-                    {"jsonrpc":"2.0","id":1,"result":{"resultType":"complete"}}
-                    """);
-            assertThat(cancels).hasValue(2);
-        }
-    }
-
-    @Test
-    void resultWaitSettingsMustBePositive() {
+    void resultPollIntervalMustBePositive() {
         var connector = new TestTaskConnector().connector();
 
-        assertThatIllegalArgumentException()
-                .isThrownBy(() -> build(t -> t.connector(connector).resultMaxWait(Duration.ZERO)))
-                .withMessage("resultMaxWait must be positive, got: PT0S");
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> build(t -> t.connector(connector).resultPollInterval(Duration.ofMillis(-1))))
                 .withMessage("resultPollInterval must be positive, got: PT-0.001S");

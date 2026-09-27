@@ -10,7 +10,10 @@ import dev.tachyonmcp.core.server.session.SessionSnapshot;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -39,6 +42,7 @@ public class Session {
     private final AtomicReference<@Nullable LoggingLevel> loggingLevel = new AtomicReference<>();
     private final AtomicReference<SessionSnapshot> persistedSnapshot;
     private volatile @Nullable String resumingStreamKey;
+    private final Set<InFlightRequest> inFlightRequests = ConcurrentHashMap.newKeySet();
 
     public Session(String id, SseConnection connection) {
         this(
@@ -104,6 +108,29 @@ public class Session {
     public void touch() {
         this.lastActivityNanos = System.nanoTime();
         onTouch.accept(this);
+    }
+
+    /**
+     * Tracks a request from dispatch until {@link InFlightRequest#completed()}. The session is not
+     * idle while the request's requestor stays connected.
+     *
+     * @return the tracked request
+     */
+    public InFlightRequest attachRequest() {
+        var request = new InFlightRequest();
+        inFlightRequests.add(request);
+        if (state.get() == SessionState.CLOSED) {
+            request.sessionClosed.complete(null);
+        }
+        return request;
+    }
+
+    /** Whether no in-flight request's requestor is still connected, so the session may idle out. */
+    public boolean idle() {
+        for (var request : inFlightRequests) {
+            if (request.connected.get()) return false;
+        }
+        return true;
     }
 
     /** Transitions from {@link SessionState#INITIALIZING} to {@link SessionState#ACTIVE}. */
@@ -290,9 +317,40 @@ public class Session {
         if (closed) {
             var conn = connection.getAndSet(SseConnection.noop());
             conn.close();
+            inFlightRequests.forEach(request -> request.sessionClosed.complete(null));
             onChange.accept(this);
         }
         return closed;
+    }
+
+    /**
+     * A request dispatched on this session, tracked until it completes, so nothing it registers
+     * outlives it.
+     */
+    public final class InFlightRequest {
+
+        private final CompletableFuture<Void> sessionClosed = new CompletableFuture<>();
+        private final AtomicBoolean connected = new AtomicBoolean(true);
+
+        private InFlightRequest() {}
+
+        /** Completes, on the closing thread, if the session closes locally while the request is in flight. */
+        public CompletionStage<Void> sessionClosed() {
+            return sessionClosed;
+        }
+
+        /** The requestor's connection closed: the session may idle out while the request runs on. */
+        public void disconnected() {
+            if (connected.compareAndSet(true, false)) {
+                touch();
+            }
+        }
+
+        /** The request completed: stops tracking it and restarts the idle clock. */
+        public void completed() {
+            disconnected();
+            inFlightRequests.remove(this);
+        }
     }
 
     @Override

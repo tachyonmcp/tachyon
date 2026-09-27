@@ -206,6 +206,14 @@ class PostSseStreamTest {
                 .isInstanceOf(IOException.class)
                 .hasMessage("write failed");
         assertThat(closeCause).singleElement().isSameAs(ChannelHandlerUtils.closeFailure(channel));
+
+        var lateCause = new ArrayList<Throwable>();
+        stream.onClose(lateCause::add);
+        assertThat(lateCause)
+                .as("registered after the close, runs at once with the same cause")
+                .singleElement()
+                .isSameAs(ChannelHandlerUtils.closeFailure(channel));
+        assertThat(closeCause).as("earlier callbacks run once").hasSize(1);
     }
 
     @Test
@@ -373,10 +381,16 @@ class PostSseStreamTest {
         final var stream = newStream(Duration.ZERO);
         final var dropped = new AtomicInteger();
         stream.writeEvent(1, "{}".getBytes(StandardCharsets.UTF_8), dropped::incrementAndGet);
+        final var closeReports = new AtomicInteger();
+        stream.onClose(cause -> closeReports.incrementAndGet());
 
         stream.terminate();
+        stream.onClose(cause -> closeReports.incrementAndGet());
         channel.close();
 
+        assertThat(closeReports)
+                .as("a stream that ended unopened leaves nothing on its kept-alive connection")
+                .hasValue(0);
         assertThat(dropped).hasValue(1);
         assertThat(stream.start().toCompletableFuture()).isCompletedExceptionally();
         assertThat(sink.writes).isEmpty();
