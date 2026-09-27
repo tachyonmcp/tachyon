@@ -2,6 +2,8 @@
 title: "MCP Skills Extension"
 weight: 10
 sidebar_order: 10
+aliases:
+    - /docs/extensions/mcp-skills/
 toc: true
 description: |-
   Ship an MCP Skills extension from your Tachyon server so agents can discover and install skills.

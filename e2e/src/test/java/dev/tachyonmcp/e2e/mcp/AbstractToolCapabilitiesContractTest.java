@@ -11,7 +11,10 @@ import dev.tachyonmcp.api.server.features.tasks.TaskSupport;
 import dev.tachyonmcp.api.server.features.tools.ToolDescriptor;
 import dev.tachyonmcp.api.server.features.tools.ToolFn;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
+import dev.tachyonmcp.core.server.ServerBuilder;
+import dev.tachyonmcp.extensions.tasks.TasksExtension;
 import dev.tachyonmcp.testkit.McpClient;
+import dev.tachyonmcp.testkit.TestTaskConnector;
 import java.net.http.HttpResponse;
 import java.util.stream.Stream;
 import net.javacrumbs.jsonunit.core.Option;
@@ -146,11 +149,17 @@ public abstract class AbstractToolCapabilitiesContractTest<C extends McpClient> 
 
     // region: Execution / Task Support Tests
 
+    /** Tools declaring task support need {@link TasksExtension}. */
+    protected static void withTasks(ServerBuilder builder) {
+        builder.withExtension(TasksExtension.class, t -> t.connector(new TestTaskConnector().connector()));
+    }
+
     @ParameterizedTest(name = "[{index}] {0}")
     @MethodSource
     protected void shouldIncludeExecutionTaskSupport(String toolName, boolean hasExecution, ToolDescriptor descriptor)
             throws Exception {
-        startServerWith(s -> s.tools().register(descriptor, OK));
+        startServer(
+                AbstractToolCapabilitiesContractTest::withTasks, s -> s.tools().register(descriptor, OK));
 
         try (var client = readyClient()) {
             var response = listTools(client);
@@ -228,7 +237,7 @@ public abstract class AbstractToolCapabilitiesContractTest<C extends McpClient> 
     @Test
     protected void shouldRegisterWithFullDescriptor() throws Exception {
         var annotations = ToolAnnotations.of(null, true, false, null, null);
-        startEmptyServer();
+        startServer(AbstractToolCapabilitiesContractTest::withTasks, s -> {});
         server.tools()
                 .register(
                         b -> b.name("full-tool")

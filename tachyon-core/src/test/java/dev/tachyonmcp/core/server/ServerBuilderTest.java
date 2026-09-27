@@ -209,15 +209,56 @@ class ServerBuilderTest {
         }
     }
 
-    @Test
-    void requiredTaskSupportRequiresTasksExtension() {
+    // 2025-11-25 Tasks § Tool-Level Negotiation: taskSupport is only meaningful with the tasks
+    // capability, which only TasksExtension advertises, so either value fails fast without it.
+    @ParameterizedTest
+    @EnumSource(
+            value = TaskSupport.class,
+            names = {"REQUIRED", "OPTIONAL"})
+    void taskSupportRequiresTasksExtension(TaskSupport taskSupport) {
         assertThatThrownBy(() -> TachyonServer.builder()
                         .withTools(tools -> tools.register(
-                                builder -> builder.name("task-tool").taskSupport(TaskSupport.REQUIRED),
-                                (context, request) -> ToolResult.empty()))
+                                        builder -> builder.name("task-tool").taskSupport(taskSupport),
+                                        (context, request) -> ToolResult.empty())
+                                .register(builder -> builder.name("plain"), (context, request) -> ToolResult.empty()))
                         .build())
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessage("Task-producing tools require TasksExtension");
+                .hasMessage("Tool 'task-tool' declares task support, which requires TasksExtension");
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = TaskSupport.class,
+            names = {"REQUIRED", "OPTIONAL"})
+    void taskToolRegisteredAfterBuildRequiresTasksExtension(TaskSupport taskSupport) {
+        try (var server = TachyonServer.builder().build()) {
+            var tools = server.tools();
+
+            assertThatIllegalStateException()
+                    .isThrownBy(() -> tools.register(
+                            builder -> builder.name("late").taskSupport(taskSupport),
+                            (context, request) -> ToolResult.empty()))
+                    .withMessage("Tool 'late' declares task support, which requires TasksExtension");
+            assertThatIllegalStateException()
+                    .isThrownBy(() -> tools.registerAsync(
+                            builder -> builder.name("late-async").taskSupport(taskSupport),
+                            (context, request) -> CompletableFuture.completedFuture(ToolResult.empty())))
+                    .withMessage("Tool 'late-async' declares task support, which requires TasksExtension");
+            assertThat(tools.descriptors()).as("nothing half-registered").isEmpty();
+        }
+    }
+
+    @Test
+    void taskToolRegisteredAfterBuildIsAcceptedWithATasksRuntime() {
+        try (var server =
+                TachyonServer.builder().withExtensions(new FakeTasksExtension()).build()) {
+            server.tools()
+                    .register(
+                            builder -> builder.name("late").taskSupport(TaskSupport.OPTIONAL),
+                            (context, request) -> ToolResult.empty());
+
+            assertThat(server.tools().find("late")).isPresent();
+        }
     }
 
     @Test
@@ -232,14 +273,11 @@ class ServerBuilderTest {
         }
     }
 
-    @ParameterizedTest
-    @EnumSource(
-            value = TaskSupport.class,
-            names = {"FORBIDDEN", "OPTIONAL"})
-    void nonRequiredTaskSupportBuildsWithoutTasksExtension(TaskSupport taskSupport) {
+    @Test
+    void forbiddenTaskSupportBuildsWithoutTasksExtension() {
         try (var server = TachyonServer.builder()
                 .withTools(tools -> tools.register(
-                        builder -> builder.name("task-tool").taskSupport(taskSupport),
+                        builder -> builder.name("task-tool").taskSupport(TaskSupport.FORBIDDEN),
                         (context, request) -> ToolResult.empty()))
                 .build()) {
             assertThat(server).isNotNull();

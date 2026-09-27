@@ -253,33 +253,6 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
         return builder.build();
     }
 
-    void validateConfiguration() {
-        // Only TaskSupport.REQUIRED is checked eagerly: it always attempts to create a task, on
-        // every call, so a missing connector is unambiguously a misconfiguration. OPTIONAL tools
-        // may run synchronously and never touch the connector -- under MCP 2026-07-28 OPTIONAL
-        // always runs synchronously, and under 2025-11-25 the client decides per call. FORBIDDEN
-        // tools never touch it either. ToolMethodHandlers.mapResult still rejects a
-        // REQUIRED-without-connector call at runtime; this just fails faster.
-        var hasRequiredTaskTool = toolRegistry.getAll().stream()
-                .anyMatch(handler -> handler.descriptor().taskSupport() == TaskSupport.REQUIRED);
-        var connectorMissing = !taskRuntime.executionConfigured();
-        if (hasRequiredTaskTool && connectorMissing) {
-            throw new IllegalStateException("Task-producing tools require TasksExtension");
-        }
-        if (connectorMissing) {
-            var optionalTaskTools = toolRegistry.getAll().stream()
-                    .filter(handler -> handler.descriptor().taskSupport() == TaskSupport.OPTIONAL)
-                    .map(handler -> handler.descriptor().name())
-                    .toList();
-            if (!optionalTaskTools.isEmpty()) {
-                logger.warn(
-                        "Tool(s) {} declare TaskSupport.OPTIONAL but no TaskConnector is configured -- a"
-                                + " task-augmented call to them will fail at runtime under MCP 2025-11-25",
-                        optionalTaskTools);
-            }
-        }
-    }
-
     private final Map<ServerExtension, EngineBinding<?>> engineBindings;
 
     DefaultTachyonServer(
@@ -321,7 +294,8 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
         this.payloadSerializer = payloadSerializer1;
         this.payloadDeserializer = payloadDeserializer1;
         var caps = config.capabilities();
-        this.toolRegistry = new DefaultToolRegistry(schemaFactory1, caps.tools());
+        this.toolRegistry =
+                new DefaultToolRegistry(schemaFactory1, caps.tools(), () -> taskRuntime.executionConfigured());
         this.resourceRegistry = new DefaultResourceRegistry(this, caps.resources());
         this.promptRegistry = new DefaultPromptRegistry(caps.prompts());
         this.completionRegistry = new DefaultCompletionRegistry(caps.completions());

@@ -65,7 +65,7 @@ class DefaultToolRegistryTest {
     private static final PayloadSerde TEST_SERDE = new JacksonPayloadSerde();
 
     private final DefaultToolRegistry registry = new DefaultToolRegistry(
-            Jackson3JsonFactory.INSTANCE, FeatureConfig.builder().build());
+            Jackson3JsonFactory.INSTANCE, FeatureConfig.builder().build(), () -> true);
 
     private static void registerHandlers(DefaultToolRegistry registry, Map<String, RpcMethodHandler<?, ?>> handlers) {
         var validator = new NetworkntJsonSchemaValidator();
@@ -422,7 +422,8 @@ class DefaultToolRegistryTest {
     void listWithCustomPageSize() {
         var reg = new DefaultToolRegistry(
                 Jackson3JsonFactory.INSTANCE,
-                FeatureConfig.builder().pageSize(1).build());
+                FeatureConfig.builder().pageSize(1).build(),
+                () -> true);
         reg.register(testTool("a", null, null));
         reg.register(testTool("b", null, null));
         var result = reg.list(0, null);
@@ -433,7 +434,7 @@ class DefaultToolRegistryTest {
     @Test
     void registerIsNoOpWhenToolsCapabilityIsOff() {
         var reg = new DefaultToolRegistry(
-                Jackson3JsonFactory.INSTANCE, FeatureConfig.builder().off().build());
+                Jackson3JsonFactory.INSTANCE, FeatureConfig.builder().off().build(), () -> true);
         var changeCount = new AtomicInteger();
         reg.onChange(changeCount::incrementAndGet);
 
@@ -871,7 +872,7 @@ class DefaultToolRegistryTest {
             {"type":"object","properties":{"message":{"type":"string"},"count":{"type":"integer"}},"required":["message","count"]}
             """);
         var registryVal = new DefaultToolRegistry(
-                Jackson3JsonFactory.INSTANCE, FeatureConfig.builder().build());
+                Jackson3JsonFactory.INSTANCE, FeatureConfig.builder().build(), () -> true);
         var handlers = new HashMap<String, RpcMethodHandler<?, ?>>();
         registerHandlers(registryVal, handlers);
         registryVal.register(
@@ -904,7 +905,7 @@ class DefaultToolRegistryTest {
     @Test
     void shouldConvertMixedJavaAndJsonNodeEntries() throws Exception {
         var registryVal = new DefaultToolRegistry(
-                Jackson3JsonFactory.INSTANCE, FeatureConfig.builder().build());
+                Jackson3JsonFactory.INSTANCE, FeatureConfig.builder().build(), () -> true);
         var handlers = new HashMap<String, RpcMethodHandler<?, ?>>();
         registerHandlers(registryVal, handlers);
         registryVal.register(

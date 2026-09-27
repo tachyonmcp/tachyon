@@ -1,9 +1,9 @@
 ---
 title: Tasks
 tags: [concept, tasks, experimental]
-sources: [tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/tasks/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tasks/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tools/ToolMethodHandlers.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java, extensions/tachyon-extensions-tasks/src/main/java/dev/tachyonmcp/extensions/tasks/, integrations/tachyon-tasks-temporal/]
-updated: 2026-09-26
-commit: e1dcfc68
+sources: [tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/tasks/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tasks/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tools/ToolMethodHandlers.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tools/DefaultToolRegistry.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java, extensions/tachyon-extensions-tasks/src/main/java/dev/tachyonmcp/extensions/tasks/, integrations/tachyon-tasks-temporal/]
+updated: 2026-09-27
+commit: 4316204b
 ---
 
 # ⏳ Tasks
@@ -34,7 +34,7 @@ Boundary: `engine` imports no protocol types, enforced by `EngineBoundaryTest` (
 
 `withExtension(TasksExtension.class, t -> t.connector(c))` ⇒ registered = enabled; no capability switch, no auto-registration. No connector ⇒ ISE `TasksExtension.Builder#build`; `TaskEngineSettings` validates pageSize/pollInterval > 0, keepAlive default **5 min** (`TaskEngineSettings#DEFAULT_KEEP_ALIVE`). Kotlin: `tasks(connector) { }` on `TachyonServerBuilder`. Runtime access: `server.extension(TasksExtension.class).orElseThrow().tasks()`. Bootstrap `TasksExtension#attach`: engine ⇒ `McpTaskBinding` listener ⇒ `ServerEngine#installTaskRuntime` ⇒ `TaskMethodHandlers#register` ⇒ list_changed wiring ⇒ janitor start.
 
-Startup check: any `REQUIRED` tool w/o tasks extension (`TaskRuntime#executionConfigured`) ⇒ `IllegalStateException("Task-producing tools require TasksExtension")`; `OPTIONAL` w/o connector ⇒ warn `DefaultTachyonServer#validateConfiguration`.
+Registration check: registering a `REQUIRED` or `OPTIONAL` tool w/o tasks extension (`TaskRuntime#executionConfigured`) ⇒ `IllegalStateException("Tool '<name>' declares task support, which requires TasksExtension")`, at build (bootstrap registrations ⇒ build fails, server closed) or after it `DefaultToolRegistry#register`. Extensions bootstrap before registrations, so the runtime is already installed.
 
 ## 🔁 Task-producing tool call
 
@@ -45,7 +45,7 @@ Startup check: any `REQUIRED` tool w/o tasks extension (`TaskRuntime#executionCo
 | 2025-11-25 (legacy augmentation) | client sends task-augmented call; `FORBIDDEN`/absent + augmented ⇒ -32601; `REQUIRED` + plain ⇒ -32601 (§ Tool-Level Negotiation) |
 | 2026-07-28 | no augmentation flag; `REQUIRED` ⇒ tasks extension must be declared (else -32021) |
 
-Tool returns `ToolResult.task(snapshot)` ⇒ checks (not FORBIDDEN, legacy must be augmented, connector configured, extension declared on modern) ⇒ `taskRuntime().publish(snapshot, context.sessionId(), progressToken)` ⇒ `McpTaskRoute.of(...)` (explicit: async tools map off the dispatch thread); never refused ⇒ `createTaskResult`, observation outcome `TaskHandoff`. Non-task result for REQUIRED/augmented ⇒ internal error.
+Tool returns `ToolResult.task(snapshot)` ⇒ checks (not FORBIDDEN, legacy must be augmented, extension declared on modern) ⇒ `taskRuntime().publish(snapshot, context.sessionId(), progressToken)` ⇒ `McpTaskRoute.of(...)` (explicit: async tools map off the dispatch thread); never refused ⇒ `createTaskResult`, observation outcome `TaskHandoff`. Non-task result for REQUIRED/augmented ⇒ internal error.
 
 ## 🗂️ Registry semantics
 
