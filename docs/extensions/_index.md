@@ -44,8 +44,8 @@ server.start();
 ```
 
 Configurable extensions ([Tasks](tasks.md), [Skills](skills.md)) are registered by class with
-`withExtension(Type.class, …)`; `withExtensions` takes ready-made instances of extensions that need no
-configuration and rejects configurable ones. Kotlin: `withExtension(SkillsExtension::class.java) {
+`withExtension(Type.class, …)`; `withExtensions` takes ready-made instances. It rejects
+configurable extensions that only their provider can bootstrap, such as Tasks. Kotlin: `withExtension(SkillsExtension::class.java) {
 registry(registry) }`, `tasks(connector) { }` for Tasks, `extensions(...)` for instances.
 
 ## What clients must send

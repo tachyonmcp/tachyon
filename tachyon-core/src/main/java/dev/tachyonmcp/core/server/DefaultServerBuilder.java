@@ -254,7 +254,8 @@ final class DefaultServerBuilder implements ServerBuilder {
     }
 
     private void addExtension(ServerExtension extension) {
-        if (extension instanceof ConfigurableExtension<?>) {
+        if (extension instanceof ConfigurableExtension<?> configurable
+                && ExtensionProviders.bindsEngine(configurable.getClass())) {
             var type = extension.getClass();
             throw new IllegalArgumentException("Register " + type.getName() + " with withExtension("
                     + type.getSimpleName() + ".class, ...), not as an instance");
