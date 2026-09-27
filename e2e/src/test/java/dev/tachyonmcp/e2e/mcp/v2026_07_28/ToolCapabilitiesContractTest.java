@@ -37,7 +37,8 @@ class ToolCapabilitiesContractTest extends AbstractToolCapabilitiesContractTest<
     @MethodSource("taskSupportWithoutExecutionField")
     protected void shouldIncludeExecutionTaskSupport(String toolName, boolean hasExecution, ToolDescriptor descriptor)
             throws Exception {
-        startServerWith(s -> s.tools().register(descriptor, OK));
+        startServer(
+                AbstractToolCapabilitiesContractTest::withTasks, s -> s.tools().register(descriptor, OK));
 
         try (var client = readyClient()) {
             var response = listTools(client);
@@ -60,7 +61,7 @@ class ToolCapabilitiesContractTest extends AbstractToolCapabilitiesContractTest<
     @Test
     protected void shouldRegisterWithFullDescriptor() throws Exception {
         var annotations = ToolAnnotations.of(null, true, false, null, null);
-        startEmptyServer();
+        startServer(AbstractToolCapabilitiesContractTest::withTasks, s -> {});
         server.tools()
                 .register(
                         b -> b.name("full-tool")

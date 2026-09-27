@@ -52,7 +52,7 @@ Two-phase: `build()` constructs server + runs registrations, **no socket**; `sta
    - default in-memory `SessionEventStore` + `SessionStore`
    - extensions: `withExtensions` instances first, then one per `withExtension` type (fresh builder `build()` per server; duplicate id ⇒ IAE) `DefaultServerBuilder#resolveExtensions`
    - executor = `threadFactory` given ? thread-per-task : VT executor `tachyon-vt-*` (`DefaultTachyonServer#defaultExecutor`)
-   - `new DefaultTachyonServer(...)` → run `withTools/withResources/...` callbacks → annotation providers → `validateConfiguration()`; any throw ⇒ `close()` + rethrow.
+   - `new DefaultTachyonServer(...)` → run `withTools/withResources/...` callbacks → annotation providers (each tool registration checks task support against the installed task runtime, `DefaultToolRegistry#register`); any throw ⇒ `close()` + rethrow.
 2. `DefaultTachyonServer` ctor `DefaultTachyonServer`: registries, `registerDefaults()` (`DefaultTachyonServer#registerDefaults`), `bootstrapExtensions()` (`DefaultTachyonServer#bootstrapExtensions`), change listeners (`DefaultTachyonServer#setupChangeListeners`), session janitor if sessions on.
 3. `start()` `DefaultTachyonServer#start`: lifecycle `ReentrantLock`, `new NettyServer(this, NettyServerConfig…)`, record bound host/port.
 4. `close()` `DefaultTachyonServer` → see [[concurrency]].

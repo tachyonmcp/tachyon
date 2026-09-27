@@ -6,6 +6,7 @@ import dev.tachyonmcp.api.json.spi.JsonSchemaFactory;
 import dev.tachyonmcp.api.runtime.InteractionContext;
 import dev.tachyonmcp.api.server.config.Mode;
 import dev.tachyonmcp.api.server.domain.InvalidArgumentException;
+import dev.tachyonmcp.api.server.features.tasks.TaskSupport;
 import dev.tachyonmcp.api.server.features.tools.AbstractToolHandler;
 import dev.tachyonmcp.api.server.features.tools.AsyncToolFn;
 import dev.tachyonmcp.api.server.features.tools.ToolDescriptor;
@@ -23,6 +24,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletionStage;
+import java.util.function.BooleanSupplier;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,6 +38,7 @@ public class DefaultToolRegistry extends AbstractRegistry<ToolDescriptor, ToolHa
     private static final Logger logger = LoggerFactory.getLogger(DefaultToolRegistry.class);
 
     private final JsonSchemaFactory<?> schemaFactory;
+    private final BooleanSupplier tasksAvailable;
     private final FeatureConfig config;
 
     /**
@@ -49,11 +52,15 @@ public class DefaultToolRegistry extends AbstractRegistry<ToolDescriptor, ToolHa
      *
      * @param schemaFactory validates registered tool schemas; must accept {@link String} sources
      * @param config        feature configuration, e.g. page size and mode
+     * @param tasksAvailable whether a tasks runtime is installed; a tool declaring task support is
+     *                      refused without one
      */
-    public DefaultToolRegistry(JsonSchemaFactory<?> schemaFactory, FeatureConfig config) {
+    public DefaultToolRegistry(
+            JsonSchemaFactory<?> schemaFactory, FeatureConfig config, BooleanSupplier tasksAvailable) {
         super(config.pageSize());
         this.schemaFactory = schemaFactory;
         this.config = config;
+        this.tasksAvailable = tasksAvailable;
     }
 
     @Override
@@ -85,6 +92,10 @@ public class DefaultToolRegistry extends AbstractRegistry<ToolDescriptor, ToolHa
         }
         var name = descriptor.name();
         validateName(name);
+        var taskSupport = descriptor.taskSupport();
+        if (taskSupport != null && taskSupport != TaskSupport.FORBIDDEN && !tasksAvailable.getAsBoolean()) {
+            throw new IllegalStateException("Tool '" + name + "' declares task support, which requires TasksExtension");
+        }
         JsonSchemaUtils.validateInputSchemaRoot(schemaFactory, name, descriptor.inputSchema());
         JsonSchemaUtils.validateHeaderAnnotations(schemaFactory, name, descriptor.inputSchema());
         JsonSchemaUtils.validateOutputSchemaRoot(schemaFactory, name, descriptor.outputSchema());

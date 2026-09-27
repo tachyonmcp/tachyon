@@ -19,7 +19,7 @@ advertises the extensions it supports; a client declares the ones it uses. To bu
 | Extension | ID | Module | Enable with |
 |---|---|---|---|
 | [Tasks](tasks.md) | `io.modelcontextprotocol/tasks` | `tachyon-extensions-tasks` | `.withExtension(TasksExtension.class, t -> t.connector(connector))` |
-| [Skills](mcp-skills.md) | `io.modelcontextprotocol/skills` | `tachyon-extensions-skills` | `.withExtensions(SkillsExtension.builder()...build())` |
+| [Skills](skills.md) | `io.modelcontextprotocol/skills` | `tachyon-extensions-skills` | `.withExtensions(SkillsExtension.builder()...build())` |
 
 ## Add an extension
 
@@ -113,7 +113,7 @@ Choose `REQUIRED` only for a mandatory extension, one whose methods can't work f
 doesn't support it. On MCP 2025-11-25 it needs server sessions.
 
 Built-in extensions expose the policy on their builders; see
-[Skills negotiation](mcp-skills.md#extension-negotiation).
+[Skills negotiation](skills.md#extension-negotiation).
 
 ## Write your own extension
 

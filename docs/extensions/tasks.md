@@ -6,16 +6,14 @@ toc: true
 aliases:
   - /docs/features/tasks/
 description: |-
-  Long-running operations in Tachyon: the tasks/* lifecycle, enforced state machine, status notifications, and TasksExtension (SEP-1686).
+  Long-running operations in Tachyon: the `tasks/*` lifecycle, enforced state machine, status notifications, and TasksExtension (SEP-1686).
 ---
 
-Tachyon exposes external work as MCP tasks. The application, workflow engine, or job system owns
+Tachyon exposes external work as [MCP tasks](https://modelcontextprotocol.io/extensions/tasks/). The application, workflow engine, or job system owns
 execution. Tachyon owns protocol mapping, a small snapshot cache, and notifications.
 
 Tools, resources, prompts, and completions can be declared with [annotations](../annotations.md).
-Task configuration uses a `TaskConnector` and an explicit tool descriptor: `@McpTool` exposes name and
-description, but has no `taskSupport` setting. Use the programmatic task-capable tool below alongside
-your annotated services.
+Task configuration uses a `TaskConnector` and an explicit tool descriptor: `@McpTool` exposes name and description, but has no `taskSupport` setting. Use the programmatic task-capable tool below alongside your annotated services.
 
 ## Configure a task connector
 
@@ -37,7 +35,8 @@ var server = TachyonServer.builder()
 ```
 
 `TasksExtension` lives in `tachyon-extensions-tasks`. Tasks are off until you register it. There is no
-built-in in-process engine: registering it without a connector fails the build. Registering it also
+built-in in-process engine: registering it without a connector fails the build, and so does a tool
+declaring `TaskSupport.OPTIONAL` or `REQUIRED` without it. Registering it also
 advertises the `io.modelcontextprotocol/tasks` wire extension. Legacy compatibility operations are:
 
 | Builder method | MCP method |

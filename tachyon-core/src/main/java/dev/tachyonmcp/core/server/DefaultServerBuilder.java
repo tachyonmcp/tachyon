@@ -342,7 +342,6 @@ final class DefaultServerBuilder implements ServerBuilder {
         try {
             bootstrapRegistrations.forEach(registrar -> registrar.accept(server));
             applyAnnotationRegistrations(server);
-            server.validateConfiguration();
         } catch (Throwable t) {
             server.close();
             throw t;
