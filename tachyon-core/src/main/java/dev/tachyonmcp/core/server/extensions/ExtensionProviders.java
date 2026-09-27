@@ -44,6 +44,19 @@ public final class ExtensionProviders {
         return (ExtensionProvider<E, B>) PROVIDERS.get(type);
     }
 
+    /**
+     * Tells whether the provider for {@code type} bootstraps it on the engine. Such an extension
+     * cannot be registered as a plain instance: bootstrapping it through {@code ExtensionContext}
+     * would skip its {@link EngineBinding}.
+     *
+     * @param type a configurable extension class
+     * @return {@code true} if the provider is an {@link EngineBinding}
+     * @throws IllegalStateException if no provider, or more than one, serves {@code type}
+     */
+    public static boolean bindsEngine(Class<?> type) {
+        return PROVIDERS.get(type) instanceof EngineBinding<?>;
+    }
+
     private static ExtensionProvider<?, ?> locate(Class<?> type) {
         var annotation = type.getAnnotation(ProvidedBy.class);
         if (annotation != null) {

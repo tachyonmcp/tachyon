@@ -13,7 +13,6 @@ import dev.tachyonmcp.api.server.extensions.ExtensionContext;
 import dev.tachyonmcp.api.server.extensions.ExtensionNegotiation;
 import dev.tachyonmcp.api.server.extensions.ExtensionSettings;
 import dev.tachyonmcp.api.server.extensions.ProvidedBy;
-import dev.tachyonmcp.api.server.extensions.ServerExtension;
 import dev.tachyonmcp.api.server.features.resources.ResourceDescriptor;
 import dev.tachyonmcp.core.server.domain.ServerErrors;
 import dev.tachyonmcp.core.server.features.resources.MimeTypes;
@@ -89,8 +88,8 @@ public final class SkillsExtension implements ConfigurableExtension<SkillsExtens
      *     -> skills.registry(...))}, so each server builds its own instance.
      */
     @Deprecated(forRemoval = true)
-    public static InstanceBuilder builder() {
-        return new InstanceBuilder();
+    public static Builder builder() {
+        return new Builder();
     }
 
     @Override
@@ -274,7 +273,11 @@ public final class SkillsExtension implements ConfigurableExtension<SkillsExtens
         private String cacheScope = "public";
         private ExtensionNegotiation negotiation = ExtensionNegotiation.OPTIONAL;
 
-        Builder() {}
+        /**
+         * Creates a builder with default settings. Prefer
+         * {@code ServerBuilder.withExtension(SkillsExtension.class, ...)}, which creates it.
+         */
+        public Builder() {}
 
         /**
          * Adds a skill registry. Construct {@link FilesystemSkillsRegistry} or
@@ -346,108 +349,6 @@ public final class SkillsExtension implements ConfigurableExtension<SkillsExtens
         @Override
         public SkillsExtension build() {
             return new SkillsExtension(registries, cacheTtlMs, cacheScope, negotiation);
-        }
-    }
-
-    /**
-     * Builds a standalone skills extension for {@code ServerBuilder.withExtensions(...)}.
-     *
-     * @deprecated Configure through {@code ServerBuilder.withExtension(SkillsExtension.class, ...)}.
-     */
-    @Deprecated(forRemoval = true)
-    public static final class InstanceBuilder {
-
-        private final Builder delegate = new Builder();
-
-        private InstanceBuilder() {}
-
-        /**
-         * Adds a skill registry.
-         *
-         * @param registry the skill registry
-         * @return this builder
-         * @see Builder#registry(SkillsRegistry)
-         */
-        public InstanceBuilder registry(SkillsRegistry registry) {
-            delegate.registry(registry);
-            return this;
-        }
-
-        /**
-         * Sets the {@code ttlMs} cache-freshness hint of {@code skills/list} results.
-         *
-         * @param cacheTtlMs milliseconds to consider the listing fresh; must be {@code >= 0}
-         * @return this builder
-         * @see Builder#cacheTtlMs(long)
-         */
-        public InstanceBuilder cacheTtlMs(long cacheTtlMs) {
-            delegate.cacheTtlMs(cacheTtlMs);
-            return this;
-        }
-
-        /**
-         * Sets the {@code cacheScope} of {@code skills/list} results.
-         *
-         * @param cacheScope {@code "public"} or {@code "private"}
-         * @return this builder
-         * @see Builder#cacheScope(String)
-         */
-        public InstanceBuilder cacheScope(String cacheScope) {
-            delegate.cacheScope(cacheScope);
-            return this;
-        }
-
-        /**
-         * Sets whether clients must declare the extension before calling its methods.
-         *
-         * @param negotiation the negotiation policy
-         * @return this builder
-         * @see Builder#negotiation(ExtensionNegotiation)
-         */
-        public InstanceBuilder negotiation(ExtensionNegotiation negotiation) {
-            delegate.negotiation(negotiation);
-            return this;
-        }
-
-        /**
-         * Builds a standalone extension instance for {@code ServerBuilder.withExtensions(...)}.
-         *
-         * @return the configured extension
-         */
-        public ServerExtension build() {
-            return new Standalone(delegate.build());
-        }
-    }
-
-    /**
-     * Wraps a {@link SkillsExtension} as a plain {@link ServerExtension}, which
-     * {@code withExtensions(...)} accepts; that method rejects {@link ConfigurableExtension} instances.
-     */
-    private record Standalone(SkillsExtension extension) implements ServerExtension {
-
-        @Override
-        public String extensionId() {
-            return extension.extensionId();
-        }
-
-        @Override
-        public ExtensionNegotiation negotiation() {
-            return extension.negotiation();
-        }
-
-        @Override
-        public AdvertiseMode advertiseMode() {
-            return extension.advertiseMode();
-        }
-
-        @Override
-        public ExtensionSettings serverSettings() {
-            return extension.serverSettings();
-        }
-
-        @Override
-        public void bootstrap(ExtensionContext server) {
-            extension.bootstrap(server);
         }
     }
 }

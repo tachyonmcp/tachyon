@@ -96,9 +96,9 @@ public interface ServerBuilder {
      *
      * @param extensions the extensions to register
      * @return this builder
-     * @throws IllegalArgumentException if an extension is a {@link ConfigurableExtension}: those are
-     *     created by the server from {@link #withExtension(Class, Consumer)}, so each server builds
-     *     and bootstraps its own instance
+     * @throws IllegalArgumentException if an extension is a {@link ConfigurableExtension} whose
+     *     provider bootstraps it on the server engine: only {@link #withExtension(Class, Consumer)}
+     *     bootstraps it correctly
      */
     ServerBuilder withExtensions(ServerExtension... extensions);
 

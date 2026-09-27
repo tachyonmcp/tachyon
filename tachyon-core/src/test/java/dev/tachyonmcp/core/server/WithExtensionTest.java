@@ -167,14 +167,25 @@ class WithExtensionTest {
     }
 
     @Test
-    void configurableExtensionInstanceIsRejectedInFavourOfWithExtension() {
-        var instance = new StubExtension.Builder().option("bypass").build();
+    void configurableInstanceNeedingItsEngineBindingIsRejectedInFavourOfWithExtension() {
+        var instance = new AnnotatedExtension.Builder().build();
         var builder = TachyonServer.builder();
 
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> builder.withExtensions(instance))
-                .withMessage("Register " + StubExtension.class.getName() + " with withExtension("
-                        + StubExtension.class.getSimpleName() + ".class, ...), not as an instance");
+                .withMessage("Register " + AnnotatedExtension.class.getName() + " with withExtension("
+                        + AnnotatedExtension.class.getSimpleName() + ".class, ...), not as an instance");
+        assertThat(instance.events).as("never bootstrapped").isEmpty();
+    }
+
+    @Test
+    void configurableInstanceThatBootstrapsItselfIsAcceptedAsAnInstance() {
+        var instance = new StubExtension.Builder().option("legacy").build();
+
+        try (var server = TachyonServer.builder().withExtensions(instance).build()) {
+            assertThat(server.extension(StubExtension.class)).containsSame(instance);
+            assertThat(instance.bootstraps).containsExactly("engine");
+        }
     }
 
     @Test

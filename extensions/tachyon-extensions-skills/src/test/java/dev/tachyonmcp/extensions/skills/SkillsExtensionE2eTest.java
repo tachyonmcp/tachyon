@@ -8,9 +8,7 @@ import static dev.tachyonmcp.testkit.JsonRpcResponseAssert.assertThat;
 import static net.javacrumbs.jsonunit.assertj.JsonAssertions.assertThatJson;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import dev.tachyonmcp.api.server.extensions.ConfigurableExtension;
 import dev.tachyonmcp.api.server.extensions.ExtensionNegotiation;
-import dev.tachyonmcp.api.server.extensions.ServerExtension;
 import dev.tachyonmcp.core.server.features.resources.MimeTypes;
 import dev.tachyonmcp.testkit.Mcp20251125Client;
 import dev.tachyonmcp.testkit.Mcp20260728Client;
@@ -126,12 +124,11 @@ class SkillsExtensionE2eTest {
 
     @Test
     @SuppressWarnings("removal")
-    void deprecatedInstanceBuilderStillRegistersThroughWithExtensions() throws Exception {
-        var extension = SkillsExtension.builder()
+    void deprecatedBuilderInstanceStillRegistersThroughWithExtensions() throws Exception {
+        SkillsExtension extension = SkillsExtension.builder()
                 .registry(classpathSkillsRegistry)
                 .cacheTtlMs(1_000)
                 .build();
-        assertThat(extension).isNotInstanceOf(ConfigurableExtension.class);
         try (var server = McpTestServers.start(builder -> builder.withExtensions(extension), it -> {});
                 var client = createClient(server.port())) {
             // language=JSON
@@ -141,9 +138,7 @@ class SkillsExtensionE2eTest {
             final var result = assertThat(list).isSuccess().result();
             assertThat(result.path("ttlMs").asLong()).isEqualTo(1_000L);
             assertThat(result.path("skills").findValuesAsString("uri")).contains("skill://pdf-processing/SKILL.md");
-            assertThat(server.extensions())
-                    .extracting(ServerExtension::extensionId)
-                    .containsExactly(SkillsExtension.ID);
+            assertThat(server.extension(SkillsExtension.class)).containsSame(extension);
         }
     }
 

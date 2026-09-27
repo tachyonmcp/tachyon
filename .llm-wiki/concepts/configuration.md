@@ -25,7 +25,7 @@ Verdict: `ServerBuilder` exposes grouped `Consumer<X.Builder>` configurers + sho
 | `json` | [JsonConfig.Builder](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/config/JsonConfig.java) (api) | serde, input/output validators |
 | `name/version/host/port` | shorthands | |
 | `withTools/withResources/withPrompts/withCompletions` | bootstrap registrations run in `build()` | |
-| `withExtensions` | unconfigured `ServerExtension` instances | dup id ⇒ IAE; `ConfigurableExtension` instance ⇒ IAE |
+| `withExtensions` | unconfigured `ServerExtension` instances | dup id ⇒ IAE; `ConfigurableExtension` instance with an `EngineBinding` provider (Tasks) ⇒ IAE |
 | `withExtension(Class, configurer)` | `ExtensionBuilder` from the type's provider | configurers accumulate per type; built per server in `build()` `DefaultServerBuilder#resolveExtensions` |
 | `threadFactory` | handler executor | |
 | `annotations` | [AnnotationContext](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/AnnotationContext.java) (`withProvider(p).register(obj)`) | composes across calls; `@ExperimentalApi` [AnnotationContext](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/AnnotationContext.java) |
