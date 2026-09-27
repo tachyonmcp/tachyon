@@ -3,7 +3,7 @@ title: Tasks
 tags: [concept, tasks, experimental]
 sources: [tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/tasks/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tasks/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tools/ToolMethodHandlers.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tools/DefaultToolRegistry.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java, extensions/tachyon-extensions-tasks/src/main/java/dev/tachyonmcp/extensions/tasks/, integrations/tachyon-tasks-temporal/]
 updated: 2026-09-27
-commit: 4316204b
+commit: 16ca0f84
 ---
 
 # ⏳ Tasks
@@ -24,7 +24,7 @@ Verdict: Tachyon does **not** run tasks. External system owns execution via `Tas
 | `McpTaskBinding` (MCP binding) | core `TaskRuntime` + `TaskEvents` ⇒ `notifyTaskStatus`/`notifyTaskProgress`, 2025 capability | `McpTaskBinding` |
 | `McpTaskRoute` | MCP route: sessionId + progressToken; `of(null,null)` ⇒ `NONE` | `McpTaskRoute` |
 | `TasksExtension` (module `tachyon-extensions-tasks`, `@ProvidedBy(TasksExtensionProvider)`) | id `io.modelcontextprotocol/tasks`, `ALWAYS`; `tasks()` ⇒ engine; builder: connector (required), pageSize, keepAlive, pollInterval, resultPollInterval, resultMaxWait | `TasksExtension` |
-| `TasksExtensionProvider` (`@InternalApi`) | creates `Builder`; `EngineBinding` ⇒ `TasksExtension#attach` | `TasksExtensionProvider` |
+| `TasksExtensionProvider` (`@InternalApi`) | creates `Builder`; `EngineBinding` ⇒ `TasksExtension#install`, `TasksExtension#attach` | `TasksExtensionProvider` |
 | `TaskRuntime` (core seam, `@InternalApi`) | what tool/subscription handlers need; `NONE` when no extension | `TaskRuntime` |
 | `TasksExtensionSupport` (core, `@InternalApi`) | id + per-request gate `requireDeclared` | `TasksExtensionSupport` |
 
@@ -32,7 +32,7 @@ Boundary: `engine` imports no protocol types, enforced by `EngineBoundaryTest` (
 
 ## ⚙️ Config
 
-`withExtension(TasksExtension.class, t -> t.connector(c))` ⇒ registered = enabled; no capability switch, no auto-registration. No connector ⇒ ISE `TasksExtension.Builder#build`; `TaskEngineSettings` validates pageSize/pollInterval > 0, keepAlive default **5 min** (`TaskEngineSettings#DEFAULT_KEEP_ALIVE`). Kotlin: `tasks(connector) { }` on `TachyonServerBuilder`. Runtime access: `server.extension(TasksExtension.class).orElseThrow().tasks()`. Bootstrap `TasksExtension#attach`: engine ⇒ `McpTaskBinding` listener ⇒ `ServerEngine#installTaskRuntime` ⇒ `TaskMethodHandlers#register` ⇒ list_changed wiring ⇒ janitor start.
+`withExtension(TasksExtension.class, t -> t.connector(c))` ⇒ registered = enabled; no capability switch, no auto-registration. No connector ⇒ ISE `TasksExtension.Builder#build`; `TaskEngineSettings` validates pageSize/pollInterval > 0, keepAlive default **5 min** (`TaskEngineSettings#DEFAULT_KEEP_ALIVE`). Kotlin: `tasks(connector) { }` on `TachyonServerBuilder`. Runtime access: `server.extension(TasksExtension.class).orElseThrow().tasks()`. Install phase `TasksExtension#install` (before any extension bootstraps): engine ⇒ `McpTaskBinding` listener ⇒ `ServerEngine#installTaskRuntime`. So task-capable tools registered in another extension's `bootstrap` pass the `DefaultToolRegistry#register` check even when that extension comes first. Bootstrap `TasksExtension#attach`: `TaskMethodHandlers#register` ⇒ list_changed wiring ⇒ janitor start.
 
 Registration check: registering a `REQUIRED` or `OPTIONAL` tool w/o tasks extension (`TaskRuntime#executionConfigured`) ⇒ `IllegalStateException("Tool '<name>' declares task support, which requires TasksExtension")`, at build (bootstrap registrations ⇒ build fails, server closed) or after it `DefaultToolRegistry#register`. Extensions bootstrap before registrations, so the runtime is already installed.
 

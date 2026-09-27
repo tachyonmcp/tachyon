@@ -3,8 +3,14 @@ package dev.tachyonmcp.extensions.tasks;
 
 import static net.javacrumbs.jsonunit.assertj.JsonAssertions.assertThatJson;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 
+import dev.tachyonmcp.api.server.extensions.AdvertiseMode;
+import dev.tachyonmcp.api.server.extensions.ExtensionContext;
+import dev.tachyonmcp.api.server.extensions.ServerExtension;
 import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
+import dev.tachyonmcp.api.server.features.tasks.TaskSupport;
+import dev.tachyonmcp.api.server.features.tools.ToolResult;
 import dev.tachyonmcp.core.server.TachyonServer;
 import dev.tachyonmcp.testkit.Mcp20251125Client;
 import dev.tachyonmcp.testkit.Mcp20260728Client;
@@ -92,6 +98,64 @@ class TasksExtensionE2eTest {
                     """).body()).inPath("$.error.code").isEqualTo(-32601);
             assertThat(server.extension(TasksExtension.class)).isEmpty();
         }
+    }
+
+    @Test
+    void extensionBootstrappedFirstRegistersTaskToolsServedByTasksExtension() throws Exception {
+        var connector = new TestTaskConnector();
+        try (var server = McpTestServers.start(
+                        builder -> builder.withExtensions(taskToolExtension(connector))
+                                .withExtension(TasksExtension.class, t -> t.connector(connector.connector())),
+                        it -> {});
+                var client = new Mcp20251125Client(server.port())) {
+            client.initialize();
+
+            assertThatJson(client.post("""
+                    {"jsonrpc":"2.0","id":1,"method":"tools/list"}
+                    """).body())
+                    .inPath("$.result.tools[0]")
+                    .isObject()
+                    .containsEntry("name", "book")
+                    .containsEntry("execution", Map.of("taskSupport", "required"));
+
+            var call = client.post("""
+                    {"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"book","arguments":{},"task":{}}}
+                    """);
+            assertThatJson(call.body()).inPath("$.result.task.taskId").isEqualTo("booked");
+            assertThatJson(call.body()).inPath("$.result.task.status").isEqualTo("working");
+        }
+    }
+
+    @Test
+    void taskToolFromExtensionBootstrapStillFailsWithoutTasksExtension() {
+        var builder = TachyonServer.builder().withExtensions(taskToolExtension(new TestTaskConnector()));
+
+        assertThatIllegalStateException()
+                .isThrownBy(builder::build)
+                .withMessage("Tool 'book' declares task support, which requires TasksExtension");
+    }
+
+    private static ServerExtension taskToolExtension(TestTaskConnector connector) {
+        return new ServerExtension() {
+            @Override
+            public String extensionId() {
+                return "test/booking";
+            }
+
+            @Override
+            public AdvertiseMode advertiseMode() {
+                return AdvertiseMode.ALWAYS;
+            }
+
+            @Override
+            public void bootstrap(ExtensionContext context) {
+                context.tools().register(b -> b.name("book").taskSupport(TaskSupport.REQUIRED), (ctx, request) -> {
+                    var snapshot = working("booked");
+                    connector.publish(snapshot);
+                    return ToolResult.task(snapshot);
+                });
+            }
+        };
     }
 
     private static String extractCursor(String body) {

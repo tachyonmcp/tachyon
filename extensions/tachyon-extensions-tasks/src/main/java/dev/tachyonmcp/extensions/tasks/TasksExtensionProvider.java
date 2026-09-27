@@ -29,6 +29,11 @@ public final class TasksExtensionProvider
     }
 
     @Override
+    public void install(TasksExtension extension, ServerEngine engine) {
+        extension.install(engine);
+    }
+
+    @Override
     public void bootstrap(TasksExtension extension, ServerEngine engine) {
         extension.attach(engine);
     }
