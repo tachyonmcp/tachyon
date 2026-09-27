@@ -296,7 +296,7 @@ overloads have been removed, use `.name(...)` on the builder instead. `.tool(nam
 
 ## Extensions
 
-SEP-2133. `@ExperimentalApi`. Built-ins: Tasks (`tachyon-extensions-tasks`, `.withExtension(TasksExtension.class, t -> t.connector(connector))`), Skills (`tachyon-extensions-skills`, `.withExtensions(SkillsExtension.builder()...build())`).
+SEP-2133. Stable: `ServerExtension`, `ExtensionContext`, `withExtension`. Built-ins: Tasks (`tachyon-extensions-tasks`, `.withExtension(TasksExtension.class, t -> t.connector(connector))`), Skills (`tachyon-extensions-skills`, `.withExtensions(SkillsExtension.builder()...build())`).
 
 ```java
 public interface ServerExtension extends Extension<InteractionContext> {

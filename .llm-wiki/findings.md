@@ -26,7 +26,6 @@ Spotted while reading code. Runtime verification noted per finding. Fixed in cod
 - 🪶 Task notifications are sent under the per-task `TaskEntry` lock (for ordering). SSE sends never park (session status offers, `DefaultTachyonServer#notifyTaskStatus`), but a custom `SessionEventStore#append` that blocks (remote store) serializes publishers of that task behind its I/O. `TaskEntry#notifyIfNewer`
 - 🪶 A2A placement undecided: the tasks `engine` package is protocol-neutral so it can become `tachyon-tasks` (MCP binding + future A2A binding on one engine). If A2A ships inside `tachyon-core`, the engine must move into core instead (core cannot depend on an extension). Decide before the split; engine ownership when both bindings are present is open. `EngineBoundaryTest`
 - 🪶 Task codecs still live in core (`McpTaskMapper` v2025/v2026, task methods on `ProtocolRequestMapper`/`ProtocolResponseMapper`, `capabilities.tasks` in `ServerInfoMapper`); the generated `…extensions.tasks.protocol.v2026_07_28` models are unused. `McpTaskMapper`
-- 🪶 Stable `ServerBuilder#withExtensions(ServerExtension...)` / `withExtension` take types built on `@ExperimentalApi` `ServerExtension`. Stabilize `ServerExtension` before 1.0 or accept the mismatch. `ConfigurableExtension`
 
 ## 🪶 Polish
 

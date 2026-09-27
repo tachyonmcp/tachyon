@@ -507,7 +507,7 @@ TachyonServer(port = 8080) {
 ```
 
 Java also keeps the pre-nesting flat setters and convenience shortcuts (`.tools()`,
-`.tools(listChanged)`, `.noTools()`, `.toolsPageSize(n)`, and the `resources`/`prompts`/`tasks`
+`.tools(listChanged)`, `.noTools()`, `.toolsPageSize(n)`, and the `resources`/`prompts`
 equivalents) — they mutate the same nested sub-config, so chaining still works:
 `c.tools().toolsPageSize(20)` sets `mode = ON` and `pageSize = 20` on the same `FeatureConfig`.
 
