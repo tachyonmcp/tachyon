@@ -39,6 +39,7 @@ class TaskAugmentedToolTest extends AbstractStatefulMcpE2eTest {
                             .register(
                                     b -> b.name("forbidden").taskSupport(TaskSupport.FORBIDDEN),
                                     (context, request) -> ToolResult.text("inline"));
+                    registrar.tools().register(b -> b.name("plain"), (context, request) -> ToolResult.text("inline"));
                 });
     }
 
@@ -50,7 +51,12 @@ class TaskAugmentedToolTest extends AbstractStatefulMcpE2eTest {
                     {"jsonrpc":"2.0","id":2,"method":"tools/call","params":{
                       "name":"required","arguments":{}}}
                     """);
-            assertThatResponse(response).isJsonRpcError().hasErrorCode(-32602);
+            // 2025-11-25 Tasks § Tool-Level Negotiation 2.3: "required" called inline MUST be -32601
+            assertThatResponse(response)
+                    .isJsonRpcError()
+                    .hasId(2)
+                    .hasErrorCode(-32601)
+                    .hasErrorMessage("Task augmentation required for this tool");
         }
     }
 
@@ -86,7 +92,29 @@ class TaskAugmentedToolTest extends AbstractStatefulMcpE2eTest {
                     {"jsonrpc":"2.0","id":2,"method":"tools/call","params":{
                       "name":"forbidden","arguments":{},"task":{}}}
                     """);
-            assertThatResponse(response).isJsonRpcError().hasErrorCode(-32602);
+            // 2025-11-25 Tasks § Tool-Level Negotiation 2.1: "forbidden" as a task SHOULD be -32601
+            assertThatResponse(response)
+                    .isJsonRpcError()
+                    .hasId(2)
+                    .hasErrorCode(-32601)
+                    .hasErrorMessage("Task augmentation not supported for this tool");
+        }
+    }
+
+    @Test
+    void toolWithoutTaskSupportRejectsTaskAugmentedCallLikeForbidden() throws Exception {
+        try (var client = createTestClient()) {
+            client.initialize();
+            var response = client.sendRpc("""
+                    {"jsonrpc":"2.0","id":2,"method":"tools/call","params":{
+                      "name":"plain","arguments":{},"task":{}}}
+                    """);
+            // 2025-11-25 Tasks § Tool-Level Negotiation 2.1: taskSupport absent is treated as "forbidden"
+            assertThatResponse(response)
+                    .isJsonRpcError()
+                    .hasId(2)
+                    .hasErrorCode(-32601)
+                    .hasErrorMessage("Task augmentation not supported for this tool");
         }
     }
 }

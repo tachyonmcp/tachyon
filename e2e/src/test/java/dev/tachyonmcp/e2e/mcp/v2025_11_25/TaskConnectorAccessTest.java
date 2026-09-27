@@ -36,7 +36,7 @@ import tools.jackson.databind.JsonNode;
  * {@code TaskConnector} with the caller's {@code InteractionContext}. Without an authorization
  * context the task id is a bearer capability (2025-11-25 Tasks § Security). This connector scopes
  * each booked task to the session that booked it: the recipe an application uses for session
- * isolation, documented in {@code docs/features/tasks.md}. The same {@code get} check authorizes each
+ * isolation, documented in {@code docs/extensions/tasks.md}. The same {@code get} check authorizes each
  * task id a {@code subscriptions/listen} stream names (ext-tasks 2026-07-28 § Security: authorize
  * every task-related request); the acknowledgment lists only the ids it allowed.
  */

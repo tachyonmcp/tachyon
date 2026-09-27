@@ -1,8 +1,10 @@
 ---
 title: "Tasks"
-weight: 20
-sidebar_order: 20
+weight: 5
+sidebar_order: 5
 toc: true
+aliases:
+  - /docs/features/tasks/
 description: |-
   Long-running operations in Tachyon: the tasks/* lifecycle, enforced state machine, status notifications, and TasksExtension (SEP-1686).
 ---
@@ -29,22 +31,38 @@ var tasks = TaskConnector.builder()
         .build();
 
 var server = TachyonServer.builder()
-        .capabilities(c -> c.tasks(tasks))
+        .withExtension(TasksExtension.class, t -> t.connector(tasks))
         .port(8080)
         .build();
 ```
 
-Tasks are off by default. There is no built-in in-process engine. Enabling tasks without a connector
-fails during server configuration. Declaring
-`.tasks(tasks)` also registers the `io.modelcontextprotocol/tasks` wire extension automatically —
-there's no separate `.withExtensions(...)` call to make. Legacy compatibility operations are:
+`TasksExtension` lives in `tachyon-extensions-tasks`. Tasks are off until you register it. There is no
+built-in in-process engine: registering it without a connector fails the build. Registering it also
+advertises the `io.modelcontextprotocol/tasks` wire extension. Legacy compatibility operations are:
 
 | Builder method | MCP method |
 |---|---|
 | `.list(...)` | legacy `tasks/list` |
 | `.awaitResult(...)` | legacy blocking `tasks/result` |
 
-`.list(...)` and `.awaitResult(...)` support the pre-SEP-2663 (2025-11-25) wire only.
+`.list(...)` and `.awaitResult(...)` support the pre-SEP-2663 (2025-11-25) wire only. Without `.list(...)`,
+`tasks/list` answers `-32601 Method not found`. Without `.awaitResult(...)`, `tasks/result` still works:
+Tachyon calls `get` until the task is terminal, waiting the snapshot's `pollInterval` (else
+`resultPollInterval`, default 1 second) between calls, then returns its result. The wait ends early:
+
+| Condition | `tasks/result` answer |
+|---|---|
+| task `ttl` elapsed while still running (2025-11-25 § TTL) | `-32602 Failed to retrieve task: Task has expired` |
+| `resultMaxWait` passed (default 5 minutes) | `-32603`, the client may ask again |
+
+```java
+.withExtension(TasksExtension.class, tasks -> tasks
+        .connector(connector)
+        .resultPollInterval(Duration.ofMillis(500))
+        .resultMaxWait(Duration.ofMinutes(10)))
+```
+
+A connector `.awaitResult(...)` replaces this loop and owns its own wait bound.
 
 ## Return a task from a tool
 
@@ -74,6 +92,28 @@ The flow is:
 7. A later `tasks/get` calls `get(...)` again to observe the authoritative state. Cancellation may
    still be pending or may settle in another terminal state.
 
+That is the MCP 2026-07-28 contract, and `cancel(...)` keeps it on both versions: it only requests
+cancellation. MCP 2025-11-25 instead requires the task to be `cancelled` before `tasks/cancel`
+answers, so for those clients Tachyon waits on top of the connector:
+
+| Step | Legacy `tasks/cancel` |
+|---|---|
+| `get(...)` reports a terminal task | `-32602 Cannot cancel task: already in terminal status '<status>'`; `cancel(...)` is not called |
+| otherwise | `cancel(...)`, then `get(...)` until terminal, paced and bounded like `tasks/result` |
+| settles `cancelled` | the `cancelled` task |
+| settles `completed` or `failed` first | `-32602 Cannot cancel task: already in terminal status '<status>'` |
+| task `ttl` elapses / `resultMaxWait` passes | `-32602 … Task has expired` / `-32603` |
+
+The wait runs on the request's virtual thread and sleeps between polls, so it holds no platform
+thread; each waiting cancel costs one `get(...)` per poll interval.
+
+The spec rule is about the task's status, not its execution: stopping the work is a best effort, but
+an accepted cancel makes the task `cancelled` for good, even if the work later completes. Tachyon does
+not own that status — `get(...)` does — so keep it in the external system. Record the accepted cancel
+where `get(...)` reads status and report `cancelled` from then on: the legacy response then needs one
+lookup, and the answer holds across restarts and nodes. A connector that reports only execution state,
+such as a Temporal workflow still processing its cancellation, is answered once it settles.
+
 Tachyon never runs the handler in the background and never invokes it again for `tasks/update`.
 
 The handler must durably create the external task before returning `ToolResult.task(...)`. Tachyon
@@ -85,7 +125,7 @@ on that cache: it asks the connector for authoritative state.
 Push updates through the public `Tasks` façade when the external system sends a callback:
 
 ```java
-server.tasks().publish(TaskSnapshot.builder()
+server.extension(TasksExtension.class).orElseThrow().tasks().publish(TaskSnapshot.builder()
         .taskId(workflowId)
         .status(TaskState.WORKING)
         .statusMessage("Charging card")
@@ -185,7 +225,7 @@ task-augmented tool call that created the task — it is not part of `TaskSnapsh
 revision:
 
 ```java
-server.tasks().reportProgress(workflowId, 40.0, 100.0, "Charging card");
+server.extension(TasksExtension.class).orElseThrow().tasks().reportProgress(workflowId, 40.0, 100.0, "Charging card");
 ```
 
 When that call carried no progress token, or the task is not cached, `reportProgress` is a no-op,
@@ -196,7 +236,7 @@ logged at debug.
 Kotlin uses the same Java connector:
 
 ```kotlin
-capabilities {
+buildServer {
     tasks(taskConnector) {
         pollInterval = 1.seconds
     }

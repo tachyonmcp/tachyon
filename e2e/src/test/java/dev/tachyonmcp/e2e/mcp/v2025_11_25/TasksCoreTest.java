@@ -187,7 +187,7 @@ class TasksCoreTest extends AbstractStatefulMcpE2eTest {
     }
 
     @Test
-    void cancelAlreadyTerminalTaskReturnsCurrentSnapshot() throws Exception {
+    void cancelAlreadyTerminalTaskIsRejected() throws Exception {
         taskConnector.reset();
         var completed = TaskSnapshot.builder()
                 .from(working("workflow-terminal", 1))
@@ -206,9 +206,12 @@ class TasksCoreTest extends AbstractStatefulMcpE2eTest {
             var cancelJson = client.sendRpc("""
                     {"jsonrpc":"2.0","id":3,"method":"tasks/cancel","params":{"taskId":"workflow-terminal"}}
                     """);
-            assertThatJson(cancelJson.body()).inPath("$.result.taskId").isEqualTo("workflow-terminal");
-            assertThatJson(cancelJson.body()).inPath("$.result.status").isEqualTo("completed");
-            assertThat(taskConnector.cancelledTaskIds()).containsExactly("workflow-terminal");
+            // 2025-11-25 Tasks § Task Cancellation: terminal tasks MUST be rejected with -32602
+            assertThatResponse(cancelJson)
+                    .isJsonRpcError()
+                    .hasErrorCode(-32602)
+                    .hasErrorMessage("Cannot cancel task: already in terminal status 'completed'");
+            assertThat(taskConnector.cancelledTaskIds()).isEmpty();
         }
     }
 

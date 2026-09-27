@@ -93,5 +93,5 @@ Yes. The `tachyon-kotlin` module adds a coroutine-first DSL and kotlinx.serializ
 
 ### Where do I start?
 
-Build the [Quickstart](quickstart.md), then choose the guide for [tools](features/tools.md), [resources](features/resources.md), [tasks](features/tasks.md), or
+Build the [Quickstart](quickstart.md), then choose the guide for [tools](features/tools.md), [resources](features/resources.md), [tasks](extensions/tasks.md), or
 [extensions](extensions/).

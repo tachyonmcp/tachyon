@@ -46,7 +46,7 @@ and can be used in one server.
 ## Continue work across interactions
 
 - [Client interactions](client-interactions/) — request user input from an active handler
-- [Tasks](tasks/) — connect tool calls to durable work owned by a job or workflow system
+- [Tasks](../extensions/tasks/) — connect tool calls to durable work owned by a job or workflow system
 
 Tachyon advertises tools, resources, and prompts automatically after you register them. Configure
 capability modes explicitly only when you need dynamic registration or notifications. See

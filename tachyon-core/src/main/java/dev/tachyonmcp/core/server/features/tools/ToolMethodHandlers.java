@@ -4,6 +4,7 @@ package dev.tachyonmcp.core.server.features.tools;
 import static dev.tachyonmcp.core.server.domain.ServerErrors.fromUnhandledException;
 import static dev.tachyonmcp.core.server.domain.ServerErrors.internalError;
 import static dev.tachyonmcp.core.server.domain.ServerErrors.invalidParams;
+import static dev.tachyonmcp.core.server.domain.ServerErrors.methodNotFound;
 
 import dev.tachyonmcp.api.annotations.InternalApi;
 import dev.tachyonmcp.api.json.JsonDocument;
@@ -166,11 +167,12 @@ public final class ToolMethodHandlers {
         private @Nullable Object validateTaskRequest(
                 DispatchContext context, ProtocolRequestMapper.ToolCallRequest mapped, TaskSupport taskSupport) {
             if (context.requestMapper().supportsLegacyTaskAugmentation()) {
+                // 2025-11-25 Tasks § Tool-Level Negotiation: -32601 (MUST for required, SHOULD for forbidden)
                 if (taskSupport == TaskSupport.FORBIDDEN && mapped.taskAugmented()) {
-                    return invalidParams("Task augmentation not supported for this tool");
+                    return methodNotFound("Task augmentation not supported for this tool");
                 }
                 if (taskSupport == TaskSupport.REQUIRED && !mapped.taskAugmented()) {
-                    return invalidParams("Task augmentation required for this tool");
+                    return methodNotFound("Task augmentation required for this tool");
                 }
                 return null;
             }

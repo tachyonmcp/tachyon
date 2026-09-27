@@ -110,7 +110,7 @@ carries the same `400`, so the status alone does not prove which layer rejected 
 
 Three fixtures cover the parts of a server that are awkward to drive over the wire.
 
-`TestTaskConnector` stands in for the external system behind a [task](features/tasks.md)
+`TestTaskConnector` stands in for the external system behind a [task](extensions/tasks.md)
 connector. Seed it with snapshots, hand `connector()` to the builder, then assert on what
 Tachyon asked it for:
 
@@ -118,7 +118,7 @@ Tachyon asked it for:
 var tasks = new TestTaskConnector().start(TaskSnapshot.working("t-1", Instant.now(), 1));
 
 var server = McpTestServers.start(
-    b -> b.capabilities(c -> c.tasks(tasks.connector())),
+    b -> b.withExtension(TasksExtension.class, t -> t.connector(tasks.connector())),
     s -> {});
 
 // later

@@ -169,14 +169,16 @@ Full: `resources/java/PromptFnExample.java`
 
 ### Capabilities `capabilities(cfg -> ...)`
 
-Configs: `FeatureConfig` (tools/prompts: `mode`, `listChanged`, `pageSize`), `ResourcesConfig` (+ `subscribe`), 
-`TasksConfig` (`enabled`, `connector` (a `TaskConnector`), `pageSize`, 
-`keepAlive` (default 5 min — retention window for a terminal task's result), 
-`pollInterval` (default none — suggested `tasks/get` polling cadence, wire-visible); `list`/`cancel`/`requests` 
-are derived read-only accessors reflecting which `TaskConnector` operations are wired, not settable flags).
+Configs: `FeatureConfig` (tools/prompts: `mode`, `listChanged`, `pageSize`), `ResourcesConfig` (+ `subscribe`).
+Tasks are no capability config: `.withExtension(TasksExtension.class, t -> t.connector(c))` (`tachyon-extensions-tasks`);
+builder: `connector` (required), `pageSize`, `keepAlive` (5 min, terminal result retention), `pollInterval`
+(none, wire-visible suggestion), `@LegacyApi` `resultPollInterval`/`resultMaxWait`. Kotlin: `tasks(connector) { }`.
 
 `TaskConnector.builder().get(fn).cancel(fn).update(fn).list(fn).awaitResult(fn).build()` — `get`,
 `cancel`, and `update` are required by the modern Tasks extension. `list`/`awaitResult` are optional
+(no `awaitResult` ⇒ `tasks/result` polls `get` at the snapshot's `pollInterval` else `resultPollInterval` 1s,
+bounded by task `ttl` ⇒ -32602 expired and `resultMaxWait` 5min ⇒ -32603). `cancel` is fire-and-forget; for
+2025-11-25 clients Tachyon rejects terminal tasks (-32602) and polls `get` the same way until `cancelled`
 and `@Deprecated(forRemoval = false)`: legacy MCP 2025-11-25
 (pre-SEP-2663) surface, kept for compatibility.
 
@@ -184,17 +186,16 @@ Default `Mode.AUTO` advertises only registered features. Force `Mode.ON`/`Mode.O
 
 | Method | Effect |
 |---|---|
-| `.tools(FeatureConfig)` / `.resources(ResourcesConfig)` / `.prompts(FeatureConfig)` / `.tasks(TasksConfig)` | set the full nested config |
+| `.tools(FeatureConfig)` / `.resources(ResourcesConfig)` / `.prompts(FeatureConfig)` | set the full nested config |
 | `.tools()` / `.tools(listChanged)` / `.noTools()` | shortcut: tools |
 | `.resources()` / `.resources(subscribe, listChanged)` / `.noResources()` | shortcut: resources |
 | `.prompts()` / `.prompts(listChanged)` / `.noPrompts()` | shortcut: prompts |
-| `.tasks(connector)` | tasks with a `TaskConnector` — also auto-registers the `io.modelcontextprotocol/tasks` wire extension |
-| `.toolsMode(m)` / `.toolsListChanged(b)` / `.toolsPageSize(n)` (+ `resources*`/`prompts*`/`tasks*` siblings) | flat per-field setters; chain onto the shortcuts above, e.g. `c.tools().toolsPageSize(20)` |
+| `.toolsMode(m)` / `.toolsListChanged(b)` / `.toolsPageSize(n)` (+ `resources*`/`prompts*` siblings) | flat per-field setters; chain onto the shortcuts above, e.g. `c.tools().toolsPageSize(20)` |
 | `.completions()` | arg autocomplete |
 | `.logging()` | logging notifications |
 
 Kotlin DSL nests instead:
-`capabilities { tools { mode = Mode.ON; pageSize = 20 }; tasks(taskConnector) { pollInterval = 1.seconds } }`.
+`capabilities { tools { mode = Mode.ON; pageSize = 20 } }`; tasks sit beside it: `tasks(taskConnector) { pollInterval = 1.seconds }`.
 
 Enable logging before publishing structured messages from a handler. `log` accepts every MCP
 severity; `info`, `warning`, and `error` are conveniences. The client-selected threshold is applied
@@ -295,7 +296,7 @@ overloads have been removed, use `.name(...)` on the builder instead. `.tool(nam
 
 ## Extensions
 
-SEP-2133. `@ExperimentalApi`. Built-ins: Tasks (`.capabilities(c -> c.tasks(connector))`, auto-registered), Skills (`tachyon-extensions-skills`, `.withExtensions(SkillsExtension.builder()...build())`).
+SEP-2133. `@ExperimentalApi`. Built-ins: Tasks (`tachyon-extensions-tasks`, `.withExtension(TasksExtension.class, t -> t.connector(connector))`), Skills (`tachyon-extensions-skills`, `.withExtensions(SkillsExtension.builder()...build())`).
 
 ```java
 public interface ServerExtension extends Extension<InteractionContext> {
@@ -364,8 +365,8 @@ val server = TachyonServer(8080) {
 }
 ```
 
-(`TasksExtension` is the one built-in extension you never register by hand — `.tasks(connector)` in
-`capabilities { }` registers it automatically.)
+(`TasksExtension` is configurable: register it with `tasks(connector) { }` on the builder, not
+`extensions(...)`, which rejects configurable instances.)
 
 ### Typed decode/result (Kotlin)
 

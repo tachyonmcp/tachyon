@@ -4,7 +4,13 @@ package dev.tachyonmcp.api.server.features.tasks;
 import dev.tachyonmcp.api.annotations.ExperimentalApi;
 import dev.tachyonmcp.api.runtime.InteractionContext;
 
-/** Returns the authoritative task snapshot for {@code tasks/get}. */
+/**
+ * Returns the authoritative task snapshot for {@code tasks/get}.
+ *
+ * <p>The snapshot is the task's MCP status, which may differ from the state of the work behind it:
+ * after an accepted {@link TaskCancelFn cancel}, legacy MCP 2025-11-25 requires {@code cancelled}
+ * here, and to keep it, even while the work still runs or later finishes.
+ */
 @FunctionalInterface
 @ExperimentalApi
 public interface TaskGetFn {

@@ -1,6 +1,7 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
 package dev.tachyonmcp.extensions.tasks;
 
+import dev.tachyonmcp.api.annotations.LegacyApi;
 import dev.tachyonmcp.api.server.extensions.AdvertiseMode;
 import dev.tachyonmcp.api.server.extensions.ConfigurableExtension;
 import dev.tachyonmcp.api.server.extensions.ExtensionBuilder;
@@ -41,6 +42,14 @@ public final class TasksExtension implements ConfigurableExtension<TasksExtensio
 
     /** Default retention window for a terminal task's cached result. */
     public static final Duration DEFAULT_KEEP_ALIVE = TaskEngineSettings.DEFAULT_KEEP_ALIVE;
+
+    /** Default wait between {@code get} calls that serve a blocking legacy {@code tasks/result}. */
+    @LegacyApi
+    public static final Duration DEFAULT_RESULT_POLL_INTERVAL = TaskEngineSettings.DEFAULT_RESULT_POLL_INTERVAL;
+
+    /** Default longest wait of a blocking legacy {@code tasks/result}. */
+    @LegacyApi
+    public static final Duration DEFAULT_RESULT_MAX_WAIT = TaskEngineSettings.DEFAULT_RESULT_MAX_WAIT;
 
     private final TaskEngineSettings settings;
     private volatile @Nullable TaskEngine engine;
@@ -103,6 +112,8 @@ public final class TasksExtension implements ConfigurableExtension<TasksExtensio
         private int pageSize = Pagination.DEFAULT_PAGE_SIZE;
         private Duration keepAlive = DEFAULT_KEEP_ALIVE;
         private @Nullable Duration pollInterval;
+        private Duration resultPollInterval = TaskEngineSettings.DEFAULT_RESULT_POLL_INTERVAL;
+        private Duration resultMaxWait = TaskEngineSettings.DEFAULT_RESULT_MAX_WAIT;
 
         Builder() {}
 
@@ -145,13 +156,48 @@ public final class TasksExtension implements ConfigurableExtension<TasksExtensio
         /**
          * Sets the default {@code pollInterval} suggested in task responses. Default is {@code null}
          * (suggest none); pass a value only if it fits how long tasks on this server actually run:
-         * spec-compliant requestors throttle their own polling to match it.
+         * spec-compliant requestors throttle their own polling to match it. As a snapshot default,
+         * it also paces a blocking {@code tasks/result} served through {@code get}, ahead of
+         * {@link #resultPollInterval(Duration)}.
          *
          * @param pollInterval the suggested interval, or {@code null} to suggest none
          * @return this builder
          */
         public Builder pollInterval(@Nullable Duration pollInterval) {
             this.pollInterval = pollInterval;
+            return this;
+        }
+
+        /**
+         * Sets the wait between {@code get} calls that serve a blocking legacy {@code tasks/result}
+         * without a connector {@code awaitResult}, and a legacy {@code tasks/cancel} waiting for
+         * {@code cancelled}, when the snapshot suggests no {@code pollInterval}. Default is 1 second.
+         * Legacy: MCP 2025-11-25 only; 2026-07-28 has no {@code tasks/result} and a fire-and-forget
+         * {@code tasks/cancel}.
+         *
+         * @param resultPollInterval a positive interval
+         * @return this builder
+         */
+        @LegacyApi
+        public Builder resultPollInterval(Duration resultPollInterval) {
+            this.resultPollInterval = Objects.requireNonNull(resultPollInterval, "resultPollInterval");
+            return this;
+        }
+
+        /**
+         * Sets the longest a blocking legacy {@code tasks/result} or {@code tasks/cancel} polls
+         * {@code get} before answering an internal error; the client may ask again. Default is 5
+         * minutes. A task whose
+         * {@code ttl} elapses first ends the wait with "Task has expired". Does not bound a connector
+         * {@code awaitResult}, which owns its wait. Legacy: MCP 2025-11-25 only, where giving up
+         * deliberately relaxes the spec's block-until-terminal rule.
+         *
+         * @param resultMaxWait a positive duration
+         * @return this builder
+         */
+        @LegacyApi
+        public Builder resultMaxWait(Duration resultMaxWait) {
+            this.resultMaxWait = Objects.requireNonNull(resultMaxWait, "resultMaxWait");
             return this;
         }
 
@@ -167,7 +213,8 @@ public final class TasksExtension implements ConfigurableExtension<TasksExtensio
             if (connector == null) {
                 throw new IllegalStateException("TasksExtension requires a TaskConnector");
             }
-            return new TasksExtension(new TaskEngineSettings(connector, pageSize, keepAlive, pollInterval));
+            return new TasksExtension(new TaskEngineSettings(
+                    connector, pageSize, keepAlive, pollInterval, resultPollInterval, resultMaxWait));
         }
     }
 }

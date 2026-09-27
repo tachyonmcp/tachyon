@@ -24,7 +24,7 @@ Start with a running server, add the features your application needs, then prepa
 - [Annotations](annotations.md) — declare feature methods and bind typed arguments.
 - [Completions](features/completions.md) — suggest prompt arguments and resource variables.
 - [JSON schemas](json.md) — customize validation and serialization.
-- [Tasks](features/tasks.md) and [client interactions](features/client-interactions.md) — support longer work and request user input.
+- [Tasks](extensions/tasks.md) and [client interactions](features/client-interactions.md) — support longer work and request user input.
 
 ## Operate
 
