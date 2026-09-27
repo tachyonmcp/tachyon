@@ -66,7 +66,6 @@ class TaskConnectorAccessTest extends AbstractStatefulMcpE2eTest {
                         }));
     }
 
-    @SuppressWarnings("deprecation")
     private TaskConnector sessionScopedConnector() {
         return TaskConnector.builder()
                 .get((ctx, request) -> {
