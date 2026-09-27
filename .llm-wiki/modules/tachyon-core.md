@@ -2,7 +2,7 @@
 title: tachyon-core
 tags: [module, core]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/, tachyon-core/src/main/resources/, tachyon-core/pom.xml]
-updated: 2026-09-26
+updated: 2026-09-27
 commit: 31900e6a
 ---
 
@@ -40,6 +40,7 @@ Verdict: the runtime. ~190 main files. Deps: `slf4j-api`, `netty-codec-http`, `n
 - [DefaultTachyonServer](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java) = state + registries + `methodHandlers` map + pending server→client requests + session manager + event store + extensions; implements [ServerEngine](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/internal/ServerEngine.java) **and** [ExtensionContext](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/extensions/ExtensionContext.java) [DefaultTachyonServer](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java).
 - [McpDispatcher](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java) = per-request flow, one per [McpChannelInitializer](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpChannelInitializer.java) (i.e. per server start) `McpChannelInitializer.java` ctor.
 - [DefaultDispatchContext](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/session/DefaultDispatchContext.java) = per request: delegates channel state, adds engine, request id, outbound stream, observation, notifications impl [DefaultDispatchContext](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/session/DefaultDispatchContext.java).
+- Handler extension lookup: [DispatchContext#extension](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/session/DispatchContext.java) ⇒ `engine().extension(type)` (`TachyonServer#extension`). [NoopInteractionContext#extension](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/session/NoopInteractionContext.java) ⇒ empty: its `engine()` throws.
 
 ## 📦 Resources
 

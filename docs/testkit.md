@@ -21,6 +21,72 @@ Version is pinned by the `tachyon-bom` — see [Quickstart](quickstart.md#1-add-
 </dependency>
 ```
 
+## A complete test
+
+This JUnit class starts a server on a free port, calls a tool over HTTP, and checks both the success
+and the error path. It compiles and runs as is, and the testkit's own build runs the same code as
+`EchoToolDocsExampleTest`:
+
+```java
+import static dev.tachyonmcp.testkit.JsonRpcResponseAssert.assertThat;
+import static dev.tachyonmcp.testkit.McpHttpResponseAssert.assertThatResponse;
+
+import dev.tachyonmcp.api.server.features.tools.ToolResult;
+import dev.tachyonmcp.core.server.TachyonServer;
+import dev.tachyonmcp.testkit.McpTestClients;
+import dev.tachyonmcp.testkit.McpTestServers;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+
+class EchoToolTest {
+
+    private static TachyonServer server;
+
+    @BeforeAll
+    static void startServer() {
+        server = McpTestServers.start(
+                b -> {},
+                s -> s.tools()
+                        .register(
+                                tool -> tool.name("echo").description("Echo back the message"),
+                                (ctx, request) -> ToolResult.text(
+                                        "echo:" + request.arguments().stringOr("message", ""))));
+    }
+
+    @AfterAll
+    static void stopServer() {
+        server.close();
+    }
+
+    @Test
+    void echoesMessage() throws Exception {
+        try (var client = McpTestClients.latest(server.port())) {
+            var response = client.post("""
+                    {"jsonrpc":"2.0","id":1,"method":"tools/call",
+                     "params":{"name":"echo","arguments":{"message":"hi"}}}
+                    """);
+
+            assertThatResponse(response).hasStatus(200).isSuccess().hasTextContent("echo:hi");
+        }
+    }
+
+    @Test
+    void rejectsUnknownTool() throws Exception {
+        try (var client = McpTestClients.latest(server.port())) {
+            var response = client.post("""
+                    {"jsonrpc":"2.0","id":2,"method":"tools/call",
+                     "params":{"name":"missing","arguments":{}}}
+                    """);
+
+            assertThat(response).isJsonRpcError().hasErrorCode(-32602).hasErrorMessage("Unknown tool: missing");
+        }
+    }
+}
+```
+
+The sections below cover each piece on its own.
+
 ## Servers
 
 `McpTestServers.start` builds a port-0 server, registers handlers, and starts it — closing the
@@ -41,7 +107,9 @@ requests):
 
 ```java
 try (var client = McpTestClients.latest(port)) {
-    client.post("""{"jsonrpc":"2.0","id":1,"method":"tools/list"}""");
+    client.post("""
+        {"jsonrpc":"2.0","id":1,"method":"tools/list"}
+        """);
 }
 ```
 
@@ -50,7 +118,9 @@ already-initialized client for the chosen protocol version:
 
 ```java
 try (var client = McpTestClients.builder(port).protocolVersion("2025-11-25").build()) {
-    client.sendRpc("""{"jsonrpc":"2.0","id":1,"method":"ping"}""");
+    client.sendRpc("""
+        {"jsonrpc":"2.0","id":1,"method":"ping"}
+        """);
 }
 ```
 
@@ -80,12 +150,14 @@ Error assertions follow the same staged shape:
 ```java
 import static dev.tachyonmcp.testkit.McpHttpResponseAssert.assertThatResponse;
 
-final HttpResponse<String> response = client.sendRpc("""{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"missing","arguments":{}}}""");
+var response = client.post("""
+    {"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"missing","arguments":{}}}
+    """);
 
 assertThatResponse(response)
     .isJsonRpcError()
     .hasErrorCode(-32602)
-    .hasErrorMessage("Invalid params");
+    .hasErrorMessage("Unknown tool: missing");
 ```
 
 ### HTTP status and transport rejections
@@ -172,7 +244,7 @@ try (var stream = client.openPostStream(null, """
      "params":{"notifications":{"toolsListChanged":true}}}
     """)) {
     stream.await(
-    frame -> frame.data().contains("notifications/subscriptions/acknowledged"),
+        frame -> frame.data().contains("notifications/subscriptions/acknowledged"),
         Duration.ofSeconds(5));
-    }
+}
 ```

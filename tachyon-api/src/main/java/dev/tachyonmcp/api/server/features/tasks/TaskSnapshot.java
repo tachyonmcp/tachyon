@@ -203,6 +203,25 @@ public interface TaskSnapshot extends HasMeta {
         /** Copies values from an existing snapshot. */
         Builder from(TaskSnapshot snapshot);
 
+        /**
+         * Starts the next revision of {@code previous}: copies its values and sets {@link #revision(long)}
+         * to {@code previous.revision() + 1}, so {@link Tasks#publish(TaskSnapshot)} applies it instead of
+         * ignoring an unchanged revision.
+         *
+         * <pre>{@code
+         * tasks.publish(s -> s.next(previous)
+         *         .status(TaskState.COMPLETED)
+         *         .result(TaskResult.completed(ToolResult.text("Charged")))
+         *         .lastUpdatedAt(clock.instant()));
+         * }</pre>
+         *
+         * @param previous the snapshot to continue
+         * @return this builder
+         */
+        default Builder next(TaskSnapshot previous) {
+            return from(previous).revision(previous.revision() + 1);
+        }
+
         /** Sets the stable task ID. */
         Builder taskId(String taskId);
 

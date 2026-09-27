@@ -19,7 +19,8 @@ import dev.tachyonmcp.api.annotations.ExperimentalApi;
  *   UNKNOWN        → unsupported by MCP
  * </pre>
  *
- * <p>See <a href="https://modelcontextprotocol.io/seps/1686-tasks">SEP-1686</a> and
+ * <p>See <a href="https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2663">SEP-2663</a>
+ * (and <a href="https://modelcontextprotocol.io/seps/1686-tasks">SEP-1686</a> for MCP 2025-11-25) and
  * A2A <a href="https://a2a-protocol.org/latest/specification/#413-taskstate">Task State</a>
  */
 @ExperimentalApi

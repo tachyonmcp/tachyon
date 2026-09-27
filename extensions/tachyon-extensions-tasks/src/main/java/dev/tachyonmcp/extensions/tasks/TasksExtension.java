@@ -2,12 +2,14 @@
 package dev.tachyonmcp.extensions.tasks;
 
 import dev.tachyonmcp.api.annotations.LegacyApi;
+import dev.tachyonmcp.api.runtime.InteractionContext;
 import dev.tachyonmcp.api.server.extensions.AdvertiseMode;
 import dev.tachyonmcp.api.server.extensions.ConfigurableExtension;
 import dev.tachyonmcp.api.server.extensions.ExtensionBuilder;
 import dev.tachyonmcp.api.server.extensions.ProvidedBy;
 import dev.tachyonmcp.api.server.features.tasks.TaskConnector;
 import dev.tachyonmcp.api.server.features.tasks.Tasks;
+import dev.tachyonmcp.core.server.TachyonServer;
 import dev.tachyonmcp.core.server.features.Pagination;
 import dev.tachyonmcp.core.server.features.tasks.TasksExtensionSupport;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
@@ -31,7 +33,17 @@ import org.jspecify.annotations.Nullable;
  *                 .keepAlive(Duration.ofMinutes(10)))
  *         .build();
  *
- * Tasks tasks = server.extension(TasksExtension.class).orElseThrow().tasks();
+ * Tasks tasks = TasksExtension.tasks(server);
+ * }</pre>
+ *
+ * <p>A tool handler reaches the same facade through its context, e.g. to hand it to background work:
+ *
+ * <pre>{@code
+ * (ctx, request) -> {
+ *     var tasks = TasksExtension.tasks(ctx);
+ *     // ... background work later calls tasks.publish(...)
+ *     return ToolResult.task(TaskSnapshot.working(jobId, Instant.now(), 1));
+ * }
  * }</pre>
  */
 @ProvidedBy(TasksExtensionProvider.class)
@@ -39,6 +51,9 @@ public final class TasksExtension implements ConfigurableExtension<TasksExtensio
 
     /** Extension identifier advertised during server initialization and declared by clients. */
     public static final String ID = TasksExtensionSupport.ID;
+
+    private static final String NOT_REGISTERED =
+            "TasksExtension is not registered: add .withExtension(TasksExtension.class, t -> t.connector(...))";
 
     /** Default retention window for a terminal task's cached result. */
     public static final Duration DEFAULT_KEEP_ALIVE = TaskEngineSettings.DEFAULT_KEEP_ALIVE;
@@ -77,6 +92,33 @@ public final class TasksExtension implements ConfigurableExtension<TasksExtensio
             throw new IllegalStateException("TasksExtension is not bootstrapped: build the server first");
         }
         return current;
+    }
+
+    /**
+     * Returns the tasks facade of {@code server}.
+     *
+     * @param server a built server
+     * @return the task registry
+     * @throws IllegalStateException if {@link TasksExtension} is not registered on {@code server}
+     */
+    public static Tasks tasks(TachyonServer server) {
+        return server.extension(TasksExtension.class)
+                .orElseThrow(() -> new IllegalStateException(NOT_REGISTERED))
+                .tasks();
+    }
+
+    /**
+     * Returns the tasks facade of the server handling {@code ctx}. The facade is server-scoped: hand it,
+     * never {@code ctx}, to background work that outlives the request.
+     *
+     * @param ctx the context of the request being handled
+     * @return the task registry
+     * @throws IllegalStateException if {@link TasksExtension} is not registered on that server
+     */
+    public static Tasks tasks(InteractionContext ctx) {
+        return ctx.extension(TasksExtension.class)
+                .orElseThrow(() -> new IllegalStateException(NOT_REGISTERED))
+                .tasks();
     }
 
     /**

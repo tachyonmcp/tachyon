@@ -2,7 +2,7 @@
 title: tachyon-api
 tags: [module, api]
 sources: [tachyon-api/src/main/java/dev/tachyonmcp/api/]
-updated: 2026-09-22
+updated: 2026-09-27
 commit: 58f386e8
 ---
 
@@ -32,7 +32,7 @@ Verdict: contract module. User-facing SAMs, descriptors, requests, results, doma
 
 ## 🎭 InteractionContext (what handlers get)
 
-`InteractionContext`: `protocolVersion()`, `lifecycle()` (`INITIALIZATION|OPERATION|SHUTDOWN`), `sessionId()` (null stateless), `isExtensionEnabled(id)`, `notifications()` (`log`, `progress(token,…)`, `comment`), `client()` (`elicitation().create(...)`), `sendRequest(method, params)` (`@ExperimentalApi`, raw JSON string future), typed attributes `get/set(AttributeKey)`.
+`InteractionContext`: `protocolVersion()`, `lifecycle()` (`INITIALIZATION|OPERATION|SHUTDOWN`), `sessionId()` (null stateless), `isExtensionEnabled(id)`, `extension(Class)` (`@ExperimentalApi`, `Optional`; default empty for server-less contexts, server-scoped so background work may keep the result), `notifications()` (`log`, `progress(token,…)`, `comment`), `client()` (`elicitation().create(...)`), `sendRequest(method, params)` (`@ExperimentalApi`, raw JSON string future), typed attributes `get/set(AttributeKey)`.
 
 Runtime impl in core: `DefaultDispatchContext` (per request, wraps channel ctx) → [[tachyon-core]].
 

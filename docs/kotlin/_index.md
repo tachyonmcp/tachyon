@@ -21,6 +21,9 @@ Version is pinned by the `tachyon-bom` — see [Quickstart](../quickstart.md#1-a
 </dependency>
 ```
 
+[Tasks](../extensions/tasks.md#kotlin) are optional: add `tachyon-extensions-tasks` to use
+`tasks(connector) { }`, `ToolScope.tasks`, or `TachyonServer.tasks`.
+
 A minimal Gradle build for the examples below, with JDK 21:
 
 ```kotlin
@@ -524,11 +527,11 @@ Available via `ToolScope.arguments` (or `PromptScope.arguments`):
 |---|---|---|
 | `ServerInfoScope` | `info { }` | `name`, `version`, `description`, `title`, `instructions` |
 | `CapabilitiesScope` | `capabilities { }` | `tools()`, `resources()`, `prompts()`, `logging`, `completionsMode` |
-| `TasksScope` | `tasks(connector) { }` | `pageSize`, `keepAlive`, `pollInterval`, `resultPollInterval` |
+| `TasksScope` | `tasks(connector) { }` (needs `tachyon-extensions-tasks`) | `pageSize`, `keepAlive`, `pollInterval`, `resultPollInterval` |
 | `NetworkScope` | `network { }` | `host`, `port`, `endpointPath`, `allowedOrigins`, `allowedHeaders`, `allowedHosts`, `maxContentLength`, `maxPipelinedRequests`, `maxPendingSseBytes` |
 | `SessionScope` | `session { }` | `enable()`, `sessionTtl`, `sessionIdGenerator` |
 | `RuntimeScope` | `runtime { }` | `shutdownGracePeriod`, `requestTimeout`, `clock` |
-| `ToolScope` | tool lambda | `ctx`, `request`, `arguments`; `success(v)`, `text(t)`, `fail(msg)`, `content { }` |
+| `ToolScope` | tool lambda | `ctx`, `request`, `arguments`, `tasks`; `success(v)`, `text(t)`, `fail(msg)`, `content { }` |
 | `ResourceScope` | resource lambda | `ctx`, `uri`, `params`, `uriTemplate` |
 | `TemplateScope` | resource-template lambda | `ctx`, `uri`, `params`, `uriTemplate`; contextual `TextResourceContents { }` |
 | `PromptScope` | prompt lambda | `ctx`, `request`, `arguments`; `content { }` |

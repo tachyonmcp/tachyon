@@ -40,7 +40,7 @@ Import `tachyon-bom` once, then add modules with no `<version>`:
 - `TachyonServer.builder()` → `ServerBuilder`. Start here.
 - `.build()` (only terminal method) → `TachyonServer` (`AutoCloseable`), no transport bound yet.
 - `TachyonServer.start()` (blocking) → binds the Netty transport.
-- `TachyonServer`: `.tools()`, `.resources()`, `.prompts()`, `.tasks()`, `.completions()` first; then `.start()`, `.port()` (throws before `.start()`), `.close()`, `.config()`.
+- `TachyonServer`: `.tools()`, `.resources()`, `.prompts()`, `.completions()` first (tasks: `TasksExtension.tasks(server)`); then `.start()`, `.port()` (throws before `.start()`), `.close()`, `.config()`.
 - Dynamic registration: `.tools().register(...)`, `.resources().register(...)`, `.prompts().register(...)`, `.completions().registerForPrompt(...)`/`.registerForResource(...)` — all work before or after `.start()`.
 - Every function gets `dev.tachyonmcp.api.runtime.InteractionContext` → protocol + optional session + notifications.
 - ⚡ **Virtual threads**: All synchronous functions (`ToolFn`, `ResourceFn`, `PromptFn`, `CompletionFn`) run on a virtual thread per request. Blocking for I/O is fine — never use `synchronized` (pins carrier thread). Use `ReentrantLock` instead.
@@ -181,6 +181,19 @@ no time bound; ends at task `ttl` ⇒ -32602 expired, or silently once the respo
 2025-11-25 clients Tachyon rejects terminal tasks (-32602) and polls `get` the same way until `cancelled`
 and `@Deprecated(forRemoval = false)`: legacy MCP 2025-11-25
 (pre-SEP-2663) surface, kept for compatibility.
+
+Task tool: `.taskSupport(TaskSupport.REQUIRED)`, start external work, return
+`ToolResult.task(TaskSnapshot.working(id, now, 1))` — handler runs once, never in the background.
+Façade `Tasks` (`publish`/`get`/`remove`/`reportProgress`): `TasksExtension.tasks(server)` (callbacks) or
+`TasksExtension.tasks(ctx)` (handler; hand the façade, never `ctx`, to background work). Not registered ⇒
+ISE; in a handler ⇒ -32603. Publish: `tasks.publish(s -> s.next(previous).status(COMPLETED).result(...)
+.lastUpdatedAt(now))` — `next` copies + bumps `revision`; a not-newer revision is silently ignored.
+Pull stays authoritative: `tasks/get` always calls the connector's `get`.
+Kotlin: `ToolScope.tasks` (member; `val tasks = tasks` before launching work), `server.tasks`,
+`TaskSnapshot(from = previous) { status = ...; lastUpdatedAt = Clock.System.now() }` (next revision;
+`kotlin.time.Instant`/`Duration`). `tachyon-kotlin` has the tasks module `<optional>`: add
+`tachyon-extensions-tasks`, else first use ⇒ ISE naming it. Background work runs on the app's own
+`CoroutineScope` (`jobs.launch { delay(...) }`), never `GlobalScope`/`coroutineScope { }` (blocks the call).
 
 Default `Mode.AUTO` advertises only registered features. Force `Mode.ON`/`Mode.OFF`. **`OFF` also blocks registration**: registry `register` becomes a debug-logged no-op, not merely hidden from `initialize`.
 
