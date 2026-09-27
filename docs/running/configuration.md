@@ -230,6 +230,10 @@ extends the `Host` check with additional authorities — e.g. a container reachi
 via `host.docker.internal`. It does **not** widen the `Origin` check: a browser page on a
 non-local origin is rejected unless that origin is in [`allowedOrigins`](#cors).
 
+An absolute-form request line (`POST http://localhost:8080/mcp HTTP/1.1`) is accepted. Its
+authority is what the server targets, so it passes the same check as `Host`, and a `Host` that
+differs from it is rejected with `400 Bad Request`.
+
 | Option | Default | Description |
 |---|---|---|
 | `allowedHosts` | — (localhost-only) | Extra `Host` authorities (`host` or `host:port`) accepted beyond localhost |

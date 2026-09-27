@@ -2,8 +2,8 @@
 title: Errors
 tags: [concept, errors, protocol]
 sources: [tachyon-api/src/main/java/dev/tachyonmcp/api/server/domain/ServerError.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/domain/ServerErrors.java, tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/mcp/v2025_11_25/codecs/McpResponseMapper.java, tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/mcp/v2026_07_28/codecs/McpResponseMapper.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/PeekedBody.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/JsonRpcCodec.java]
-updated: 2026-09-23
-commit: 0ac33032
+updated: 2026-09-27
+commit: a3cf5df7
 ---
 
 # 🚨 Errors
@@ -51,7 +51,7 @@ Subscription transport failures produce `StreamFailed(causeType, cause?)`, with 
 
 | Status | When | Proof |
 |---|---|---|
-| 400 | missing `MCP-Session-Id` (stateful) ; duplicate singleton MCP header ; malformed body — JSON-RPC error body, `-32700` for a JSON syntax failure or `-32600` for well-formed JSON that isn't a JSON-RPC envelope, per `JsonRpcCodec.Parse#invalidRequest` | `McpDispatcher#dispatchTrackedRequestAsync`, `McpHeaderGuardHandler#hasDuplicateSingleton`, `McpDispatcher#malformedBodyError` |
+| 400 | missing `MCP-Session-Id` (stateful) ; duplicate singleton MCP header ; absolute-form target whose authority ≠ `Host` (bare 400, closes) ; malformed body — JSON-RPC error body, `-32700` for a JSON syntax failure or `-32600` for well-formed JSON that isn't a JSON-RPC envelope, per `JsonRpcCodec.Parse#invalidRequest` | `McpDispatcher#dispatchTrackedRequestAsync`, `McpHeaderGuardHandler#hasDuplicateSingleton`, `DnsRebindingProtectionHandler#channelRead`, `McpDispatcher#malformedBodyError` |
 
 ⚠️ A SEP-2243 mirror disagreeing with the body is **not** here — it is a JSON-RPC error, coded per negotiated version (400/-32020 on 2026-07-28, 200/-32001 on 2025-11-25) via `ChannelHandlerUtils#rejectWithServerError` — [[protocol-versions]].
 | 403 | DNS-rebinding guard | `DnsRebindingProtectionHandler#reject` |

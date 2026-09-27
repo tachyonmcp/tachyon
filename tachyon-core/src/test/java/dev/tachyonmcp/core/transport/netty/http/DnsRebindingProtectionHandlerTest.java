@@ -18,6 +18,7 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class DnsRebindingProtectionHandlerTest {
@@ -229,6 +230,35 @@ class DnsRebindingProtectionHandlerTest {
     void constructorRejectsUrlEntry() {
         assertThatThrownBy(() -> new DnsRebindingProtectionHandler(List.of("http://host.docker.internal:8096")))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    /** RFC 9112 §3.2.2: the absolute-form authority is the target, even when HTTP/1.0 omits Host. */
+    @Test
+    void checksAbsoluteFormAuthorityWhenHttp10OmitsHost() {
+        channel = new EmbeddedChannel(new DnsRebindingProtectionHandler());
+        var req = new DefaultFullHttpRequest(HttpVersion.HTTP_1_0, HttpMethod.POST, "http://attacker.example/mcp");
+
+        channel.writeInbound(req);
+
+        assertThat(rejectionStatus(channel)).isEqualTo(HttpResponseStatus.FORBIDDEN);
+        assertThat(req.refCnt()).isZero();
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "http://localhost/mcp?client=test,     /mcp?client=test",
+        "HTTPS://[::1]:8096/mcp/,               /mcp/",
+        "http://localhost:8096,                 /",
+        "http://localhost:8096?x=1,             /?x=1"
+    })
+    void rewritesAcceptedAbsoluteFormToOriginForm(String target, String originForm) {
+        channel = new EmbeddedChannel(new DnsRebindingProtectionHandler());
+        var req = new DefaultFullHttpRequest(HttpVersion.HTTP_1_0, HttpMethod.POST, target);
+
+        assertThat(channel.writeInbound(req)).isTrue();
+
+        HttpRequest forwarded = channel.readInbound();
+        assertThat(forwarded.uri()).isEqualTo(originForm);
     }
 
     @Test

@@ -19,6 +19,7 @@ import java.util.Map;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 /**
@@ -233,6 +234,51 @@ public abstract class AbstractDnsRebindingTest<C extends McpClient> extends Abst
         assertThat(response.header("access-control-allow-origin")).isNull();
     }
 
+    /** RFC 9112 §3.2.2: an origin server MUST accept the absolute-form request-target. */
+    @ParameterizedTest
+    @CsvSource({
+        "http://localhost:%d/mcp,         localhost:%d",
+        "HTTP://LOCALHOST:%d/mcp/?x=1,    LOCALHOST:%d",
+        "http://127.0.0.1:%d/mcp,         127.0.0.1:%d",
+        "http://[::1]:%d/mcp,             [::1]:%d"
+    })
+    void acceptsAbsoluteFormTargetingLoopback(String target, String host) throws Exception {
+        var response = rawPost(target.formatted(port), host.formatted(port), Map.of());
+
+        assertThat(response.status()).isEqualTo(200);
+    }
+
+    /**
+     * The server targets the request-target's authority and ignores {@code Host} (RFC 9112 §3.2.2), so
+     * a guard that approves {@code Host} alone would let a rebound authority in behind a loopback
+     * {@code Host}. The two must agree (§3.2), and the authority must pass the guard on its own.
+     */
+    @ParameterizedTest
+    @CsvSource({
+        "http://attacker.example.com:%d/mcp,           localhost:%d,                 400",
+        "http://localhost:%d/mcp,                      attacker.example.com:%d,      400",
+        "http://localhost/mcp,                         localhost:%d,                 400",
+        "http://attacker.example.com:%d/mcp,           attacker.example.com:%d,      403",
+        "http://0.0.0.0:%d/mcp,                        0.0.0.0:%d,                   403",
+        "http://localhost:80@attacker.example.com/mcp, localhost:80@attacker.example.com, 403",
+        "http://user@localhost:%d/mcp,                 user@localhost:%d,            403"
+    })
+    void rejectsAbsoluteFormWithForeignOrMismatchedAuthority(String target, String host, int status) throws Exception {
+        var response = rawPost(target.formatted(port), host.formatted(port), Map.of());
+
+        assertThat(response.status()).isEqualTo(status);
+        assertThat(response.header("connection")).isEqualToIgnoringCase("close");
+        assertThat(response.header("access-control-allow-origin")).isNull();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"http://localhost:%d/other", "ftp://localhost:%d/mcp", "*"})
+    void absoluteFormToOtherResourceIsNotFound(String target) throws Exception {
+        var response = rawPost(target.formatted(port), "localhost:" + port, Map.of());
+
+        assertThat(response.status()).isEqualTo(404);
+    }
+
     private HttpResponse<String> preflight(String origin, String path) throws Exception {
         var request = HttpRequest.newBuilder()
                 .uri(URI.create("http://localhost:" + port + path))
@@ -247,16 +293,25 @@ public abstract class AbstractDnsRebindingTest<C extends McpClient> extends Abst
     }
 
     private RawResponse rawPost(String host, Map<String, String> headers) throws IOException {
+        return rawPost("/mcp", host, headers);
+    }
+
+    private RawResponse rawPost(String target, String host, Map<String, String> headers) throws IOException {
         var all = new LinkedHashMap<>(requestHeaders());
         all.putAll(headers);
         all.put("Content-Type", "application/json");
         all.put("Accept", "application/json, text/event-stream");
-        return raw("POST", host, all, requestBody());
+        return raw("POST", target, host, all, requestBody());
     }
 
     private RawResponse raw(String method, String host, Map<String, String> headers, String body) throws IOException {
+        return raw(method, "/mcp", host, headers, body);
+    }
+
+    private RawResponse raw(String method, String target, String host, Map<String, String> headers, String body)
+            throws IOException {
         var bytes = body.getBytes(StandardCharsets.UTF_8);
-        var head = new StringBuilder(method + " /mcp HTTP/1.1\r\nHost: " + host + "\r\n");
+        var head = new StringBuilder(method + " " + target + " HTTP/1.1\r\nHost: " + host + "\r\n");
         headers.forEach(
                 (name, value) -> head.append(name).append(": ").append(value).append("\r\n"));
         head.append("Connection: close\r\nContent-Length: ")
