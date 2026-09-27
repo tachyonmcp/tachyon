@@ -1,13 +1,11 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
 package dev.tachyonmcp.api.server.extensions;
 
-import dev.tachyonmcp.api.annotations.ExperimentalApi;
 import dev.tachyonmcp.api.runtime.Extension;
 import dev.tachyonmcp.api.runtime.InteractionContext;
 import java.util.Set;
 
 /** Pluggable server extension that can add custom methods, capabilities, and lifecycle hooks. */
-@ExperimentalApi
 public interface ServerExtension extends Extension<InteractionContext> {
     /** Returns the server settings to advertise for this extension, e.g. in {@code initialize} or {@code server/discover}. */
     default ExtensionSettings serverSettings() {

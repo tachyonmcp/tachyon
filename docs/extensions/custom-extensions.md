@@ -11,9 +11,6 @@ This guide builds a small extension that adds a custom `com.example/greet` metho
 You then call it with curl, see what happens when a client forgets to declare it, and learn the
 rest of the authoring API.
 
-> **API status:** `ServerExtension` and `ExtensionContext` are `@ExperimentalApi`: they may change in
-> a later release.
-
 ## Do you need an extension?
 
 Usually not. Pick the simplest option that does the job:

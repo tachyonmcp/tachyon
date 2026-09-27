@@ -1,7 +1,6 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
 package dev.tachyonmcp.api.server.extensions;
 
-import dev.tachyonmcp.api.annotations.ExperimentalApi;
 import dev.tachyonmcp.api.server.extensions.spi.ExtensionProvider;
 import java.lang.annotation.Documented;
 import java.lang.annotation.ElementType;
@@ -21,9 +20,8 @@ import java.lang.annotation.Target;
  * }</pre>
  *
  * <p>The provider needs a public no-argument constructor and must report the annotated class from
- * {@link ExtensionProvider#extensionType()}. Experimental together with the provider SPI it names.
+ * {@link ExtensionProvider#extensionType()}.
  */
-@ExperimentalApi
 @Documented
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.TYPE)

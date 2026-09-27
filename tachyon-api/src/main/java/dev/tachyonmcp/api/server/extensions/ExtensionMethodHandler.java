@@ -1,7 +1,6 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
 package dev.tachyonmcp.api.server.extensions;
 
-import dev.tachyonmcp.api.annotations.ExperimentalApi;
 import dev.tachyonmcp.api.json.JsonObject;
 import dev.tachyonmcp.api.runtime.InteractionContext;
 import org.jspecify.annotations.Nullable;
@@ -15,7 +14,6 @@ import org.jspecify.annotations.Nullable;
  * {@link ServerExtension#bootstrap(ExtensionContext)}.
  */
 @FunctionalInterface
-@ExperimentalApi
 public interface ExtensionMethodHandler {
 
     /**

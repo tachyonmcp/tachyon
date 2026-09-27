@@ -540,7 +540,6 @@ public class TachyonServerBuilder
          * Registers a [ConfigurableExtension] by class and configures its builder. Calling this again for
          * the same class keeps configuring the same builder.
          */
-        @ExperimentalApi
         public fun <E, B> withExtension(
             type: Class<E>,
             configure: B.() -> Unit,

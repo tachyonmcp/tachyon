@@ -29,7 +29,7 @@ Package-level: `package-info.java` with `@NullMarked` (+ `@InternalApi` for `tra
 | `SessionStore`/`SessionEventStore`/`SessionSnapshot` (`@ExperimentalApi since 1.0.0-beta.27`) | `Session` (`@InternalApi since beta.27`) |
 | Kotlin `public` DSL | Kotlin `internal` |
 
-Experimental notable: `Tasks`, `TaskConnector`, `ToolHandler`, `TypedToolFn`, `ExtensionContext`, `ServerExtension`, `NetworkConfig`, `ObservabilityConfig`, `annotations(...)`, `pipelineCustomizer`, `sendRequest`, `comment()`.
+Experimental notable: `Tasks`, `TaskConnector`, `ToolHandler`, `TypedToolFn`, `NetworkConfig`, `ObservabilityConfig`, `annotations(...)`, `pipelineCustomizer`, `sendRequest`, `comment()`.
 
 ## 🧬 Immutables
 

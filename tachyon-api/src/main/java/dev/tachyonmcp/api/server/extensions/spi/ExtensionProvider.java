@@ -1,7 +1,6 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
 package dev.tachyonmcp.api.server.extensions.spi;
 
-import dev.tachyonmcp.api.annotations.ExperimentalApi;
 import dev.tachyonmcp.api.server.extensions.ConfigurableExtension;
 import dev.tachyonmcp.api.server.extensions.ExtensionBuilder;
 
@@ -17,7 +16,6 @@ import dev.tachyonmcp.api.server.extensions.ExtensionBuilder;
  * @param <E> the extension type
  * @param <B> the builder that configures and creates {@code E}
  */
-@ExperimentalApi
 public interface ExtensionProvider<E extends ConfigurableExtension<B>, B extends ExtensionBuilder<E>> {
 
     /**
