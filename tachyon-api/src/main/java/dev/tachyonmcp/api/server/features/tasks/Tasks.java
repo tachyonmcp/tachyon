@@ -2,6 +2,7 @@
 package dev.tachyonmcp.api.server.features.tasks;
 
 import dev.tachyonmcp.api.annotations.ExperimentalApi;
+import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -20,6 +21,28 @@ public interface Tasks {
      * status is never broadcast to other sessions.
      */
     TaskSnapshot publish(TaskSnapshot snapshot);
+
+    /**
+     * Builds a snapshot with {@code configurer} and {@linkplain #publish(TaskSnapshot) publishes} it.
+     *
+     * <pre>{@code
+     * tasks.publish(s -> s.taskId(workflowId)
+     *         .status(TaskState.WORKING)
+     *         .statusMessage("Charging card")
+     *         .createdAt(createdAt)
+     *         .lastUpdatedAt(clock.instant())
+     *         .revision(4));
+     * }</pre>
+     *
+     * @param configurer sets the fields of a fresh {@link TaskSnapshot#builder() builder}
+     * @return the effective snapshot, as for {@link #publish(TaskSnapshot)}
+     * @throws IllegalArgumentException if the configured snapshot is invalid; nothing is published
+     */
+    default TaskSnapshot publish(Consumer<TaskSnapshot.Builder> configurer) {
+        var builder = TaskSnapshot.builder();
+        configurer.accept(builder);
+        return publish(builder.build());
+    }
 
     /** Returns the cached task projection, or {@code null} when absent. */
     @Nullable

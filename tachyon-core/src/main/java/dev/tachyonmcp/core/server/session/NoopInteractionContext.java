@@ -7,6 +7,7 @@ import dev.tachyonmcp.api.runtime.ClientContext;
 import dev.tachyonmcp.api.runtime.ContextNotifications;
 import dev.tachyonmcp.api.server.domain.LoggingLevel;
 import dev.tachyonmcp.api.server.domain.RequestId;
+import dev.tachyonmcp.api.server.extensions.ServerExtension;
 import dev.tachyonmcp.core.protocol.Protocol;
 import dev.tachyonmcp.core.protocol.ProtocolMappers;
 import dev.tachyonmcp.core.protocol.ProtocolRequestMapper;
@@ -86,6 +87,11 @@ public class NoopInteractionContext implements DispatchContext {
     @Override
     public ServerEngine engine() {
         throw new UnsupportedOperationException("No server available");
+    }
+
+    @Override
+    public <E extends ServerExtension> Optional<E> extension(Class<E> type) {
+        return Optional.empty();
     }
 
     @Override

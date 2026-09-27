@@ -4,12 +4,14 @@ package dev.tachyonmcp.core.server.session;
 import dev.tachyonmcp.api.annotations.InternalApi;
 import dev.tachyonmcp.api.server.domain.LoggingLevel;
 import dev.tachyonmcp.api.server.domain.RequestId;
+import dev.tachyonmcp.api.server.extensions.ServerExtension;
 import dev.tachyonmcp.core.protocol.ProtocolRequestMapper;
 import dev.tachyonmcp.core.protocol.ProtocolResponseMapper;
 import dev.tachyonmcp.core.runtime.ChannelContext;
 import dev.tachyonmcp.core.server.OutboundSseStream;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
 import dev.tachyonmcp.core.server.observability.Observation;
+import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 
 @InternalApi
@@ -17,6 +19,11 @@ public interface DispatchContext extends ChannelContext {
 
     /** Returns the owning {@link ServerEngine}. */
     ServerEngine engine();
+
+    @Override
+    default <E extends ServerExtension> Optional<E> extension(Class<E> type) {
+        return engine().extension(type);
+    }
 
     /** Sets the logging level for the current session; no-op when no session is bound. */
     void setLoggingLevel(LoggingLevel level);

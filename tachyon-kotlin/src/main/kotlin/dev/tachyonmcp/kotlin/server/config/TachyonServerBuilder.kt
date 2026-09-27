@@ -31,6 +31,7 @@ import dev.tachyonmcp.kotlin.server.features.CoroutineRuntime
 import dev.tachyonmcp.kotlin.server.features.tools.toolDescriptorOf
 import dev.tachyonmcp.kotlin.server.json.toJsonSchema
 import dev.tachyonmcp.kotlin.server.json.toJsonSchemaOrNull
+import dev.tachyonmcp.kotlin.server.requireTasksModule
 import io.netty.channel.ChannelPipeline
 import kotlinx.serialization.json.JsonObject
 import kotlin.contracts.ExperimentalContracts
@@ -519,6 +520,7 @@ public class TachyonServerBuilder
          * @param connector system that owns task execution
          * @param configure retention, paging, and polling options
          * @return this builder
+         * @throws IllegalStateException if `tachyon-extensions-tasks` is not on the classpath
          */
         @OptIn(ExperimentalContracts::class)
         @ExperimentalApi
@@ -527,11 +529,13 @@ public class TachyonServerBuilder
             configure: (@TachyonDsl TasksScope).() -> Unit = {},
         ): TachyonServerBuilder {
             contract { callsInPlace(configure, InvocationKind.EXACTLY_ONCE) }
-            val scope = TasksScope(connector).apply(configure)
-            delegate.withExtension<TasksExtension, TasksExtension.Builder>(
-                TasksExtension::class.java,
-            ) {
-                scope.applyTo(it)
+            requireTasksModule {
+                val scope = TasksScope(connector).apply(configure)
+                delegate.withExtension<TasksExtension, TasksExtension.Builder>(
+                    TasksExtension::class.java,
+                ) {
+                    scope.applyTo(it)
+                }
             }
             return this
         }

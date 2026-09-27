@@ -2,6 +2,7 @@
 package dev.tachyonmcp.api.runtime;
 
 import dev.tachyonmcp.api.annotations.ExperimentalApi;
+import dev.tachyonmcp.api.server.extensions.ServerExtension;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -63,6 +64,24 @@ public interface InteractionContext {
      * @return {@code true} if the extension is active
      */
     boolean isExtensionEnabled(String extensionId);
+
+    /**
+     * Returns the server extension of the given type registered on the server handling this
+     * interaction, e.g. to reach the runtime facade a configurable extension exposes.
+     *
+     * <p>The extension is server-scoped: a handler may hand it to background work that outlives
+     * this request. Hand over the extension or its facade, never this context.
+     *
+     * <p>The default returns empty, for contexts with no server behind them.
+     *
+     * @param type the extension class to look up
+     * @param <E>  the extension type
+     * @return the first registered extension that is an instance of {@code type}, or empty
+     */
+    @ExperimentalApi
+    default <E extends ServerExtension> Optional<E> extension(Class<E> type) {
+        return Optional.empty();
+    }
 
     /**
      * Returns the notification sender bound to this interaction.

@@ -95,7 +95,7 @@ See the [quickstart](docs/quickstart.md) for Java and Kotlin examples plus a `cu
 |---|---|
 | **MCP surface** | Tools, resources and templates, prompts, completions, logging, sampling, form/URL elicitation, cancellation, subscriptions, pagination, and progress notifications |
 | **Annotations** | Optional adapters for [mcp-java, LangChain4j, and Spring AI](docs/annotations.md), mapped onto Tachyon's standard registries |
-| **Tasks** | Full `tasks/*` lifecycle, state validation, status notifications, retention, and `TasksExtension` for [SEP-1686](docs/extensions/tasks.md) |
+| **Tasks** | Full `tasks/*` lifecycle, state validation, status notifications, retention, and `TasksExtension` for [SEP-2663](docs/extensions/tasks.md), with SEP-1686 compatibility for MCP 2025-11-25 clients |
 | **Agent Skills** | `SkillsExtension` implements the [SEP-2640](docs/extensions/skills.md) draft: filesystem/classpath registries, `skill://` resources, `skills/list`, `skills/get`, and directory reads |
 | **Extensions** | [SEP-2133](docs/extensions/) negotiation, custom JSON-RPC methods, capability advertisement, and extension-gated features |
 | **Runtime** | Stateless or resumable sessions, `Last-Event-ID` replay, pluggable stores, virtual-thread handlers, request timeouts, and graceful draining |
