@@ -151,9 +151,25 @@
                 <configuration>
                     <archive>
                         <manifestEntries>
-                            <Main-Class>com.example.echo.EchoServer</Main-Class>
+                            <Main-Class>com.example.echo.EchoServerKt</Main-Class>
                         </manifestEntries>
                     </archive>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <version>4.1.1</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <finalName>${project.artifactId}</finalName>
+                    <mainClass>com.example.echo.EchoServerKt</mainClass>
                 </configuration>
             </plugin>
         </plugins>
