@@ -64,7 +64,7 @@ Stateless ⇒ `NoopSessionEventStore`: `append` discards, `drain` returns the cu
 
 - Notifications: `server.sendNotification(session, …)` → event log append → deliver on bound POST-SSE stream (if dispatching same session) else GET connection `DefaultTachyonServer#sendSerializedNotification`.
 - Requests (elicitation/sampling): `sendRequest` registers pending future with `runtime.requestTimeout` (60s) and ownership `DefaultTachyonServer`. Stateless dispatch ctx refuses: "Server-to-client requests require a session" `DefaultDispatchContext#sendRequest`.
-- Broadcasts (`list_changed`, logs) iterate **ACTIVE local** sessions only `DefaultTachyonServer#broadcastNotification`, `DefaultTachyonServer#broadcastLog`.
+- Broadcasts (tools/resources/prompts `list_changed`, logs) iterate **ACTIVE local** sessions only `DefaultTachyonServer#broadcastNotification`, `DefaultTachyonServer#broadcastLog`.
 
 [WireClientContext#create](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/session/WireClientContext.java)
 encodes an `ElicitationRequest` record; `toElicitationResult` validates accepted content before

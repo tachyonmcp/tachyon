@@ -16,7 +16,6 @@ import dev.tachyonmcp.core.server.internal.ServerEngine;
 import dev.tachyonmcp.extensions.tasks.engine.TaskEngine;
 import dev.tachyonmcp.extensions.tasks.engine.TaskEngineSettings;
 import java.time.Duration;
-import java.util.Map;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
@@ -137,9 +136,6 @@ public final class TasksExtension implements ConfigurableExtension<TasksExtensio
     void attach(ServerEngine server) {
         var created = Objects.requireNonNull(engine, "install runs before attach");
         TaskMethodHandlers.register(server, created);
-        if (settings.list()) {
-            created.onChange(() -> server.broadcastNotification("notifications/tasks/list_changed", Map.of()));
-        }
         created.start();
     }
 

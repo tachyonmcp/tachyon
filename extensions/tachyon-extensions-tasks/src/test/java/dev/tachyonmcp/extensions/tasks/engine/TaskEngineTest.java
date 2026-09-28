@@ -187,8 +187,6 @@ class TaskEngineTest {
                 events.add("progress " + taskId + " " + progress + "/" + total + " " + message + " -> " + route);
             }
         });
-        var changes = new ArrayList<String>();
-        registry.onChange(() -> changes.add("changed"));
         var owner = new TestRoute("owner");
 
         registry.publish(snapshot("task-1", TaskState.WORKING, 1));
@@ -204,7 +202,6 @@ class TaskEngineTest {
                         "status task-1@2 -> " + owner,
                         "status task-1@3 -> " + owner,
                         "progress task-1 0.5/1.0 halfway -> " + owner);
-        assertThat(changes).as("one change per accepted revision").hasSize(3);
     }
 
     @Test

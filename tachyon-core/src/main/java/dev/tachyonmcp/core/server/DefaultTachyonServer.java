@@ -412,13 +412,8 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
         }
     }
 
-    void broadcastNotification(String method) {
-        broadcastNotification(method, java.util.Map.of());
-    }
-
-    @Override
-    public void broadcastNotification(String method, Object params) {
-        var paramsStr = JsonRpcCodec.toJsonParams(params);
+    private void broadcastNotification(String method) {
+        var paramsStr = JsonRpcCodec.toJsonParams(java.util.Map.of());
         var notificationJson = JsonRpcCodec.serializeNotificationAsString(method, paramsStr);
         for (var entry : sessionManager.allSessions()) {
             if (entry.state() == SessionState.ACTIVE) {
