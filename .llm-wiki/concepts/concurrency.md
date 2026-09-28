@@ -2,8 +2,8 @@
 title: Concurrency & shutdown
 tags: [concept, concurrency, virtual-threads]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/sse/PostSseStream.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/internal/OperationTracker.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/NettyServer.java, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/HandlerFutures.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/OutboundSseStreamMessageRouter.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/PeekedBody.java]
-updated: 2026-09-25
-commit: cbfbcd7f
+updated: 2026-09-28
+commit: 16f22b51
 ---
 
 # 🧵 Concurrency & shutdown
@@ -41,15 +41,20 @@ client `notifications/cancelled` → `inboundRequests.get(key).cancel(true)` →
 
 [DefaultTachyonServer#close](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java):
 
-1. Refuse if called on Netty event loop (would deadlock drain) [DefaultTachyonServer#requireNotOnEventLoop](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java).
-2. `netty.stopAccepting()` — close server socket, keep children.
+1. Refuse `close()`/`stop()` on a Netty event loop (would deadlock drain) [DefaultTachyonServer#requireNotOnEventLoop](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java).
+2. `netty.stopAccepting()` — close server socket, keep children. Bounded wait `NettyServer#await`.
 3. `deadline = now + runtime.shutdownGracePeriod` (5s default).
-4. `operations.drain(deadline)` — stop admission, wait `active==0`. Admission counts until **both** dispatch future and `transportCompletion` (response flushed) done `OperationTracker`.
-5. `executor.shutdown()` + await remaining, else `shutdownNow`.
-6. `subscriptionRegistry.closeAll()` (graceful listen results), extensions shutdown within deadline, task janitor stop, `sessionManager.close()`, event store close.
-7. `finally` `netty.close()`.
+4. `subscriptionRegistry.closeAll()` — graceful listen results first; a listen response pends for the stream's life, so a later drain would wait out the whole grace. Also closes the registry: a listen admitted earlier that activates later gets ack + graceful result at once `SubscriptionRegistry#activate`.
+5. `operations.drain(deadline)` — stop admission, wait `active==0`. Admission counts until **both** dispatch future and `transportCompletion` (response flushed) done `OperationTracker`.
+6. `executor.shutdown()` + await remaining, else `shutdownNow`.
+7. Extensions shutdown within deadline, task janitor stop, `sessionManager.close()`, event store close.
+8. `finally` `netty.close()` + `transport = null` — close children (unsent bytes dropped), `shutdownGracefully(0, grace)`. Each wait `awaitUninterruptibly(runtime.shutdownGracePeriod)`, read from the engine config: interrupt restored after, timeout ⇒ warn + continue, so neither an interrupted drain nor a wedged loop (only `pipelineCustomizer` handlers or a bug run there; user handlers run on the executor) hangs shutdown `NettyServer#close`.
 
-New requests during drain ⇒ `RejectedExecutionException` ⇒ 503 "Server shutting down". Tests: `ServerShutdownGraceTest`, e2e `ShutdownDrainTest`.
+New requests during drain ⇒ `RejectedExecutionException` ⇒ 503 "Server shutting down". Tests: `ServerShutdownGraceTest`, e2e `ShutdownDrainTest`, e2e `ServerRestartTest#shutdownEndsListenStreamGracefullyWithoutWaitingOutTheGracePeriod` (stop + close).
+
+## 🔁 Stop / restart
+
+`DefaultTachyonServer#stop` = transport-only subset of close, same `lifecycleLock` + event-loop guard: `stopAccepting` ⇒ `subscriptionRegistry.closeAll()` (listen responses pend for the stream's life, so complete them before the drain waits on their flush) ⇒ `drain(deadline)` ⇒ transport `close()` ⇒ `transport = null` ⇒ `OperationTracker#reopen` + `SubscriptionRegistry#reopen`. Keeps executor, extensions, registries, sessions, event store ⇒ `start()` binds a fresh `NettyServer` (port 0 ⇒ new port), sessions resume. No-op when not started or closed; `close()` stays terminal (`start()` ⇒ ISE "Server is closed"). Past the grace, unfinished responses are dropped: a slow client or handler never extends `stop()`. Normal case ≈ drain time + milliseconds; wedged event loop ≤ `shutdownGracePeriod` per wait (stopAccepting, drain, 3 close waits), never the client's pace. `Duration.ZERO` ⇒ no transport waits: closes proceed async, so an immediate rebind of a fixed port may race. Test: e2e `ServerRestartTest` (`#stopDropsUnfinishedRequestAfterGracePeriodAndRestarts`).
 
 ## ⚠️ Rules for new code
 

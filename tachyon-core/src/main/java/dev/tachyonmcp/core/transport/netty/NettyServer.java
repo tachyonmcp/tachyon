@@ -10,9 +10,12 @@ import io.netty.channel.MultiThreadIoEventLoopGroup;
 import io.netty.channel.WriteBufferWaterMark;
 import io.netty.channel.group.DefaultChannelGroup;
 import io.netty.util.concurrent.DefaultThreadFactory;
+import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GlobalEventExecutor;
 import java.io.Closeable;
 import java.net.InetSocketAddress;
+import java.time.Duration;
+import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -29,6 +32,7 @@ public final class NettyServer implements Closeable {
     final MultiThreadIoEventLoopGroup eventLoopGroup;
     private final Channel serverChannel;
     private final DefaultChannelGroup childChannels = new DefaultChannelGroup(GlobalEventExecutor.INSTANCE);
+    private final Duration shutdownTimeout;
 
     /**
      * Returns the port the server is bound to.
@@ -49,6 +53,7 @@ public final class NettyServer implements Closeable {
     }
 
     public NettyServer(ServerEngine server, NettyServerConfig config) {
+        shutdownTimeout = server.config().runtime().shutdownGracePeriod();
         var engine = config.ioEngine();
         if (engine == NettyIoEngine.AUTO) {
             engine = NettyIoEngine.detect();
@@ -117,24 +122,27 @@ public final class NettyServer implements Closeable {
      * {@link #close()} finishes the teardown.
      */
     public void stopAccepting() {
-        try {
-            serverChannel.close().sync();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
+        await(serverChannel.close(), "Server channel close");
     }
 
+    /**
+     * Closes every channel, dropping unsent data, and shuts the event loops down. Each wait is
+     * bounded and uninterruptible, restoring the interrupt status afterwards, so neither a slow
+     * client nor an interrupted caller can keep the transport alive.
+     */
     @Override
     public void close() {
         logger.debug("Shutting down TachyonMCP Server");
-        try {
-            serverChannel.close().sync();
-            childChannels.close().sync();
-            eventLoopGroup
-                    .shutdownGracefully(0, 3, java.util.concurrent.TimeUnit.SECONDS)
-                    .sync();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+        await(serverChannel.close(), "Server channel close");
+        await(childChannels.close(), "Connection close");
+        await(
+                eventLoopGroup.shutdownGracefully(0, shutdownTimeout.toMillis(), TimeUnit.MILLISECONDS),
+                "Event loop shutdown");
+    }
+
+    private void await(Future<?> future, String step) {
+        if (!future.awaitUninterruptibly(shutdownTimeout.toMillis())) {
+            logger.warn("{} did not finish within {}; continuing", step, shutdownTimeout);
         }
     }
 }

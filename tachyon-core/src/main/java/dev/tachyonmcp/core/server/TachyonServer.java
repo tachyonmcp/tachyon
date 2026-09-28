@@ -57,8 +57,27 @@ public interface TachyonServer extends AutoCloseable {
 
     /**
      * Starts the configured transport. Feature registries may be populated before this call.
+     * Starts again after {@link #stop()}, binding a new transport (port {@code 0} picks a new port).
+     *
+     * @throws IllegalStateException if the server is already started or {@linkplain #close() closed}
      */
     void start();
+
+    /**
+     * Stops the transport and keeps the server, so {@link #start()} can serve it again.
+     *
+     * <p>Stops accepting connections, ends open {@code subscriptions/listen} streams gracefully,
+     * waits up to {@code shutdownGracePeriod} for in-flight requests, then closes every connection:
+     * a response not written by then is dropped, so a slow client or handler cannot delay the stop.
+     * Registries, extensions, the handler executor and sessions stay: a client resumes its session on
+     * the restarted transport. No-op when not started or already closed.
+     *
+     * <p>Blocks while draining, so never call it on a transport event loop.
+     *
+     * @throws IllegalStateException if called on a transport event loop thread
+     */
+    @ExperimentalApi
+    void stop();
 
     /**
      * Returns the port the server is bound to.
@@ -101,7 +120,7 @@ public interface TachyonServer extends AutoCloseable {
     }
 
     /**
-     * Shuts down the server and releases its resources.
+     * Shuts down the server and releases its resources. Terminal: {@link #start()} throws afterwards.
      */
     @Override
     void close();

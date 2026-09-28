@@ -7,8 +7,10 @@ import java.util.concurrent.locks.ReentrantLock;
 import org.springframework.context.SmartLifecycle;
 
 /**
- * Binds the {@link TachyonServer} transport once the context is refreshed and closes it first on
- * shutdown.
+ * Binds the {@link TachyonServer} transport once the context is refreshed and unbinds it first on
+ * shutdown, draining in-flight requests before other beans stop. {@link #stop()} calls
+ * {@link TachyonServer#stop()}, so {@code context.stop()}/{@code start()} and CRaC restore serve
+ * again; the bean's destroy callback ({@link TachyonServer#close()}) releases the server.
  */
 @ExperimentalApi
 public final class TachyonServerLifecycle implements SmartLifecycle {
@@ -55,7 +57,7 @@ public final class TachyonServerLifecycle implements SmartLifecycle {
         lock.lock();
         try {
             if (!running) return;
-            server.close();
+            server.stop();
             running = false;
         } finally {
             lock.unlock();
@@ -73,11 +75,10 @@ public final class TachyonServerLifecycle implements SmartLifecycle {
     }
 
     /**
-     * Never. A {@link TachyonServer} is single-use — {@link
-     * TachyonServer#close()} is terminal and a later {@link TachyonServer#start()} throws — so the
-     * stop/start cycle that {@code ConfigurableApplicationContext.pause()}/{@code restart()} and CRaC
-     * checkpoint-restore apply to pauseable beans would leave the transport permanently down. Spring's
-     * default is {@code true}; Boot's own web server lifecycles opt out the same way.
+     * Never, so {@code ConfigurableApplicationContext.pause()}/{@code restart()}, which stop only
+     * pauseable beans, leave the transport bound, like Boot's web server lifecycles. CRaC checkpoint
+     * and {@code context.stop()} stop every bean regardless, so the transport unbinds and binds again
+     * on restore/{@code start()}. Spring's default is {@code true}.
      */
     @Override
     public boolean isPauseable() {

@@ -17,7 +17,8 @@ public interface RuntimeConfig {
     /**
      * Time an owned executor is given to drain in-flight handlers on {@code close()} before
      * they are force-interrupted (default 5s). {@code Duration.ZERO} interrupts running
-     * handlers immediately.
+     * handlers immediately. Also bounds each wait while the transport closes its connections and
+     * event loops.
      */
     @Value.Default
     default Duration shutdownGracePeriod() {

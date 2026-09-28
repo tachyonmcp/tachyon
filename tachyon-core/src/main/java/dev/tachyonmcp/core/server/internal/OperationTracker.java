@@ -82,4 +82,17 @@ public final class OperationTracker {
             lock.unlock();
         }
     }
+
+    /**
+     * Admits operations again after {@link #drain}, for a transport restart. Stragglers still
+     * active past the drain deadline keep being tracked.
+     */
+    public void reopen() {
+        lock.lock();
+        try {
+            closing = false;
+        } finally {
+            lock.unlock();
+        }
+    }
 }

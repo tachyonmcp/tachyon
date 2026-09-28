@@ -13,9 +13,9 @@ import org.junit.jupiter.api.Test;
 class TachyonServerLifecycleTest {
 
     private final AtomicInteger starts = new AtomicInteger();
-    private final AtomicInteger closes = new AtomicInteger();
+    private final AtomicInteger stops = new AtomicInteger();
     private final AtomicBoolean failStart = new AtomicBoolean();
-    private final AtomicBoolean failClose = new AtomicBoolean();
+    private final AtomicBoolean failStop = new AtomicBoolean();
     private final TachyonServer server = (TachyonServer) Proxy.newProxyInstance(
             TachyonServer.class.getClassLoader(), new Class<?>[] {TachyonServer.class}, (proxy, method, args) -> {
                 switch (method.getName()) {
@@ -23,9 +23,9 @@ class TachyonServerLifecycleTest {
                         starts.incrementAndGet();
                         if (failStart.getAndSet(false)) throw new IllegalStateException("bind failed");
                     }
-                    case "close" -> {
-                        closes.incrementAndGet();
-                        if (failClose.getAndSet(false)) throw new IllegalStateException("close failed");
+                    case "stop" -> {
+                        stops.incrementAndGet();
+                        if (failStop.getAndSet(false)) throw new IllegalStateException("stop failed");
                     }
                     default -> throw new UnsupportedOperationException(method.getName());
                 }
@@ -41,7 +41,7 @@ class TachyonServerLifecycleTest {
         assertThat(lifecycle.isRunning()).isFalse();
 
         lifecycle.stop();
-        assertThat(closes).hasValue(0);
+        assertThat(stops).hasValue(0);
 
         lifecycle.start();
         lifecycle.start();
@@ -49,12 +49,24 @@ class TachyonServerLifecycleTest {
         assertThat(starts).hasValue(2);
     }
 
-    /**
-     * A {@code TachyonServer} is single-use: {@code close()} is terminal and a later {@code start()}
-     * throws. Spring's {@code SmartLifecycle} pauses beans by default, so a
-     * {@code ConfigurableApplicationContext.pause()}/{@code restart()} cycle — or a CRaC checkpoint —
-     * would stop the transport and never bring it back.
-     */
+    /** {@code stop()} unbinds only; bean destroy closes. So a stopped context starts again. */
+    @Test
+    void stopThenStartRestartsTheTransportWithoutClosing() {
+        final var lifecycle = new TachyonServerLifecycle(server);
+
+        lifecycle.start();
+        lifecycle.stop();
+        assertThat(lifecycle.isRunning()).isFalse();
+        assertThat(lifecycle.hasStarted()).isTrue();
+
+        lifecycle.start();
+
+        assertThat(lifecycle.isRunning()).isTrue();
+        assertThat(starts).hasValue(2);
+        assertThat(stops).hasValue(1);
+    }
+
+    /** Context {@code pause()} leaves the transport bound; only {@code stop()} unbinds it. */
     @Test
     void theTransportOptsOutOfContextPause() {
         final var lifecycle = new TachyonServerLifecycle(server);
@@ -64,12 +76,12 @@ class TachyonServerLifecycleTest {
     }
 
     @Test
-    void failedCloseLeavesRunningAndCanRetryOnce() {
+    void failedStopLeavesRunningAndCanRetryOnce() {
         final var lifecycle = new TachyonServerLifecycle(server);
         lifecycle.start();
-        failClose.set(true);
+        failStop.set(true);
 
-        assertThatIllegalStateException().isThrownBy(lifecycle::stop).withMessage("close failed");
+        assertThatIllegalStateException().isThrownBy(lifecycle::stop).withMessage("stop failed");
         assertThat(lifecycle.isRunning()).isTrue();
 
         lifecycle.start();
@@ -78,6 +90,6 @@ class TachyonServerLifecycleTest {
         lifecycle.stop();
         lifecycle.stop();
         assertThat(lifecycle.isRunning()).isFalse();
-        assertThat(closes).hasValue(2);
+        assertThat(stops).hasValue(2);
     }
 }
