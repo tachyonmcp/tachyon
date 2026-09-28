@@ -53,6 +53,8 @@ public final class SubscriptionRegistry {
      */
     private final ReentrantLock lock = new ReentrantLock();
 
+    private boolean closed;
+
     public SubscriptionRegistry(ServerEngine server) {
         this.server = server;
     }
@@ -61,7 +63,7 @@ public final class SubscriptionRegistry {
      * Registers a new subscription and sends its ack-first {@code
      * notifications/subscriptions/acknowledged} event, atomically with respect to concurrent {@code
      * notifyXxx}/{@link #closeAll} calls — see {@link #lock}. Returns the registry key for a later
-     * {@link #remove}.
+     * {@link #remove}. After {@link #closeAll}, the ack is followed at once by the graceful result.
      */
     public long activate(
             RequestId subscriptionId,
@@ -72,9 +74,13 @@ public final class SubscriptionRegistry {
         lock.lock();
         try {
             var key = nextKey.incrementAndGet();
-            entries.put(key, new Entry(subscriptionId, stream, filter, responseMapper, pendingResponse));
             var ackParams = responseMapper.subscriptionsAcknowledgedParams(subscriptionId, filter);
             push(stream, responseMapper, "notifications/subscriptions/acknowledged", ackParams);
+            if (closed) {
+                pendingResponse.complete(responseMapper.subscriptionsListenGracefulResult(subscriptionId));
+            } else {
+                entries.put(key, new Entry(subscriptionId, stream, filter, responseMapper, pendingResponse));
+            }
             return key;
         } finally {
             lock.unlock();
@@ -162,17 +168,29 @@ public final class SubscriptionRegistry {
     /**
      * Gracefully tears down every open subscription: completes each deferred response with a
      * protocol-specific {@code resultType: "complete"} result, which the dispatcher then writes as
-     * the stream's final response before closing it. Called on server shutdown.
+     * the stream's final response before closing it. Called on server shutdown; later activations
+     * complete the same way until {@link #reopen}.
      */
     public void closeAll() {
         lock.lock();
         try {
+            closed = true;
             for (var key : List.copyOf(entries.keySet())) {
                 var entry = entries.remove(key);
                 if (entry == null) continue;
                 entry.pendingResponse()
                         .complete(entry.responseMapper().subscriptionsListenGracefulResult(entry.subscriptionId()));
             }
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /** Registers subscriptions again after {@link #closeAll}, for a transport restart. */
+    public void reopen() {
+        lock.lock();
+        try {
+            closed = false;
         } finally {
             lock.unlock();
         }

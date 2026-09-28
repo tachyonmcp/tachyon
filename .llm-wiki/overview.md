@@ -2,8 +2,8 @@
 title: Overview
 tags: [concept, architecture]
 sources: [pom.xml, tachyon-core/pom.xml, integrations/pom.xml, extensions/pom.xml, tachyon-core/src/main/java/dev/tachyonmcp/core/server/TachyonServer.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/ServerBuilder.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultServerBuilder.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java]
-updated: 2026-09-26
-commit: e1dcfc68
+updated: 2026-09-28
+commit: d291cee0
 ---
 
 # 🛰️ Overview
@@ -42,7 +42,7 @@ graph TD
 
 ## 🎯 The one type users hold
 
-`TachyonServer` interface `TachyonServer` — `AutoCloseable`, exposes registries `tools()/resources()/prompts()/completions()`, `extension(Class)`, `annotations(...)`, `notifications()`, `start()`, `port()`, `close()`. Factory `TachyonServer.builder()` → `DefaultServerBuilder` (`DefaultServerBuilder#network`).
+`TachyonServer` interface `TachyonServer` — `AutoCloseable`, exposes registries `tools()/resources()/prompts()/completions()`, `extension(Class)`, `annotations(...)`, `notifications()`, `start()`, `stop()`, `port()`, `close()`. Factory `TachyonServer.builder()` → `DefaultServerBuilder` (`DefaultServerBuilder#network`).
 
 Two-phase: `build()` constructs server + runs registrations, **no socket**; `start()` binds Netty.
 
@@ -55,7 +55,7 @@ Two-phase: `build()` constructs server + runs registrations, **no socket**; `sta
    - `new DefaultTachyonServer(...)` → run `withTools/withResources/...` callbacks → annotation providers (each tool registration checks task support against the installed task runtime, `DefaultToolRegistry#register`); any throw ⇒ `close()` + rethrow.
 2. `DefaultTachyonServer` ctor `DefaultTachyonServer`: registries, `registerDefaults()` (`DefaultTachyonServer#registerDefaults`), `bootstrapExtensions()` (`DefaultTachyonServer#bootstrapExtensions`), change listeners (`DefaultTachyonServer#setupChangeListeners`), session janitor if sessions on.
 3. `start()` `DefaultTachyonServer#start`: lifecycle `ReentrantLock`, `new NettyServer(this, NettyServerConfig…)`, record bound host/port.
-4. `close()` `DefaultTachyonServer` → see [[concurrency]].
+4. `stop()` unbinds the transport only (restartable); `close()` `DefaultTachyonServer` is terminal → see [[concurrency]].
 
 ## 🧩 Internal seams
 

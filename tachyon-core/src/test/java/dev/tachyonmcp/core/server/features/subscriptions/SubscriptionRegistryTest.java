@@ -90,6 +90,40 @@ class SubscriptionRegistryTest {
         assertThat(events.get(1).data()).contains("notifications/tools/list_changed");
     }
 
+    /**
+     * A listen admitted before shutdown can reach {@code activate} after {@link
+     * SubscriptionRegistry#closeAll}; left pending, its response would hold the drain for the whole
+     * grace period.
+     */
+    @Test
+    void activateAfterCloseAllCompletesGracefullyUntilReopen() {
+        var filter = new SubscriptionListenRequest(true, false, false, Set.of(), Set.of());
+        var lateEvents = new CopyOnWriteArrayList<SseEvent>();
+        var latePending = new CompletableFuture<>();
+
+        registry.closeAll();
+        registry.activate(
+                RequestId.of(1L), new RecordingStream(lateEvents, e -> {}), filter, responseMapper, latePending);
+
+        assertThat(latePending)
+                .isCompletedWithValue(responseMapper.subscriptionsListenGracefulResult(RequestId.of(1L)));
+        assertThat(lateEvents)
+                .singleElement()
+                .satisfies(e -> assertThat(e.data()).contains("notifications/subscriptions/acknowledged"));
+
+        registry.reopen();
+        var events = new CopyOnWriteArrayList<SseEvent>();
+        var pending = new CompletableFuture<>();
+        registry.activate(RequestId.of(2L), new RecordingStream(events, e -> {}), filter, responseMapper, pending);
+        registry.notifyToolsListChanged();
+
+        assertThat(pending).isNotDone();
+        assertThat(events).hasSize(2);
+        assertThat(events.get(0).data()).contains("notifications/subscriptions/acknowledged");
+        assertThat(events.get(1).data()).contains("notifications/tools/list_changed");
+        assertThat(lateEvents).hasSize(1);
+    }
+
     private static void awaitLatch(CountDownLatch latch) {
         try {
             assertThat(latch.await(5, TimeUnit.SECONDS))

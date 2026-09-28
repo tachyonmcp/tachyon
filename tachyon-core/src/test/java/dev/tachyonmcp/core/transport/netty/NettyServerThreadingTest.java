@@ -81,6 +81,25 @@ class NettyServerThreadingTest {
     }
 
     @Test
+    void closeOnInterruptedThreadStillShutsDownEventLoopsAndKeepsInterrupt() {
+        try (var server = newEngine(b -> {})) {
+            var netty = new NettyServer(0, server);
+            boolean interrupted;
+            Thread.currentThread().interrupt();
+            try {
+                netty.close();
+            } finally {
+                interrupted = Thread.interrupted();
+            }
+
+            assertThat(interrupted).as("interrupt status restored").isTrue();
+            assertThat(netty.eventLoopGroup.isTerminated())
+                    .as("event loops shut down despite the interrupt")
+                    .isTrue();
+        }
+    }
+
+    @Test
     void serverOwnedExecutorIsShutDownByServerClose() {
         var server = newEngine(
                 b -> b.threadFactory(Thread.ofVirtual().name("tenant-", 0).factory()),

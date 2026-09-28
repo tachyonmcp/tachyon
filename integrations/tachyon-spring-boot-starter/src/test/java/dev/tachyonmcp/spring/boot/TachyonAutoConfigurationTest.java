@@ -4,6 +4,7 @@ package dev.tachyonmcp.spring.boot;
 import static dev.tachyonmcp.testkit.JsonRpcResponseAssert.assertThat;
 import static net.javacrumbs.jsonunit.assertj.JsonAssertions.assertThatJson;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 
 import dev.tachyonmcp.api.annotations.McpTool;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
@@ -134,6 +135,38 @@ class TachyonAutoConfigurationTest {
                 assertThat(call).isSuccess().hasId(1).hasResult("""
                     {"content":[{"type":"text","text":"pong"}],"resultType":"complete"}
                     """);
+            }
+        });
+    }
+
+    @Test
+    void stoppedContextStartsAgainAndServesTheSameTools() {
+        runner.withUserConfiguration(CustomizerConfig.class).run(context -> {
+            var server = context.getBean(TachyonServer.class);
+            var lifecycle = context.getBean(TachyonServerLifecycle.class);
+            var firstPort = server.port();
+
+            context.stop();
+
+            assertThat(lifecycle.isRunning()).isFalse();
+            assertThatIllegalStateException().isThrownBy(server::port);
+
+            context.start();
+
+            assertThat(lifecycle.isRunning()).isTrue();
+            assertThat(server.port()).isPositive();
+            try (var client = McpTestClients.latest(server.port())) {
+                var call = client.sendRpc("""
+                    {"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"ping","arguments":{}}}
+                    """);
+
+                assertThat(call)
+                        .as("served again after restart, first port was %d", firstPort)
+                        .isSuccess()
+                        .hasId(1)
+                        .hasResult("""
+                            {"content":[{"type":"text","text":"pong"}],"resultType":"complete"}
+                            """);
             }
         });
     }

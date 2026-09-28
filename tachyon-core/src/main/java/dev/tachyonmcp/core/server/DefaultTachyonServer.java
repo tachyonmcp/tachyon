@@ -606,7 +606,7 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
             } else if (ext instanceof EngineExtension engineExtension) {
                 engineExtension.bootstrap((ServerEngine) this);
             } else {
-                ext.bootstrap((ExtensionContext) this);
+                ext.bootstrap(this);
             }
         } finally {
             bootstrappingExtensionId = null;
@@ -998,6 +998,43 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
     }
 
     @Override
+    public void stop() {
+        requireNotOnEventLoop(transport);
+        lifecycleLock.lock();
+        try {
+            final var current = transport;
+            requireNotOnEventLoop(current);
+            if (closed || current == null) {
+                return;
+            }
+            logger.info("Stopping TachyonMCP Server transport");
+            if (current instanceof NettyServer netty) {
+                netty.stopAccepting();
+            }
+            // Listen responses stay pending for the stream's lifetime: complete them first, so the
+            // drain waits for their flush instead of the whole grace period.
+            subscriptionRegistry.closeAll();
+            try {
+                operations.drain(System.nanoTime()
+                        + config.runtime().shutdownGracePeriod().toNanos());
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } finally {
+                try {
+                    current.close();
+                } catch (IOException e) {
+                    logger.debug("Error closing transport", e);
+                }
+                transport = null;
+                operations.reopen();
+                subscriptionRegistry.reopen();
+            }
+        } finally {
+            lifecycleLock.unlock();
+        }
+    }
+
+    @Override
     public void close() {
         requireNotOnEventLoop(transport);
         lifecycleLock.lock();
@@ -1017,6 +1054,7 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
                 logger.info("Shutting down TachyonMCP Server");
                 final var deadline = System.nanoTime()
                         + config.runtime().shutdownGracePeriod().toNanos();
+                subscriptionRegistry.closeAll();
                 try {
                     operations.drain(deadline);
                     executor.shutdown();
@@ -1027,7 +1065,6 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
                     executor.shutdownNow();
                     Thread.currentThread().interrupt();
                 }
-                subscriptionRegistry.closeAll();
                 shutdownExtensions(deadline);
                 sessionManager.close();
                 sessionEventStore.close();
@@ -1043,6 +1080,7 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
                         logger.debug("Error closing transport", e);
                     }
                 }
+                transport = null;
             }
         } finally {
             lifecycleLock.unlock();
@@ -1062,9 +1100,9 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
 
     private static void requireNotOnEventLoop(@Nullable Closeable transport) {
         if (transport instanceof NettyServer netty && netty.inEventLoop()) {
-            throw new IllegalStateException("close() must not be called from a Netty event loop thread — "
+            throw new IllegalStateException("stop() and close() must not be called from a Netty event loop thread — "
                     + "draining in-flight requests needs that thread to flush their responses. "
-                    + "Call close() from another thread.");
+                    + "Call them from another thread.");
         }
     }
 }

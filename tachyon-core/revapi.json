@@ -1501,6 +1501,15 @@
           "attachments": {
             "since": "1.0.0-beta.32"
           }
+        },
+        {
+          "ignore": true,
+          "code": "java.method.addedToInterface",
+          "new": "method void dev.tachyonmcp.core.server.TachyonServer::stop()",
+          "justification": "Restartable transport for Spring SmartLifecycle stop/start and CRaC; TachyonServer is created by the builder and not meant to be implemented by users",
+          "attachments": {
+            "since": "1.0.0-beta.33"
+          }
         }
       ]
     }
