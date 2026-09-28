@@ -12,7 +12,6 @@ import dev.tachyonmcp.api.server.features.tasks.TaskNotFoundException;
 import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
 import dev.tachyonmcp.api.server.features.tasks.TaskState;
 import dev.tachyonmcp.api.server.features.tasks.Tasks;
-import dev.tachyonmcp.core.server.features.ChangeSupport;
 import dev.tachyonmcp.core.server.features.Pagination;
 import dev.tachyonmcp.core.server.internal.AbstractJanitor;
 import java.time.Clock;
@@ -47,7 +46,6 @@ public final class TaskEngine implements Tasks {
     private final TaskEngineSettings settings;
     private final Clock clock;
     private final List<TaskEvents> listeners = new CopyOnWriteArrayList<>();
-    private final ChangeSupport changes = new ChangeSupport();
     private final AbstractJanitor janitor = new AbstractJanitor("task-janitor") {
         @Override
         protected void sweep() {
@@ -93,15 +91,6 @@ public final class TaskEngine implements Tasks {
         listeners.add(Objects.requireNonNull(listener, "listener"));
     }
 
-    /**
-     * Registers a callback run whenever the cached task set changes: publish, remove, or eviction.
-     *
-     * @param callback the callback
-     */
-    public void onChange(Runnable callback) {
-        changes.onChange(Objects.requireNonNull(callback, "callback"));
-    }
-
     @Override
     public TaskSnapshot publish(TaskSnapshot snapshot) {
         return publish(snapshot, TaskRoute.NONE);
@@ -123,7 +112,6 @@ public final class TaskEngine implements Tasks {
         var existing = entries.putIfAbsent(effective.taskId(), created);
         if (existing == null) {
             created.notifyIfNewer(this::fireStatus);
-            changes.fireOnChange();
             return effective;
         }
         existing.route(route);
@@ -133,7 +121,6 @@ public final class TaskEngine implements Tasks {
     private TaskSnapshot publish(TaskEntry entry, TaskSnapshot effective) {
         if (entry.publish(effective)) {
             entry.notifyIfNewer(this::fireStatus);
-            changes.fireOnChange();
         }
         return entry.snapshot();
     }
@@ -341,11 +328,7 @@ public final class TaskEngine implements Tasks {
 
     @Override
     public boolean remove(String taskId) {
-        var removed = entries.remove(taskId) != null;
-        if (removed) {
-            changes.fireOnChange();
-        }
-        return removed;
+        return entries.remove(taskId) != null;
     }
 
     /** Starts evicting expired projections in the background. */
@@ -359,14 +342,10 @@ public final class TaskEngine implements Tasks {
     }
 
     void runJanitorSweep() {
-        var changed = false;
         for (var cached : entries.entrySet()) {
             var taskId = cached.getKey();
             var entry = cached.getValue();
-            changed |= entry.evictIfExpired(() -> entries.remove(taskId, entry));
-        }
-        if (changed) {
-            changes.fireOnChange();
+            entry.evictIfExpired(() -> entries.remove(taskId, entry));
         }
     }
 }

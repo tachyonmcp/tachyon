@@ -4,10 +4,12 @@ package dev.tachyonmcp.extensions.tasks;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.tachyonmcp.api.server.domain.ProgressToken;
+import dev.tachyonmcp.api.server.features.PaginatedResult;
 import dev.tachyonmcp.api.server.features.tasks.TaskConnector;
 import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
 import dev.tachyonmcp.api.server.features.tasks.TaskState;
 import dev.tachyonmcp.api.server.features.tasks.Tasks;
+import dev.tachyonmcp.core.protocol.Protocol;
 import dev.tachyonmcp.core.protocol.Protocols;
 import dev.tachyonmcp.core.runtime.SseConnection;
 import dev.tachyonmcp.core.runtime.SseEvent;
@@ -15,6 +17,7 @@ import dev.tachyonmcp.core.server.TachyonServer;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
@@ -22,17 +25,18 @@ import org.junit.jupiter.api.Test;
 /** Push traffic of a task reaches only the session that owns it, in revision order. */
 class TaskPushRoutingTest {
 
-    /** No legacy {@code tasks/list}: the server then sends no {@code list_changed} next to status pushes. */
-    private static final TaskConnector NO_LEGACY_LIST = TaskConnector.builder()
+    /** Serves legacy {@code tasks/list}, so no push may hint at the task set: MCP defines no {@code tasks/list_changed}. */
+    private static final TaskConnector CONNECTOR = TaskConnector.builder()
             .get((ctx, request) -> null)
             .cancel((ctx, request) -> {})
             .update((ctx, request) -> {})
+            .list((ctx, request) -> PaginatedResult.of(List.of(), null, true))
             .build();
 
     private static ServerEngine server() {
         return (ServerEngine) TachyonServer.builder()
                 .session(s -> s.enabled())
-                .withExtension(TasksExtension.class, t -> t.connector(NO_LEGACY_LIST))
+                .withExtension(TasksExtension.class, t -> t.connector(CONNECTOR))
                 .build();
     }
 
@@ -70,13 +74,50 @@ class TaskPushRoutingTest {
             assertThat(legacyConnection.sent)
                     .singleElement()
                     .satisfies(event -> assertThat(event.data())
+                            .contains("\"method\":\"notifications/tasks/status\"")
                             .contains("\"taskId\":\"legacy-task\"")
-                            .contains("\"status\":\"working\""));
+                            .contains("\"status\":\"working\"")
+                            .doesNotContain("list_changed"));
             assertThat(modernConnection.sent)
                     .singleElement()
                     .satisfies(event -> assertThat(event.data())
                             .contains("\"taskId\":\"modern-task\"")
-                            .contains("\"status\":\"working\""));
+                            .contains("\"status\":\"working\"")
+                            .doesNotContain("list_changed"));
+        }
+    }
+
+    @Test
+    void taskSetChangesReachNoSessionButTheOwner() {
+        try (var server = server()) {
+            var ownerConnection = new TestConnection();
+            var owner = server.createSession("owner");
+            owner.protocol(legacyProtocol());
+            owner.connection(ownerConnection);
+            owner.activate();
+
+            var bystanderConnection = new TestConnection();
+            var bystander = server.createSession("bystander");
+            bystander.protocol(legacyProtocol());
+            bystander.connection(bystanderConnection);
+            bystander.activate();
+
+            server.taskRuntime().publish(submitted("owned-task"), "owner", null);
+            tasks(server).publish(revision(2, "owned-task"));
+            tasks(server).publish(submitted("orphan-task"));
+            assertThat(tasks(server).remove("owned-task")).isTrue();
+            assertThat(tasks(server).remove("orphan-task")).isTrue();
+
+            assertThat(bystanderConnection.sent)
+                    .as("publish, revision bump and remove are invisible to other sessions")
+                    .isEmpty();
+            assertThat(ownerConnection.sent)
+                    .as("owner gets status pushes only, one per accepted revision")
+                    .hasSize(2)
+                    .allSatisfy(event -> assertThat(event.data())
+                            .contains("\"method\":\"notifications/tasks/status\"")
+                            .contains("\"taskId\":\"owned-task\"")
+                            .doesNotContain("list_changed"));
         }
     }
 
@@ -163,14 +204,25 @@ class TaskPushRoutingTest {
     private static final Pattern REVISION_MARKER = Pattern.compile("\"statusMessage\":\"r(\\d+)\"");
 
     private static TaskSnapshot revision(long revision) {
+        return revision(revision, "raced");
+    }
+
+    private static TaskSnapshot revision(long revision, String taskId) {
         return TaskSnapshot.builder()
-                .taskId("raced")
+                .taskId(taskId)
                 .status(TaskState.WORKING)
                 .statusMessage("r" + revision)
                 .createdAt(Instant.EPOCH)
                 .lastUpdatedAt(Instant.EPOCH)
                 .revision(revision)
                 .build();
+    }
+
+    private static Protocol legacyProtocol() {
+        return Protocols.list().stream()
+                .filter(protocol -> protocol.versionString().equals("2025-11-25"))
+                .findFirst()
+                .orElseThrow();
     }
 
     private static TaskSnapshot submitted(String taskId) {

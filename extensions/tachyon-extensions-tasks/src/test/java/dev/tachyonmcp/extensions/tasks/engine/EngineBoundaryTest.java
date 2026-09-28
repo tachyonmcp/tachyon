@@ -29,7 +29,6 @@ class EngineBoundaryTest {
             "dev.tachyonmcp.api.runtime.",
             "dev.tachyonmcp.api.server.features.",
             "dev.tachyonmcp.api.server.domain.TaskResult",
-            "dev.tachyonmcp.core.server.features.ChangeSupport",
             "dev.tachyonmcp.core.server.features.Pagination",
             "dev.tachyonmcp.core.server.internal.AbstractJanitor",
             "dev.tachyonmcp.extensions.tasks.engine.");

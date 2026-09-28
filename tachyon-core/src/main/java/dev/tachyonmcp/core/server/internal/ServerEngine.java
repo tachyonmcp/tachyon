@@ -58,9 +58,6 @@ public interface ServerEngine extends TachyonServer {
     /** Resolves effective capabilities based on configuration and registered features. */
     ServerCapabilities resolveCapabilities();
 
-    /** Sends a notification to all active sessions. */
-    void broadcastNotification(String method, Object params);
-
     /** Registers a method handler keyed by its own method name. */
     void registerHandler(RpcMethodHandler<?, ?> handler);
 
