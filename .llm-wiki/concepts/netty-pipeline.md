@@ -3,7 +3,7 @@ title: Netty pipeline
 tags: [concept, transport, netty]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/http/]
 updated: 2026-09-29
-commit: 4b4b6f7e
+commit: 05370f81
 ---
 
 # 🧪 Netty pipeline
@@ -16,6 +16,7 @@ Verdict: one static-order pipeline per channel. Every registered `Protocol`'s ha
 - I/O engine `AUTO` ⇒ `NettyIoEngine.detect()` order **io_uring > epoll > kqueue > NIO**, reflective, cached per JVM `NettyIoEngine#IO_URING`, `NettyIoEngine#detect`.
 - Event loops = **platform** threads `netty-io` (native transports pin anyway) `NettyServer#NettyServer`.
 - `SO_BACKLOG 1024`, `TCP_NODELAY`, `SO_KEEPALIVE`, write watermark 32K/128K `NettyServer#NettyServer`.
+- Failed bind (or interrupted wait) ⇒ constructor closes the channel if still open and shuts the group down before rethrowing: nothing else holds the group, `DefaultTachyonServer#close` can't reach it. Interrupt restored, original failure propagates `NettyServer#NettyServer`. Native transports throw `NativeIoException`, NIO `BindException`. Test: e2e `ServerRestartTest#failedStartOnOccupiedPortReleasesEventLoopsAndCanBeRetried`.
 - `stopAccepting()` closes server channel only; `close()` closes children + event loops (graceful 0..3s) `NettyServer#stopAccepting`.
 
 ## 🧱 Handler order

@@ -9,11 +9,16 @@ import static org.awaitility.Awaitility.await;
 
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
 import dev.tachyonmcp.core.server.TachyonServer;
+import dev.tachyonmcp.core.server.config.SessionConfig;
 import dev.tachyonmcp.testkit.Mcp20251125Client;
 import dev.tachyonmcp.testkit.McpTestClients;
 import java.io.IOException;
+import java.net.InetAddress;
+import java.net.ServerSocket;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -32,8 +37,8 @@ class ServerRestartTest {
     @Test
     void restartServesSameRegistrationsAndSessionsOnNewTransport() throws Exception {
         try (var server = TachyonServer.builder()
+                .session(SessionConfig.Builder::enabled)
                 .network(n -> n.port(0))
-                .session(s -> s.enabled())
                 .build()) {
             server.tools().register(b -> b.name("before"), (ctx, req) -> ToolResult.text("one"));
             server.start();
@@ -69,7 +74,7 @@ class ServerRestartTest {
         final var result = new CompletableFuture<ToolResult>();
         try (var server = TachyonServer.builder()
                 .network(n -> n.port(0))
-                .session(s -> s.enabled())
+                .session(SessionConfig.Builder::enabled)
                 .runtime(r -> r.shutdownGracePeriod(Duration.ofSeconds(5)))
                 .build()) {
             server.tools().registerAsync(b -> b.name("slow"), (ctx, req) -> {
@@ -117,7 +122,7 @@ class ServerRestartTest {
     void stopDropsUnfinishedRequestAfterGracePeriodAndRestarts() throws Exception {
         try (var server = TachyonServer.builder()
                 .network(n -> n.port(0))
-                .session(s -> s.enabled())
+                .session(SessionConfig.Builder::enabled)
                 .runtime(r -> r.shutdownGracePeriod(Duration.ofMillis(300)))
                 .build()) {
             server.tools().registerAsync(b -> b.name("stuck"), (ctx, req) -> {
@@ -210,6 +215,61 @@ class ServerRestartTest {
                 .withMessageContaining("not started");
         assertThatCode(server::stop).as("stop after close").doesNotThrowAnyException();
         assertThatIllegalStateException().isThrownBy(server::start).withMessage("Server is closed");
+    }
+
+    /**
+     * A start() that cannot bind must not strand the event loops it allocated: the server stays
+     * stopped and startable, and once the port frees a retry serves.
+     */
+    @Test
+    void failedStartOnOccupiedPortReleasesEventLoopsAndCanBeRetried() throws Exception {
+        final var occupant = new ServerSocket(0, 1, InetAddress.getLoopbackAddress());
+        try (var server = TachyonServer.builder()
+                .network(n -> n.port(occupant.getLocalPort()))
+                .build()) {
+            // Event loop threads join the thread group of the thread that first submits work to
+            // them, so a private group isolates this start from the servers of parallel tests.
+            final var startThreads = new ThreadGroup("failed-start");
+            final var failed =
+                    CompletableFuture.runAsync(server::start, task -> new Thread(startThreads, task).start());
+
+            // NIO throws BindException; native transports throw Errors.NativeIoException. Both are IOExceptions.
+            assertThatThrownBy(() -> failed.get(5, TimeUnit.SECONDS))
+                    .as("start on an occupied port")
+                    .cause()
+                    .isInstanceOf(IOException.class)
+                    .hasMessageContaining("Address already in use");
+            assertThatIllegalStateException().isThrownBy(server::port).withMessageContaining("not started");
+            assertThatCode(server::stop).as("stop after failed start").doesNotThrowAnyException();
+            await().atMost(Duration.ofSeconds(5))
+                    .untilAsserted(() -> assertThat(eventLoopThreads(startThreads))
+                            .as("event loop threads left running by the failed start")
+                            .isEmpty());
+
+            occupant.close();
+            server.start();
+
+            try (var client = new Mcp20251125Client(server.port())) {
+                final var session = client.initialize();
+                assertThat(client.ping(session, 1).statusCode())
+                        .as("retry after the port frees")
+                        .isEqualTo(200);
+            }
+        } finally {
+            occupant.close();
+        }
+    }
+
+    /**
+     * Netty's shared {@code globalEventExecutor} thread may also land in the group, so match by name.
+     */
+    private static List<String> eventLoopThreads(ThreadGroup group) {
+        final var threads = new Thread[group.activeCount() + 8];
+        final var count = group.enumerate(threads);
+        return Arrays.stream(threads, 0, count)
+                .map(Thread::getName)
+                .filter(name -> name.startsWith("netty-io"))
+                .toList();
     }
 
     private static HttpResponse<String> callTool(Mcp20251125Client client, String session, String name)
