@@ -54,7 +54,14 @@ import org.jspecify.annotations.Nullable;
  *                           for the client. A subscriber, or a tool writing from a Netty I/O
  *                           thread, is disconnected past this limit, or past the channel's write
  *                           high watermark when the limit is {@code 0}. The final response is
- *                           always accepted, and one larger event may exceed it
+ *                           always accepted, and one larger event may exceed it. On a GET
+ *                           listening stream it bounds the live events held while the client
+ *                           is slow (or the channel's write high watermark when {@code 0}); past
+ *                           it the stream closes and the client resumes with {@code Last-Event-ID}
+ * @param sseStallTimeout    how long a GET listening stream may stay unwritable (client not
+ *                           reading) before it closes (default 30s); the client then resumes with
+ *                           {@code Last-Event-ID}, losing nothing; {@link Duration#ZERO} disables,
+ *                           leaving stalls to {@code writerIdleTimeout}
  */
 @ExperimentalApi
 public record NetworkConfig(
@@ -71,7 +78,8 @@ public record NetworkConfig(
         @Nullable List<String> allowedHosts,
         NettyIoEngine ioEngine,
         Duration heartbeatInterval,
-        int maxPendingSseBytes) {
+        int maxPendingSseBytes,
+        Duration sseStallTimeout) {
 
     public NetworkConfig {
         if (maxPipelinedRequests < 0) {
@@ -79,6 +87,10 @@ public record NetworkConfig(
         }
         if (maxPendingSseBytes < 0) {
             throw new IllegalArgumentException("maxPendingSseBytes must not be negative");
+        }
+        Objects.requireNonNull(sseStallTimeout, "sseStallTimeout");
+        if (sseStallTimeout.isNegative()) {
+            throw new IllegalArgumentException("sseStallTimeout must not be negative");
         }
         Objects.requireNonNull(endpointPath, "endpointPath");
         if (!isServablePath(endpointPath)) {
@@ -111,6 +123,7 @@ public record NetworkConfig(
     public static final Duration DEFAULT_HEARTBEAT_INTERVAL = Duration.ofSeconds(15);
     public static final int DEFAULT_MAX_PIPELINED_REQUESTS = 16;
     public static final int DEFAULT_MAX_PENDING_SSE_BYTES = 64 * 1024;
+    public static final Duration DEFAULT_SSE_STALL_TIMEOUT = Duration.ofSeconds(30);
 
     static final NetworkConfig DEFAULT = new NetworkConfig(
             DEFAULT_HOST,
@@ -126,7 +139,8 @@ public record NetworkConfig(
             null,
             NettyIoEngine.AUTO,
             DEFAULT_HEARTBEAT_INTERVAL,
-            DEFAULT_MAX_PENDING_SSE_BYTES);
+            DEFAULT_MAX_PENDING_SSE_BYTES,
+            DEFAULT_SSE_STALL_TIMEOUT);
 
     public static Builder builder() {
         return new Builder();
@@ -148,6 +162,7 @@ public record NetworkConfig(
         private NettyIoEngine ioEngine = DEFAULT.ioEngine;
         private Duration heartbeatInterval = DEFAULT.heartbeatInterval;
         private int maxPendingSseBytes = DEFAULT.maxPendingSseBytes;
+        private Duration sseStallTimeout = DEFAULT.sseStallTimeout;
         private boolean hostPortExplicitlySet;
         private boolean addressExplicitlySet;
 
@@ -300,12 +315,33 @@ public record NetworkConfig(
          * callback): the client is disconnected once this limit is full or, when the limit is
          * {@code 0}, once the channel's write high watermark is. The final response is always
          * accepted, and one event larger than the limit may still be sent.
+         *
+         * <p>On a GET listening stream this bounds the live events held while the client is slow
+         * (or the channel's write high watermark when {@code 0}): past it the stream closes, and
+         * the client resumes with {@code Last-Event-ID}, losing nothing.
          */
         public Builder maxPendingSseBytes(int bytes) {
             if (bytes < 0) {
                 throw new IllegalArgumentException("maxPendingSseBytes must not be negative");
             }
             this.maxPendingSseBytes = bytes;
+            return this;
+        }
+
+        /**
+         * Sets how long a GET listening stream may stay unwritable, because the client stopped
+         * reading, before it closes (default 30s). A short burst that fills the write buffer rides
+         * it out; a stalled client is disconnected and resumes with {@code Last-Event-ID}, losing
+         * nothing. {@link Duration#ZERO} disables it, leaving stalls to {@code writerIdleTimeout}.
+         *
+         * @throws IllegalArgumentException if {@code timeout} is negative
+         */
+        public Builder sseStallTimeout(Duration timeout) {
+            Objects.requireNonNull(timeout, "sseStallTimeout cannot be null");
+            if (timeout.isNegative()) {
+                throw new IllegalArgumentException("sseStallTimeout must not be negative");
+            }
+            this.sseStallTimeout = timeout;
             return this;
         }
 
@@ -325,7 +361,8 @@ public record NetworkConfig(
                     allowedHosts,
                     ioEngine,
                     heartbeatInterval,
-                    maxPendingSseBytes);
+                    maxPendingSseBytes,
+                    sseStallTimeout);
         }
     }
 }

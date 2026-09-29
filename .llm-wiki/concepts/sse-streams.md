@@ -2,8 +2,8 @@
 title: SSE streams
 tags: [concept, transport, sse]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpInitializationHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/sse/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/OutboundSseStream.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/OutboundSseStreamMessageRouter.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpOperationHandler.java]
-updated: 2026-09-27
-commit: fae0c389
+updated: 2026-09-29
+commit: 4b4b6f7e
 ---
 
 # 📡 SSE streams
@@ -54,12 +54,16 @@ Initial headers and every queued event are aggregated with Netty `PromiseCombine
 - Stateless server: `openStatelessStream` — headers, `retry: 3000`, heartbeat, priming, nothing else `SseManager#openStatelessStream`.
 - Stateful: requires `MCP-Session-Id` (400) and local or hydrated session (404) `McpOperationHandler#handleGet`.
 - `openStream`: new `NettySseConnection` replaces session connection (previous one **closed**); close listener detaches only if still current `SseManager#openStream`, `Session#connection`.
-- `Last-Event-ID` present ⇒ remember `resumingStreamKey`, replay on executor.
+- `Last-Event-ID` parsed once into `ResumeCursor` (`<n>[#<key>]`, both numeric; malformed ⇒ fresh stream) `SseManager.ResumeCursor#parse`. Valid ⇒ remember `resumingStreamKey`, priming event **echoes the cursor** (not a fresh id), replay on executor. A fresh id would outrank the backlog and drop `#key`: drop after priming, resume from it ⇒ backlog skipped `SseManager#openStream`.
 - 2026-07-28 has no GET (protocol `matches` POST only); uses `subscriptions/listen` POST stream instead → [[feature-registries]].
 
 ## ⏪ Replay
 
-`SseManager.replayEvents` `SseManager#replayEvents`: parse `<n>[#<key>]`, take all session events, keep `sseId > n` **and** `streamKey == key` (null = GET stream), convert via `ServerEngine.toSseEvent` (request/cancel events skipped) `ServerEngine#wireEventId`, stop when `session.send` false (throttled/closed).
+`SseManager#missedEvents`: take all session events, keep `sseId > n` **and** `streamKey == key` (null = GET stream), convert via `ServerEngine.toSseEvent` (request/cancel events skipped) `ServerEngine#wireEventId`. Replay failure ⇒ close, client resumes again `SseManager#replay`.
+
+Replay gate `NettySseConnection#replay`: a resuming connection starts in replay mode; live `send` is held (event loop) until the backlog is queued ahead of it, minus held ids ≤ last replayed (dedupe of the snapshot overlap). Live can't overtake backlog ⇒ `Last-Event-ID` never jumps a gap. Priming bypasses the gate `NettySseConnection#prime`.
+
+Slow client (GET): never drop on an open stream. One `pending` queue (event loop); `flush` writes while `isWritable`, then holds. Nothing held + writable ⇒ `send` writes directly, no measure/queue (`NettySseConnectionBenchmark`). `McpOperationHandler#channelWritabilityChanged` → `NettySseConnection#onWritabilityChanged`: writable ⇒ cancel stall timer + flush; unwritable ⇒ arm timer. Timer fires still unwritable after `NetworkConfig#sseStallTimeout` (30s, `0` = off) ⇒ **hard** close (stalled peer can't drain a graceful one; client's `Last-Event-ID` = last complete event) `NettySseConnection#abort`. Held live bytes > `maxPendingSseBytes` (high watermark if `0`; one oversized **live** event allowed, replayed ones don't count) ⇒ same close `NettySseConnection#abortIfOverBudget`. Checked only outside replay mode: after `send` flush and once `replay` has flushed the backlog. Replayed events count 0 bytes and live events held during a slow backlog read are not budgeted until it lands ⇒ no close→reconnect→replay loop; a post-replay close still advances `Last-Event-ID` past the flushed backlog. Burst rides through; stall resumes via `Last-Event-ID`.
 
 ## 🫀 Keep-alive math
 

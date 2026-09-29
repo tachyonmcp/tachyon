@@ -51,6 +51,12 @@ public class NetworkScope
          */
         public var maxPendingSseBytes: Int? = null
 
+        /**
+         * How long a GET listening stream may stay unwritable (client not reading) before it closes
+         * (default 30s); the client then resumes with `Last-Event-ID`, losing nothing. `ZERO` disables it.
+         */
+        public var sseStallTimeout: Duration? = null
+
         /** Netty I/O engine configuration. */
         public var ioEngine: NettyIoEngine? = null
 
@@ -86,6 +92,7 @@ public class NetworkScope
             maxContentLength?.let(builder::maxContentLength)
             maxPipelinedRequests?.let(builder::maxPipelinedRequests)
             maxPendingSseBytes?.let(builder::maxPendingSseBytes)
+            sseStallTimeout?.let { builder.sseStallTimeout(it.toJavaDuration()) }
             ioEngine?.let(builder::ioEngine)
         }
     }

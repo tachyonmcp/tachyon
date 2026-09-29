@@ -43,7 +43,8 @@ Configured via `network { }` / `NetworkConfig.Builder`.
 | `heartbeatInterval` | `15s` | SSE heartbeat interval for silent listening streams; `<= 0` disables |
 | `maxContentLength` | `1 MB` | Max aggregated HTTP request body |
 | `maxPipelinedRequests` | `16` | HTTP/1.1 pipelined requests that may wait behind the one in flight on a connection. Responses always follow request order; the next request gets `429 Too Many Requests` once the ones ahead are answered, and the connection closes. `0` disables pipelining |
-| `maxPendingSseBytes` | `64 * 1024` | Encoded, unsent output one POST-SSE stream may buffer before tools wait for the client; `0` disables buffering, see below |
+| `maxPendingSseBytes` | `64 * 1024` | Encoded, unsent output one POST-SSE stream may buffer before tools wait for the client; `0` disables buffering, see below. Also bounds live events held for a slow GET listening stream |
+| `sseStallTimeout` | `30s` | How long a GET listening stream may stay unwritable (client not reading) before it closes and the client resumes with `Last-Event-ID`; `Duration.ZERO` disables, leaving stalls to `writerIdleTimeout` |
 | `ioEngine` | `AUTO` | Netty I/O transport, see below |
 
 `.port(int)` is also available as a top-level `ServerBuilder` shortcut.
@@ -177,6 +178,18 @@ a tool:
 Neither needs configuration beyond enabling sessions, which
 [Session](#session) covers. Replay reads from the session event store, so a custom
 `SessionEventStore` participates in it.
+
+A slow client on a GET listening stream never loses events on an open stream. While the channel
+is unwritable, Tachyon holds new events and writes them once the client catches up, so a short
+burst rides through. The stream closes instead when it stays unwritable longer than
+`sseStallTimeout` (default `30s`), or when the held events exceed `maxPendingSseBytes` (the write
+high watermark when that is `0`). The client then reconnects with the id of the last event it
+received and gets the rest replayed. Resuming also survives a second drop: the first event on a
+resumed stream carries the client's own `Last-Event-ID`, so a client that drops again before the
+replay arrives resumes from the same point.
+
+Resuming needs the reconnect to reach the instance that holds the session's event log. With more
+than one instance, see [deployment](deployment.md#more-than-one-instance).
 
 ### CORS
 

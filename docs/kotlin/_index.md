@@ -528,7 +528,7 @@ Available via `ToolScope.arguments` (or `PromptScope.arguments`):
 | `ServerInfoScope` | `info { }` | `name`, `version`, `description`, `title`, `instructions` |
 | `CapabilitiesScope` | `capabilities { }` | `tools()`, `resources()`, `prompts()`, `logging`, `completionsMode` |
 | `TasksScope` | `tasks(connector) { }` (needs `tachyon-extensions-tasks`) | `pageSize`, `keepAlive`, `pollInterval`, `resultPollInterval` |
-| `NetworkScope` | `network { }` | `host`, `port`, `endpointPath`, `allowedOrigins`, `allowedHeaders`, `allowedHosts`, `maxContentLength`, `maxPipelinedRequests`, `maxPendingSseBytes` |
+| `NetworkScope` | `network { }` | `host`, `port`, `endpointPath`, `allowedOrigins`, `allowedHeaders`, `allowedHosts`, `maxContentLength`, `maxPipelinedRequests`, `maxPendingSseBytes`, `sseStallTimeout` |
 | `SessionScope` | `session { }` | `enable()`, `sessionTtl`, `sessionIdGenerator` |
 | `RuntimeScope` | `runtime { }` | `shutdownGracePeriod`, `requestTimeout`, `clock` |
 | `ToolScope` | tool lambda | `ctx`, `request`, `arguments`, `tasks`; `success(v)`, `text(t)`, `fail(msg)`, `content { }` |

@@ -42,6 +42,9 @@ class NetworkConfigTest {
         assertThat(config.maxPendingSseBytes())
                 .as("a tool may run 64 KiB ahead of its client by default")
                 .isEqualTo(64 * 1024);
+        assertThat(config.sseStallTimeout())
+                .as("a GET stream may stay unwritable 30s before it closes")
+                .isEqualTo(Duration.ofSeconds(30));
     }
 
     @Test
@@ -127,7 +130,8 @@ class NetworkConfigTest {
                 hosts,
                 NettyIoEngine.AUTO,
                 Duration.ofSeconds(15),
-                NetworkConfig.DEFAULT_MAX_PENDING_SSE_BYTES);
+                NetworkConfig.DEFAULT_MAX_PENDING_SSE_BYTES,
+                NetworkConfig.DEFAULT_SSE_STALL_TIMEOUT);
 
         // Mutating the original lists must not affect the config
         origins.add("http://evil.com");
@@ -172,6 +176,24 @@ class NetworkConfigTest {
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> NetworkConfig.builder().maxPendingSseBytes(-1))
                 .withMessage("maxPendingSseBytes must not be negative");
+    }
+
+    @Test
+    void sseStallTimeoutAcceptsZeroAndRejectsNegative() {
+        assertThat(NetworkConfig.builder()
+                        .sseStallTimeout(Duration.ofSeconds(5))
+                        .build()
+                        .sseStallTimeout())
+                .isEqualTo(Duration.ofSeconds(5));
+        assertThat(NetworkConfig.builder()
+                        .sseStallTimeout(Duration.ZERO)
+                        .build()
+                        .sseStallTimeout())
+                .as("0 disables the stall timer")
+                .isZero();
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> NetworkConfig.builder().sseStallTimeout(Duration.ofSeconds(-1)))
+                .withMessage("sseStallTimeout must not be negative");
     }
 
     @Test

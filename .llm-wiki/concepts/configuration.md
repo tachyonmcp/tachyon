@@ -2,8 +2,8 @@
 title: Configuration
 tags: [concept, config, builder]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/server/ServerBuilder.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultServerBuilder.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/, tachyon-api/src/main/java/dev/tachyonmcp/api/server/config/]
-updated: 2026-09-27
-commit: a3cf5df7
+updated: 2026-09-29
+commit: 4b4b6f7e
 ---
 
 # 🎛️ Configuration
@@ -61,7 +61,7 @@ Verdict: `ServerBuilder` exposes grouped `Consumer<X.Builder>` configurers + sho
 - `build()` takes its session stores from the `ServerConfig` it publishes, so `TachyonServer#config` and the running server share one `SessionConfig` `DefaultServerBuilder#build`. Stateless ⇒ no stores at all → [[sessions]].
 - `NetworkConfig.Builder`: `address()` XOR `host()/port()` ⇒ ISE `Builder#Builder`.
 - `TasksExtension`: registered w/o connector ⇒ ISE `TasksExtension.Builder#build`; `resultPollInterval` must be > 0 `TaskEngineSettings`.
-- page sizes must be > 0; `maxContentLength` > 0; `maxPipelinedRequests` >= 0 (`0` disables pipelining) `NetworkConfig.Builder#maxPipelinedRequests`; `maxPendingSseBytes` >= 0 (default 64 KiB, `0` disables buffering; per POST-SSE stream budget → [[sse-streams]]) `NetworkConfig.Builder#maxPendingSseBytes`; `pollInterval` > 0.
+- page sizes must be > 0; `maxContentLength` > 0; `maxPipelinedRequests` >= 0 (`0` disables pipelining) `NetworkConfig.Builder#maxPipelinedRequests`; `maxPendingSseBytes` >= 0 (default 64 KiB, `0` disables buffering; per POST-SSE stream budget; also caps live events held for a slow GET stream → [[sse-streams]]) `NetworkConfig.Builder#maxPendingSseBytes`; `sseStallTimeout` >= 0 (default 30s, `0` disables; GET stream unwritable that long ⇒ close) `NetworkConfig.Builder#sseStallTimeout`; `pollInterval` > 0.
 - `allowedHosts` entries: bare authority only, no URL syntax ⇒ IAE at pipeline construction → [[security-guards]].
 
 Kotlin mirrors: `info { }`, `capabilities { }`, `network { }`, `session { }` scopes → [[tachyon-kotlin]].

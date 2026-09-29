@@ -18,7 +18,7 @@ Java 21+/Kotlin 2.2 MCP server. Java first, Kotlin adapts.
 Use IDE MCP for building/running tests if available. Otherwise see
 [CONTRIBUTING.md](CONTRIBUTING.md) for `make` targets (`build`, `test`, `lint`,
 `format`, `ci`, `all`).
-- Use `mvn -q` when only pass/fail matters
+- Always pass `-q` to `mvn` / `./mvnw`: errors, test failures and JMH results still print
 
 ## LLM Wiki 🧠
 

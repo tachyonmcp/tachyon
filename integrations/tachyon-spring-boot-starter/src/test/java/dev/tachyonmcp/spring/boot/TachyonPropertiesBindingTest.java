@@ -48,6 +48,7 @@ class TachyonPropertiesBindingTest {
             assertThat(config.network().maxContentLength()).isEqualTo(McpChannelInitializer.DEFAULT_MAX_CONTENT_LENGTH);
             assertThat(config.network().maxPipelinedRequests()).isEqualTo(NetworkConfig.DEFAULT_MAX_PIPELINED_REQUESTS);
             assertThat(config.network().maxPendingSseBytes()).isEqualTo(NetworkConfig.DEFAULT_MAX_PENDING_SSE_BYTES);
+            assertThat(config.network().sseStallTimeout()).isEqualTo(NetworkConfig.DEFAULT_SSE_STALL_TIMEOUT);
             assertThat(config.network().allowedOrigins()).isNull();
             assertThat(config.network().allowedHosts()).isNull();
             assertThat(config.network().ioEngine()).isEqualTo(NettyIoEngine.AUTO);
@@ -67,6 +68,7 @@ class TachyonPropertiesBindingTest {
                         "tachyon.network.max-content-length=2MB",
                         "tachyon.network.max-pipelined-requests=4",
                         "tachyon.network.max-pending-sse-bytes=256KB",
+                        "tachyon.network.sse-stall-timeout=45",
                         "tachyon.network.allowed-origins[0]=https://app.example.com",
                         "tachyon.network.allowed-origins[1]=https://admin.example.com",
                         "tachyon.network.allowed-headers[0]=X-Trace-Id",
@@ -83,6 +85,9 @@ class TachyonPropertiesBindingTest {
                     assertThat(network.maxContentLength()).isEqualTo(2 * 1024 * 1024);
                     assertThat(network.maxPipelinedRequests()).isEqualTo(4);
                     assertThat(network.maxPendingSseBytes()).isEqualTo(256 * 1024);
+                    assertThat(network.sseStallTimeout())
+                            .as("a bare number binds as seconds")
+                            .isEqualTo(Duration.ofSeconds(45));
                     assertThat(network.allowedOrigins())
                             .containsExactly("https://app.example.com", "https://admin.example.com");
                     assertThat(network.allowedHeaders()).containsExactly("X-Trace-Id");
@@ -202,6 +207,27 @@ class TachyonPropertiesBindingTest {
                     .asInstanceOf(throwable(InvalidConfigurationPropertyValueException.class))
                     .satisfies(failure ->
                             assertThat(failure.getName()).isEqualTo("tachyon.network.max-pipelined-requests"));
+        });
+    }
+
+    @Test
+    void negativeSseStallTimeoutIsRejectedByNameAndZeroDisablesIt() {
+        runner.withPropertyValues("tachyon.network.sse-stall-timeout=-1s").run(context -> {
+            assertThat(context).hasFailed();
+            assertThat(context.getStartupFailure())
+                    .rootCause()
+                    .isInstanceOf(InvalidConfigurationPropertyValueException.class)
+                    .asInstanceOf(throwable(InvalidConfigurationPropertyValueException.class))
+                    .satisfies(failure -> {
+                        assertThat(failure.getName()).isEqualTo("tachyon.network.sse-stall-timeout");
+                        assertThat(failure.getValue()).isEqualTo(Duration.ofSeconds(-1));
+                    });
+        });
+
+        runner.withPropertyValues("tachyon.network.sse-stall-timeout=0").run(context -> {
+            assertThat(context).hasNotFailed();
+            assertThat(context.getBean(TachyonServer.class).config().network().sseStallTimeout())
+                    .isEqualTo(Duration.ZERO);
         });
     }
 
