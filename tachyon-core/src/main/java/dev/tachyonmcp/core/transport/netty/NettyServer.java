@@ -16,6 +16,7 @@ import java.io.Closeable;
 import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.util.concurrent.TimeUnit;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -64,44 +65,66 @@ public final class NettyServer implements Closeable {
         // native transports pin via JNI — so virtual threads provide no benefit
         // here and add scheduling cost. Virtual threads are used only for
         // application-level work (see Server#executor()).
-        eventLoopGroup = new MultiThreadIoEventLoopGroup(new DefaultThreadFactory("netty-io"), engine.ioHandler());
-
-        var bootstrap = new ServerBootstrap();
-        bootstrap
-                .group(eventLoopGroup)
-                .channel(engine.channel())
-                .option(ChannelOption.SO_BACKLOG, 1024)
-                .option(ChannelOption.SO_REUSEADDR, true)
-                .childOption(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT)
-                .childOption(ChannelOption.TCP_NODELAY, true)
-                .childOption(ChannelOption.SO_KEEPALIVE, true)
-                .childOption(ChannelOption.WRITE_BUFFER_WATER_MARK, new WriteBufferWaterMark(32 * 1024, 128 * 1024))
-                .childHandler(new McpChannelInitializer(
-                        config.endpointPath(),
-                        server.isStateless(),
-                        server,
-                        config.readerIdleTimeout(),
-                        config.writerIdleTimeout(),
-                        config.maxContentLength(),
-                        config.maxPipelinedRequests(),
-                        childChannels,
-                        config.corsConfig(),
-                        config.allowedHosts(),
-                        config.pipelineCustomizer()));
-
+        var group = new MultiThreadIoEventLoopGroup(new DefaultThreadFactory("netty-io"), engine.ioHandler());
+        Channel channel = null;
+        var bound = false;
         try {
-            this.serverChannel =
-                    bootstrap.bind(config.host(), config.port()).sync().channel();
-            var version = NettyServer.class.getPackage().getImplementationVersion();
-            logger.info(
-                    "TachyonMCP Server {}(Netty I/O: {}) started on {}",
-                    version == null ? "" : "v" + version + " ",
-                    engine,
-                    serverChannel.localAddress());
+            var bootstrap = new ServerBootstrap();
+            bootstrap
+                    .group(group)
+                    .channel(engine.channel())
+                    .option(ChannelOption.SO_BACKLOG, 1024)
+                    .option(ChannelOption.SO_REUSEADDR, true)
+                    .childOption(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT)
+                    .childOption(ChannelOption.TCP_NODELAY, true)
+                    .childOption(ChannelOption.SO_KEEPALIVE, true)
+                    .childOption(ChannelOption.WRITE_BUFFER_WATER_MARK, new WriteBufferWaterMark(32 * 1024, 128 * 1024))
+                    .childHandler(new McpChannelInitializer(
+                            config.endpointPath(),
+                            server.isStateless(),
+                            server,
+                            config.readerIdleTimeout(),
+                            config.writerIdleTimeout(),
+                            config.maxContentLength(),
+                            config.maxPipelinedRequests(),
+                            childChannels,
+                            config.corsConfig(),
+                            config.allowedHosts(),
+                            config.pipelineCustomizer()));
+
+            var bindFuture = bootstrap.bind(config.host(), config.port());
+            channel = bindFuture.channel();
+            bindFuture.sync();
+            bound = true;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new RuntimeException("Failed to start Netty server on " + config.host() + ":" + config.port(), e);
+        } finally {
+            if (!bound) {
+                abortStartup(channel, group);
+            }
         }
+
+        eventLoopGroup = group;
+        serverChannel = channel;
+        var version = NettyServer.class.getPackage().getImplementationVersion();
+        logger.info(
+                "TachyonMCP Server {}(Netty I/O: {}) started on {}",
+                version == null ? "" : "v" + version + " ",
+                engine,
+                channel.localAddress());
+    }
+
+    /**
+     * Releases what a failed constructor allocated: nothing else holds the group, so
+     * {@link #close()} can never reach it. Runs from a {@code finally}, so the startup failure
+     * propagates unchanged.
+     */
+    private void abortStartup(@Nullable Channel channel, MultiThreadIoEventLoopGroup group) {
+        if (channel != null && channel.isOpen()) {
+            await(channel.close(), "Server channel close");
+        }
+        await(group.shutdownGracefully(0, shutdownTimeout.toMillis(), TimeUnit.MILLISECONDS), "Event loop shutdown");
     }
 
     /**
