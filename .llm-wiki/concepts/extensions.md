@@ -2,8 +2,8 @@
 title: Extensions
 tags: [concept, extensions, spi]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/ProtocolVersionHandler.java, tachyon-api/src/main/java/dev/tachyonmcp/api/server/extensions/, tachyon-api/src/main/java/dev/tachyonmcp/api/runtime/Extension.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/handlers/ExtensionNegotiator.java, tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/mcp/v2026_07_28/transport/ExtensionNegotiationHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultServerBuilder.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java, tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/mcp/v2026_07_28/transport/RequestValidationHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/extensions/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tasks/TasksExtensionSupport.java]
-updated: 2026-09-28
-commit: 16ca0f84
+updated: 2026-09-29
+commit: ac9d433f
 ---
 
 # 🧩 Extensions
@@ -49,7 +49,7 @@ Spring extensions still bootstrap during server construction. Discovered annotat
    - 2025-11-25: `InitializeHandler#handle` negotiates from `initialize` capabilities. `DefaultDispatchContext#enableExtension` stores declarations on the session when present. Stateless servers get a fresh context per POST, so declarations last only for `initialize`, even on a reused connection; later OPTIONAL calls see `false`, REQUIRED calls reject. [ProtocolVersionHandler#channelRead](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/ProtocolVersionHandler.java), [StatelessExtensionNegotiationTest](../../e2e/src/test/java/dev/tachyonmcp/e2e/mcp/v2025_11_25/StatelessExtensionNegotiationTest.java).
    - 2026-07-28: every POST, `ExtensionNegotiationHandler` in pipeline, on fresh channel ctx `ExtensionNegotiationHandler#channelRead`. Non-object params ⇒ `RequestMappingException` swallowed, **no extension enabled**, request passes on so dispatcher answers `invalid_params` `RequestMappingException`.
 5. Advertise in `initialize`/`server/discover`: `ALWAYS` always, `NEGOTIATED` if enabled, `NEVER` never `ExtensionNegotiator#registeredExtensions`.
-6. `close()` → `shutdownExtensions(deadline)` each on own VT, joined with remaining grace; slow one logged + abandoned `DefaultTachyonServer#bootstrapExtensions`.
+6. `close()` → `shutdownExtensions(deadline)` each on own VT, in order, joined with remaining grace; slow one logged + abandoned. Interrupted caller: joins ignore interrupt, every extension still shut down, interrupt restored `DefaultTachyonServer#shutdownExtensions`. Test: `ServerShutdownGraceTest#interruptedCloseShutsDownAllExtensions`.
 
 ## 🚪 Routing gate
 
