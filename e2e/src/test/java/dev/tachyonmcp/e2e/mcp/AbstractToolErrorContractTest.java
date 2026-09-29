@@ -18,6 +18,9 @@ public abstract class AbstractToolErrorContractTest<C extends McpClient> extends
     /** Returns a client ready to send requests (handshake already performed, if the version needs one). */
     protected abstract C readyClient() throws Exception;
 
+    /** Returns the HTTP status this protocol revision ties to an {@code -32602} invalid-params error. */
+    protected abstract int invalidParamsHttpStatus();
+
     @Override
     protected void startDefaultServer() {
         startServerWith(s -> s.tools()
@@ -46,17 +49,34 @@ public abstract class AbstractToolErrorContractTest<C extends McpClient> extends
     }
 
     @Test
-    protected void shouldRedactIllegalArgumentExceptionFromInvalidParamsError() throws Exception {
+    void shouldRejectUnknownTool() throws Exception {
+        try (var client = readyClient()) {
+            var response = client.post("""
+                {"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"missing","arguments":{}}}
+                """);
+
+            assertThatResponse(response)
+                    .hasStatus(invalidParamsHttpStatus())
+                    .isJsonRpcError()
+                    .hasId(3)
+                    .hasErrorCode(-32602)
+                    .hasErrorMessage("Unknown tool: missing");
+        }
+    }
+
+    @Test
+    void shouldRedactIllegalArgumentExceptionFromInvalidParamsError() throws Exception {
         startServerWith(s -> s.tools()
                 .register(builder -> builder.name("bad-arg").description("Rejects input"), (context, request) -> {
                     throw new IllegalArgumentException("sensitive internal detail");
                 }));
 
         try (var client = readyClient()) {
-            var response = client.sendRpc("""
+            var response = client.post("""
                 {"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"bad-arg","arguments":{}}}
                 """);
             assertThatResponse(response)
+                    .hasStatus(invalidParamsHttpStatus())
                     .isJsonRpcError()
                     .hasId(2)
                     .hasErrorCode(-32602)

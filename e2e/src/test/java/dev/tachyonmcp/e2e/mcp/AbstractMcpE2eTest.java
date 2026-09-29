@@ -84,6 +84,22 @@ public abstract class AbstractMcpE2eTest<C extends McpClient> {
 
     protected final void startServer(Consumer<ServerBuilder> configurer, Consumer<TachyonServer> registrar) {
         closeCustomServerIfRunning();
+        var started = startConfigured(configurer, registrar);
+        this.server = started;
+        this.port = started.port();
+        this.usingCustomServer = true;
+    }
+
+    /**
+     * Starts a server under the parent's {@link #sessionMode()} without touching {@link #server} or
+     * {@link #port}: the shared default stays intact for the other tests, and the caller closes the
+     * returned server. Public so contract interfaces such as {@link McpSdkContract} can reach it.
+     */
+    public final TachyonServer startIsolatedServer(Consumer<TachyonServer> registrar) {
+        return startConfigured(builder -> {}, registrar);
+    }
+
+    private TachyonServer startConfigured(Consumer<ServerBuilder> configurer, Consumer<TachyonServer> registrar) {
         var builder = TachyonServer.builder().port(0);
         configurer.accept(builder);
         if (sessionMode() == SessionMode.STATEFUL) {
@@ -91,10 +107,7 @@ public abstract class AbstractMcpE2eTest<C extends McpClient> {
         } else {
             builder.stateless();
         }
-        var started = McpTestServers.startSafely(builder, registrar);
-        this.server = started;
-        this.port = started.port();
-        this.usingCustomServer = true;
+        return McpTestServers.startSafely(builder, registrar);
     }
 
     private void closeCustomServerIfRunning() {
