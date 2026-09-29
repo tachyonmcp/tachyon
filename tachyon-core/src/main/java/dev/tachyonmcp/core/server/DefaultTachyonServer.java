@@ -66,6 +66,7 @@ import io.netty.channel.ChannelPipeline;
 import io.netty.handler.codec.http.HttpRequest;
 import java.io.Closeable;
 import java.io.IOException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.IdentityHashMap;
@@ -634,9 +635,11 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
      * deadline, so a slow extension cannot make {@link #close()} run past the configured grace
      * period on top of whatever {@link OperationTracker#drain} already spent waiting on in-flight
      * requests. A slow extension is logged and left running in the background rather than blocked
-     * on indefinitely.
+     * on indefinitely. Waits ignore interrupts and restore the interrupt status afterwards, so an
+     * interrupted caller still shuts every extension down.
      */
     private void shutdownExtensions(long deadlineNanos) {
+        var interrupted = Thread.interrupted();
         for (var ext : extensions) {
             final var worker = Thread.ofVirtual()
                     .name("ext-shutdown-" + ext.extensionId())
@@ -647,22 +650,21 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
                             logger.warn("Extension shutdown error: {}", ext.extensionId(), e);
                         }
                     });
-            var remainingMs = (deadlineNanos - System.nanoTime()) / 1_000_000;
-            if (remainingMs <= 0) {
-                logger.warn("Shutdown grace period already elapsed, not waiting on extension: {}", ext.extensionId());
-                continue;
-            }
-            try {
-                worker.join(remainingMs);
-                if (worker.isAlive()) {
-                    logger.warn(
-                            "Extension shutdown exceeded remaining grace period, continuing without waiting further: {}",
-                            ext.extensionId());
+            while (worker.isAlive() && deadlineNanos - System.nanoTime() > 0) {
+                try {
+                    worker.join(Duration.ofNanos(deadlineNanos - System.nanoTime()));
+                } catch (InterruptedException e) {
+                    interrupted = true;
                 }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return;
             }
+            if (worker.isAlive()) {
+                logger.warn(
+                        "Extension shutdown exceeded the grace period, continuing without waiting further: {}",
+                        ext.extensionId());
+            }
+        }
+        if (interrupted) {
+            Thread.currentThread().interrupt();
         }
     }
 

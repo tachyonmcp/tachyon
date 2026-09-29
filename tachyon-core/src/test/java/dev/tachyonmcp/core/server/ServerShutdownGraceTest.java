@@ -14,8 +14,10 @@ import dev.tachyonmcp.api.server.extensions.ServerExtension;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
 import java.time.Duration;
+import java.util.Collection;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
@@ -60,6 +62,41 @@ class ServerShutdownGraceTest {
                 .as("start after close must not bind a transport on a shut-down engine")
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("Server is closed");
+    }
+
+    @Test
+    void interruptedCloseShutsDownAllExtensions() {
+        final var shutdowns = new ConcurrentLinkedQueue<String>();
+        final var server = TachyonServer.builder()
+                .withExtensions(shutdownRecorder("test/first", shutdowns), shutdownRecorder("test/second", shutdowns))
+                .build();
+
+        Thread.currentThread().interrupt();
+        server.close();
+
+        assertThat(Thread.interrupted())
+                .as("close keeps the caller's interrupt")
+                .isTrue();
+        assertThat(shutdowns).as("shut down before close returns").containsExactly("test/first", "test/second");
+    }
+
+    private static ServerExtension shutdownRecorder(String id, Collection<String> shutdowns) {
+        return new ServerExtension() {
+            @Override
+            public String extensionId() {
+                return id;
+            }
+
+            @Override
+            public AdvertiseMode advertiseMode() {
+                return AdvertiseMode.ALWAYS;
+            }
+
+            @Override
+            public void shutdown() {
+                shutdowns.add(id);
+            }
+        };
     }
 
     @Test
