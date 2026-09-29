@@ -3,6 +3,7 @@ package dev.tachyonmcp.spring.boot;
 
 import dev.tachyonmcp.core.server.ServerBuilder;
 import dev.tachyonmcp.core.transport.netty.http.Origins;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.boot.context.properties.PropertyMapper;
@@ -18,7 +19,7 @@ import org.springframework.util.unit.DataSize;
  * sources by default, which is exactly that rule. Customizers run afterwards and therefore still win.
  *
  * <p>A value the core builders would reject is rejected here first, as an {@link
- * InvalidConfigurationPropertyValueException}: Boot's analyzer for it names the key and the file and
+ * InvalidConfigurationPropertyValueException}: Boot's analyser for it names the key and the file and
  * line it came from, where the core speaks in terms of its Java API. Nothing is silently dropped.
  */
 final class TachyonPropertiesApplier {
@@ -29,6 +30,7 @@ final class TachyonPropertiesApplier {
     private static final String MAX_CONTENT_LENGTH = "tachyon.network.max-content-length";
     private static final String MAX_PIPELINED_REQUESTS = "tachyon.network.max-pipelined-requests";
     private static final String MAX_PENDING_SSE_BYTES = "tachyon.network.max-pending-sse-bytes";
+    private static final String SSE_STALL_TIMEOUT = "tachyon.network.sse-stall-timeout";
     private static final String ALLOWED_ORIGINS = "tachyon.network.allowed-origins";
 
     private static final PropertyMapper MAP = PropertyMapper.get();
@@ -57,6 +59,9 @@ final class TachyonPropertiesApplier {
             MAP.from(network.maxPendingSseBytes())
                     .as(size -> toIntBytes(MAX_PENDING_SSE_BYTES, size, 0))
                     .to(config::maxPendingSseBytes);
+            MAP.from(network.sseStallTimeout())
+                    .as(TachyonPropertiesApplier::toNonNegativeStallTimeout)
+                    .to(config::sseStallTimeout);
             MAP.from(network.maxPipelinedRequests())
                     .as(TachyonPropertiesApplier::toNonNegativeRequests)
                     .to(config::maxPipelinedRequests);
@@ -149,5 +154,13 @@ final class TachyonPropertiesApplier {
                     "Pipelined request limit must not be negative; 0 disables pipelining.");
         }
         return maxPipelinedRequests;
+    }
+
+    private static Duration toNonNegativeStallTimeout(Duration sseStallTimeout) {
+        if (sseStallTimeout.isNegative()) {
+            throw new InvalidConfigurationPropertyValueException(
+                    SSE_STALL_TIMEOUT, sseStallTimeout, "SSE stall timeout must not be negative; 0 disables it.");
+        }
+        return sseStallTimeout;
     }
 }

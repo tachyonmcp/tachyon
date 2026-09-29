@@ -2,8 +2,8 @@
 title: Findings
 tags: [meta, findings]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/]
-updated: 2026-09-28
-commit: e02fd639
+updated: 2026-09-29
+commit: 4b4b6f7e
 ---
 
 # 🔎 Findings
@@ -11,7 +11,6 @@ commit: e02fd639
 Spotted while reading code. Runtime verification noted per finding. Fixed in code ⇒ 🗑️ remove row.
 
 - ⚠️ `UnsupportedProtocolVersionHandler` encodes the rejection with `ProtocolVersionHandler#LATEST_PROTOCOL` (not `Protocols#baseline`) + HTTP 400, even for legacy-looking clients. Intentional per SEP-2575? `UnsupportedProtocolVersionHandler#channelRead`
-- ⚠️ GET-SSE no byte budget: busy loop ⇒ queue grows with producer. `Session#send`, `NettySseConnection#send`
 - ⚠️ POST-SSE budget per stream only; no global cap or connection limit. `PostSseStream#reserve`
 - ⚠️ Perf: notifications round-trip bytes → `String` → bytes. `DefaultTachyonServer#sendSerializedNotification` builds `notificationJson` as a `String`; `SseSerializer#measure` then counts its UTF-8 size (~0.7 ns/char, charAt loop, not vectorized) and `SseSerializer#encode` transcodes it back. Carry `byte[]` end to end (like the final response, `PostSseStream#writeEvent(long, byte[], Runnable)`): length is free, encode is a copy. Touches `SseEvent`, `JsonRpcCodec`, event log (stores `String`).
 - ⚠️ Several producers on one POST-SSE stream: a parked producer can be overtaken ⇒ wire ids out of order ⇒ `Last-Event-ID` resume may skip one. Pre-existing race, wider with parking. `PostSseStream#awaitCapacity`
@@ -25,6 +24,8 @@ Spotted while reading code. Runtime verification noted per finding. Fixed in cod
 - 🪶 Blocking custom `SessionEventStore#append` serializes a task's publishers (per-task lock). `TaskEntry#notifyIfNewer`
 - 🪶 A2A placement undecided: the tasks `engine` package is protocol-neutral so it can become `tachyon-tasks` (MCP binding + future A2A binding on one engine). If A2A ships inside `tachyon-core`, the engine must move into core instead (core cannot depend on an extension). Decide before the split; engine ownership when both bindings are present is open. `EngineBoundaryTest`
 - ⚠️ `close()` on an interrupted thread: `shutdownExtensions` returns on the first interrupted `join`, so later extensions never get `shutdown()` called (their worker is never started). `DefaultTachyonServer#shutdownExtensions`
+- ⚠️ Failed startup leaks the event-loop group: `NettyServer` constructor creates `MultiThreadIoEventLoopGroup`, then `bind().sync()` throws (port in use) with no cleanup; `DefaultTachyonServer#start` never assigns `transport`, so `close()` can't reach it. Non-daemon `netty-io` threads keep the JVM alive. Fix: catch in constructor, close channel, `shutdownGracefully`, rethrow, keep interrupt flag. `NettyServer#NettyServer`
+- 🪶 Dead code: `DefaultTachyonServer#drainEvents` has no caller; `Session#cursor` only feeds it. Delete or wire up. `DefaultTachyonServer#drainEvents`
 - 🪶 Task codecs still live in core (`McpTaskMapper` v2025/v2026, task methods on `ProtocolRequestMapper`/`ProtocolResponseMapper`, `capabilities.tasks` in `ServerInfoMapper`); the generated `…extensions.tasks.protocol.v2026_07_28` models are unused. `McpTaskMapper`
 
 ## 🪶 Polish

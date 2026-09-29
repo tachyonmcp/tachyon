@@ -68,7 +68,12 @@ public record TachyonProperties(
      *                            64KB). Zero disables buffering: a tool waits until each event
      *                            reaches the socket. Past
      *                            it, a tool sending progress, logs or comments waits for the client.
-     *                            The final response is always accepted.
+     *                            The final response is always accepted. On a GET listening stream
+     *                            it bounds the live events held while the client is slow.
+     * @param sseStallTimeout     How long a GET listening stream may stay unwritable (client not
+     *                            reading) before it closes; the client then resumes with
+     *                            Last-Event-ID, losing nothing. If a duration suffix is not
+     *                            specified, seconds will be used. Zero disables it.
      * @param allowedOrigins      Origins the DNS-rebinding guard admits and the CORS handler grants,
      *                            each http(s)://host[:port] with no path. Unset grants any loopback
      *                            origin, on any port.
@@ -88,6 +93,7 @@ public record TachyonProperties(
             @Nullable DataSize maxContentLength,
             @Nullable Integer maxPipelinedRequests,
             @Nullable DataSize maxPendingSseBytes,
+            @DurationUnit(ChronoUnit.SECONDS) @Nullable Duration sseStallTimeout,
             @Nullable List<String> allowedOrigins,
             @Nullable List<String> allowedHeaders,
             @Nullable List<String> allowedHosts,

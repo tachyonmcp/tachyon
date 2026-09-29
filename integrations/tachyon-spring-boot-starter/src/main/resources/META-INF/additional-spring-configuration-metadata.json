@@ -33,6 +33,10 @@
       "defaultValue": "64KB"
     },
     {
+      "name": "tachyon.network.sse-stall-timeout",
+      "defaultValue": "30s"
+    },
+    {
       "name": "tachyon.network.allowed-origins",
       "defaultValue": []
     },

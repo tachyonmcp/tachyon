@@ -34,8 +34,21 @@ missed events of **that stream only** — never another stream's (MCP resumabili
 NOT replay messages that would have been sent on a different stream"*, guarded by
 `SseReplayPerStreamTest`).
 
-Replay is a **one-shot** read of the log at reconnect time (`SseManager.replayEvents`): it scans the
+Replay is a **one-shot** read of the log at reconnect time (`SseManager.missedEvents`): it scans the
 log once, sends events with `id > lastSeen` and matching stream key, and stops.
+
+The resumed stream's priming event echoes the client's `Last-Event-ID`, `#<key>` included, instead
+of drawing a fresh id. A fresh id would be higher than every missed event and would drop the key,
+so a client that disconnects again after the priming event, before the replay reaches it, would
+resume past its backlog, or onto the GET stream (`SseResumeCursorTest`). Until the replay is
+queued, live events sent to the resumed connection are held, then released minus those the replay
+already covered, so a live event never moves the client's `Last-Event-ID` past an event still
+waiting to be replayed (`NettySseConnection.replay`).
+
+A slow client pauses the stream rather than losing events: while the channel is unwritable,
+events are held and written again on `channelWritabilityChanged`. The stream closes only when it
+stays unwritable longer than `sseStallTimeout` or the held events exceed `maxPendingSseBytes`; the
+client then resumes from the last event it received (`NettySseConnectionTest`).
 
 ## The scenario: a tool that closes its stream mid-call
 
@@ -66,7 +79,7 @@ After the mid-call close, two things happen concurrently on different threads:
 - **A — append** (server-local): handler returns → dispatch completes → `finalizePostSseResponse`
   appends `5#3` to the log.
 - **B — reconnect + replay** (network round-trip): the client sees the close → sends
-  `GET` with `Last-Event-ID: 4#3` → `SseManager.replayEvents` reads the log.
+  `GET` with `Last-Event-ID: 4#3` → `SseManager.missedEvents` reads the log.
 
 Nothing orders A before B.
 
@@ -167,6 +180,9 @@ stream's messages.
 | Dropped-write callback | `PostSseStream.writeEvent(long, ByteBuf, Runnable)` / `doWriteEvent` |
 | Response finalize + fallback | `McpOperationHandler.finalizePostSseResponse` / `redeliverOnReconnect` |
 | Record resumed stream key | `SseManager.openStream`; `Session.resumingStreamKey` |
-| One-shot replay | `SseManager.replayEvents` |
+| Cursor echo in priming event | `SseManager.openStream`, `SseManager.ResumeCursor` |
+| One-shot replay | `SseManager.missedEvents` |
+| Replay gate, slow-client hold, stall timer | `NettySseConnection` (`replay`, `onWritabilityChanged`) |
+| Double-reconnect regression test | `e2e/.../SseResumeCursorTest` |
 | Regression test | `e2e/.../SsePostReconnectRedeliveryTest` |
 | Cross-stream invariant test | `e2e/.../SseReplayPerStreamTest` |

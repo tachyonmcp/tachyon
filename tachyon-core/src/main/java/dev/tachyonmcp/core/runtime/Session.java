@@ -293,16 +293,14 @@ public class Session {
 
     /**
      * Sends an SSE event to the client. Returns {@code false} without sending when no connection
-     * is attached or the stream is throttled ({@link Backpressure#COLD}) — a slow client must not
-     * accumulate events in the channel's outbound buffer. Dropped events stay in the event log and
-     * are replayable via {@code Last-Event-ID} on reconnect.
+     * is attached; the event stays in the event log, replayable via {@code Last-Event-ID} on
+     * reconnect. A slow client is the connection's concern: it holds events while the client
+     * catches up, or closes so the client resumes without a gap — never drops one from an open
+     * stream.
      */
     public boolean send(SseEvent event) {
         var conn = connection.get();
         if (conn == SseConnection.noop()) {
-            return false;
-        }
-        if (shouldThrottle()) {
             return false;
         }
         conn.send(event);

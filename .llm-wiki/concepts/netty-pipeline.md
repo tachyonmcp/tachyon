@@ -2,8 +2,8 @@
 title: Netty pipeline
 tags: [concept, transport, netty]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/http/]
-updated: 2026-09-27
-commit: a3cf5df7
+updated: 2026-09-29
+commit: 4b4b6f7e
 ---
 
 # 🧪 Netty pipeline
@@ -76,7 +76,7 @@ Written by `PostSseStream#closeOnWriteFailure`, `SseHeartbeat#send` and `McpOper
 
 `HttpPipeliningGate` is the single `autoRead` owner: `autoRead = writable && nothing queued` `HttpPipeliningGate#channelWritabilityChanged`. Reads stop on the first queued pipelined request, so the queue holds at most one read's worth; clients that don't pipeline keep `autoRead` (and disconnect detection) untouched `HttpPipeliningGate#channelRead`. ⚠️ While a request is queued a client FIN is noticed only when the in-flight response completes or fails. Stuck in-flight request ⇒ reader-idle closes the channel as before. `Session.send` drops (returns false) when connection not writable — event stays in log for replay `Session#send`.
 
-Sustained non-writability on a heartbeat stream ends in writer idle, which both phases honor [SseHeartbeat#ignoresIdle](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/sse/SseHeartbeat.java) → [[sse-streams]].
+Sustained non-writability on a heartbeat stream ends in writer idle, which both phases honor [SseHeartbeat#ignoresIdle](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/sse/SseHeartbeat.java) → [[sse-streams]]. A resumable GET stream closes sooner: `McpOperationHandler#channelWritabilityChanged` forwards to `NettySseConnection#onWritabilityChanged`, whose stall timer closes after `sseStallTimeout` → [[sse-streams]].
 
 ## 📤 Response helpers
 

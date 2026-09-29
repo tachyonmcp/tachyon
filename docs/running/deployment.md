@@ -144,6 +144,14 @@ active.
 
 Experimental `SessionStore` and `SessionEventStore` implementations can persist session snapshots and replay events across restarts. They do not
 coordinate live session or transport ownership between nodes. See [session configuration](configuration.md#session).
+
+SSE resumption depends on this routing too. A client that reconnects with `Last-Event-ID`,
+whether after a network drop, a deploy, or because Tachyon closed a stalled stream (see
+[reconnecting](configuration.md#reconnecting-to-an-sse-stream)), must reach the instance that holds
+the session's event log, or the missed events are not replayed. Tachyon does not route requests:
+sticky routing is the load balancer's job. Key it on the `Mcp-Session-Id` request header, for
+example with a header hash in Envoy, NGINX or HAProxy. Cookie-based stickiness, such as AWS ALB
+target-group stickiness, only works for clients that keep cookies, and many MCP clients do not.
 If session-store lookup fails during a POST, the server returns HTTP 500 with `Session lookup failed`. An unknown session returns HTTP 404.
 
 ## Containers

@@ -25,6 +25,7 @@ import dev.tachyonmcp.core.transport.jsonrpc.JsonRpcCodec;
 import dev.tachyonmcp.core.transport.jsonrpc.JsonRpcMessage;
 import dev.tachyonmcp.core.transport.netty.http.CorsDecision;
 import dev.tachyonmcp.core.transport.netty.http.TachyonCorsHandler;
+import dev.tachyonmcp.core.transport.netty.sse.NettySseConnection;
 import dev.tachyonmcp.core.transport.netty.sse.PostSseStream;
 import dev.tachyonmcp.core.transport.netty.sse.SseHeartbeat;
 import dev.tachyonmcp.core.transport.netty.sse.SseManager;
@@ -555,6 +556,17 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
     @Override
     public void channelInactive(ChannelHandlerContext ctx) {
         ctx.fireChannelInactive();
+    }
+
+    @Override
+    public void channelWritabilityChanged(ChannelHandlerContext ctx) {
+        var session = ChannelHandlerUtils.getSession(ctx.channel());
+        if (session != null
+                && session.connection() instanceof NettySseConnection sse
+                && sse.channel() == ctx.channel()) {
+            sse.onWritabilityChanged();
+        }
+        ctx.fireChannelWritabilityChanged();
     }
 
     @Override

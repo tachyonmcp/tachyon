@@ -76,6 +76,7 @@ class TachyonConfigurationMetadataTest {
                         "tachyon.network.max-content-length",
                         "tachyon.network.max-pipelined-requests",
                         "tachyon.network.max-pending-sse-bytes",
+                        "tachyon.network.sse-stall-timeout",
                         "tachyon.network.allowed-origins",
                         "tachyon.network.allowed-headers",
                         "tachyon.network.allowed-hosts",
@@ -162,6 +163,7 @@ class TachyonConfigurationMetadataTest {
                 Arguments.of(
                         "tachyon.network.max-pending-sse-bytes",
                         DataSize.ofBytes(NetworkConfig.DEFAULT_MAX_PENDING_SSE_BYTES)),
+                Arguments.of("tachyon.network.sse-stall-timeout", NetworkConfig.DEFAULT_SSE_STALL_TIMEOUT),
                 Arguments.of(
                         "tachyon.network.io-engine", NettyIoEngine.AUTO.name().toLowerCase(Locale.ROOT)),
                 Arguments.of("tachyon.session.session-ttl", SessionConfig.DEFAULT_SESSION_TTL),

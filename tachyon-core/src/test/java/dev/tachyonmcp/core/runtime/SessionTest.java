@@ -108,23 +108,16 @@ class SessionTest {
     }
 
     @Test
-    void sendDropsWhenThrottled() {
+    void sendLeavesSlowClientsToTheConnection() {
         connection.writable = false;
         var event = new SseEvent("1", "message", "{}");
-        assertThat(session.send(event)).isFalse();
-        assertThat(connection.sent).isEmpty();
-        assertThat(session.backpressure()).isEqualTo(Backpressure.COLD);
-    }
-
-    @Test
-    void sendResumesWhenWritableAgain() {
-        connection.writable = false;
-        assertThat(session.send(new SseEvent("1", "message", "{}"))).isFalse();
-        connection.writable = true;
-        var event = new SseEvent("2", "message", "{}");
-        assertThat(session.send(event)).isTrue();
+        assertThat(session.send(event))
+                .as("a slow client is buffered by the connection, never dropped from an open stream")
+                .isTrue();
         assertThat(connection.sent).containsExactly(event);
-        assertThat(session.backpressure()).isEqualTo(Backpressure.HOT);
+        assertThat(connection.closed).isFalse();
+        assertThat(session.shouldThrottle()).isTrue();
+        assertThat(session.backpressure()).isEqualTo(Backpressure.COLD);
     }
 
     @Test
