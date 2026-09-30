@@ -32,6 +32,12 @@ internal class StructuredFactoryBuildersTest {
     }
 
     @Test
+    fun `Icon block requires a source when no binary data is supplied`() {
+        shouldThrow<IllegalArgumentException> { Icon { mimeType = "image/png" } }
+            .message shouldBe "Icon.src is required"
+    }
+
+    @Test
     fun `binary Icon block rejects ambiguous or incomplete input`() {
         shouldThrow<IllegalArgumentException> {
             Icon {

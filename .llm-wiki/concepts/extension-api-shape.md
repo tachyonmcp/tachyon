@@ -2,8 +2,8 @@
 title: Extension API shape
 tags: [concept, extensions, kotlin]
 sources: [tachyon-api/src/main/java/dev/tachyonmcp/api/server/extensions/, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/tasks/TaskConnector.java, tachyon-kotlin/src/main/kotlin/dev/tachyonmcp/kotlin/server/config/TachyonServerBuilder.kt, tachyon-kotlin/src/main/kotlin/dev/tachyonmcp/kotlin/server/config/TasksExtensions.kt, tachyon-kotlin/src/main/kotlin/dev/tachyonmcp/kotlin/server/config/SkillsExtensions.kt, tachyon-kotlin/src/main/kotlin/dev/tachyonmcp/kotlin/server/domain/TaskSnapshotFactories.kt, extensions/tachyon-extensions-skills/src/main/java/dev/tachyonmcp/extensions/skills/SkillsExtension.java]
-updated: 2026-09-30
-commit: 46487a0c
+updated: 2026-10-01
+commit: 5bbf33fa
 ---
 
 # 🧩 Extension API shape

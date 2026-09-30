@@ -53,6 +53,14 @@ internal class StatefulServerTest {
     )
 
     @Test
+    fun `empty session scope preserves stateless defaults`() {
+        buildServer { session { } }.use { server ->
+            server.config().session.enabled shouldBe false
+            server.config().session.sessionTtl shouldBe null
+        }
+    }
+
+    @Test
     fun `enable alone makes the server stateful with defaults`() {
         buildServer {
             name("kotlin-session-defaults")

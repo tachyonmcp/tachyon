@@ -31,12 +31,12 @@ public fun TachyonServerBuilder.skills(
     configure: (@TachyonDsl SkillsScope).() -> Unit = {},
 ): TachyonServerBuilder {
     contract { callsInPlace(configure, InvocationKind.EXACTLY_ONCE) }
-    lateinit var scope: SkillsScope
+    var scope: SkillsScope? = null
     withExtension(SkillsExtension::class.java) {
         registry(registry)
         scope = SkillsScope(this)
     }
-    scope.apply(configure).applyTo()
+    checkNotNull(scope).apply(configure).applyTo()
     return this
 }
 
