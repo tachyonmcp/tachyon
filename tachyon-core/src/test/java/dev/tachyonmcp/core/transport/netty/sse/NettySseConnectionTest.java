@@ -222,6 +222,7 @@ class NettySseConnectionTest {
 
     private EmbeddedChannel newChannel(int writableContents) {
         var channel = new EmbeddedChannel(new ChokeAfter(writableContents));
+        channel.freezeTime();
         channels.add(channel);
         return channel;
     }
