@@ -14,6 +14,7 @@ import dev.tachyonmcp.api.server.domain.ToolAnnotations
 import dev.tachyonmcp.core.server.features.resources.MimeTypes
 import dev.tachyonmcp.kotlin.server.TachyonDsl
 import dev.tachyonmcp.kotlin.server.config.ResourceScope
+import dev.tachyonmcp.kotlin.server.config.TemplateScope
 import java.util.Base64
 
 /** Builds [dev.tachyonmcp.api.server.domain.Annotations]. */
@@ -44,6 +45,9 @@ public class IconBuilder
         /** Image URL or data URI. */
         public var src: String? = null
 
+        /** Raw image bytes, encoded as a data URI. Requires [mimeType]; mutually exclusive with [src]. */
+        public var data: ByteArray? = null
+
         /** Image MIME type. Defaults to a guess from [src]'s extension. */
         public var mimeType: String? = src?.let { MimeTypes.guess(it) }
 
@@ -53,13 +57,26 @@ public class IconBuilder
         /** Theme variant. */
         public var theme: String? = null
 
-        internal fun build(): Icon =
-            Icon.of(
+        internal fun build(): Icon {
+            val bytes = data
+            if (bytes != null) {
+                require(src == null) { "Icon.src and Icon.data are mutually exclusive" }
+                return Icon.of(
+                    bytes,
+                    requireNotNull(mimeType) {
+                        "Icon.mimeType is required for binary data"
+                    },
+                    sizes.orEmpty(),
+                    theme,
+                )
+            }
+            return Icon.of(
                 requireNotNull(src) { "Icon.src is required" },
                 mimeType,
                 sizes.orEmpty(),
                 theme,
             )
+        }
     }
 
 /** Builds a [dev.tachyonmcp.api.server.domain.PromptArgument]. */
@@ -190,7 +207,7 @@ public class AudioContentBuilder
 @TachyonDsl
 public class BlobResourceContentsBuilder
     internal constructor(
-        scope: ResourceScope? = null,
+        private val scope: ResourceScope? = null,
     ) {
         /** Resource URI. */
         public var uri: String? = scope?.uri
@@ -217,6 +234,26 @@ public class BlobResourceContentsBuilder
 
         /** Optional resource metadata. */
         public var meta: Map<String, Any> = emptyMap()
+
+        /**
+         * Returns a scalar URI-template parameter.
+         *
+         * @param name template parameter name
+         */
+        public fun param(name: String): String =
+            requireNotNull(scope as? TemplateScope) {
+                "URI-template parameters require a TemplateScope"
+            }.param(name)
+
+        /**
+         * Returns a sequence URI-template parameter.
+         *
+         * @param name template parameter name
+         */
+        public fun sequence(name: String): List<String> =
+            requireNotNull(
+                scope as? TemplateScope,
+            ) { "URI-template parameters require a TemplateScope" }.sequence(name)
 
         internal fun build(): BlobResourceContents =
             BlobResourceContents.of(

@@ -40,7 +40,13 @@ internal class ResourcePromptAttributesE2eTest : AbstractStatelessMcpE2eTest<Mcp
 
     @Test
     fun `resource full attribute set round-trips over the wire`() {
-        val icon = Icon { src = "https://example.com/resource-icon.png" }
+        val icon =
+            Icon {
+                data = byteArrayOf(0, 1, -1)
+                mimeType = "image/png"
+                sizes = listOf("16x16")
+                theme = "dark"
+            }
         val annotations = Annotations { priority = 0.5 }
 
         TachyonServer(port = 0) {
@@ -87,7 +93,8 @@ internal class ResourcePromptAttributesE2eTest : AbstractStatelessMcpE2eTest<Mcp
             body shouldContain """"title":"Full Resource Title""""
             body shouldContain """"priority":0.5"""
             body shouldContain """"size":123"""
-            body shouldContain """"src":"https://example.com/resource-icon.png""""
+            body shouldContain
+                """"icons":[{"src":"data:image/png;base64,AAH/","mimeType":"image/png","sizes":["16x16"],"theme":"dark"}]"""
             body shouldContain """"owner":"team-x""""
             // extensionId gates visibility: no negotiated extension for "com.example/resource-ext"
             // means this session never sees the resource, not even without the field.

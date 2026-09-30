@@ -16,14 +16,12 @@ import dev.tachyonmcp.api.server.features.completions.CompletionResult
 import dev.tachyonmcp.api.server.features.prompts.PromptDescriptor
 import dev.tachyonmcp.api.server.features.resources.ResourceDescriptor
 import dev.tachyonmcp.api.server.features.resources.ResourceTemplateDescriptor
-import dev.tachyonmcp.api.server.features.tasks.TaskConnector
 import dev.tachyonmcp.api.server.features.tasks.TaskSupport
 import dev.tachyonmcp.api.server.features.tools.ToolDescriptor
 import dev.tachyonmcp.api.server.features.tools.ToolResult
 import dev.tachyonmcp.core.server.ServerBuilder
 import dev.tachyonmcp.core.server.config.NetworkConfig
 import dev.tachyonmcp.core.server.features.resources.MimeTypes
-import dev.tachyonmcp.extensions.tasks.TasksExtension
 import dev.tachyonmcp.kotlin.server.DefaultKotlinTachyonServer
 import dev.tachyonmcp.kotlin.server.TachyonDsl
 import dev.tachyonmcp.kotlin.server.TachyonServer
@@ -31,7 +29,6 @@ import dev.tachyonmcp.kotlin.server.features.CoroutineRuntime
 import dev.tachyonmcp.kotlin.server.features.tools.toolDescriptorOf
 import dev.tachyonmcp.kotlin.server.json.toJsonSchema
 import dev.tachyonmcp.kotlin.server.json.toJsonSchemaOrNull
-import dev.tachyonmcp.kotlin.server.requireTasksModule
 import io.netty.channel.ChannelPipeline
 import kotlinx.serialization.json.JsonObject
 import kotlin.contracts.ExperimentalContracts
@@ -52,6 +49,7 @@ public class TachyonServerBuilder
         private val featureRegistrar: KotlinFeatureRegistrar =
             KotlinFeatureRegistrar(delegate, coroutineRuntime)
 
+        @JvmSynthetic
         @OptIn(ExperimentalContracts::class)
         public fun info(
             configure: (@TachyonDsl ServerInfoScope).() -> Unit,
@@ -63,6 +61,7 @@ public class TachyonServerBuilder
             return this
         }
 
+        @JvmSynthetic
         @OptIn(ExperimentalContracts::class)
         public fun capabilities(
             configure: (@TachyonDsl CapabilitiesScope).() -> Unit,
@@ -74,6 +73,7 @@ public class TachyonServerBuilder
             return this
         }
 
+        @JvmSynthetic
         @OptIn(ExperimentalContracts::class)
         public fun network(
             configure: (@TachyonDsl NetworkScope).() -> Unit,
@@ -88,6 +88,7 @@ public class TachyonServerBuilder
             return this
         }
 
+        @JvmSynthetic
         @OptIn(ExperimentalContracts::class)
         public fun session(
             configure: (@TachyonDsl SessionScope).() -> Unit,
@@ -99,6 +100,7 @@ public class TachyonServerBuilder
             return this
         }
 
+        @JvmSynthetic
         @OptIn(ExperimentalContracts::class)
         public fun runtime(
             configure: (@TachyonDsl RuntimeScope).() -> Unit,
@@ -113,6 +115,7 @@ public class TachyonServerBuilder
         /**
          * Configures slow-request diagnostics and the passive MCP observation lifecycle.
          */
+        @JvmSynthetic
         @OptIn(ExperimentalContracts::class)
         @ExperimentalApi
         public fun observability(
@@ -200,7 +203,7 @@ public class TachyonServerBuilder
          * `META-INF/services`) back-fills. Add that artifact to the classpath to use `typedTool`
          * without a codegen resource.
          *
-         * Pass [schemaGenerator] to control generation for this call only.
+         * [schemaGenerator] runs in place for [In], then [Out]; contract: `AT_LEAST_ONCE`.
          *
          * The call arguments are decoded into [In] by the configured serde, and the block may
          * return **either** shape:
@@ -220,6 +223,7 @@ public class TachyonServerBuilder
          */
         @ExperimentalApi
         @JvmSynthetic
+        @OptIn(ExperimentalContracts::class)
         @Suppress("LongParameterList")
         public inline fun <reified In : Any, reified Out : Any> typedTool(
             name: String,
@@ -232,6 +236,7 @@ public class TachyonServerBuilder
             meta: Map<String, Any>? = null,
             noinline block: suspend ToolScope.(In) -> Any,
         ): TachyonServerBuilder {
+            contract { callsInPlace(schemaGenerator, InvocationKind.AT_LEAST_ONCE) }
             val inputType = In::class.java
             val outputType = Out::class.java
             val descriptor =
@@ -514,43 +519,31 @@ public class TachyonServerBuilder
             this.also { delegate.withExtensions(*extensions) }
 
         /**
-         * Registers the tasks extension, so tools can hand long-running work to [connector] and clients
-         * can poll it through the `tasks` methods.
-         *
-         * @param connector system that owns task execution
-         * @param configure retention, paging, and polling options
-         * @return this builder
-         * @throws IllegalStateException if `tachyon-extensions-tasks` is not on the classpath
-         */
-        @OptIn(ExperimentalContracts::class)
-        @ExperimentalApi
-        public fun tasks(
-            connector: TaskConnector,
-            configure: (@TachyonDsl TasksScope).() -> Unit = {},
-        ): TachyonServerBuilder {
-            contract { callsInPlace(configure, InvocationKind.EXACTLY_ONCE) }
-            requireTasksModule {
-                val scope = TasksScope(connector).apply(configure)
-                delegate.withExtension<TasksExtension, TasksExtension.Builder>(
-                    TasksExtension::class.java,
-                ) {
-                    scope.applyTo(it)
-                }
-            }
-            return this
-        }
-
-        /**
          * Registers a [ConfigurableExtension] by class and configures its builder. Calling this again for
          * the same class keeps configuring the same builder.
+         *
+         * ```kotlin
+         * withExtension(TasksExtension::class.java) {
+         *     connector(connector)
+         * }
+         * ```
          */
+        @JvmSynthetic
+        @Suppress("LEAKED_IN_PLACE_LAMBDA")
+        @OptIn(ExperimentalContracts::class)
         public fun <E, B> withExtension(
             type: Class<E>,
-            configure: B.() -> Unit,
-        ): TachyonServerBuilder where E : ConfigurableExtension<B>, B : ExtensionBuilder<E> =
-            this.also { delegate.withExtension(type) { it.configure() } }
+            configure: (@TachyonDsl B).() -> Unit = {},
+        ): TachyonServerBuilder where E : ConfigurableExtension<B>, B : ExtensionBuilder<E> {
+            // DefaultServerBuilder#withExtension calls configurer.accept(builder) synchronously
+            // before returning, so this holds even though the compiler cannot see through the
+            // Consumer bridge to verify it.
+            contract { callsInPlace(configure, InvocationKind.AT_MOST_ONCE) }
+            return this.also { delegate.withExtension(type) { it.configure() } }
+        }
 
         /** Configures the JSON payload boundary: serde, schema factory, and validators. */
+        @JvmSynthetic
         @OptIn(ExperimentalContracts::class)
         public fun json(configure: (@TachyonDsl JsonScope).() -> Unit): TachyonServerBuilder {
             contract { callsInPlace(configure, InvocationKind.EXACTLY_ONCE) }
@@ -558,6 +551,7 @@ public class TachyonServerBuilder
             return this
         }
 
+        @JvmSynthetic
         @ExperimentalApi
         public fun pipelineCustomizer(
             customizer: (@TachyonDsl ChannelPipeline).() -> Unit,

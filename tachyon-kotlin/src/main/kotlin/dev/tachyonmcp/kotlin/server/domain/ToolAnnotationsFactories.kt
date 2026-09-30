@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors.
 @file:Suppress("FunctionName")
-@file:JvmName("ToolAnnotationsFactory")
+@file:[JvmName("ToolAnnotationsFactory") JvmSynthetic]
 
 // Copyright (c) 2026 Konstantin Pavlov and contributors.
 

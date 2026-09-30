@@ -40,6 +40,7 @@ public class CompletionResultBuilder
     }
 
 /** Builds a [CompletionResult] with a receiver DSL. */
+@JvmSynthetic
 @OptIn(ExperimentalContracts::class)
 public fun CompletionResult(block: CompletionResultBuilder.() -> Unit): CompletionResult {
     contract { callsInPlace(block, InvocationKind.EXACTLY_ONCE) }

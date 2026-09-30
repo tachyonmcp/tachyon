@@ -1,8 +1,8 @@
 ---
 title: Index
 tags: [meta]
-updated: 2026-09-18
-commit: f2adbaed
+updated: 2026-09-30
+commit: 46487a0c
 ---
 
 # 🗺️ Tachyon MCP — LLM Wiki index
@@ -30,6 +30,7 @@ Index into code, **not** a spec. Page vs code mismatch → code wins, fix the pa
 | [[feature-registries]] | Tools/resources/prompts/completions registries, `Mode` AUTO/ON/OFF, pagination, capability resolution |
 | [[tasks]] | Tasks: `TaskConnector` owns execution, registry caches `TaskSnapshot` by revision, legacy vs modern methods |
 | [[extensions]] | `ServerExtension` lifecycle, per-request vs initialize negotiation, method ownership, `_meta` gate |
+| [[extension-api-shape]] | Java extension registration and Kotlin skills/tasks adaptation comparison |
 | [[json-layer]] | `JsonDocument`/`JsonSchema` SPI via ServiceLoader, payload serde, networknt validator, JSON-RPC codec |
 | [[errors]] | `ServerError.Kind` → JSON-RPC code + HTTP status per protocol; exception mapping |
 | [[concurrency]] | Platform event loops vs virtual-thread handlers, no `synchronized`, `OperationTracker` shutdown drain |

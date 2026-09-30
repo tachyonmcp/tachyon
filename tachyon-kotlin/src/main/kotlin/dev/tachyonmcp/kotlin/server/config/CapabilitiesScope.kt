@@ -25,18 +25,21 @@ public class CapabilitiesScope
         /** Whether logging capability is enabled. */
         public var logging: Boolean = false
 
+        @JvmSynthetic
         @OptIn(ExperimentalContracts::class)
         public fun tools(configure: (@TachyonDsl FeatureScope).() -> Unit) {
             contract { callsInPlace(configure, InvocationKind.EXACTLY_ONCE) }
             toolsConfig = FeatureScope().apply(configure).toConfig()
         }
 
+        @JvmSynthetic
         @OptIn(ExperimentalContracts::class)
         public fun resources(configure: (@TachyonDsl ResourcesScope).() -> Unit) {
             contract { callsInPlace(configure, InvocationKind.EXACTLY_ONCE) }
             resourcesConfig = ResourcesScope().apply(configure).toConfig()
         }
 
+        @JvmSynthetic
         @OptIn(ExperimentalContracts::class)
         public fun prompts(configure: (@TachyonDsl FeatureScope).() -> Unit) {
             contract { callsInPlace(configure, InvocationKind.EXACTLY_ONCE) }

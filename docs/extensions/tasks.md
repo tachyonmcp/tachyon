@@ -252,12 +252,17 @@ Without it, `tasks(connector) { }`, `ToolScope.tasks`, and `TachyonServer.tasks`
 Kotlin uses the same Java connector:
 
 ```kotlin
+import dev.tachyonmcp.kotlin.server.config.tasks
+
 buildServer {
     tasks(taskConnector) {
         pollInterval = 1.seconds
     }
 }
 ```
+
+`tasks(...)` is an imported extension on `TachyonServerBuilder`. Repeated calls
+replace scoped settings, including defaults.
 
 Tool handlers return the same `ToolResult.task(TaskSnapshot)` branch. The façade is a property on
 the server and on the tool scope:

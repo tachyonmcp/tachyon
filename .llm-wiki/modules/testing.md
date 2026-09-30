@@ -2,8 +2,8 @@
 title: Testing
 tags: [module, testing, e2e, conformance]
 sources: [e2e/src/test/, conformance/, Makefile, reports/pom.xml, tachyon-core/src/test/, .github/workflows/build.yml, .github/workflows/release.yml]
-updated: 2026-09-26
-commit: caaefc64
+updated: 2026-09-30
+commit: 21c198ec
 ---
 
 # ✅ Testing
@@ -11,6 +11,8 @@ commit: caaefc64
 Verdict: E2E-first (AGENTS.md). Real server on port 0, clients = official MCP Java SDK (`mcp-core` 2.0.1, `pom.xml`) **and** raw testkit clients. E2E packages split by protocol version. Conformance via `@modelcontextprotocol/conformance` with baselines.
 
 ## 🏃 Run
+
+[ResourcePromptAttributesE2eTest](../../e2e/src/test/kotlin/dev/tachyonmcp/e2e/ResourcePromptAttributesE2eTest.kt) checks binary icon data URIs and metadata on resource lists; template/prompt cases retain URL icon coverage.
 
 | Want | Command |
 |---|---|

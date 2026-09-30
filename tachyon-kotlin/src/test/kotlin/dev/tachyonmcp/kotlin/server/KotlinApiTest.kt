@@ -51,6 +51,9 @@ import org.junit.jupiter.params.provider.MethodSource
 import tools.jackson.databind.ObjectMapper
 import java.math.BigDecimal
 import java.util.stream.Stream
+import kotlin.contracts.ExperimentalContracts
+import kotlin.contracts.InvocationKind
+import kotlin.contracts.contract
 
 internal class KotlinApiTest {
     // region: schema overloads
@@ -76,8 +79,25 @@ internal class KotlinApiTest {
                 inputSchema = buildJsonObject { put("type", "object") },
                 outputSchema = buildJsonObject { put("type", "object") },
             ) { text("ok") }
+            var lastType: Class<*>
+            val schemaTypes = mutableListOf<Class<*>>()
+            typedTool<GreetingArgs, NullableArgs>(
+                "generated-schema",
+                schemaGenerator = {
+                    lastType = it
+                    schemaTypes += it
+                    JsonSchema.objectSchema()
+                },
+            ) { text("ok") }
+            lastType shouldBe NullableArgs::class.java
+            schemaTypes shouldBe listOf(GreetingArgs::class.java, NullableArgs::class.java)
         }.use { server ->
-            listOf("java-schema", "string-schema", "json-object-schema").forEach { name ->
+            listOf(
+                "java-schema",
+                "string-schema",
+                "json-object-schema",
+                "generated-schema",
+            ).forEach { name ->
                 withClue(name) {
                     server.tools().find(name) shouldBePresent {
                         checkNotNull(inputSchema()).json() shouldEqualJson objectSchema
@@ -304,13 +324,14 @@ internal class KotlinApiTest {
     }
 
     @Test
-    @Suppress("DEPRECATION")
-    fun `content DSL collects base64 and raw binary blocks`() {
+    fun `content DSL collects text and raw binary blocks`() {
         withToolScope {
-            val encoded =
+            val answer: String
+            val mixed =
                 content {
-                    text("Answer")
-                    image("aGVsbG8=", "image/png")
+                    answer = "Answer"
+                    text(answer)
+                    image("hello".toByteArray(), "image/png")
                 }
             val binary =
                 content {
@@ -318,15 +339,19 @@ internal class KotlinApiTest {
                     audio(byteArrayOf(4, 5, 6), "audio/wav")
                 }
 
-            encoded.shouldBeInstanceOf<ToolResult.Success>()
+            mixed.shouldBeInstanceOf<ToolResult.Success>()
             binary.shouldBeInstanceOf<ToolResult.Success>()
             assertSoftly {
-                encoded.content() shouldHaveSize 2
-                (encoded.content()[0] as TextContent).text() shouldBe "Answer"
-                (encoded.content()[1] as ImageContent).mimeType() shouldBe "image/png"
+                mixed.content() shouldHaveSize 2
+                (mixed.content()[0] as TextContent).text() shouldBe answer
+                (mixed.content()[1] as ImageContent).data().toList() shouldBe
+                    "hello".toByteArray().toList()
+                (mixed.content()[1] as ImageContent).mimeType() shouldBe "image/png"
                 binary.content() shouldHaveSize 2
                 (binary.content()[0] as ImageContent).data().toList() shouldBe listOf<Byte>(1, 2, 3)
+                (binary.content()[0] as ImageContent).mimeType() shouldBe "image/png"
                 (binary.content()[1] as AudioContent).data().toList() shouldBe listOf<Byte>(4, 5, 6)
+                (binary.content()[1] as AudioContent).mimeType() shouldBe "audio/wav"
             }
         }
     }
@@ -352,9 +377,11 @@ internal class KotlinApiTest {
     fun `fail builds an error result from a message or a content DSL`() {
         withToolScope {
             val single = fail("boom")
+            val validationError: String
             val multi =
                 fail {
-                    text("Validation failed")
+                    validationError = "Validation failed"
+                    text(validationError)
                     text("field 'email' is required")
                 }
 
@@ -363,7 +390,7 @@ internal class KotlinApiTest {
             assertSoftly {
                 (single.content().single() as TextContent).text() shouldBe "boom"
                 multi.content() shouldHaveSize 2
-                (multi.content()[0] as TextContent).text() shouldBe "Validation failed"
+                (multi.content()[0] as TextContent).text() shouldBe validationError
                 (multi.content()[1] as TextContent).text() shouldBe "field 'email' is required"
             }
         }
@@ -398,30 +425,35 @@ internal class KotlinApiTest {
     // endregion
 
     @Test
-    @Suppress("DEPRECATION")
     fun `PromptScope content DSL builds one user message per block`() {
         withStatelessContext { ctx ->
             val request = PromptRequest(Args.empty(), null, null)
             val scope = PromptScope(ctx, request = request)
+            val instruction: String
             val messages =
                 scope.content {
-                    text("Summarize this")
-                    image("aGVsbG8=", "image/png")
+                    instruction = "Summarize this"
+                    text(instruction)
+                    image("hello".toByteArray(), "image/png")
                 }
             assertSoftly {
                 messages shouldHaveSize 2
                 messages.forEach { it.role() shouldBe Role.USER }
-                (messages[0].content() as TextContent).text() shouldBe "Summarize this"
+                (messages[0].content() as TextContent).text() shouldBe instruction
+                (messages[1].content() as ImageContent).data().toList() shouldBe
+                    "hello".toByteArray().toList()
                 (messages[1].content() as ImageContent).mimeType() shouldBe "image/png"
             }
         }
     }
 
+    @OptIn(ExperimentalContracts::class)
     private fun <T> withToolScope(
         arguments: Args = Args.of(null, null),
         block: ToolScope.() -> T,
-    ): T =
-        withStatelessContext { ctx ->
+    ): T {
+        contract { callsInPlace(block, InvocationKind.EXACTLY_ONCE) }
+        return withStatelessContext { ctx ->
             val request =
                 ToolRequest
                     .builder()
@@ -430,4 +462,5 @@ internal class KotlinApiTest {
                     .build()
             ToolScope(ctx, request = request).block()
         }
+    }
 }

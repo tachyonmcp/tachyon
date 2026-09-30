@@ -51,6 +51,7 @@ public class ResourceDescriptorScope
         }
     }
 
+@JvmSynthetic
 @OptIn(ExperimentalContracts::class)
 public fun resourceDescriptor(
     name: String,
@@ -67,6 +68,7 @@ public fun resourceDescriptor(
 }
 
 /** Builds a [ResourceDescriptor] with a receiver DSL. */
+@JvmSynthetic
 @OptIn(ExperimentalContracts::class)
 public fun ResourceDescriptor(block: ResourceDescriptorScope.() -> Unit): ResourceDescriptor {
     contract { callsInPlace(block, InvocationKind.EXACTLY_ONCE) }

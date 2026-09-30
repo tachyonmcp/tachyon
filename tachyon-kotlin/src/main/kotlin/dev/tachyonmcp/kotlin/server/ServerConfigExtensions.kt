@@ -1,4 +1,6 @@
 // Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors.
+@file:JvmSynthetic
+
 package dev.tachyonmcp.kotlin.server
 
 import dev.tachyonmcp.api.annotations.ExperimentalApi

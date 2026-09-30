@@ -33,6 +33,11 @@
             <optional>true</optional>
         </dependency>
         <dependency>
+            <groupId>dev.tachyonmcp</groupId>
+            <artifactId>tachyon-extensions-skills</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
             <groupId>org.jetbrains.kotlinx</groupId>
             <artifactId>kotlinx-coroutines-core-jvm</artifactId>
         </dependency>

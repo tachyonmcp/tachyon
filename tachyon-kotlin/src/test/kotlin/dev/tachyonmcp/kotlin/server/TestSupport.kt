@@ -5,8 +5,14 @@ import dev.tachyonmcp.api.runtime.InteractionContext
 import dev.tachyonmcp.core.server.TachyonServer
 import dev.tachyonmcp.core.server.internal.ServerEngine
 import dev.tachyonmcp.core.server.session.DefaultDispatchContext
+import kotlin.contracts.ExperimentalContracts
+import kotlin.contracts.InvocationKind
+import kotlin.contracts.contract
 
-internal fun <T> withStatelessContext(block: (InteractionContext) -> T): T =
-    TachyonServer.builder().build().use { server ->
+@OptIn(ExperimentalContracts::class)
+internal fun <T> withStatelessContext(block: (InteractionContext) -> T): T {
+    contract { callsInPlace(block, InvocationKind.EXACTLY_ONCE) }
+    return TachyonServer.builder().build().use { server ->
         block(DefaultDispatchContext.stateless(server as ServerEngine))
     }
+}

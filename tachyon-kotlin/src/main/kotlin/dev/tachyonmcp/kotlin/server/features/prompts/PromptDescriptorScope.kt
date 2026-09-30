@@ -43,6 +43,7 @@ public class PromptDescriptorScope
         }
 
         /** Builds and adds a prompt argument. */
+        @JvmSynthetic
         @OptIn(ExperimentalContracts::class)
         public fun argument(block: PromptArgumentBuilder.() -> Unit) {
             contract { callsInPlace(block, InvocationKind.EXACTLY_ONCE) }
@@ -66,6 +67,7 @@ public class PromptDescriptorScope
     }
 
 /** Builds a [PromptDescriptor] with a receiver DSL. */
+@JvmSynthetic
 @OptIn(ExperimentalContracts::class)
 public fun PromptDescriptor(block: PromptDescriptorScope.() -> Unit): PromptDescriptor {
     contract { callsInPlace(block, InvocationKind.EXACTLY_ONCE) }

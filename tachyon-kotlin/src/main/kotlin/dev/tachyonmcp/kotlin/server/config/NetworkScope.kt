@@ -74,6 +74,9 @@ public class NetworkScope
         public val allowedHosts: MutableList<String> = mutableListOf()
 
         internal fun applyTo(builder: NetworkConfig.Builder) {
+            require(address == null || (host == null && port == null)) {
+                "address is mutually exclusive with host and port"
+            }
             val addr = address
             if (addr != null) {
                 builder.address(addr)

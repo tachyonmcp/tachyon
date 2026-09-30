@@ -26,7 +26,7 @@ import kotlin.time.toJavaDuration
 @TachyonDsl
 public class SessionScope
     internal constructor() {
-        private var explicitlyEnabled: Boolean? = null
+        private var explicitlyEnabled: Boolean = false
 
         /**
          * Turns server-side sessions on with the default options. Redundant when any other option
@@ -35,21 +35,6 @@ public class SessionScope
         public fun enable() {
             explicitlyEnabled = true
         }
-
-        /**
-         * Whether session management is enabled.
-         *
-         * No `ReplaceWith` here on purpose: the replacement differs per direction — `true` becomes
-         * [enable], `false` becomes `stateless()` on the server builder.
-         */
-        @Deprecated(
-            "Call enable() to turn sessions on, or stateless() on the server builder for the opt-out",
-        )
-        public var enabled: Boolean
-            get() = explicitlyEnabled == true
-            set(value) {
-                explicitlyEnabled = value
-            }
 
         /** Session time-to-live duration. */
         public var sessionTtl: Duration? = null
@@ -99,18 +84,7 @@ public class SessionScope
             // Configuring an option enables sessions in Java, so options go on the builder as-is;
             // the Java builder owns the "disabled with options" rejection and its message.
             @Suppress("removal")
-            when (explicitlyEnabled) {
-                true -> {
-                    builder.enabled()
-                }
-
-                false -> {
-                    @Suppress("DEPRECATION")
-                    builder.enabled(false)
-                }
-
-                null -> Unit
-            }
+            if (explicitlyEnabled) builder.enabled()
             sessionTtl?.let { builder.sessionTtl(it.toJavaDuration()) }
             janitorInterval?.let { builder.janitorInterval(it.toJavaDuration()) }
             sessionStore?.let(builder::sessionStore)

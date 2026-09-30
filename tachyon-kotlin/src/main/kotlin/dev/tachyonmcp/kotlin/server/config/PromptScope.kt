@@ -8,6 +8,9 @@ import dev.tachyonmcp.api.server.domain.Args
 import dev.tachyonmcp.api.server.domain.PromptMessage
 import dev.tachyonmcp.api.server.features.prompts.PromptRequest
 import dev.tachyonmcp.kotlin.server.TachyonDsl
+import kotlin.contracts.ExperimentalContracts
+import kotlin.contracts.InvocationKind
+import kotlin.contracts.contract
 
 @TachyonDsl
 public class PromptScope
@@ -34,6 +37,9 @@ public class PromptScope
          * }
          * ```
          */
-        public fun content(block: ContentScope.() -> Unit): List<PromptMessage> =
-            ContentScope().apply(block).blocks.map { PromptMessage.user(it) }
+        @OptIn(ExperimentalContracts::class)
+        public fun content(block: ContentScope.() -> Unit): List<PromptMessage> {
+            contract { callsInPlace(block, InvocationKind.EXACTLY_ONCE) }
+            return ContentScope().apply(block).blocks.map { PromptMessage.user(it) }
+        }
     }

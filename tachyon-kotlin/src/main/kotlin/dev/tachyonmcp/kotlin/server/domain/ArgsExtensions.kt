@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors.
 @file:Suppress("TooManyFunctions")
+@file:JvmSynthetic
 
 package dev.tachyonmcp.kotlin.server.domain
 

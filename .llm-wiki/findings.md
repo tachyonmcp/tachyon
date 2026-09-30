@@ -2,7 +2,7 @@
 title: Findings
 tags: [meta, findings]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/]
-updated: 2026-09-29
+updated: 2026-09-30
 commit: 4b4b6f7e
 ---
 
@@ -27,6 +27,8 @@ Spotted while reading code. Runtime verification noted per finding. Fixed in cod
 
 ## 🪶 Polish
 
+- 🪶 Coroutine API gap: task connector hooks and raw extension handlers expose synchronous Java SAMs; Kotlin's suspend adaptation currently covers tools/resources/prompts/completions. Blocking connectors remain supported; suspend clients need their own bridge. Add adapters only for an actual coroutine integration. Static review only. [TaskGetFn#apply](../tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/tasks/TaskGetFn.java), [ExtensionMethodHandler#handle](../tachyon-api/src/main/java/dev/tachyonmcp/api/server/extensions/ExtensionMethodHandler.java), [toolFn](../tachyon-kotlin/src/main/kotlin/dev/tachyonmcp/kotlin/server/features/tools/ToolHandlerFactory.kt).
+- 🪶 [TachyonServer#registerTool](../tachyon-kotlin/src/main/kotlin/dev/tachyonmcp/kotlin/server/TachyonServer.kt): `configure` runs once, but overridable interface members cannot declare contracts. Fix requires API reshaping.
 - 🪶 `SessionConfig` is a sum modelled as a product: `boolean enabled` × 5 `@Nullable` options, guarded in the compact ctor **and** `Builder#build`. Stateless is a *server* property — no session config ⇒ no sessions. shape: drop `enabled`, make every component non-null, `@Nullable SessionConfig ServerConfig#session()` with `stateless()` derived from `== null`, delete `SessionConfig#sessionStoreOrDefault`/`#sessionEventStoreOrDefault` and `Builder#enabled`/`#enabled(boolean)`. Then the impossible state is unrepresentable in the value, not just the builder.
 
 ## ❓ Open questions
