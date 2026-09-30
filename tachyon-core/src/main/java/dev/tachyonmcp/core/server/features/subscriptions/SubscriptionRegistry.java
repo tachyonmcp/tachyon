@@ -117,7 +117,7 @@ public final class SubscriptionRegistry {
                         entry.stream(),
                         entry.responseMapper(),
                         "notifications/tasks",
-                        entry.responseMapper().taskStatusNotificationParams(snapshot));
+                        entry.responseMapper().subscriptionTaskStatusParams(entry.subscriptionId(), snapshot));
             }
         } finally {
             lock.unlock();

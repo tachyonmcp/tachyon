@@ -302,6 +302,33 @@ class McpResponseMapperTest {
     }
 
     @Test
+    void subscriptionTaskStatusMergesTheSubscriptionIdIntoSnapshotMeta() {
+        var observedAt = Instant.parse("2026-08-28T10:00:00Z");
+        var working = TaskSnapshot.builder()
+                .taskId("task-1")
+                .status(TaskState.WORKING)
+                .createdAt(observedAt)
+                .lastUpdatedAt(observedAt)
+                .meta(Map.of("trace", "x", "io.modelcontextprotocol/subscriptionId", "forged"))
+                .revision(1)
+                .build();
+
+        var json = mapper.encode(mapper.subscriptionTaskStatusParams(RequestId.of(7), working));
+
+        // language=JSON
+        assertThatJson(json).isEqualTo("""
+            {
+              "_meta": {"io.modelcontextprotocol/subscriptionId": 7, "trace": "x"},
+              "taskId": "task-1",
+              "status": "working",
+              "createdAt": "2026-08-28T10:00:00Z",
+              "lastUpdatedAt": "2026-08-28T10:00:00Z",
+              "ttlMs": null
+            }
+            """);
+    }
+
+    @Test
     void subscriptionIdPreservesNumericTypeFromTheRequestId() {
         var id = RequestId.of(1);
         var filter = new SubscriptionListenRequest(true, false, false, Set.of(), Set.of());

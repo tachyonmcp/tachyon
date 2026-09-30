@@ -74,7 +74,17 @@ final class McpTaskMapper {
             @Nullable JsonNode inlineResult,
             @Nullable JsonNode inlineError,
             @Nullable JsonNode inputRequests) {
-        var fields = taskFields(snapshot, effectiveWireStatus(snapshot));
+        return toStatusNotification(snapshot, inlineResult, inlineError, inputRequests, Map.of());
+    }
+
+    /** As above, with {@code serverMeta} merged over the snapshot's own {@code _meta} (server keys win). */
+    static JsonNode toStatusNotification(
+            TaskSnapshot snapshot,
+            @Nullable JsonNode inlineResult,
+            @Nullable JsonNode inlineError,
+            @Nullable JsonNode inputRequests,
+            Map<String, Object> serverMeta) {
+        var fields = taskFields(snapshot, effectiveWireStatus(snapshot), serverMeta);
         putIfPresent(fields, "result", inlineResult);
         putIfPresent(fields, "error", inlineError);
         putIfPresent(fields, "inputRequests", inputRequests);
@@ -97,8 +107,13 @@ final class McpTaskMapper {
     }
 
     private static Map<String, Object> taskFields(TaskSnapshot snapshot, String wireStatus) {
+        return taskFields(snapshot, wireStatus, Map.of());
+    }
+
+    private static Map<String, Object> taskFields(
+            TaskSnapshot snapshot, String wireStatus, Map<String, Object> serverMeta) {
         var fields = new LinkedHashMap<String, Object>();
-        putMeta(fields, snapshot);
+        putMeta(fields, snapshot, serverMeta);
         fields.put("taskId", snapshot.taskId());
         fields.put("status", wireStatus);
         putIfPresent(fields, "statusMessage", snapshot.statusMessage());
@@ -112,11 +127,17 @@ final class McpTaskMapper {
         return fields;
     }
 
-    private static void putMeta(Map<String, Object> target, TaskSnapshot snapshot) {
+    private static void putMeta(Map<String, Object> target, TaskSnapshot snapshot, Map<String, Object> serverMeta) {
         var meta = snapshot.meta();
-        if (meta != null && !meta.isEmpty()) {
-            target.put("_meta", meta);
+        if (serverMeta.isEmpty()) {
+            if (meta != null && !meta.isEmpty()) {
+                target.put("_meta", meta);
+            }
+            return;
         }
+        var merged = new LinkedHashMap<String, Object>(meta != null ? meta : Map.of());
+        merged.putAll(serverMeta);
+        target.put("_meta", merged);
     }
 
     private static void putIfPresent(Map<String, Object> target, String key, @Nullable Object value) {

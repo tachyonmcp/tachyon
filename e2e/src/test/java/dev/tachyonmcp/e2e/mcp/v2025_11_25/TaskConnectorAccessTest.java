@@ -204,6 +204,7 @@ class TaskConnectorAccessTest extends AbstractStatefulMcpE2eTest {
             // language=JSON
             assertThatJson(open.data()).isEqualTo("""
                     {"jsonrpc":"2.0","method":"notifications/tasks","params":{
+                      "_meta":{"io.modelcontextprotocol/subscriptionId":7},
                       "taskId":"open-task","status":"completed",
                       "createdAt":"2026-09-24T07:00:00Z","lastUpdatedAt":"2026-09-24T07:00:00Z",
                       "ttlMs":null,"result":{
