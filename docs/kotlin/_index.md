@@ -197,6 +197,19 @@ Required fields fail fast when the block finishes. Flat overloads remain availab
 compatibility, but new Kotlin code should use receiver factories for `Icon`, `Annotations`,
 content objects, and resource, prompt, and tool descriptors.
 
+Experimental binary icons accept raw bytes and encode `src` as a Base64 data URI:
+
+```kotlin
+val icon = Icon {
+    data = imageBytes
+    mimeType = "image/png"
+    sizes = listOf("32x32")
+}
+```
+
+Set either `src` or `data`. Binary data must be nonempty and requires a nonblank `mimeType`.
+Java callers can use the experimental `Icon.of(bytes, mimeType, sizes, theme)` overload.
+
 ## Resource & prompt handlers
 
 Resource and prompt lambdas are `suspend` functions too — call suspending APIs directly:
@@ -304,8 +317,8 @@ resourceTemplate(
 }
 ```
 
-Template handlers use the same contextual defaults. Their text builder also exposes `param(name)`
-and `sequence(name)`.
+Template handlers use the same contextual defaults. Both `TextResourceContents { }` and
+`BlobResourceContents { }` expose `param(name)` and `sequence(name)` inside their builder blocks.
 
 For a descriptor shared across registrations, build it once and use the descriptor overload:
 
@@ -537,6 +550,10 @@ Available via `ToolScope.arguments` (or `PromptScope.arguments`):
 | `PromptScope` | prompt lambda | `ctx`, `request`, `arguments`; `content { }` |
 | `CompletionScope` | completion lambda | `ctx`, `request`, `argumentName`, `argumentValue`, `resolvedArguments` |
 
+Within `network { }`, `address` is mutually exclusive with `host` or `port`.
+Within `json { }`, `serde` is mutually exclusive with `serializer` or `deserializer`.
+Conflicting settings throw `IllegalArgumentException`.
+
 `argumentName`, `argumentValue`, and `resolvedArguments` are raw client input — escape or
 allow-list before using them in a query, command, or path.
 
@@ -639,10 +656,17 @@ Inside a tool lambda, prefer the `ToolScope` shortcuts instead:
 | `text(t)` | `ToolResult.text(t)` |
 | `success(v)` / `success(v, text)` | `ToolResult.structured(...)` via the configured serde |
 | `fail(msg)` | `ToolResult.error(msg)` |
+| `fail { }` | `ToolResult.error(...)` |
 | `content { }` | `ToolResult.content(...)` |
 | `raw(json, text)` | `ToolResult.raw(json, text)` |
 | `empty()` | `ToolResult.empty()` |
 | `inputRequired(...)` | `ToolResult.inputRequired(...)` |
+
+Tool/prompt `content { }` and tool `fail { }` declare `EXACTLY_ONCE`, enabling local `val`
+assignment inside the block.
+
+Inside these blocks, `image(data, mimeType)` and `audio(data, mimeType)` accept raw `ByteArray`
+data. Decode existing Base64 strings with `Base64.getDecoder().decode(data)` before passing them.
 
 The shortcut is `fail`, not `error`: a member `error(String)` would shadow Kotlin's stdlib
 `error()`, turning a thrown `IllegalStateException` into a returned value.

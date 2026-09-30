@@ -68,6 +68,7 @@ public class ResourceTemplateDescriptorBuilder
     }
 
 /** Builds a [ResourceTemplateDescriptor] with a receiver DSL. */
+@JvmSynthetic
 @OptIn(ExperimentalContracts::class)
 public fun ResourceTemplateDescriptor(
     block: ResourceTemplateDescriptorBuilder.() -> Unit,

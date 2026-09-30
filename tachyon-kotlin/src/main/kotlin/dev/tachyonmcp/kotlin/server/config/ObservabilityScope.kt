@@ -44,6 +44,7 @@ public class ObservabilityScope
         }
 
         /** Configures opt-in request/response payload and exception-detail capture. */
+        @JvmSynthetic
         @OptIn(ExperimentalContracts::class)
         public fun payloadCapture(configure: PayloadCaptureScope.() -> Unit) {
             contract { callsInPlace(configure, InvocationKind.EXACTLY_ONCE) }

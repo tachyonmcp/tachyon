@@ -68,26 +68,6 @@ internal class StatelessServerTest {
     }
 
     @Test
-    @Suppress("DEPRECATION")
-    fun `the deprecated enabled flag still states the opt-out and its contradiction`() {
-        buildServer {
-            name("kotlin-session-deprecated-off")
-            session { enabled = false }
-        }.use { server ->
-            server.config().session.enabled shouldBe false
-        }
-        shouldThrow<IllegalStateException> {
-            buildServer {
-                name("kotlin-session-deprecated-contradiction")
-                session {
-                    enabled = false
-                    sessionTtl = 15.seconds
-                }
-            }
-        }.message shouldBe SessionConfig.SESSION_OPTIONS_REQUIRE_ENABLED
-    }
-
-    @Test
     fun `typed tools resolve schemas through the JsonSchemaFactory chain`() {
         buildServer {
             typedTool<TypedInput, TypedOutput>("typed") { ToolResult.text("unused") }

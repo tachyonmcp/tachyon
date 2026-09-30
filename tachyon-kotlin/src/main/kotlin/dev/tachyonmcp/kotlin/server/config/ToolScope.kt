@@ -14,6 +14,9 @@ import dev.tachyonmcp.extensions.tasks.TasksExtension
 import dev.tachyonmcp.kotlin.server.TachyonDsl
 import dev.tachyonmcp.kotlin.server.requireTasksModule
 import org.intellij.lang.annotations.Language
+import kotlin.contracts.ExperimentalContracts
+import kotlin.contracts.InvocationKind
+import kotlin.contracts.contract
 
 @TachyonDsl
 public class ToolScope
@@ -103,7 +106,9 @@ public class ToolScope
          * ```
          */
         @ExperimentalApi
+        @OptIn(ExperimentalContracts::class)
         public fun fail(block: ContentScope.() -> Unit): ToolResult {
+            contract { callsInPlace(block, InvocationKind.EXACTLY_ONCE) }
             val scope = ContentScope().apply(block)
             return ToolResult.error(*scope.blocks.toTypedArray())
         }
@@ -148,7 +153,9 @@ public class ToolScope
          * }
          * ```
          */
+        @OptIn(ExperimentalContracts::class)
         public fun content(block: ContentScope.() -> Unit): ToolResult {
+            contract { callsInPlace(block, InvocationKind.EXACTLY_ONCE) }
             val scope = ContentScope().apply(block)
             return ToolResult.content(*scope.blocks.toTypedArray())
         }

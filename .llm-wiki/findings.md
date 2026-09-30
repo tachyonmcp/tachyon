@@ -27,6 +27,7 @@ Spotted while reading code. Runtime verification noted per finding. Fixed in cod
 
 ## 🪶 Polish
 
+- 🪶 [TachyonServer#registerTool](../tachyon-kotlin/src/main/kotlin/dev/tachyonmcp/kotlin/server/TachyonServer.kt): `configure` runs once, but overridable interface members cannot declare contracts. Fix requires API reshaping.
 - 🪶 `SessionConfig` is a sum modelled as a product: `boolean enabled` × 5 `@Nullable` options, guarded in the compact ctor **and** `Builder#build`. Stateless is a *server* property — no session config ⇒ no sessions. shape: drop `enabled`, make every component non-null, `@Nullable SessionConfig ServerConfig#session()` with `stateless()` derived from `== null`, delete `SessionConfig#sessionStoreOrDefault`/`#sessionEventStoreOrDefault` and `Builder#enabled`/`#enabled(boolean)`. Then the impossible state is unrepresentable in the value, not just the builder.
 
 ## ❓ Open questions

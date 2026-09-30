@@ -207,7 +207,7 @@ val server = TachyonServer(port = mcpPort) {
 
 Static and template result builders inherit the requested URI and registered MIME type.
 `TextResourceContents { }` and `BlobResourceContents { }` let you override either value. Template
-text builders also keep `param("path")` and `sequence("segments")` in scope.
+text and binary builders also keep `param("path")` and `sequence("segments")` in scope.
 
 Use a receiver factory when you need a reusable descriptor:
 

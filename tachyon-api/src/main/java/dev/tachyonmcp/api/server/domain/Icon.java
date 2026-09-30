@@ -1,6 +1,8 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
 package dev.tachyonmcp.api.server.domain;
 
+import dev.tachyonmcp.api.annotations.ExperimentalApi;
+import java.util.Base64;
 import java.util.List;
 import org.immutables.value.Value;
 import org.jspecify.annotations.Nullable;
@@ -77,6 +79,23 @@ public interface Icon {
      */
     static Icon of(String src, @Nullable String mimeType, List<String> sizes, @Nullable String theme) {
         return DefaultIcon.of(src, mimeType, sizes, theme);
+    }
+
+    /**
+     * Creates an icon whose source is a Base64-encoded data URI.
+     *
+     * @param data raw image bytes
+     * @param mimeType image MIME type
+     * @param sizes conventional size labels, or an empty list
+     * @param theme theme variant, or {@code null}
+     * @return the new icon
+     * @throws IllegalArgumentException if data is empty or the MIME type is blank
+     */
+    @ExperimentalApi
+    static Icon of(byte[] data, String mimeType, List<String> sizes, @Nullable String theme) {
+        if (data.length == 0) throw new IllegalArgumentException("data must not be empty");
+        if (mimeType.isBlank()) throw new IllegalArgumentException("mimeType must not be blank");
+        return of("data:" + mimeType + ";base64," + Base64.getEncoder().encodeToString(data), mimeType, sizes, theme);
     }
 
     /** Builder for {@link Icon}. */

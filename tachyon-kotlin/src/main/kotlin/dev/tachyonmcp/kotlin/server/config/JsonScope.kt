@@ -23,7 +23,7 @@ public class JsonScope
         /**
          * Payload serializer/deserializer for structured values and arguments.
          * `null` keeps Tachyon's Jackson default.
-         * Sets both [serializer] and [deserializer] when assigned.
+         * Mutually exclusive with explicit [serializer] or [deserializer].
          */
         public var serde: PayloadSerde? = null
 
@@ -48,6 +48,9 @@ public class JsonScope
         public var schemaFactory: JsonSchemaFactory<*>? = null
 
         internal fun applyTo(builder: ServerBuilder) {
+            require(serde == null || (serializer == null && deserializer == null)) {
+                "serde is mutually exclusive with serializer and deserializer"
+            }
             builder.json { config ->
                 serde?.let { config.serde(it) }
                 serializer?.let { config.serializer(it) }

@@ -21,6 +21,7 @@ import dev.tachyonmcp.kotlin.server.domain.TextResourceContents
 import dev.tachyonmcp.kotlin.server.features.prompts.PromptDescriptor
 import dev.tachyonmcp.kotlin.server.features.resources.ResourceDescriptor
 import dev.tachyonmcp.kotlin.server.features.tools.ToolDescriptor
+import io.kotest.assertions.json.shouldEqualJson
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
@@ -316,6 +317,50 @@ internal class StatefulServerTest {
                 readResponse.body() shouldContain """"uri":"user://42/profile""""
                 readResponse.body() shouldContain """"mimeType":"application/json""""
                 readResponse.body() shouldContain """{\"id\":\"42\"}"""
+            }
+        }
+    }
+
+    @Test
+    fun `blob template contents can read scalar and sequence parameters`() {
+        TachyonServer(port = 0) {
+            name("blob-template-test")
+            session { enable() }
+            resourceTemplate(
+                name = "archive",
+                uriTemplate = "archive://{id}{/parts*}",
+                mimeType = "application/octet-stream",
+            ) {
+                BlobResourceContents {
+                    data =
+                        "${param("id")}:${sequence("parts").joinToString("/")}".encodeToByteArray()
+                }
+            }
+        }.use { handle ->
+            McpProbe(handle.port()).use { probe ->
+                probe.initialize()
+                val response =
+                    probe.post(
+                        // language=json
+                        """{"jsonrpc":"2.0","id":2,"method":"resources/read","params":{"uri":"archive://42/a/b"}}""",
+                    )
+                response.statusCode() shouldBe 200
+                response.body() shouldEqualJson
+                    // language=json
+                    """
+                    {
+                      "jsonrpc": "2.0",
+                      "id": 2,
+                      "result": {
+                        "contents": [{
+                          "uri": "archive://42/a/b",
+                          "mimeType": "application/octet-stream",
+                          "blob": "NDI6YS9i",
+                          "_meta": {}
+                        }]
+                      }
+                    }
+                    """.trimIndent()
             }
         }
     }

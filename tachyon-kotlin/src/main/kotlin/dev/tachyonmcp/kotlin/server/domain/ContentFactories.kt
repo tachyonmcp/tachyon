@@ -1,6 +1,5 @@
 // Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors.
 @file:Suppress("FunctionName", "TooManyFunctions")
-@file:JvmName("ContentBlocks")
 @file:JvmSynthetic
 
 // Copyright (c) 2026 Konstantin Pavlov and contributors.

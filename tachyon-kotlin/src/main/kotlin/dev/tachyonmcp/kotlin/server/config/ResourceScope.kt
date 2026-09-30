@@ -43,6 +43,7 @@ public open class ResourceScope
          * Builds text resource contents using this request's URI and the registered MIME type as
          * defaults.
          */
+        @JvmSynthetic
         @OptIn(ExperimentalContracts::class)
         public fun TextResourceContents(
             block: (@TachyonDsl TextResourceContentsBuilder).() -> Unit,
@@ -55,6 +56,7 @@ public open class ResourceScope
          * Builds binary resource contents using this request's URI and the registered MIME type as
          * defaults.
          */
+        @JvmSynthetic
         @OptIn(ExperimentalContracts::class)
         public fun BlobResourceContents(
             block: (@TachyonDsl BlobResourceContentsBuilder).() -> Unit,

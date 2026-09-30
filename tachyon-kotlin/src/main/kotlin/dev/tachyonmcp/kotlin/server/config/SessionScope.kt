@@ -36,21 +36,6 @@ public class SessionScope
             explicitlyEnabled = true
         }
 
-        /**
-         * Whether session management is enabled.
-         *
-         * No `ReplaceWith` here on purpose: the replacement differs per direction — `true` becomes
-         * [enable], `false` becomes `stateless()` on the server builder.
-         */
-        @Deprecated(
-            "Call enable() to turn sessions on, or stateless() on the server builder for the opt-out",
-        )
-        public var enabled: Boolean
-            get() = explicitlyEnabled == true
-            set(value) {
-                explicitlyEnabled = value
-            }
-
         /** Session time-to-live duration. */
         public var sessionTtl: Duration? = null
 
@@ -109,7 +94,8 @@ public class SessionScope
                     builder.enabled(false)
                 }
 
-                null -> Unit
+                null -> {
+                }
             }
             sessionTtl?.let { builder.sessionTtl(it.toJavaDuration()) }
             janitorInterval?.let { builder.janitorInterval(it.toJavaDuration()) }

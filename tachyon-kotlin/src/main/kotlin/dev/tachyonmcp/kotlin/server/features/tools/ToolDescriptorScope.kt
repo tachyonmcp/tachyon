@@ -85,6 +85,7 @@ public class ToolDescriptorScope
         }
     }
 
+@JvmSynthetic
 @OptIn(ExperimentalContracts::class)
 public fun toolDescriptor(
     name: String,
@@ -99,6 +100,7 @@ public fun toolDescriptor(
 }
 
 /** Builds a [ToolDescriptor] with a receiver DSL. */
+@JvmSynthetic
 @OptIn(ExperimentalContracts::class)
 public fun ToolDescriptor(block: ToolDescriptorScope.() -> Unit): ToolDescriptor {
     contract { callsInPlace(block, InvocationKind.EXACTLY_ONCE) }
