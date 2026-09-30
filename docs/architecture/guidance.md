@@ -215,6 +215,8 @@ buildServer {
 }
 ```
 
+Kotlin builder task configuration requires `import dev.tachyonmcp.kotlin.server.config.tasks`.
+
 ### 🎯 Task-producing tools
 
 A task-capable tool handler is invoked once. The application starts its external execution and
@@ -333,10 +335,11 @@ those same façade APIs; do not add feature-specific registration overloads to `
 
 ## Kotlin adapter shape
 
+- Preserve explicit `@file:JvmName` facade names when adding `@file:JvmSynthetic`; Java source visibility and JVM binary ownership are separate concerns.
 - Structured object factories with more than three fields use one canonical type-named receiver builder: `Icon { src = "..."; mimeType = "image/svg+xml" }` (`Annotations` follows this shape despite having three fields — it's nested metadata commonly composed inside other builders). Don't duplicate it with lowercase receiver factories or flat overloads; an owned enclosing DSL may add a singular member such as `argument { }` that delegates to the canonical factory. Required builder fields start nullable and fail with `requireNotNull` in `build()`.
 - Type-named receiver factories are plain `public fun`, declare an `EXACTLY_ONCE` contract, and suppress `FunctionName`. Their public builder has a plain `internal` constructor and `build()`.
 - `inline` is reserved for `reified` type parameters. A `public inline fun` copies its body into consumer bytecode and forces every member it touches to `@PublishedApi internal` — `public final` in the jar, frozen forever. A configuration DSL saves one `Function1` allocation at construction time; that is never worth the leaked ABI. `callsInPlace` contracts work without `inline`, so definite assignment and smart casts survive.
-- Keep DSL operations as receiver-class members when the receiver is owned by this module. Use a top-level extension only for types that cannot own the operation. Type-named factories remain top-level when the Java model has no Kotlin companion.
+- Keep core DSL operations as receiver-class members when the receiver is owned by this module. Optional skills/tasks configuration lives in imported `TachyonServerBuilder` extensions, sharing a file with its scope and delegating to `withExtension`. Other top-level extensions operate on types that cannot own the operation. Type-named factories remain top-level when the Java model has no Kotlin companion.
 - Java `ServerBuilder` is the implementation source of truth for server construction and validation. Server feature façades own registration; Kotlin delegates through the builder's `with*` bootstrap conveniences and adds only thin adaptation for suspend lambdas and Kotlin-specific types.
 - Do not reimplement Java builder validation, defaulting, or registration collections in Kotlin. Add missing reusable behaviour to Java first, then expose it through the Kotlin DSL.
 - Expose one Kotlin server-construction surface: `TachyonServerBuilder`. Do not publish Kotlin extensions on the Java `ServerBuilder`; they bypass Kotlin defaults and duplicate autocomplete. Use an internal owned collaborator when thin adaptation would make the public builder too large.

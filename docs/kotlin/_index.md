@@ -24,6 +24,11 @@ Version is pinned by the `tachyon-bom` — see [Quickstart](../quickstart.md#1-a
 [Tasks](../extensions/tasks.md#kotlin) are optional: add `tachyon-extensions-tasks` to use
 `tasks(connector) { }`, `ToolScope.tasks`, or `TachyonServer.tasks`.
 
+Import `dev.tachyonmcp.kotlin.server.config.tasks` for builder configuration.
+[Skills](../extensions/skills.md#enable-the-extension) similarly use the imported
+`dev.tachyonmcp.kotlin.server.config.skills` extension and require
+`tachyon-extensions-skills` explicitly.
+
 A minimal Gradle build for the examples below, with JDK 21:
 
 ```kotlin
@@ -541,6 +546,7 @@ Available via `ToolScope.arguments` (or `PromptScope.arguments`):
 | `ServerInfoScope` | `info { }` | `name`, `version`, `description`, `title`, `instructions` |
 | `CapabilitiesScope` | `capabilities { }` | `tools()`, `resources()`, `prompts()`, `logging`, `completionsMode` |
 | `TasksScope` | `tasks(connector) { }` (needs `tachyon-extensions-tasks`) | `pageSize`, `keepAlive`, `pollInterval`, `resultPollInterval` |
+| `SkillsScope` | `skills(registry) { }` (needs `tachyon-extensions-skills`) | `cacheTtl`, `cacheScope`, `negotiation`, `registry(...)` |
 | `NetworkScope` | `network { }` | `host`, `port`, `endpointPath`, `allowedOrigins`, `allowedHeaders`, `allowedHosts`, `maxContentLength`, `maxPipelinedRequests`, `maxPendingSseBytes`, `sseStallTimeout` |
 | `SessionScope` | `session { }` | `enable()`, `sessionTtl`, `sessionIdGenerator` |
 | `RuntimeScope` | `runtime { }` | `shutdownGracePeriod`, `requestTimeout`, `clock` |

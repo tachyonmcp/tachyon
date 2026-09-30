@@ -14,6 +14,7 @@ import dev.tachyonmcp.api.server.features.tools.ToolResult
 import dev.tachyonmcp.core.server.TachyonServer
 import dev.tachyonmcp.core.server.internal.ServerEngine
 import dev.tachyonmcp.core.server.session.DefaultDispatchContext
+import dev.tachyonmcp.kotlin.server.config.tasks
 import dev.tachyonmcp.kotlin.server.features.CoroutineRuntime
 import dev.tachyonmcp.kotlin.server.features.tools.toolFn
 import io.kotest.assertions.throwables.shouldThrow

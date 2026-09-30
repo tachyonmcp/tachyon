@@ -5,6 +5,7 @@ import dev.tachyonmcp.api.json.JsonSchema
 import dev.tachyonmcp.api.server.domain.ToolAnnotations
 import dev.tachyonmcp.api.server.features.tasks.TaskConnector
 import dev.tachyonmcp.api.server.features.tasks.TaskSupport
+import dev.tachyonmcp.kotlin.server.config.tasks
 import dev.tachyonmcp.kotlin.server.domain.Icon
 import dev.tachyonmcp.kotlin.server.features.tools.toolDescriptor
 import io.kotest.assertions.withClue

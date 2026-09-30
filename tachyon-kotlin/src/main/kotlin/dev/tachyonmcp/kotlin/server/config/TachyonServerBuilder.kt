@@ -16,14 +16,12 @@ import dev.tachyonmcp.api.server.features.completions.CompletionResult
 import dev.tachyonmcp.api.server.features.prompts.PromptDescriptor
 import dev.tachyonmcp.api.server.features.resources.ResourceDescriptor
 import dev.tachyonmcp.api.server.features.resources.ResourceTemplateDescriptor
-import dev.tachyonmcp.api.server.features.tasks.TaskConnector
 import dev.tachyonmcp.api.server.features.tasks.TaskSupport
 import dev.tachyonmcp.api.server.features.tools.ToolDescriptor
 import dev.tachyonmcp.api.server.features.tools.ToolResult
 import dev.tachyonmcp.core.server.ServerBuilder
 import dev.tachyonmcp.core.server.config.NetworkConfig
 import dev.tachyonmcp.core.server.features.resources.MimeTypes
-import dev.tachyonmcp.extensions.tasks.TasksExtension
 import dev.tachyonmcp.kotlin.server.DefaultKotlinTachyonServer
 import dev.tachyonmcp.kotlin.server.TachyonDsl
 import dev.tachyonmcp.kotlin.server.TachyonServer
@@ -31,7 +29,6 @@ import dev.tachyonmcp.kotlin.server.features.CoroutineRuntime
 import dev.tachyonmcp.kotlin.server.features.tools.toolDescriptorOf
 import dev.tachyonmcp.kotlin.server.json.toJsonSchema
 import dev.tachyonmcp.kotlin.server.json.toJsonSchemaOrNull
-import dev.tachyonmcp.kotlin.server.requireTasksModule
 import io.netty.channel.ChannelPipeline
 import kotlinx.serialization.json.JsonObject
 import kotlin.contracts.ExperimentalContracts
@@ -520,34 +517,6 @@ public class TachyonServerBuilder
         /** Registers one or more [ServerExtension]s, e.g. from `tachyon-extensions`. */
         public fun extensions(vararg extensions: ServerExtension): TachyonServerBuilder =
             this.also { delegate.withExtensions(*extensions) }
-
-        /**
-         * Registers the tasks extension, so tools can hand long-running work to [connector] and clients
-         * can poll it through the `tasks` methods.
-         *
-         * @param connector system that owns task execution
-         * @param configure retention, paging, and polling options
-         * @return this builder
-         * @throws IllegalStateException if `tachyon-extensions-tasks` is not on the classpath
-         */
-        @JvmSynthetic
-        @OptIn(ExperimentalContracts::class)
-        @ExperimentalApi
-        public fun tasks(
-            connector: TaskConnector,
-            configure: (@TachyonDsl TasksScope).() -> Unit = {},
-        ): TachyonServerBuilder {
-            contract { callsInPlace(configure, InvocationKind.EXACTLY_ONCE) }
-            requireTasksModule {
-                val scope = TasksScope(connector).apply(configure)
-                delegate.withExtension(
-                    TasksExtension::class.java,
-                ) {
-                    scope.applyTo(it)
-                }
-            }
-            return this
-        }
 
         /**
          * Registers a [ConfigurableExtension] by class and configures its builder. Calling this again for

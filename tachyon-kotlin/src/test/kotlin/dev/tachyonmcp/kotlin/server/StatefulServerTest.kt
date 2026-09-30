@@ -12,6 +12,7 @@ import dev.tachyonmcp.core.server.config.SessionConfig
 import dev.tachyonmcp.core.server.session.InMemorySessionEventStore
 import dev.tachyonmcp.core.server.session.InMemorySessionStore
 import dev.tachyonmcp.extensions.tasks.TasksExtension
+import dev.tachyonmcp.kotlin.server.config.tasks
 import dev.tachyonmcp.kotlin.server.domain.Annotations
 import dev.tachyonmcp.kotlin.server.domain.Icon
 import dev.tachyonmcp.kotlin.server.domain.PromptArgument

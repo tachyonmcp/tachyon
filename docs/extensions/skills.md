@@ -30,6 +30,33 @@ var server = TachyonServer.builder()
 server.start();
 ```
 
+With `tachyon-kotlin`, add `dev.tachyonmcp:tachyon-extensions-skills` explicitly
+(the dependency is optional) and use the receiver adapter:
+
+```kotlin
+import dev.tachyonmcp.extensions.skills.ClasspathSkillsRegistry
+import dev.tachyonmcp.extensions.skills.FilesystemSkillsRegistry
+import dev.tachyonmcp.kotlin.server.TachyonServer
+import dev.tachyonmcp.kotlin.server.config.skills
+import java.nio.file.Path
+import kotlin.time.Duration.Companion.minutes
+
+val server = TachyonServer(port = 8080) {
+    skills(FilesystemSkillsRegistry(Path.of("skills"))) {
+        registry(ClasspathSkillsRegistry("bundled-skills"))
+        cacheTtl = 5.minutes
+        cacheScope = "public"
+    }
+}
+```
+
+`cacheTtl` defaults to zero (always stale) and must be non-negative; it is converted
+to whole milliseconds for the wire. `cacheScope` defaults to `"public"` and also
+accepts `"private"`. `negotiation` defaults to `ExtensionNegotiation.OPTIONAL`;
+set it to `ExtensionNegotiation.REQUIRED` for strict negotiation.
+Repeated `skills(...)` calls append registries and replace these settings with
+the latest block's values, including defaults.
+
 Skills extension ID is `io.modelcontextprotocol/skills`. By default any client can call its methods,
 declared or not; strict [negotiation](#extension-negotiation) is opt-in. Skill files remain
 available through the standard Resources API.

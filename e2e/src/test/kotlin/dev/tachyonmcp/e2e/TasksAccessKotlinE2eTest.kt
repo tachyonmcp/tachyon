@@ -11,8 +11,8 @@ import dev.tachyonmcp.api.server.features.tasks.Tasks
 import dev.tachyonmcp.api.server.features.tools.ToolResult
 import dev.tachyonmcp.extensions.tasks.TasksExtension
 import dev.tachyonmcp.kotlin.server.TachyonServer
+import dev.tachyonmcp.kotlin.server.config.tasks
 import dev.tachyonmcp.kotlin.server.domain.TaskSnapshot
-import dev.tachyonmcp.kotlin.server.tasks
 import dev.tachyonmcp.testkit.McpTestClients
 import dev.tachyonmcp.testkit.TestTaskConnector
 import io.kotest.matchers.equals.shouldEqual

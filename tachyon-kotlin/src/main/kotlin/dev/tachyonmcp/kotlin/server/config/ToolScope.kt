@@ -12,7 +12,6 @@ import dev.tachyonmcp.api.server.features.tools.ToolRequest
 import dev.tachyonmcp.api.server.features.tools.ToolResult
 import dev.tachyonmcp.extensions.tasks.TasksExtension
 import dev.tachyonmcp.kotlin.server.TachyonDsl
-import dev.tachyonmcp.kotlin.server.requireTasksModule
 import org.intellij.lang.annotations.Language
 import kotlin.contracts.ExperimentalContracts
 import kotlin.contracts.InvocationKind
