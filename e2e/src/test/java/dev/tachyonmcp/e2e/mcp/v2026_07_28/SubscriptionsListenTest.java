@@ -235,6 +235,59 @@ class SubscriptionsListenTest extends AbstractStatelessMcpE2eTest<Mcp20260728Cli
     }
 
     @Test
+    void taskStatusCarriesEachSubscriptionsOwnIdAndKeepsSnapshotMeta() throws Exception {
+        var observedAt = Instant.parse("2026-08-28T10:00:00Z");
+        var taskEngine = new TestTaskConnector().publish(TaskSnapshot.working("task-a", observedAt, 0));
+        startServer(b -> b.capabilities(c -> c.tools(true))
+                .withExtension(TasksExtension.class, t -> t.connector(taskEngine.connector())));
+
+        var linesA = new CopyOnWriteArrayList<String>();
+        var linesB = new CopyOnWriteArrayList<String>();
+        try (var client = createModernTestClient()
+                .withExtensions(Map.of(TasksExtension.ID, JsonNodeFactory.instance.objectNode()))) {
+            var responseA = client.sendStreamingRequest(null, """
+                {"jsonrpc":"2.0","id":10,"method":"subscriptions/listen",
+                 "params":{"notifications":{"taskIds":["task-a"]}}}
+                """);
+            var responseB = client.sendStreamingRequest(null, """
+                {"jsonrpc":"2.0","id":20,"method":"subscriptions/listen",
+                 "params":{"notifications":{"taskIds":["task-a"]}}}
+                """);
+            var consumeA = CompletableFuture.runAsync(() -> responseA.body().forEach(linesA::add));
+            var consumeB = CompletableFuture.runAsync(() -> responseB.body().forEach(linesB::add));
+            await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
+                assertThat(payloads(linesA)).anyMatch(l -> l.contains("acknowledged"));
+                assertThat(payloads(linesB)).anyMatch(l -> l.contains("acknowledged"));
+            });
+
+            tasks(server)
+                    .publish(TaskSnapshot.builder()
+                            .from(TaskSnapshot.working("task-a", observedAt, 1))
+                            .meta(Map.of("trace", "x"))
+                            .build());
+
+            await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
+                assertThat(payloads(linesA)).anyMatch(l -> l.contains("notifications/tasks"));
+                assertThat(payloads(linesB)).anyMatch(l -> l.contains("notifications/tasks"));
+            });
+
+            // language=JSON
+            assertThatJson(taskNotification(linesA)).inPath("params._meta").isEqualTo("""
+                        {"io.modelcontextprotocol/subscriptionId": 10, "trace": "x"}
+                        """);
+            // language=JSON
+            assertThatJson(taskNotification(linesB)).inPath("params._meta").isEqualTo("""
+                        {"io.modelcontextprotocol/subscriptionId": 20, "trace": "x"}
+                        """);
+
+            responseA.body().close();
+            responseB.body().close();
+            awaitQuietly(consumeA);
+            awaitQuietly(consumeB);
+        }
+    }
+
+    @Test
     void taskStatusSubscriptionRequiresTasksExtension() throws Exception {
         var taskEngine = new TestTaskConnector();
         startServer(b -> b.withExtension(TasksExtension.class, t -> t.connector(taskEngine.connector())));
@@ -393,6 +446,13 @@ class SubscriptionsListenTest extends AbstractStatelessMcpE2eTest<Mcp20260728Cli
                 throw e;
             }
         }
+    }
+
+    private static String taskNotification(List<String> lines) {
+        return payloads(lines).stream()
+                .filter(l -> l.contains("notifications/tasks"))
+                .findFirst()
+                .orElseThrow();
     }
 
     private static List<String> payloads(List<String> lines) {

@@ -346,6 +346,16 @@ public final class McpResponseMapper extends dev.tachyonmcp.core.protocol.mcp.v2
     }
 
     @Override
+    public Object subscriptionTaskStatusParams(RequestId subscriptionId, TaskSnapshot snapshot) {
+        return McpTaskMapper.toStatusNotification(
+                snapshot,
+                taskResultNode(snapshot),
+                taskErrorNode(snapshot),
+                inputRequestsNode(snapshot),
+                Map.of(SUBSCRIPTION_ID_META_KEY, rawId(subscriptionId)));
+    }
+
+    @Override
     public Object subscriptionsListenGracefulResult(RequestId subscriptionId) {
         return new SubscriptionsListenResult(subscriptionIdMeta(subscriptionId), COMPLETE, null);
     }
@@ -356,12 +366,14 @@ public final class McpResponseMapper extends dev.tachyonmcp.core.protocol.mcp.v2
     }
 
     private static ObjectNode subscriptionIdMeta(RequestId subscriptionId) {
-        Object rawId =
-                switch (subscriptionId) {
-                    case RequestId.StringValue(var v) -> v;
-                    case RequestId.NumericValue(var v) -> v;
-                };
-        return Objects.requireNonNull(JsonUtils.toObjectTree(Map.of(SUBSCRIPTION_ID_META_KEY, rawId)));
+        return Objects.requireNonNull(JsonUtils.toObjectTree(Map.of(SUBSCRIPTION_ID_META_KEY, rawId(subscriptionId))));
+    }
+
+    private static Object rawId(RequestId subscriptionId) {
+        return switch (subscriptionId) {
+            case RequestId.StringValue(var v) -> v;
+            case RequestId.NumericValue(var v) -> v;
+        };
     }
 
     /**

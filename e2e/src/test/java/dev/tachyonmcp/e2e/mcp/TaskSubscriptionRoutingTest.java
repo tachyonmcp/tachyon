@@ -112,7 +112,8 @@ class TaskSubscriptionRoutingTest {
                         .publish(TaskSnapshot.completed(
                                 "unrouted-task", CREATED_AT, CREATED_AT, 2, ToolResult.text("unrouted result")));
 
-                for (final var stream : List.of(earlySubscriber, lateSubscriber)) {
+                for (final var listener : List.of(Map.entry(earlySubscriber, 1), Map.entry(lateSubscriber, 3))) {
+                    final var stream = listener.getKey();
                     for (final var expected : List.of("routed result", "routed result after disconnect")) {
                         final var routed = stream.await(
                                 f -> isTaskNotification(f, "notifications/tasks", "routed-task")
@@ -121,27 +122,31 @@ class TaskSubscriptionRoutingTest {
                         // language=JSON
                         assertThatJson(routed.data()).isEqualTo("""
                                 {"jsonrpc":"2.0","method":"notifications/tasks","params":{
+                                  "_meta":{"io.modelcontextprotocol/subscriptionId":%d},
                                   "taskId":"routed-task","status":"completed",
                                   "createdAt":"2026-09-25T07:00:00Z","lastUpdatedAt":"2026-09-25T07:00:00Z",
                                   "ttlMs":null,"result":{
                                     "content":[{"type":"text","text":"%s"}],"resultType":"complete"}}}
-                                """.formatted(expected));
+                                """.formatted(listener.getValue(), expected));
                     }
                 }
-                for (final var stream : List.of(earlySubscriber, lateSubscriber, otherSubscriber)) {
+                for (final var listener : List.of(
+                        Map.entry(earlySubscriber, 1), Map.entry(lateSubscriber, 3), Map.entry(otherSubscriber, 5))) {
                     // language=JSON
-                    assertThatJson(stream.await(
+                    assertThatJson(listener.getKey()
+                                    .await(
                                             f -> isTaskNotification(f, "notifications/tasks", "unrouted-task")
                                                     && f.data().contains("\"unrouted result\""),
                                             ofSeconds(5))
                                     .data())
                             .isEqualTo("""
                                     {"jsonrpc":"2.0","method":"notifications/tasks","params":{
+                                      "_meta":{"io.modelcontextprotocol/subscriptionId":%d},
                                       "taskId":"unrouted-task","status":"completed",
                                       "createdAt":"2026-09-25T07:00:00Z","lastUpdatedAt":"2026-09-25T07:00:00Z",
                                       "ttlMs":null,"result":{
                                         "content":[{"type":"text","text":"unrouted result"}],"resultType":"complete"}}}
-                                    """);
+                                    """.formatted(listener.getValue()));
                 }
                 // The unrouted completion above was published last, so it fences earlier writes.
                 assertThat(otherSubscriber.received(f -> isTaskNotification(f, "notifications/tasks", "routed-task")))

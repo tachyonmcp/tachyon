@@ -184,6 +184,15 @@ public interface ProtocolResponseMapper {
     }
 
     /**
+     * Builds the params for a {@code notifications/tasks} notification pushed on a {@code
+     * subscriptions/listen} stream: the task's status params plus the stream's own subscription id,
+     * keeping the snapshot's other {@code _meta} entries.
+     */
+    default Object subscriptionTaskStatusParams(RequestId subscriptionId, TaskSnapshot snapshot) {
+        throw new UnsupportedOperationException("subscriptions/listen is not supported by this protocol version");
+    }
+
+    /**
      * Builds the graceful-closure result sent when the server tears down a {@code
      * subscriptions/listen} stream on its own initiative (e.g. shutdown).
      */
