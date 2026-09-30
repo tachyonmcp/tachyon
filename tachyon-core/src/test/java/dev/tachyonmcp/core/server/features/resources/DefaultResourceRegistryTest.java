@@ -30,6 +30,7 @@ import dev.tachyonmcp.core.runtime.SseConnection;
 import dev.tachyonmcp.core.runtime.SseEvent;
 import dev.tachyonmcp.core.server.RpcMethodHandler;
 import dev.tachyonmcp.core.server.config.ResourcesConfig;
+import dev.tachyonmcp.core.server.features.subscriptions.SubscriptionRegistry;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
 import dev.tachyonmcp.core.server.session.DefaultDispatchContext;
 import dev.tachyonmcp.core.server.session.DispatchContext;
@@ -71,7 +72,7 @@ class DefaultResourceRegistryTest {
 
     @BeforeEach
     void setUp() {
-        ResourceMethodHandlers.register(handlers, registry);
+        ResourceMethodHandlers.register(handlers, registry, new SubscriptionRegistry(server));
     }
 
     @Test

@@ -1,9 +1,9 @@
 ---
 title: Feature registries
-tags: [concept, tools, resources, prompts, completions]
-sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/handlers/, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java]
+tags: [concept, tools, resources, prompts, completions, subscriptions]
+sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/handlers/, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java, tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/mcp/v2026_07_28/codecs/McpResponseMapper.java, extensions/tachyon-extensions-tasks/src/main/java/dev/tachyonmcp/extensions/tasks/McpTaskBinding.java]
 updated: 2026-09-30
-commit: 74c732e9
+commit: 5a68b8dd
 ---
 
 # 🧰 Feature registries
@@ -78,15 +78,15 @@ Mode `OFF` ⇒ registration silently skipped (debug log) in every registry.
 
 ## 📡 subscriptions/listen (2026-07-28)
 
-`SubscriptionsListenHandler` `SubscriptionsListenHandler` + `SubscriptionRegistry` `.../features/subscriptions/SubscriptionRegistry.java`:
-- Only when mapper `supportsSubscriptionsListen`; `taskIds` filter needs tasks extension.
-- Every notification pushed on a stream carries that stream's `_meta` `io.modelcontextprotocol/subscriptionId` (list_changed, resources/updated, tasks) via the mapper's `subscription*Params(RequestId, …)` `SubscriptionRegistry#notifyTaskStatus`, `ProtocolResponseMapper#subscriptionTaskStatusParams`.
+`SubscriptionsListenHandler` + [SubscriptionRegistry](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/subscriptions/SubscriptionRegistry.java):
+- Only when mapper `supportsSubscriptionsListen`. [SubscriptionRegistry#decode](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/subscriptions/SubscriptionRegistry.java) reads registered [SubscriptionTopic](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/subscriptions/SubscriptionTopic.java) keys; unknown keys are ignored. Built-in topics live with their feature handlers; the tasks extension registers `taskIds` ([McpTaskBinding#registerSubscriptionTopic](../../extensions/tachyon-extensions-tasks/src/main/java/dev/tachyonmcp/extensions/tasks/McpTaskBinding.java)).
+- [SubscriptionFilter#authorize](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/subscriptions/SubscriptionFilter.java) narrows requested values before ack. [SubscriptionRegistry#publish](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/subscriptions/SubscriptionRegistry.java) fans out every topic through one path; [McpResponseMapper#subscriptionNotificationParams](../../tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/mcp/v2026_07_28/codecs/McpResponseMapper.java) merges each stream's `_meta.io.modelcontextprotocol/subscriptionId` over existing metadata.
 - Task route (session) delivery happens alongside subscription fan-out; see [[tasks]] and [DefaultTachyonServer#notifyTaskStatus](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java).
 - `activate` under lock: register + ack `notifications/subscriptions/acknowledged` as **first** event (SEP-2575) `SubscriptionRegistry#activate`.
 - Returned future and Observation both span the whole stream lifetime; completes on disconnect (`Cancelled`) or genuine transport failure (`StreamFailed(causeType, cause?)`), never early at establishment `SubscriptionsListenHandler#handleAsync`.
 - Terminal continuation threading and ack timestamp publication: [[observability]].
 - Disconnect ⇒ remove + cancel; shutdown `closeAll` ⇒ graceful `resultType: complete` result `SubscriptionRegistry#closeAll`. Closed until `SubscriptionRegistry#reopen` (transport `stop()`): a late `activate` sends the ack, then completes gracefully, never registers.
-- Fan-out writes via `offerEvent` (never blocks): slow subscriber disconnected, others not held under the lock `SubscriptionRegistry#push`, [[sse-streams]].
+- Fan-out writes via `offerEvent` (never blocks): slow subscriber disconnected, others not held under the lock [SubscriptionRegistry#push](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/subscriptions/SubscriptionRegistry.java), [[sse-streams]].
 
 ## 🧩 Built-in handlers
 

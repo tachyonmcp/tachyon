@@ -4,8 +4,10 @@ package dev.tachyonmcp.core.protocol.mcp.v2026_07_28.codecs;
 import static dev.tachyonmcp.core.test.TestUtils.parseJson;
 import static net.javacrumbs.jsonunit.assertj.JsonAssertions.assertThatJson;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.tachyonmcp.api.json.PayloadDeserializer;
+import dev.tachyonmcp.core.protocol.RequestMappingException;
 import java.lang.reflect.Type;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -32,23 +34,29 @@ class McpRequestMapperTest {
     }
 
     @Test
-    void versionSpecificParamsDecodeThroughOwnRegistry() {
+    void subscriptionFilterExposesTheRawNotificationsObject() {
         final var mapper = new McpRequestMapper();
 
-        final var empty = mapper.subscriptionsListen(parseJson("{}"));
-        assertThat(empty.toolsListChanged()).isFalse();
-        assertThat(empty.resourceSubscriptions()).isEmpty();
+        assertThat(mapper.subscriptionFilter(parseJson("{}")).json()).isEqualTo("{}");
+        assertThat(mapper.subscriptionFilter(parseJson("{\"notifications\":null}"))
+                        .json())
+                .isEqualTo("{}");
 
-        final var filtered = mapper.subscriptionsListen(parseJson("""
+        final var filter = mapper.subscriptionFilter(parseJson("""
             {
               "notifications": {
                 "toolsListChanged": true,
-                "resourceSubscriptions": ["file:///a"]
+                "resourceSubscriptions": ["file:///a"],
+                "com.example/topic": {"x": 1}
               }
             }
             """));
-        assertThat(filtered.toolsListChanged()).isTrue();
-        assertThat(filtered.resourceSubscriptions()).containsExactly("file:///a");
+        assertThat(filter.boolValue("toolsListChanged")).isTrue();
+        assertThat(filter.arrayValue("resourceSubscriptions").stringValue(0)).isEqualTo("file:///a");
+        assertThat(filter.has("com.example/topic")).isTrue();
+
+        assertThatThrownBy(() -> mapper.subscriptionFilter(parseJson("{\"notifications\":[]}")))
+                .isInstanceOf(RequestMappingException.class);
     }
 
     @Test

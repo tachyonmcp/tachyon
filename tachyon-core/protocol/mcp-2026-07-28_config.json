@@ -36,7 +36,6 @@
       "extensions?: { [key: string]: object };"
     ],
     "SubscriptionFilter": [
-      "taskIds?: string[];",
       "extensions?: { [key: string]: object };"
     ]
   },

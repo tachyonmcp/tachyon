@@ -29,7 +29,6 @@ import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
 import dev.tachyonmcp.api.server.features.tasks.TaskState;
 import dev.tachyonmcp.api.server.features.tools.ToolDescriptor;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
-import dev.tachyonmcp.core.protocol.ProtocolRequestMapper.SubscriptionListenRequest;
 import dev.tachyonmcp.core.protocol.mcp.v2026_07_28.models.CallToolResult;
 import dev.tachyonmcp.core.protocol.mcp.v2026_07_28.models.CompleteResult;
 import dev.tachyonmcp.core.protocol.mcp.v2026_07_28.models.GetPromptResult;
@@ -42,7 +41,6 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.node.JsonNodeFactory;
 
@@ -237,11 +235,17 @@ class McpResponseMapperTest {
     @Test
     void subscriptionPayloadsSerializeThroughTheProtocolVersionsCodecs() {
         var id = RequestId.of("sub-1");
-        var filter = new SubscriptionListenRequest(true, false, false, Set.of("memory://one"), Set.of("task-1"));
+        var filter = Map.<String, Object>of(
+                "toolsListChanged",
+                true,
+                "resourceSubscriptions",
+                List.of("memory://one"),
+                "taskIds",
+                List.of("task-1"));
 
         var ack = mapper.encode(mapper.subscriptionsAcknowledgedParams(id, filter));
-        var listChanged = mapper.encode(mapper.subscriptionListChangedParams(id));
-        var updated = mapper.encode(mapper.subscriptionResourceUpdatedParams(id, "memory://one"));
+        var listChanged = mapper.encode(mapper.subscriptionNotificationParams(id, Map.of()));
+        var updated = mapper.encode(mapper.subscriptionNotificationParams(id, Map.of("uri", "memory://one")));
         var graceful = mapper.encode(mapper.subscriptionsListenGracefulResult(id));
 
         // language=JSON
@@ -302,7 +306,7 @@ class McpResponseMapperTest {
     }
 
     @Test
-    void subscriptionTaskStatusMergesTheSubscriptionIdIntoSnapshotMeta() {
+    void subscriptionNotificationParamsMergeTheSubscriptionIdIntoExistingMetaAndWinOverAForgedOne() {
         var observedAt = Instant.parse("2026-08-28T10:00:00Z");
         var working = TaskSnapshot.builder()
                 .taskId("task-1")
@@ -313,7 +317,8 @@ class McpResponseMapperTest {
                 .revision(1)
                 .build();
 
-        var json = mapper.encode(mapper.subscriptionTaskStatusParams(RequestId.of(7), working));
+        var json = mapper.encode(
+                mapper.subscriptionNotificationParams(RequestId.of(7), mapper.taskStatusNotificationParams(working)));
 
         // language=JSON
         assertThatJson(json).isEqualTo("""
@@ -331,9 +336,7 @@ class McpResponseMapperTest {
     @Test
     void subscriptionIdPreservesNumericTypeFromTheRequestId() {
         var id = RequestId.of(1);
-        var filter = new SubscriptionListenRequest(true, false, false, Set.of(), Set.of());
-
-        var ack = mapper.encode(mapper.subscriptionsAcknowledgedParams(id, filter));
+        var ack = mapper.encode(mapper.subscriptionsAcknowledgedParams(id, Map.of("toolsListChanged", true)));
 
         // language=JSON
         assertThatJson(ack).isEqualTo("""

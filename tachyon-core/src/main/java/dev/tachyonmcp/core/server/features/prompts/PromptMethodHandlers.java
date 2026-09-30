@@ -9,6 +9,8 @@ import dev.tachyonmcp.api.server.features.prompts.PromptResult;
 import dev.tachyonmcp.core.protocol.ProtocolRequestMapper;
 import dev.tachyonmcp.core.server.RpcMethodHandler;
 import dev.tachyonmcp.core.server.domain.ServerErrors;
+import dev.tachyonmcp.core.server.features.subscriptions.SubscriptionRegistry;
+import dev.tachyonmcp.core.server.features.subscriptions.SubscriptionTopic;
 import dev.tachyonmcp.core.server.internal.HandlerFutures;
 import dev.tachyonmcp.core.server.session.DispatchContext;
 import java.util.Map;
@@ -21,12 +23,17 @@ import org.slf4j.LoggerFactory;
 /** JSON-RPC adapters for prompt operations. */
 public final class PromptMethodHandlers {
 
+    /** {@code subscriptions/listen} opt-in to {@code notifications/prompts/list_changed}. */
+    public static final SubscriptionTopic<Boolean> LIST_CHANGED = SubscriptionTopic.flag("promptsListChanged");
+
     private PromptMethodHandlers() {}
 
     public static void register(
             Map<String, RpcMethodHandler<?, ?>> handlers,
             DefaultPromptRegistry registry,
+            SubscriptionRegistry subscriptions,
             JsonSchemaValidator validator) {
+        subscriptions.register(LIST_CHANGED);
         handlers.put("prompts/list", new PromptsListHandler(registry));
         handlers.put("prompts/get", new PromptsGetHandler(registry, validator));
     }

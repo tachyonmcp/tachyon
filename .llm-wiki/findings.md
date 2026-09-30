@@ -1,9 +1,9 @@
 ---
 title: Findings
 tags: [meta, findings]
-sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/]
-updated: 2026-09-29
-commit: 4b4b6f7e
+sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/, extensions/tachyon-extensions-tasks/src/main/java/dev/tachyonmcp/extensions/tasks/]
+updated: 2026-09-30
+commit: 5a68b8dd
 ---
 
 # 🔎 Findings
@@ -15,7 +15,7 @@ Spotted while reading code. Runtime verification noted per finding. Fixed in cod
 - ⚠️ Perf: notifications round-trip bytes → `String` → bytes. `DefaultTachyonServer#sendSerializedNotification` builds `notificationJson` as a `String`; `SseSerializer#measure` then counts its UTF-8 size (~0.7 ns/char, charAt loop, not vectorized) and `SseSerializer#encode` transcodes it back. Carry `byte[]` end to end (like the final response, `PostSseStream#writeEvent(long, byte[], Runnable)`): length is free, encode is a copy. Touches `SseEvent`, `JsonRpcCodec`, event log (stores `String`).
 - ⚠️ Several producers on one POST-SSE stream: a parked producer can be overtaken ⇒ wire ids out of order ⇒ `Last-Event-ID` resume may skip one. Pre-existing race, wider with parking. `PostSseStream#awaitCapacity`
 - ⚠️ Platform `ServerBuilder#threadFactory`: parked producer holds an OS thread until `writerIdleTimeout`. `DefaultServerBuilder#build`
-- ⚠️ Tachyon has no task access control of its own: `tasks/*` go to the connector, and `subscriptions/listen` task ids pass the connector's `get` once when the stream opens (`TaskEngine#readableTaskIds`), not per event: a permission revoked later keeps flowing until the stream closes. Safe only with unguessable task ids (MCP tasks spec MUST without context binding); Tachyon cannot check ids it doesn't mint. [TaskMethodHandlers](../extensions/tachyon-extensions-tasks/src/main/java/dev/tachyonmcp/extensions/tasks/TaskMethodHandlers.java), `SubscriptionsListenHandler#handleAsync`.
+- ⚠️ Tachyon has no task access control of its own: `tasks/*` go to the connector, and `subscriptions/listen` task ids pass the connector's `get` once when the stream opens ([McpTaskBinding#taskIdsTopic](../extensions/tachyon-extensions-tasks/src/main/java/dev/tachyonmcp/extensions/tasks/McpTaskBinding.java), [TaskEngine#readableTaskIds](../extensions/tachyon-extensions-tasks/src/main/java/dev/tachyonmcp/extensions/tasks/engine/TaskEngine.java)), not per event: a permission revoked later keeps flowing until the stream closes. Safe only with unguessable task ids (MCP tasks spec MUST without context binding); Tachyon cannot check ids it doesn't mint.
 - ⚠️ Listen: one sequential connector `get` per task id, bounded only by `maxContentLength`. `TaskEngine#readableTaskIds`
 - 🪶 A publish racing janitor eviction can land on the evicted entry: `putIfAbsent` returned it, then `TaskEntry#evictIfExpired` removed it before `TaskEntry#publish`. The status is still sent, but the newer revision is not cached. Benign: the cache is a projection and the next `tasks/get` re-caches the connector's snapshot. Pre-existing (the old `entries.get` path had the same window). `TaskEngine#publish`
 - ⚠️ `working` task with `ttl = null` never evicted. `TaskEntry#isExpired`
