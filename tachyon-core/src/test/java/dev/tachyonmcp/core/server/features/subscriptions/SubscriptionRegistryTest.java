@@ -3,16 +3,17 @@ package dev.tachyonmcp.core.server.features.subscriptions;
 
 import static dev.tachyonmcp.core.test.TestUtils.newEngine;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.tachyonmcp.api.server.domain.RequestId;
 import dev.tachyonmcp.core.protocol.Protocol;
-import dev.tachyonmcp.core.protocol.ProtocolRequestMapper.SubscriptionListenRequest;
 import dev.tachyonmcp.core.protocol.ProtocolResponseMapper;
 import dev.tachyonmcp.core.protocol.Protocols;
 import dev.tachyonmcp.core.runtime.SseEvent;
 import dev.tachyonmcp.core.server.OutboundSseStream;
+import dev.tachyonmcp.core.server.features.tools.ToolMethodHandlers;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
-import java.util.Set;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -33,6 +34,8 @@ class SubscriptionRegistryTest {
 
     private final ServerEngine engine = newEngine(b -> {});
     private final SubscriptionRegistry registry = new SubscriptionRegistry(engine);
+    private final SubscriptionFilter toolsFilter =
+            new SubscriptionFilter(Map.of(ToolMethodHandlers.LIST_CHANGED, Boolean.TRUE));
     private final ProtocolResponseMapper responseMapper = Protocols.list().stream()
             .map(Protocol::responseMapper)
             .filter(m -> m.supports("mcp", "2026-07-28"))
@@ -62,7 +65,7 @@ class SubscriptionRegistryTest {
             var notifier = new Thread(
                     () -> {
                         notifierStarted.countDown();
-                        registry.notifyToolsListChanged();
+                        notifyToolsListChanged();
                         notifierDone.countDown();
                     },
                     "concurrent-notifier");
@@ -76,12 +79,7 @@ class SubscriptionRegistryTest {
         var stream = new RecordingStream(events, onAckWrite);
 
         var pending = new CompletableFuture<>();
-        registry.activate(
-                RequestId.of(1L),
-                stream,
-                new SubscriptionListenRequest(true, false, false, Set.of(), Set.of()),
-                responseMapper,
-                pending);
+        registry.activate(RequestId.of(1L), stream, toolsFilter, responseMapper, pending);
 
         awaitLatch(notifierDone);
 
@@ -97,7 +95,7 @@ class SubscriptionRegistryTest {
      */
     @Test
     void activateAfterCloseAllCompletesGracefullyUntilReopen() {
-        var filter = new SubscriptionListenRequest(true, false, false, Set.of(), Set.of());
+        var filter = toolsFilter;
         var lateEvents = new CopyOnWriteArrayList<SseEvent>();
         var latePending = new CompletableFuture<>();
 
@@ -115,13 +113,27 @@ class SubscriptionRegistryTest {
         var events = new CopyOnWriteArrayList<SseEvent>();
         var pending = new CompletableFuture<>();
         registry.activate(RequestId.of(2L), new RecordingStream(events, e -> {}), filter, responseMapper, pending);
-        registry.notifyToolsListChanged();
+        notifyToolsListChanged();
 
         assertThat(pending).isNotDone();
         assertThat(events).hasSize(2);
         assertThat(events.get(0).data()).contains("notifications/subscriptions/acknowledged");
         assertThat(events.get(1).data()).contains("notifications/tools/list_changed");
         assertThat(lateEvents).hasSize(1);
+    }
+
+    @Test
+    void registerRejectsADuplicateFilterKey() {
+        registry.register(ToolMethodHandlers.LIST_CHANGED);
+
+        assertThatThrownBy(() -> registry.register(SubscriptionTopic.flag("toolsListChanged")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("toolsListChanged");
+    }
+
+    private void notifyToolsListChanged() {
+        registry.publish(
+                ToolMethodHandlers.LIST_CHANGED, on -> true, "notifications/tools/list_changed", mapper -> Map.of());
     }
 
     private static void awaitLatch(CountDownLatch latch) {

@@ -129,6 +129,7 @@ public final class TasksExtension implements ConfigurableExtension<TasksExtensio
         var binding = new McpTaskBinding(server, created);
         created.addListener(binding);
         server.installTaskRuntime(binding);
+        binding.registerSubscriptionTopic();
         engine = created;
     }
 

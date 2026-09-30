@@ -12,6 +12,7 @@ import dev.tachyonmcp.api.server.features.resources.ResourceRequest;
 import dev.tachyonmcp.core.protocol.mcp.v2025_11_25.models.ReadResourceRequestParams;
 import dev.tachyonmcp.core.server.RpcMethodHandler;
 import dev.tachyonmcp.core.server.config.ResourcesConfig;
+import dev.tachyonmcp.core.server.features.subscriptions.SubscriptionRegistry;
 import dev.tachyonmcp.core.server.session.DefaultDispatchContext;
 import java.util.HashMap;
 import java.util.Map;
@@ -28,7 +29,7 @@ class ResourceRequestDispatchTest {
         var registry =
                 new DefaultResourceRegistry(server, ResourcesConfig.builder().build());
         var handlers = new HashMap<String, RpcMethodHandler<?, ?>>();
-        ResourceMethodHandlers.register(handlers, registry);
+        ResourceMethodHandlers.register(handlers, registry, new SubscriptionRegistry(server));
         var captured = new AtomicReference<@Nullable ResourceRequest>();
         registry.register(
                 ResourceDescriptor.of("meta-request", "test://meta-request", null, "text/plain"), (ctx, request) -> {

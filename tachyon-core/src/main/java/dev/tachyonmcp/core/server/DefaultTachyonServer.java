@@ -396,19 +396,31 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
         if (caps.tools().listChanged()) {
             toolRegistry.onChange(() -> {
                 broadcastNotification("notifications/tools/list_changed");
-                subscriptionRegistry.notifyToolsListChanged();
+                subscriptionRegistry.publish(
+                        ToolMethodHandlers.LIST_CHANGED,
+                        on -> true,
+                        "notifications/tools/list_changed",
+                        mapper -> Map.of());
             });
         }
         if (caps.resources().listChanged()) {
             resourceRegistry.onChange(() -> {
                 broadcastNotification("notifications/resources/list_changed");
-                subscriptionRegistry.notifyResourcesListChanged();
+                subscriptionRegistry.publish(
+                        ResourceMethodHandlers.LIST_CHANGED,
+                        on -> true,
+                        "notifications/resources/list_changed",
+                        mapper -> Map.of());
             });
         }
         if (caps.prompts().listChanged()) {
             promptRegistry.onChange(() -> {
                 broadcastNotification("notifications/prompts/list_changed");
-                subscriptionRegistry.notifyPromptsListChanged();
+                subscriptionRegistry.publish(
+                        PromptMethodHandlers.LIST_CHANGED,
+                        on -> true,
+                        "notifications/prompts/list_changed",
+                        mapper -> Map.of());
             });
         }
     }
@@ -425,12 +437,10 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
 
     @Override
     public void notifyTaskStatus(TaskSnapshot snapshot, @Nullable String sessionId) {
-        // The route's session, if any; then subscriptions/listen streams naming the id, which the
-        // connector authorized when each stream opened. Never a broadcast.
+        // The route's session, if any. Never a broadcast.
         if (sessionId != null) {
             getSession(sessionId).ifPresent(session -> notifyTaskStatus(session, snapshot));
         }
-        subscriptionRegistry.notifyTaskStatus(snapshot);
     }
 
     @Override
@@ -450,7 +460,11 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
 
     @Override
     public void notifyResourceSubscriptions(String uri) {
-        subscriptionRegistry.notifyResourceUpdated(uri);
+        subscriptionRegistry.publish(
+                ResourceMethodHandlers.UPDATED,
+                uris -> uris.contains(uri),
+                "notifications/resources/updated",
+                mapper -> Map.of("uri", uri));
     }
 
     private void notifyTaskStatus(Session session, TaskSnapshot snapshot) {
@@ -482,9 +496,15 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
         methodHandlers.put("ping", new PingHandler());
         methodHandlers.put("subscriptions/listen", new SubscriptionsListenHandler(subscriptionRegistry));
         ToolMethodHandlers.register(
-                methodHandlers, toolRegistry, inputValidator, outputValidator, payloadSerializer, payloadDeserializer);
-        ResourceMethodHandlers.register(methodHandlers, resourceRegistry);
-        PromptMethodHandlers.register(methodHandlers, promptRegistry, inputValidator);
+                methodHandlers,
+                toolRegistry,
+                subscriptionRegistry,
+                inputValidator,
+                outputValidator,
+                payloadSerializer,
+                payloadDeserializer);
+        ResourceMethodHandlers.register(methodHandlers, resourceRegistry, subscriptionRegistry);
+        PromptMethodHandlers.register(methodHandlers, promptRegistry, subscriptionRegistry, inputValidator);
         CompletionMethodHandlers.register(methodHandlers, completionRegistry);
         if (config.capabilities().logging()) {
             LoggingHandlers.register(methodHandlers);
@@ -701,6 +721,11 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
     @Override
     public Completions completions() {
         return completionRegistry;
+    }
+
+    @Override
+    public SubscriptionRegistry subscriptions() {
+        return subscriptionRegistry;
     }
 
     @Override

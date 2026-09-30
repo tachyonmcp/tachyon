@@ -928,16 +928,6 @@
         },
         {
           "ignore": true,
-          "code": "java.method.numberOfParametersChanged",
-          "old": "method void dev.tachyonmcp.core.protocol.ProtocolRequestMapper.SubscriptionListenRequest::<init>(boolean, boolean, boolean, java.util.Set<java.lang.String>)",
-          "new": "method void dev.tachyonmcp.core.protocol.ProtocolRequestMapper.SubscriptionListenRequest::<init>(boolean, boolean, boolean, java.util.Set<java.lang.String>, java.util.Set<java.lang.String>)",
-          "justification": "subscriptions/listen gained per-task-ID notifications (SEP-2663): a taskIds allowlist alongside the existing toolsListChanged/promptsListChanged/resourcesListChanged/resourceSubscriptions filter fields",
-          "attachments": {
-            "since": "1.0.0-beta.23"
-          }
-        },
-        {
-          "ignore": true,
           "code": "java.class.removed",
           "old": "class dev.tachyonmcp.core.protocol.ProtocolRequestMapper.TaskUpdateRequest",
           "justification": "This internal nested request type is replaced by the public dev.tachyonmcp.api.server.features.tasks.TaskUpdateRequest, the one genuinely multi-field connector operation, now shared by both protocol versions instead of duplicated per-mapper",
@@ -1509,6 +1499,73 @@
           "justification": "Restartable transport for Spring SmartLifecycle stop/start and CRaC; TachyonServer is created by the builder and not meant to be implemented by users",
           "attachments": {
             "since": "1.0.0-beta.33"
+          }
+        },
+        {
+          "ignore": true,
+          "code": "java.class.removed",
+          "old": "class dev.tachyonmcp.core.protocol.ProtocolRequestMapper.SubscriptionListenRequest",
+          "justification": "Subscription topics replace the fixed-field subscriptions/listen request type",
+          "attachments": {
+            "since": "1.0.0-SNAPSHOT"
+          }
+        },
+        {
+          "ignore": true,
+          "code": "java.method.removed",
+          "old": "method dev.tachyonmcp.core.protocol.ProtocolRequestMapper.SubscriptionListenRequest dev.tachyonmcp.core.protocol.ProtocolRequestMapper::subscriptionsListen(java.lang.Object)",
+          "justification": "Subscription topics decode the raw notifications filter through subscriptionFilter()",
+          "attachments": {
+            "since": "1.0.0-SNAPSHOT"
+          }
+        },
+        {
+          "ignore": true,
+          "code": "java.method.removed",
+          "old": "method java.lang.Object dev.tachyonmcp.core.protocol.ProtocolResponseMapper::subscriptionListChangedParams(dev.tachyonmcp.api.server.domain.RequestId)",
+          "justification": "SubscriptionRegistry tags every topic notification through subscriptionNotificationParams()",
+          "attachments": {
+            "since": "1.0.0-SNAPSHOT"
+          }
+        },
+        {
+          "ignore": true,
+          "code": "java.method.removed",
+          "old": "method java.lang.Object dev.tachyonmcp.core.protocol.ProtocolResponseMapper::subscriptionResourceUpdatedParams(dev.tachyonmcp.api.server.domain.RequestId, java.lang.String)",
+          "justification": "SubscriptionRegistry tags every topic notification through subscriptionNotificationParams()",
+          "attachments": {
+            "since": "1.0.0-SNAPSHOT"
+          }
+        },
+        {
+          "ignore": true,
+          "code": "java.method.parameterTypeChanged",
+          "old": "parameter java.lang.Object dev.tachyonmcp.core.protocol.ProtocolResponseMapper::subscriptionsAcknowledgedParams(dev.tachyonmcp.api.server.domain.RequestId, ===dev.tachyonmcp.core.protocol.ProtocolRequestMapper.SubscriptionListenRequest===)",
+          "new": "parameter java.lang.Object dev.tachyonmcp.core.protocol.ProtocolResponseMapper::subscriptionsAcknowledgedParams(dev.tachyonmcp.api.server.domain.RequestId, ===java.util.Map<java.lang.String, java.lang.Object>===)",
+          "parameterIndex": "1",
+          "justification": "The acknowledgement accepts the honored filter from registered subscription topics",
+          "attachments": {
+            "since": "1.0.0-SNAPSHOT"
+          }
+        },
+        {
+          "ignore": true,
+          "code": "java.method.numberOfParametersChanged",
+          "old": "method void dev.tachyonmcp.core.server.features.prompts.PromptMethodHandlers::register(java.util.Map<java.lang.String, dev.tachyonmcp.core.server.RpcMethodHandler<?, ?>>, dev.tachyonmcp.core.server.features.prompts.DefaultPromptRegistry, dev.tachyonmcp.api.json.JsonSchemaValidator)",
+          "new": "method void dev.tachyonmcp.core.server.features.prompts.PromptMethodHandlers::register(java.util.Map<java.lang.String, dev.tachyonmcp.core.server.RpcMethodHandler<?, ?>>, dev.tachyonmcp.core.server.features.prompts.DefaultPromptRegistry, dev.tachyonmcp.core.server.features.subscriptions.SubscriptionRegistry, dev.tachyonmcp.api.json.JsonSchemaValidator)",
+          "justification": "Prompt handler registration also registers its subscriptions/listen topic",
+          "attachments": {
+            "since": "1.0.0-SNAPSHOT"
+          }
+        },
+        {
+          "ignore": true,
+          "code": "java.method.numberOfParametersChanged",
+          "old": "method void dev.tachyonmcp.core.server.features.resources.ResourceMethodHandlers::register(java.util.Map<java.lang.String, dev.tachyonmcp.core.server.RpcMethodHandler<?, ?>>, dev.tachyonmcp.core.server.features.resources.DefaultResourceRegistry)",
+          "new": "method void dev.tachyonmcp.core.server.features.resources.ResourceMethodHandlers::register(java.util.Map<java.lang.String, dev.tachyonmcp.core.server.RpcMethodHandler<?, ?>>, dev.tachyonmcp.core.server.features.resources.DefaultResourceRegistry, dev.tachyonmcp.core.server.features.subscriptions.SubscriptionRegistry)",
+          "justification": "Resource handler registration also registers its subscriptions/listen topics",
+          "attachments": {
+            "since": "1.0.0-SNAPSHOT"
           }
         }
       ]

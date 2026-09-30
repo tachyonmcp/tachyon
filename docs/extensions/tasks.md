@@ -159,7 +159,9 @@ Every `subscriptions/listen` stream that names a task id also receives that task
 stream opens, Tachyon calls the connector's `get` with the listener's `InteractionContext` for each
 id it names. An id the connector refuses or fails on is left out, and the acknowledgment lists only
 the ids that stay. The check runs once per stream, not per notification. Status is never broadcast
-to other sessions.
+to other sessions. The tasks extension owns the `taskIds` filter topic. Without that extension,
+`taskIds` is ignored and omitted from the acknowledgment. With the extension installed, the client
+must declare it before requesting task ids.
 
 ## Retrieve the result
 

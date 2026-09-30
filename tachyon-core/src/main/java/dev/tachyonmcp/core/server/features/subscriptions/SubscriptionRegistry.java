@@ -2,25 +2,33 @@
 package dev.tachyonmcp.core.server.features.subscriptions;
 
 import dev.tachyonmcp.api.annotations.InternalApi;
+import dev.tachyonmcp.api.json.JsonObject;
 import dev.tachyonmcp.api.server.domain.RequestId;
-import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
-import dev.tachyonmcp.core.protocol.ProtocolRequestMapper.SubscriptionListenRequest;
 import dev.tachyonmcp.core.protocol.ProtocolResponseMapper;
+import dev.tachyonmcp.core.protocol.RequestMappingException;
 import dev.tachyonmcp.core.runtime.SseEvent;
 import dev.tachyonmcp.core.server.OutboundSseStream;
+import dev.tachyonmcp.core.server.domain.ServerErrors;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
+import dev.tachyonmcp.core.server.session.DispatchContext;
 import dev.tachyonmcp.core.transport.jsonrpc.JsonRpcCodec;
+import java.util.Collections;
+import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Function;
 import java.util.function.Predicate;
 
 /**
- * Tracks active {@code subscriptions/listen} streams (2026-07-28), independent of any session,
- * and pushes {@code notifications/tools|prompts|resources/list_changed} and {@code
- * notifications/resources/updated} to each stream whose filter opted in.
+ * Tracks active {@code subscriptions/listen} streams (2026-07-28), independent of any session, and
+ * pushes notifications to each stream whose filter opted into the {@link SubscriptionTopic} they
+ * belong to. Knows no filter names: core and extensions {@link #register} their topics and {@link
+ * #publish} to them, and every pushed notification is tagged with the stream's own subscription id.
  *
  * <p>Keyed by an internal counter, not the wire {@code subscriptionId} — two different stateless
  * connections may legally reuse the same JSON-RPC request id, so the registry's own key and the id
@@ -33,7 +41,7 @@ public final class SubscriptionRegistry {
     private record Entry(
             RequestId subscriptionId,
             OutboundSseStream stream,
-            SubscriptionListenRequest filter,
+            SubscriptionFilter filter,
             ProtocolResponseMapper responseMapper,
             CompletableFuture<Object> pendingResponse) {}
 
@@ -41,15 +49,18 @@ public final class SubscriptionRegistry {
     private final ConcurrentHashMap<Long, Entry> entries = new ConcurrentHashMap<>();
     private final AtomicLong nextKey = new AtomicLong();
 
+    /** Copy-on-write: topics are registered at startup and read on every listen and notification. */
+    private volatile Map<String, SubscriptionTopic<?>> topics = Map.of();
+
     /**
-     * Guards {@link #activate} against a concurrent {@code notifyXxx}/{@link #closeAll}: making the
+     * Guards {@link #activate} against a concurrent {@link #publish}/{@link #closeAll}: making the
      * subscription visible in {@code entries} and enqueueing its ack event must happen as one
      * atomic step, or a matching change firing in the gap between them is either dropped (never
      * delivered to this subscriber, because {@code entries} didn't have it yet) or delivered ahead
      * of the ack (forbidden — SEP-2575 requires the ack to be the first message on the stream).
      * Held only across cheap, non-blocking work (a map put, building a small JSON object, and
      * submitting an SSE write to the channel's event loop — never a network wait), so contention is
-     * a non-issue.
+     * a non-issue. Also serializes {@link #register}.
      */
     private final ReentrantLock lock = new ReentrantLock();
 
@@ -60,21 +71,63 @@ public final class SubscriptionRegistry {
     }
 
     /**
+     * Makes {@code topic} available to {@code subscriptions/listen} filters. Call while the server
+     * starts up, before listeners connect.
+     *
+     * @throws IllegalArgumentException if a topic with the same {@code filterKey} is registered
+     */
+    public void register(SubscriptionTopic<?> topic) {
+        lock.lock();
+        try {
+            if (topics.containsKey(topic.filterKey())) {
+                throw new IllegalArgumentException("Subscription topic already registered: " + topic.filterKey());
+            }
+            var updated = new LinkedHashMap<>(topics);
+            updated.put(topic.filterKey(), topic);
+            topics = Collections.unmodifiableMap(updated);
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
+     * Reads every registered topic from the raw {@code notifications} filter. Keys no topic owns are
+     * ignored.
+     *
+     * @throws RequestMappingException with {@code invalid_params} if a topic's value has the wrong JSON type
+     */
+    public SubscriptionFilter decode(DispatchContext context, JsonObject rawFilter) {
+        var requested = new LinkedHashMap<SubscriptionTopic<?>, Object>();
+        for (var topic : topics.values()) {
+            Object value;
+            try {
+                value = topic.decoder().decode(context, rawFilter);
+            } catch (IllegalArgumentException e) {
+                throw new RequestMappingException(ServerErrors.invalidParams(e.getMessage()));
+            }
+            if (value != null) {
+                requested.put(topic, value);
+            }
+        }
+        return new SubscriptionFilter(requested);
+    }
+
+    /**
      * Registers a new subscription and sends its ack-first {@code
-     * notifications/subscriptions/acknowledged} event, atomically with respect to concurrent {@code
-     * notifyXxx}/{@link #closeAll} calls — see {@link #lock}. Returns the registry key for a later
+     * notifications/subscriptions/acknowledged} event, atomically with respect to concurrent {@link
+     * #publish}/{@link #closeAll} calls — see {@link #lock}. Returns the registry key for a later
      * {@link #remove}. After {@link #closeAll}, the ack is followed at once by the graceful result.
      */
     public long activate(
             RequestId subscriptionId,
             OutboundSseStream stream,
-            SubscriptionListenRequest filter,
+            SubscriptionFilter filter,
             ProtocolResponseMapper responseMapper,
             CompletableFuture<Object> pendingResponse) {
         lock.lock();
         try {
             var key = nextKey.incrementAndGet();
-            var ackParams = responseMapper.subscriptionsAcknowledgedParams(subscriptionId, filter);
+            var ackParams = responseMapper.subscriptionsAcknowledgedParams(subscriptionId, filter.acknowledged());
             push(stream, responseMapper, "notifications/subscriptions/acknowledged", ackParams);
             if (closed) {
                 pendingResponse.complete(responseMapper.subscriptionsListenGracefulResult(subscriptionId));
@@ -92,65 +145,30 @@ public final class SubscriptionRegistry {
         entries.remove(key);
     }
 
-    public void notifyToolsListChanged() {
-        pushListChanged(SubscriptionListenRequest::toolsListChanged, "notifications/tools/list_changed");
-    }
-
-    public void notifyPromptsListChanged() {
-        pushListChanged(SubscriptionListenRequest::promptsListChanged, "notifications/prompts/list_changed");
-    }
-
-    public void notifyResourcesListChanged() {
-        pushListChanged(SubscriptionListenRequest::resourcesListChanged, "notifications/resources/list_changed");
-    }
-
     /**
-     * Pushes {@code notifications/tasks} (tasks extension, SEP-2663) to every subscription that
-     * opted into {@code snapshot.taskId()} via {@code subscriptions/listen}.
+     * Pushes {@code method} to every subscription that opted into {@code topic} with a value {@code
+     * wants} accepts. The stream's own subscription id is merged into the params' {@code _meta}.
+     *
+     * @param params builds the notification params once per protocol mapper in play
      */
-    public void notifyTaskStatus(TaskSnapshot snapshot) {
+    public <F> void publish(
+            SubscriptionTopic<F> topic,
+            Predicate<? super F> wants,
+            String method,
+            Function<ProtocolResponseMapper, Object> params) {
         lock.lock();
         try {
+            var built = new IdentityHashMap<ProtocolResponseMapper, Object>();
             for (var entry : entries.values()) {
-                if (!entry.filter().taskIds().contains(snapshot.taskId())) continue;
+                var requested = entry.filter().get(topic);
+                if (requested == null || !wants.test(requested)) continue;
+                var mapper = entry.responseMapper();
+                var base = built.computeIfAbsent(mapper, params);
                 push(
                         entry.stream(),
-                        entry.responseMapper(),
-                        "notifications/tasks",
-                        entry.responseMapper().subscriptionTaskStatusParams(entry.subscriptionId(), snapshot));
-            }
-        } finally {
-            lock.unlock();
-        }
-    }
-
-    /** Pushes {@code notifications/resources/updated} to every subscription that opted into {@code uri}. */
-    public void notifyResourceUpdated(String uri) {
-        lock.lock();
-        try {
-            for (var entry : entries.values()) {
-                if (!entry.filter().resourceSubscriptions().contains(uri)) continue;
-                push(
-                        entry.stream(),
-                        entry.responseMapper(),
-                        "notifications/resources/updated",
-                        entry.responseMapper().subscriptionResourceUpdatedParams(entry.subscriptionId(), uri));
-            }
-        } finally {
-            lock.unlock();
-        }
-    }
-
-    private void pushListChanged(Predicate<SubscriptionListenRequest> wants, String method) {
-        lock.lock();
-        try {
-            for (var entry : entries.values()) {
-                if (!wants.test(entry.filter())) continue;
-                push(
-                        entry.stream(),
-                        entry.responseMapper(),
+                        mapper,
                         method,
-                        entry.responseMapper().subscriptionListChangedParams(entry.subscriptionId()));
+                        mapper.subscriptionNotificationParams(entry.subscriptionId(), base));
             }
         } finally {
             lock.unlock();

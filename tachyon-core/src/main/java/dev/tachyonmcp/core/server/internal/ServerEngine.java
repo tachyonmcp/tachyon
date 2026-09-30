@@ -14,6 +14,7 @@ import dev.tachyonmcp.core.runtime.SseEvent;
 import dev.tachyonmcp.core.server.OutboundSseStream;
 import dev.tachyonmcp.core.server.RpcMethodHandler;
 import dev.tachyonmcp.core.server.TachyonServer;
+import dev.tachyonmcp.core.server.features.subscriptions.SubscriptionRegistry;
 import dev.tachyonmcp.core.server.features.tasks.TaskRuntime;
 import dev.tachyonmcp.core.server.session.SessionEvent;
 import dev.tachyonmcp.core.transport.jsonrpc.JsonRpcCodec;
@@ -102,6 +103,9 @@ public interface ServerEngine extends TachyonServer {
     /** Returns the installed task runtime, or {@link TaskRuntime#NONE} when no tasks extension is installed. */
     TaskRuntime taskRuntime();
 
+    /** Returns the registry of {@code subscriptions/listen} topics and streams. */
+    SubscriptionRegistry subscriptions();
+
     /**
      * Installs the task runtime. Called once, by the tasks extension while it bootstraps.
      *
@@ -111,10 +115,9 @@ public interface ServerEngine extends TachyonServer {
 
     /**
      * Maps and sends a task status notification to the task's route session ({@code sessionId}, the
-     * session of the tool call that created it; nothing when {@code null} or gone) and to the
-     * {@code subscriptions/listen} subscribers of its id, each authorized by the task connector when
-     * its stream opened. Never broadcast to other sessions. Never blocks on a slow client: its stream
-     * is closed instead.
+     * session of the tool call that created it; nothing when {@code null} or gone). Never broadcast to
+     * other sessions. Never blocks on a slow client: its stream is closed instead. {@code
+     * subscriptions/listen} subscribers are the tasks extension's own topic, see {@link #subscriptions()}.
      */
     void notifyTaskStatus(TaskSnapshot snapshot, @Nullable String sessionId);
 

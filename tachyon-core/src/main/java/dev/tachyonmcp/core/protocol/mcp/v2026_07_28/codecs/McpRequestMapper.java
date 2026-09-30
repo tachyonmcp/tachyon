@@ -1,12 +1,11 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
 package dev.tachyonmcp.core.protocol.mcp.v2026_07_28.codecs;
 
+import dev.tachyonmcp.api.json.JsonObject;
 import dev.tachyonmcp.api.json.PayloadDeserializer;
 import dev.tachyonmcp.core.protocol.mcp.AbstractMcpRequestMapper;
-import dev.tachyonmcp.core.protocol.mcp.v2026_07_28.models.SubscriptionsListenRequestParams;
+import dev.tachyonmcp.core.server.json.JsonUtils;
 import java.util.Objects;
-import java.util.Set;
-import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.node.ObjectNode;
 
@@ -47,24 +46,14 @@ public final class McpRequestMapper extends AbstractMcpRequestMapper {
     }
 
     @Override
-    public SubscriptionListenRequest subscriptionsListen(@Nullable Object params) {
-        var listenParams = convert(asObject(params), SubscriptionsListenRequestParams.class);
-        var filter = listenParams.notifications();
-        if (filter == null) {
-            return new SubscriptionListenRequest(false, false, false, Set.of(), Set.of());
+    public JsonObject subscriptionFilter(@Nullable Object params) {
+        var notifications = asObject(params).get("notifications");
+        if (notifications == null || notifications.isNull()) {
+            return JsonObject.empty();
         }
-        var resourceSubscriptions = filter.resourceSubscriptions() != null
-                ? filter.resourceSubscriptions().stream()
-                        .filter(Objects::nonNull)
-                        .collect(Collectors.toUnmodifiableSet())
-                : Set.<String>of();
-        return new SubscriptionListenRequest(
-                Boolean.TRUE.equals(filter.toolsListChanged()),
-                Boolean.TRUE.equals(filter.promptsListChanged()),
-                Boolean.TRUE.equals(filter.resourcesListChanged()),
-                resourceSubscriptions,
-                filter.taskIds() != null
-                        ? filter.taskIds().stream().filter(Objects::nonNull).collect(Collectors.toUnmodifiableSet())
-                        : Set.of());
+        if (!(notifications instanceof ObjectNode filter)) {
+            throw invalidParams("notifications must be an object");
+        }
+        return JsonObject.of(Objects.requireNonNull(JsonUtils.toObjectMap(filter)));
     }
 }

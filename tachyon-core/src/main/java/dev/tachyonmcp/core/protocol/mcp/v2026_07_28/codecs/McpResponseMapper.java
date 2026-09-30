@@ -26,7 +26,6 @@ import dev.tachyonmcp.api.server.features.resources.ResourceTemplateDescriptor;
 import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
 import dev.tachyonmcp.api.server.features.tools.ToolDescriptor;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
-import dev.tachyonmcp.core.protocol.ProtocolRequestMapper.SubscriptionListenRequest;
 import dev.tachyonmcp.core.protocol.codec.Codec;
 import dev.tachyonmcp.core.protocol.codec.CodecSupport;
 import dev.tachyonmcp.core.protocol.mcp.v2026_07_28.McpProtocol;
@@ -47,16 +46,12 @@ import dev.tachyonmcp.core.protocol.mcp.v2026_07_28.models.ListResourceTemplates
 import dev.tachyonmcp.core.protocol.mcp.v2026_07_28.models.ListResourcesResult;
 import dev.tachyonmcp.core.protocol.mcp.v2026_07_28.models.ListToolsResult;
 import dev.tachyonmcp.core.protocol.mcp.v2026_07_28.models.LoggingMessageNotificationParams;
-import dev.tachyonmcp.core.protocol.mcp.v2026_07_28.models.NotificationParams;
 import dev.tachyonmcp.core.protocol.mcp.v2026_07_28.models.Prompt;
 import dev.tachyonmcp.core.protocol.mcp.v2026_07_28.models.PromptArgument;
 import dev.tachyonmcp.core.protocol.mcp.v2026_07_28.models.ReadResourceResult;
 import dev.tachyonmcp.core.protocol.mcp.v2026_07_28.models.Resource;
 import dev.tachyonmcp.core.protocol.mcp.v2026_07_28.models.ResourceContents;
 import dev.tachyonmcp.core.protocol.mcp.v2026_07_28.models.ResourceTemplate;
-import dev.tachyonmcp.core.protocol.mcp.v2026_07_28.models.ResourceUpdatedNotificationParams;
-import dev.tachyonmcp.core.protocol.mcp.v2026_07_28.models.SubscriptionFilter;
-import dev.tachyonmcp.core.protocol.mcp.v2026_07_28.models.SubscriptionsAcknowledgedNotificationParams;
 import dev.tachyonmcp.core.protocol.mcp.v2026_07_28.models.SubscriptionsListenResult;
 import dev.tachyonmcp.core.protocol.mcp.v2026_07_28.models.TextResourceContents;
 import dev.tachyonmcp.core.protocol.mcp.v2026_07_28.models.Tool;
@@ -321,48 +316,26 @@ public final class McpResponseMapper extends dev.tachyonmcp.core.protocol.mcp.v2
     }
 
     @Override
-    public Object subscriptionsAcknowledgedParams(RequestId subscriptionId, SubscriptionListenRequest filter) {
-        var uris = filter.resourceSubscriptions();
-        var taskIds = filter.taskIds();
-        return new SubscriptionsAcknowledgedNotificationParams(
-                new SubscriptionFilter(
-                        trueOrNull(filter.toolsListChanged()),
-                        trueOrNull(filter.promptsListChanged()),
-                        trueOrNull(filter.resourcesListChanged()),
-                        uris.isEmpty() ? null : List.copyOf(uris),
-                        taskIds.isEmpty() ? null : List.copyOf(taskIds),
-                        null),
-                subscriptionIdMeta(subscriptionId));
+    public Object subscriptionsAcknowledgedParams(RequestId subscriptionId, Map<String, Object> honoredFilter) {
+        var ack = JsonNodeFactory.instance.objectNode();
+        ack.set("notifications", JsonUtils.toObjectTree(honoredFilter));
+        ack.set("_meta", subscriptionIdMeta(subscriptionId));
+        return ack;
     }
 
     @Override
-    public Object subscriptionListChangedParams(RequestId subscriptionId) {
-        return new NotificationParams(subscriptionIdMeta(subscriptionId));
-    }
-
-    @Override
-    public Object subscriptionResourceUpdatedParams(RequestId subscriptionId, String uri) {
-        return new ResourceUpdatedNotificationParams(uri, subscriptionIdMeta(subscriptionId));
-    }
-
-    @Override
-    public Object subscriptionTaskStatusParams(RequestId subscriptionId, TaskSnapshot snapshot) {
-        return McpTaskMapper.toStatusNotification(
-                snapshot,
-                taskResultNode(snapshot),
-                taskErrorNode(snapshot),
-                inputRequestsNode(snapshot),
-                Map.of(SUBSCRIPTION_ID_META_KEY, rawId(subscriptionId)));
+    public Object subscriptionNotificationParams(RequestId subscriptionId, Object params) {
+        var tagged = params instanceof ObjectNode node
+                ? node.deepCopy()
+                : (ObjectNode) Objects.requireNonNull(JsonUtils.parse(encode(params)));
+        var meta = tagged.get("_meta") instanceof ObjectNode existing ? existing : tagged.putObject("_meta");
+        meta.setAll(subscriptionIdMeta(subscriptionId));
+        return tagged;
     }
 
     @Override
     public Object subscriptionsListenGracefulResult(RequestId subscriptionId) {
         return new SubscriptionsListenResult(subscriptionIdMeta(subscriptionId), COMPLETE, null);
-    }
-
-    /** Opted-out filter flags are omitted from the wire, not sent as {@code false}. */
-    private static @Nullable Boolean trueOrNull(boolean requested) {
-        return requested ? Boolean.TRUE : null;
     }
 
     private static ObjectNode subscriptionIdMeta(RequestId subscriptionId) {
