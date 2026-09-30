@@ -22,4 +22,9 @@ class ToolErrorContractTest extends AbstractToolErrorContractTest<Mcp20251125Cli
         client.initialize();
         return client;
     }
+
+    @Override
+    protected int invalidParamsHttpStatus() {
+        return 200;
+    }
 }
