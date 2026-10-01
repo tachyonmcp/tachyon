@@ -89,7 +89,7 @@ examples: ## Build live examples against published artifacts
 
 examples-snapshot: install-server ## Build examples against local SNAPSHOT artifacts
 	@echo "🌤️ 🎬 Building SNAPSHOT examples..."
-	@./mvnw verify -P snapshot-examples -f examples/pom.xml -Dtachyon.version=1.0.0-SNAPSHOT --no-transfer-progress
+	@./mvnw verify -P snapshot-examples -f examples/pom.xml -Dtachyon.version=1.0.1-SNAPSHOT --no-transfer-progress
 	@echo " ✅  Done!"
 
 conformance: ## Run MCP conformance suite

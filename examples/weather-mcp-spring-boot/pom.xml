@@ -8,7 +8,8 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>dev.tachyonmcp.example</groupId>
     <artifactId>weather-mcp-spring-boot</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>1.0.0</version>
+<!--    <version>1.0.1-SNAPSHOT</version>-->
     <name>Weather MCP - Spring Boot</name>
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -16,7 +17,7 @@
         <maven.compiler.parameters>true</maven.compiler.parameters>
         <spring-boot.version>4.1.1</spring-boot.version>
         <tachyon.version>1.0.0</tachyon.version>
-<!--        <tachyon.version>1.0.0-SNAPSHOT</tachyon.version>-->
+<!--        <tachyon.version>1.0.1-SNAPSHOT</tachyon.version>-->
     </properties>
     <dependencyManagement>
         <dependencies>

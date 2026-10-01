@@ -203,7 +203,7 @@ jobs:
 
       - name: Verify example
         working-directory: 'examples/${{ matrix.example }}'
-        run: ./mvnw verify -Dtachyon.version=1.0.0-SNAPSHOT --no-transfer-progress
+        run: ./mvnw verify -Dtachyon.version=1.0.1-SNAPSHOT --no-transfer-progress
 
       - name: Publish test results
         uses: mikepenz/action-junit-report@a9170d5795813c01ab4901ffb045b52bab4ab09d # v6
