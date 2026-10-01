@@ -16,8 +16,8 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.release>21</maven.compiler.release>
-        <tachyon.version>1.0.0-rc.1</tachyon.version>
-<!--        <tachyon.version>1.0.0-SNAPSHOT</tachyon.version>-->
+        <tachyon.version>1.0.0</tachyon.version>
+<!--        <tachyon.version>1.0.1-SNAPSHOT</tachyon.version>-->
         <junit.version>6.1.3</junit.version>
         <json-unit.version>6.2.0</json-unit.version>
         <immutables.version>2.12.2</immutables.version>

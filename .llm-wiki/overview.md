@@ -12,7 +12,7 @@ Tachyon = MCP **server** library. Netty Streamable-HTTP transport, JSON-RPC, vir
 
 ## 📦 Modules
 
-Root `pom.xml` version `1.0.0-SNAPSHOT`. Java `21` (`pom.xml`), Kotlin `2.2.21` (`pom.xml`), Jackson **3** (`pom.xml`, package `tools.jackson.*`), Netty `4.2+` (`pom.xml`).
+Root `pom.xml` version `1.0.1-SNAPSHOT`. Java `21` (`pom.xml`), Kotlin `2.2.21` (`pom.xml`), Jackson **3** (`pom.xml`, package `tools.jackson.*`), Netty `4.2+` (`pom.xml`).
 
 ```mermaid
 graph TD

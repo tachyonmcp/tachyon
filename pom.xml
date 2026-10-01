@@ -9,7 +9,7 @@
 
     <groupId>dev.tachyonmcp</groupId>
     <artifactId>root</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>1.0.1-SNAPSHOT</version>
     <packaging>pom</packaging>
 
     <name>Tachyon MCP</name>
@@ -33,6 +33,10 @@
             <id>kpavlov</id>
             <name>Konstantin Pavlov</name>
             <url>https://github.com/kpavlov</url>
+            <roles>
+                <role>author</role>
+                <role>maintainer</role>
+            </roles>
         </developer>
     </developers>
 
@@ -61,14 +65,14 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <!-- Reproducible builds: fixed for dev builds, overridden with the tag commit time on release -->
-        <project.build.outputTimestamp>2026-09-19T00:00:00Z</project.build.outputTimestamp>
+        <project.build.outputTimestamp>2026-10-01T08:49:07Z</project.build.outputTimestamp>
         <!-- Published modules override this with their stable JPMS automatic module name -->
         <automatic.module.name>dev.tachyonmcp.internal</automatic.module.name>
         <!-- Java -->
         <java.version>21</java.version>
         <kotlin.version>2.2.21</kotlin.version>
         <kotlin-language.version>2.2</kotlin-language.version>
-        <api.oldVersion>1.0.0-rc.1</api.oldVersion>
+        <api.oldVersion>1.0.0</api.oldVersion>
         <!-- Bound to verify in the modules that declare revapi; needs the baseline from Central, so opt in with -Drevapi.skip=false -->
         <revapi.skip>true</revapi.skip>
 

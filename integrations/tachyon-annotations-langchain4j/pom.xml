@@ -10,7 +10,7 @@
     <parent>
         <groupId>dev.tachyonmcp</groupId>
         <artifactId>tachyon-integrations</artifactId>
-        <version>1.0.0-SNAPSHOT</version>
+        <version>1.0.1-SNAPSHOT</version>
     </parent>
 
     <artifactId>tachyon-annotations-langchain4j</artifactId>
