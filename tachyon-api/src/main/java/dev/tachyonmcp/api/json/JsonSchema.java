@@ -41,6 +41,7 @@ public interface JsonSchema extends JsonDocument {
      * @param json Json string
      * @throws IllegalArgumentException when json is null or blank string
      * @deprecated Use {@link #unchecked(String)}
+     * @return the json schema
      */
     @Deprecated
     static JsonSchema of(String json) {
@@ -56,6 +57,7 @@ public interface JsonSchema extends JsonDocument {
      * @param type   the source representation's type
      * @return the parsed schema
      * @throws IllegalStateException if no {@code JsonSchemaFactory} is registered for {@code type}
+     * @param <T> the value type
      */
     @ExperimentalApi
     static <T> JsonSchema from(T source, Class<T> type) {

@@ -21,6 +21,14 @@ public record PromptRequest(
         @Nullable Map<String, Object> meta)
         implements ServerFeature.Request {
 
+    /**
+     * Creates a prompt request.
+     *
+     * @param arguments the arguments
+     * @param inputResponses the input responses
+     * @param requestState the request state
+     * @param meta the metadata entries
+     */
     public PromptRequest {
         if (arguments == null) arguments = Args.empty();
     }

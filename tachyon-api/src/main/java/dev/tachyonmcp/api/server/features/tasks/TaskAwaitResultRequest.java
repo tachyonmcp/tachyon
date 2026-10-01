@@ -15,7 +15,11 @@ import org.jspecify.annotations.Nullable;
 @Value.Style(visibilityString = "PACKAGE", typeImmutable = "Default*")
 public interface TaskAwaitResultRequest extends HasMeta {
 
-    /** Returns the task identifier. */
+    /**
+     * Returns the task identifier.
+     *
+     * @return the task identifier
+     */
     String taskId();
 
     /** Returns request metadata, or {@code null} when absent. */
@@ -29,23 +33,46 @@ public interface TaskAwaitResultRequest extends HasMeta {
         if (taskId().isBlank()) throw new IllegalArgumentException("taskId cannot be blank");
     }
 
-    /** Creates a request builder. */
+    /**
+     * Creates a request builder.
+     *
+     * @return a new builder
+     */
     static Builder builder() {
         return DefaultTaskAwaitResultRequest.builder();
     }
 
     /** Builder for {@link TaskAwaitResultRequest}. */
     interface Builder {
-        /** Copies an existing request. */
+        /**
+         * Copies an existing request.
+         *
+         * @param request the request
+         * @return this builder
+         */
         Builder from(TaskAwaitResultRequest request);
 
-        /** Sets the task identifier. */
+        /**
+         * Sets the task identifier.
+         *
+         * @param taskId the task id
+         * @return this builder
+         */
         Builder taskId(String taskId);
 
-        /** Sets request metadata. */
+        /**
+         * Sets request metadata.
+         *
+         * @param meta the metadata entries
+         * @return this builder
+         */
         Builder meta(@Nullable Map<String, ?> meta);
 
-        /** Builds the request. */
+        /**
+         * Builds the request.
+         *
+         * @return the configured value
+         */
         TaskAwaitResultRequest build();
     }
 }

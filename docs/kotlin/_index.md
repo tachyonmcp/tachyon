@@ -558,7 +558,8 @@ Available via `ToolScope.arguments` (or `PromptScope.arguments`):
 
 Within `network { }`, `address` is mutually exclusive with `host` or `port`.
 Within `json { }`, `serde` is mutually exclusive with `serializer` or `deserializer`.
-Conflicting settings throw `IllegalArgumentException`.
+Conflicting settings throw `IllegalArgumentException` in the Kotlin scopes; the Java network
+builder throws `IllegalStateException` for conflicting address settings.
 
 `argumentName`, `argumentValue`, and `resolvedArguments` are raw client input — escape or
 allow-list before using them in a query, command, or path.
@@ -589,7 +590,7 @@ TachyonServer(port = 8080) {
 
 ## Post-build registration
 
-Every builder-time registration function has a suspend `register*` twin on the built
+Every builder-time registration function has a `register*` twin accepting a suspend handler on the built
 `TachyonServer`, callable before or after `start()` — the Kotlin equivalent of Java's
 `server.tools().register(...)`, `server.resources().register(...)`,
 `server.prompts().register(...)`, and `server.completions().registerForPrompt/Resource(...)`.

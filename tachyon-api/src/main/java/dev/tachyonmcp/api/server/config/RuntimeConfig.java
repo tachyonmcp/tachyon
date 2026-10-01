@@ -19,6 +19,8 @@ public interface RuntimeConfig {
      * they are force-interrupted (default 5s). {@code Duration.ZERO} interrupts running
      * handlers immediately. Also bounds each wait while the transport closes its connections and
      * event loops.
+     *
+     * @return the shutdown grace period
      */
     @Value.Default
     default Duration shutdownGracePeriod() {
@@ -27,6 +29,8 @@ public interface RuntimeConfig {
 
     /**
      * Timeout for pending requests sent to the client (default 60s).
+     *
+     * @return the request timeout
      */
     @Value.Default
     default Duration requestTimeout() {
@@ -37,15 +41,28 @@ public interface RuntimeConfig {
      * Clock used for task timestamps ({@code createdAt}, {@code lastUpdatedAt}) and TTL/expiry
      * checks (default {@link Clock#systemUTC()}). Override with a fixed or controllable clock in
      * tests that need deterministic timing.
+     *
+     * @return the clock
      */
     @Value.Default
     default Clock clock() {
         return Clock.systemUTC();
     }
 
+    /**
+     * Default Request timeout.
+     */
     Duration DEFAULT_REQUEST_TIMEOUT = Duration.ofSeconds(60);
+    /**
+     * Default.
+     */
     RuntimeConfig DEFAULT = DefaultRuntimeConfig.of(Duration.ofSeconds(5), DEFAULT_REQUEST_TIMEOUT, Clock.systemUTC());
 
+    /**
+     * Creates a new builder.
+     *
+     * @return a new builder
+     */
     static Builder builder() {
         return DefaultRuntimeConfig.builder();
     }
@@ -59,18 +76,33 @@ public interface RuntimeConfig {
          * Sets the shutdown grace period: how long an owned executor is given to drain in-flight
          * handlers on {@code close()} before they are force-interrupted. {@code Duration.ZERO}
          * interrupts running handlers immediately.
+         *
+         * @param shutdownGracePeriod the shutdown grace period
+         * @return this builder
          */
         public abstract Builder shutdownGracePeriod(Duration shutdownGracePeriod);
 
         /**
          * Sets the timeout for pending requests sent to the client (default 60s).
+         *
+         * @param requestTimeout the request timeout
+         * @return this builder
          */
         public abstract Builder requestTimeout(Duration requestTimeout);
 
-        /** Sets the clock used for task timestamps and TTL/expiry checks. */
+        /**
+         * Sets the clock used for task timestamps and TTL/expiry checks.
+         *
+         * @param clock the clock
+         * @return this builder
+         */
         public abstract Builder clock(Clock clock);
 
-        /** Builds the {@link RuntimeConfig}. */
+        /**
+         * Builds the {@link RuntimeConfig}.
+         *
+         * @return the configured value
+         */
         public abstract RuntimeConfig build();
     }
 }

@@ -13,7 +13,12 @@ import java.util.stream.Collectors;
  */
 public record SchemaValidationError(String path, String keyword, String message) {
 
-    /** Joins the messages of several errors into one {@code "; "}-separated string. */
+    /**
+     * Joins the messages of several errors into one {@code "; "}-separated string.
+     *
+     * @param errors the errors
+     * @return the joined error messages
+     */
     public static String join(List<SchemaValidationError> errors) {
         return errors.stream().map(SchemaValidationError::message).collect(Collectors.joining("; "));
     }

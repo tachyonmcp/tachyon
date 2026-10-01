@@ -69,6 +69,7 @@ public final class AnnotationInvocationSupport {
      *
      * @param type the Java type to map
      * @throws IllegalStateException if {@code type} isn't one {@link #coerce} can produce
+     * @return the corresponding JSON Schema type name
      */
     public static String jsonSchemaType(Type type) {
         Type effective = unwrapOptional(type);

@@ -8,16 +8,29 @@ import java.util.Map;
 @FunctionalInterface
 public interface ExtensionSettings {
 
-    /** Returns the settings as an immutable JSON object. */
+    /**
+     * Returns the settings as an immutable JSON object.
+     *
+     * @return the settings as an immutable JSON object
+     */
     JsonObject values();
 
-    /** Creates settings from JSON-compatible values. */
+    /**
+     * Creates settings from JSON-compatible values.
+     *
+     * @param values the values
+     * @return the extension settings
+     */
     static ExtensionSettings of(Map<String, ?> values) {
         var object = JsonObject.of(values);
         return () -> object;
     }
 
-    /** Returns empty settings. */
+    /**
+     * Returns empty settings.
+     *
+     * @return the empty extension settings
+     */
     static ExtensionSettings empty() {
         return JsonObject::empty;
     }

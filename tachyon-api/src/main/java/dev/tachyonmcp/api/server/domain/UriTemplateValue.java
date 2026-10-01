@@ -65,6 +65,11 @@ public sealed interface UriTemplateValue permits UriTemplateValue.Scalar, UriTem
      * @param value the scalar value
      */
     record Scalar(String value) implements UriTemplateValue {
+        /**
+         * Creates a scalar URI template value.
+         *
+         * @param value the value
+         */
         public Scalar {
             Objects.requireNonNull(value, "value");
         }
@@ -76,6 +81,11 @@ public sealed interface UriTemplateValue permits UriTemplateValue.Scalar, UriTem
      * @param values the sequence values
      */
     record Sequence(List<String> values) implements UriTemplateValue {
+        /**
+         * Creates a sequence of URI template values.
+         *
+         * @param values the values
+         */
         public Sequence {
             Objects.requireNonNull(values, "values");
             values = List.copyOf(values);

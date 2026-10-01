@@ -21,6 +21,7 @@ import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
+/** Tool that searches the web through the You.com HTTP API. */
 public class YouComSearchTool extends AbstractToolHandler {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -61,6 +62,11 @@ public class YouComSearchTool extends AbstractToolHandler {
 
     private final YouComSearchConfig config;
 
+    /**
+     * Creates a search tool with the supplied connection settings.
+     *
+     * @param config API credentials, profile, and endpoint settings
+     */
     public YouComSearchTool(YouComSearchConfig config) {
         super(ToolDescriptor.builder()
                 .name("you-search")

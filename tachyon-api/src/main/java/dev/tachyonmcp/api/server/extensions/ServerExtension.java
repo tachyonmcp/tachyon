@@ -7,7 +7,11 @@ import java.util.Set;
 
 /** Pluggable server extension that can add custom methods, capabilities, and lifecycle hooks. */
 public interface ServerExtension extends Extension<InteractionContext> {
-    /** Returns the server settings to advertise for this extension, e.g. in {@code initialize} or {@code server/discover}. */
+    /**
+     * Returns the server settings to advertise for this extension, e.g. in {@code initialize} or {@code server/discover}.
+     *
+     * @return the settings advertised for this extension
+     */
     default ExtensionSettings serverSettings() {
         return ExtensionSettings.empty();
     }
@@ -15,10 +19,16 @@ public interface ServerExtension extends Extension<InteractionContext> {
     /**
      * Controls whether this extension is advertised to clients (e.g. in {@code initialize} or {@code server/discover}).
      * See {@link AdvertiseMode}.
+     *
+     * @return the advertise mode
      */
     AdvertiseMode advertiseMode();
 
-    /** Returns the set of JSON-RPC methods this extension handles. */
+    /**
+     * Returns the set of JSON-RPC methods this extension handles.
+     *
+     * @return the set of JSON-RPC methods this extension handles
+     */
     default Set<String> methods() {
         return Set.of();
     }
@@ -34,7 +44,11 @@ public interface ServerExtension extends Extension<InteractionContext> {
         return ExtensionNegotiation.OPTIONAL;
     }
 
-    /** Bootstraps the extension during server startup. */
+    /**
+     * Bootstraps the extension during server construction, before the transport starts.
+     *
+     * @param context the server registries and runtime services available to the extension
+     */
     default void bootstrap(ExtensionContext context) {}
 
     /**

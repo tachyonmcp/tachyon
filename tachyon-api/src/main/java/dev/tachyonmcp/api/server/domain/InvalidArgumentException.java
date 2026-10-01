@@ -9,6 +9,9 @@ package dev.tachyonmcp.api.server.domain;
  */
 public final class InvalidArgumentException extends IllegalArgumentException {
 
+    /**
+     * Arg name.
+     */
     private final String argName;
 
     /**

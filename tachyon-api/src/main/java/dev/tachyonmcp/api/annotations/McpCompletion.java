@@ -27,7 +27,8 @@ import java.lang.annotation.Target;
  * registration.
  *
  * <p>Enum-typed prompt and resource template arguments complete from constant names automatically;
- * declaring {@code @McpCompletion} for the same target in the same service replaces that default.
+ * an explicit {@code @McpCompletion} for the same target takes precedence, regardless of service
+ * registration order.
  *
  * <p>Alternatively, take a single {@code CompletionRequest} to handle all arguments of the target
  * and read the partial value, resolved siblings, and request metadata directly. Either signature

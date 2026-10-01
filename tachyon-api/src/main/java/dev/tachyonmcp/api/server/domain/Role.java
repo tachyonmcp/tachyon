@@ -10,7 +10,13 @@ package dev.tachyonmcp.api.server.domain;
  * {@link #getValue()} and {@link #fromValue(String)}.
  */
 public enum Role {
+    /**
+     * User.
+     */
     USER("user"),
+    /**
+     * Assistant.
+     */
     ASSISTANT("assistant");
 
     private final String value;
@@ -19,7 +25,11 @@ public enum Role {
         this.value = value;
     }
 
-    /** Returns the wire string for this role ({@code "user"} or {@code "assistant"}). */
+    /**
+     * Returns the wire string for this role ({@code "user"} or {@code "assistant"}).
+     *
+     * @return the wire string for this role ({@code "user"} or {@code "assistant"})
+     */
     public String getValue() {
         return value;
     }
@@ -28,6 +38,8 @@ public enum Role {
      * Parses a role from its wire string representation.
      *
      * @throws IllegalArgumentException when the value does not match any known role.
+     * @param value the value
+     * @return the matching role
      */
     public static Role fromValue(String value) {
         for (Role v : values()) {

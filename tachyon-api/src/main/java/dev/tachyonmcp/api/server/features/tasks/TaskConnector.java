@@ -52,22 +52,38 @@ public final class TaskConnector {
         this.awaitResult = awaitResult;
     }
 
-    /** Creates a new connector builder. */
+    /**
+     * Creates a new connector builder.
+     *
+     * @return a new builder
+     */
     public static Builder builder() {
         return new Builder();
     }
 
-    /** Returns the authoritative task lookup used by {@code tasks/get}. Always present. */
+    /**
+     * Returns the authoritative task lookup used by {@code tasks/get}. Always present.
+     *
+     * @return the authoritative task lookup used by {@code tasks/get}
+     */
     public TaskGetFn get() {
         return get;
     }
 
-    /** Returns the required {@code tasks/cancel} operation. */
+    /**
+     * Returns the required {@code tasks/cancel} operation.
+     *
+     * @return the required {@code tasks/cancel} operation
+     */
     public TaskCancelFn cancel() {
         return cancel;
     }
 
-    /** Returns the required {@code tasks/update} operation. */
+    /**
+     * Returns the required {@code tasks/update} operation.
+     *
+     * @return the required {@code tasks/update} operation
+     */
     public TaskUpdateFn update() {
         return update;
     }
@@ -79,6 +95,8 @@ public final class TaskConnector {
      * Legacy: legacy surface kept for MCP 2025-11-25 (pre-SEP-2663) compatibility; no
      *     equivalent exists in the modern tasks extension. Not scheduled for removal.
      * </p>
+     *
+     * @return the legacy {@code tasks/list} hook, or {@code null} when unsupported
      */
     @LegacyApi
     public @Nullable TaskListFn list() {
@@ -91,6 +109,8 @@ public final class TaskConnector {
      * Legacy: legacy surface kept for MCP 2025-11-25 (pre-SEP-2663) compatibility; no
      *     equivalent exists in the modern tasks extension. Not scheduled for removal.
      * </p>
+     *
+     * @return the legacy blocking {@code tasks/result} hook, or {@code null} when unsupported
      */
     @LegacyApi
     public @Nullable TaskAwaitResultFn awaitResult() {
@@ -110,19 +130,34 @@ public final class TaskConnector {
 
         private Builder() {}
 
-        /** Sets the authoritative task lookup used by {@code tasks/get}. Required. */
+        /**
+         * Sets the authoritative task lookup used by {@code tasks/get}. Required.
+         *
+         * @param get the task lookup function
+         * @return this builder
+         */
         public Builder get(TaskGetFn get) {
             this.get = Objects.requireNonNull(get, "get");
             return this;
         }
 
-        /** Sets the required cooperative {@code tasks/cancel} operation. */
+        /**
+         * Sets the required cooperative {@code tasks/cancel} operation.
+         *
+         * @param cancel the task cancellation function
+         * @return this builder
+         */
         public Builder cancel(TaskCancelFn cancel) {
             this.cancel = Objects.requireNonNull(cancel, "cancel");
             return this;
         }
 
-        /** Sets the required {@code tasks/update} operation. */
+        /**
+         * Sets the required {@code tasks/update} operation.
+         *
+         * @param update the task input function
+         * @return this builder
+         */
         public Builder update(TaskUpdateFn update) {
             this.update = Objects.requireNonNull(update, "update");
             return this;
@@ -134,6 +169,9 @@ public final class TaskConnector {
          * Legacy: legacy surface kept for MCP 2025-11-25 (pre-SEP-2663) compatibility; no
          *     equivalent exists in the modern tasks extension. Not scheduled for removal.
          * </p>
+         *
+         * @param list the task listing function
+         * @return this builder
          */
         @LegacyApi
         public Builder list(TaskListFn list) {
@@ -147,6 +185,9 @@ public final class TaskConnector {
          * Legacy: legacy surface kept for MCP 2025-11-25 (pre-SEP-2663) compatibility; no
          *     equivalent exists in the modern tasks extension. Not scheduled for removal.
          * </p>
+         *
+         * @param awaitResult the task result function
+         * @return this builder
          */
         @LegacyApi
         public Builder awaitResult(TaskAwaitResultFn awaitResult) {
@@ -158,6 +199,7 @@ public final class TaskConnector {
          * Builds the connector.
          *
          * @throws IllegalStateException if a modern Tasks operation was not configured
+         * @return the configured value
          */
         public TaskConnector build() {
             if (get == null) throw new IllegalStateException("TaskConnector requires get(...)");

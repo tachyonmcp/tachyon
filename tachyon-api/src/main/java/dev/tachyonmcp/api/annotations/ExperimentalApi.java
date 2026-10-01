@@ -31,6 +31,10 @@ import java.lang.annotation.Target;
 })
 public @interface ExperimentalApi {
 
-    /** Version in which the annotated API became experimental. */
+    /**
+     * Version in which the annotated API became experimental.
+     *
+     * @return the version in which this API status began
+     */
     String since() default "";
 }

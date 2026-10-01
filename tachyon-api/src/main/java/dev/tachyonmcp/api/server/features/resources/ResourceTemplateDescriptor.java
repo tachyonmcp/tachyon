@@ -26,30 +26,58 @@ public interface ResourceTemplateDescriptor extends ServerFeature.Descriptor, Ha
     @Override
     String name();
 
-    /** The URI template pattern (e.g. {@code file:///{path}}). */
+    /**
+     * The URI template pattern (e.g. {@code file:///{path}}).
+     *
+     * @return the uri template
+     */
     String uriTemplate();
 
-    /** Optional description of the resource family. */
+    /**
+     * Optional description of the resource family.
+     *
+     * @return the description
+     */
     @Nullable
     String description();
 
-    /** Optional MIME type that all matching resources share. */
+    /**
+     * Optional MIME type that all matching resources share.
+     *
+     * @return the mime type
+     */
     @Nullable
     String mimeType();
 
-    /** Optional human-readable title. */
+    /**
+     * Optional human-readable title.
+     *
+     * @return the title
+     */
     @Nullable
     String title();
 
-    /** Optional annotations shared by resources matching this template. */
+    /**
+     * Optional annotations shared by resources matching this template.
+     *
+     * @return the annotations
+     */
     @Nullable
     Annotations annotations();
 
-    /** Optional identifier of the extension that owns this template. */
+    /**
+     * Optional identifier of the extension that owns this template.
+     *
+     * @return the extension id
+     */
     @Nullable
     String extensionId();
 
-    /** Icons for resources matching this template, or an empty list. */
+    /**
+     * Icons for resources matching this template, or an empty list.
+     *
+     * @return the icons
+     */
     List<Icon> icons();
 
     /** Optional protocol extension metadata. */
@@ -74,7 +102,7 @@ public interface ResourceTemplateDescriptor extends ServerFeature.Descriptor, Ha
     /**
      * Creates a builder for constructing resource template descriptors.
      *
-     * @return a new resource template descriptor builder
+     * @return a new builder
      */
     static Builder builder() {
         return DefaultResourceTemplateDescriptor.builder();
@@ -83,46 +111,101 @@ public interface ResourceTemplateDescriptor extends ServerFeature.Descriptor, Ha
     /** Builder for {@link ResourceTemplateDescriptor}. */
     interface Builder {
 
-        /** Fills this builder with the attribute values from {@code instance}. */
+        /**
+         * Fills this builder with the attribute values from {@code instance}.
+         *
+         * @param instance the instance to copy
+         * @return this builder
+         */
         Builder from(ResourceTemplateDescriptor instance);
 
-        /** Sets the template name, unique within the server. */
+        /**
+         * Sets the template name, unique within the server.
+         *
+         * @param name the name
+         * @return this builder
+         */
         Builder name(String name);
 
-        /** Sets the URI template pattern (e.g. {@code file:///{path}}). */
+        /**
+         * Sets the URI template pattern (e.g. {@code file:///{path}}).
+         *
+         * @param uriTemplate the URI template
+         * @return this builder
+         */
         Builder uriTemplate(String uriTemplate);
 
-        /** Sets the optional description of the resource family. */
+        /**
+         * Sets the optional description of the resource family.
+         *
+         * @param description the description
+         * @return this builder
+         */
         Builder description(@Nullable String description);
 
-        /** Sets the optional MIME type that all matching resources share. */
+        /**
+         * Sets the optional MIME type that all matching resources share.
+         *
+         * @param mimeType the MIME type
+         * @return this builder
+         */
         Builder mimeType(@Nullable String mimeType);
 
-        /** Sets the optional human-readable title. */
+        /**
+         * Sets the optional human-readable title.
+         *
+         * @param title the title
+         * @return this builder
+         */
         Builder title(@Nullable String title);
 
-        /** Sets the optional annotations shared by resources matching this template. */
+        /**
+         * Sets the optional annotations shared by resources matching this template.
+         *
+         * @param annotations the annotations
+         * @return this builder
+         */
         Builder annotations(@Nullable Annotations annotations);
 
-        /** Sets the icons for resources matching this template. */
+        /**
+         * Sets the icons for resources matching this template.
+         *
+         * @param elements the elements
+         * @return this builder
+         */
         Builder icons(Iterable<? extends Icon> elements);
 
-        /** Sets the icons for resources matching this template; an empty array means no icons. */
+        /**
+         * Sets the icons for resources matching this template; an empty array means no icons.
+         *
+         * @param elements the elements
+         * @return this builder
+         */
         default Builder icons(Icon... elements) {
             return icons(List.of(elements));
         }
 
-        /** Sets the optional identifier of the extension that owns this template. */
+        /**
+         * Sets the optional identifier of the extension that owns this template.
+         *
+         * @param extensionId the extension identifier
+         * @return this builder
+         */
         Builder extensionId(@Nullable String extensionId);
 
         /**
          * Sets optional protocol extension metadata.
          *
          * @param entries metadata entries, or {@code null} for none
+         * @return this builder
          */
         Builder meta(@Nullable Map<String, ?> entries);
 
-        /** Builds the {@link ResourceTemplateDescriptor}. */
+        /**
+         * Builds the {@link ResourceTemplateDescriptor}.
+         *
+         * @return the configured value
+         */
         ResourceTemplateDescriptor build();
     }
 }

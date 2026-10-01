@@ -19,7 +19,7 @@ fail to compile and won't show up until a client hits them.
 | Concern | Kotlin MCP SDK | Tachyon (Kotlin) |
 |---|---|---|
 | Package root | `io.modelcontextprotocol.kotlin.sdk.*` | `dev.tachyonmcp.{api,core,kotlin}.*` |
-| JSON node type | kotlinx `JsonElement` / `McpJson` | **Jackson 3** `tools.jackson.databind.JsonNode` |
+| JSON node type | kotlinx `JsonElement` / `McpJson` | Provider-neutral `JsonDocument` / `JsonObject`; Jackson 3 or kotlinx providers |
 | Server + HTTP | `Server(...)` + you wire Ktor, sessions, reaper | `TachyonServer(port) { ... }` — transport & sessions built in |
 | Identity | `Implementation(name, version, title, websiteUrl, icons)` | `info { name; version; title; websiteUrl; icons.add(...) }` |
 | Icon | `sdk.types.Icon` | `dev.tachyonmcp.kotlin.server.domain.Icon { src = …; mimeType = … }` |
@@ -103,7 +103,7 @@ val logoIcon =
 
 ## 3. Tools
 
-`addTool` becomes `registerTool` (import from `dev.tachyonmcp.kotlin.server.features.tools`). The
+`addTool` becomes the `registerTool` member of `dev.tachyonmcp.kotlin.server.TachyonServer`. The
 handler receiver changes from `ClientConnection.(CallToolRequest)` to `ToolScope`, and it
 returns a `ToolResult`. `registerTool` returns the `TachyonServer`, so registrations chain.
 
@@ -144,7 +144,7 @@ CallToolResult(content = listOf(TextContent(json)))               → ToolResult
 CallToolResult(content = listOf(TextContent(json)), isError=true) → ToolResult.error(json)
 ToolResult.raw(structuredJson, textFallback)                    // pre-serialized JSON, skips serde
 success(EchoReply(...))                                         // configured serde → structuredContent
-ToolResult.structured(pojo)                                     // Jackson: POJO → structuredContent
+ToolResult.structured(pojo)                                     // configured serde → structuredContent
 ```
 
 ## 6. Schemas — three shapes, one gotcha
@@ -155,7 +155,7 @@ ToolResult.structured(pojo)                                     // Jackson: POJO
 
 - **Jackson 3**: `tools.jackson.databind.JsonNode`, *not* `com.fasterxml.jackson…`. Convert a
   kotlinx `JsonObject` once with `ObjectMapper().readTree(obj.toString())`.
-- The root must declare `"type":"object"` — validated at *registration*, so a typo in a raw
+- The input schema root must declare `"type":"object"` — validated at *registration*, so a typo in a raw
   string fails at boot, not at call time.
 - Generating schema strings from `@Serializable` types (e.g. `KClass.jsonSchemaString` from a
   schema-generator library) drops straight into the String overload and kills the
@@ -229,9 +229,9 @@ val server = TachyonServer(port = mcpPort) {
 ```
 
 `list_changed` fires automatically when the registry changes (given `listChanged = true`) — drop
-any manual `broadcastNotification("notifications/resources/list_changed", …)`. Use the resource
-**`name`** as your remove key; make it unique (the URI is a safe choice — bare filenames collide
-across directories, and `remove(name)` won't find a stale entry keyed differently).
+any manual `broadcastNotification("notifications/resources/list_changed", …)`. Use
+`server.resources().unregisterByUri(uri)` to remove a specific resource. `unregister(name)` removes
+one matching resource; names need not be unique.
 
 ## 9. Client requests
 

@@ -11,7 +11,7 @@ import java.lang.annotation.Target;
  * Indicates that an annotated element is legacy (not deprecated) and may be subject to
  * removal in future versions. This annotation serves as a warning
  * to developers that the API might be moved or removed in the future.
- * <p></p>
+ * <p>
  * Example is MCP Tasks: tasks/list and awaitResult are deprecated in 2026-07-28 MCP protocol.
  */
 @Documented
@@ -29,6 +29,8 @@ public @interface LegacyApi {
 
     /**
      * Version in which the annotated API became legacy.
+     *
+     * @return the version in which this API status began
      */
     String since() default "";
 }

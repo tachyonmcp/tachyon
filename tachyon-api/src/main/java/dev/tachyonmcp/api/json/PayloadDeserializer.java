@@ -20,11 +20,21 @@ public interface PayloadDeserializer {
 
     /**
      * Deserializes a JSON string to the given target type.
+     *
+     * @param <T> the value type
+     * @param json the encoded JSON
+     * @param targetType the target type
+     * @return the deserialized value
      */
     <T> T deserialize(String json, Type targetType);
 
     /**
      * Deserializes a JSON string to the given target class.
+     *
+     * @param <T> the value type
+     * @param json the encoded JSON
+     * @param targetClass the target class
+     * @return the deserialized value
      */
     default <T> T deserialize(String json, Class<T> targetClass) {
         return deserialize(json, (Type) targetClass);

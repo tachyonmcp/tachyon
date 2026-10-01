@@ -17,7 +17,7 @@ make test    # unit + e2e tests
 make lint    # check style: Spotless + Detekt (SpotBugs runs automatically during build)
 make format  # auto-fix style: Spotless + Detekt
 make jmh     # JMH benchmarks + throughput regression gate (BenchmarkGate)
-make ci      # what CI runs: clean + lint + build + revapi + jmh
+make ci      # what CI runs: clean + lint + build + revapi
 make all     # everything: clean + format + lint + full install + examples
 ```
 

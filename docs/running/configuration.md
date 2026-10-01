@@ -532,7 +532,7 @@ equivalents) — they mutate the same nested sub-config, so chaining still works
 
 | Option | Description |
 |---|---|
-| `threadFactory(ThreadFactory)` | Thread factory for the server-owned virtual-thread-per-task executor (default: `Thread.ofVirtual().name("tachyon-", 0)`) |
+| `threadFactory(ThreadFactory)` | Thread factory for the server-owned thread-per-task executor (default: `Thread.ofVirtual().name("tachyon-vt-", 0).factory()`) |
 | `pipelineCustomizer(Consumer<ChannelPipeline>)` | Hook to mutate the Netty pipeline after MCP handlers are installed |
 | `json(cfg -> cfg.inputSchemaValidator(...).outputSchemaValidator(...))` | Custom JSON Schema validators |
 
@@ -550,8 +550,8 @@ Runnable servers, each built in CI:
 | [`mcp-skills`](https://github.com/tachyonmcp/tachyon/tree/main/examples/mcp-skills) | Java | `SkillsExtension` with classpath and filesystem registries |
 | [`temporal`](https://github.com/tachyonmcp/tachyon/tree/main/examples/temporal) | Java | MCP tasks backed by Temporal workflows |
 
-Each is a standalone Maven project with its own wrapper; every one reads `HOST`, `PORT` and
-`ALLOWED_HOST` from the environment. See
+The standalone servers read `HOST`, `PORT` and `ALLOWED_HOST` from the environment; Temporal is
+a library and test example. See
 [`examples/README.md`](https://github.com/tachyonmcp/tachyon/blob/main/examples/README.md) for
 the per-example commands.
 

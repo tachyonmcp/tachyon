@@ -8,6 +8,9 @@ import java.util.Objects;
 @ExperimentalApi
 public final class TaskNotFoundException extends Exception {
 
+    /**
+     * Task id.
+     */
     private final String taskId;
 
     /**
@@ -31,7 +34,11 @@ public final class TaskNotFoundException extends Exception {
         this.taskId = taskId;
     }
 
-    /** Returns the unknown task identifier. */
+    /**
+     * Returns the unknown task identifier.
+     *
+     * @return the unknown task identifier
+     */
     public String taskId() {
         return taskId;
     }

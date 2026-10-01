@@ -8,13 +8,25 @@ package dev.tachyonmcp.api.runtime;
  */
 public interface Extension<T> {
 
-    /** Unique identifier for this extension. */
+    /**
+     * Unique identifier for this extension.
+     *
+     * @return the extension id
+     */
     String extensionId();
 
-    /** Called after connection initialization is complete. */
+    /**
+     * Called after connection initialization is complete.
+     *
+     * @param context the connection context
+     */
     default void onConnectionInit(T context) {}
 
-    /** Called when the connection is being closed. */
+    /**
+     * Called when the connection is being closed.
+     *
+     * @param context the connection context
+     */
     default void onConnectionClose(T context) {}
 
     /** Called during server shutdown to release resources. */

@@ -194,7 +194,7 @@ fun main() {
 ```
 
 Run `gradle --console=plain run`. Connect an MCP client to `http://127.0.0.1:8080/mcp`.
-For a curl request, use the [quickstart request](../quickstart.md#3-test-with-curl), setting both
+For a curl request, use the [quickstart request](../quickstart.md#3-call-the-greeting-tool), setting both
 the `Mcp-Name` header and `params.name` to the tool name below and replacing `params.arguments`.
 
 | Tool | Arguments | Result |

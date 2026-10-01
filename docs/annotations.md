@@ -266,10 +266,9 @@ and `org.springframework.ai.mcp.annotation.method.tool.utils.McpJsonSchemaGenera
 so records, enums, `List<T>`, and nested POJOs are described — and bound — correctly, not rejected.
 Both providers still strip parameters neither framework knows about (Tachyon's own
 `InteractionContext`) from the generated schema themselves. `SpringAiAnnotationProvider`
-additionally rejects, at registration, parameter types under `org.springframework.ai.mcp.annotation`
-that aren't one of the three request-context types it actually emulates (`McpSyncRequestContext`,
-`McpAsyncRequestContext`, `MetaProvider`) — e.g. `McpMeta` or `McpTransportContext` — instead of
-silently resolving them to `null` at invocation. `LangChain4jAnnotationProvider` cannot see generic
+additionally rejects Spring AI request-context types, MCP exchanges and request objects, and
+`@McpProgressToken` parameters at registration; it does not emulate Spring AI context injection.
+Use Tachyon's `InteractionContext` instead. `LangChain4jAnnotationProvider` cannot see generic
 type arguments — LangChain4j reads the declaring `Method` alone — so for a parameter declared with a type
 variable it describes the bound type with the scalar mapping above and rejects any other bound type at
 registration.
@@ -293,8 +292,8 @@ that name both in the advertised `PromptArgument` and when resolving the incomin
 `SpringAiAnnotationProvider` scans `instance.getClass().getDeclaredMethods()`. If `instance` is a
 Spring-managed bean wrapped in a CGLIB proxy — the default for `@Component`/`@Service` beans using
 class-based proxying — `getClass()` returns the proxy class, whose declared methods don't carry the
-original annotations. Register the unproxied instance, or a bean with proxying disabled
-(`proxyTargetClass = false` with an interface, or `@Scope(proxyMode = ScopeMode.NO)`).
+original annotations. Register the unproxied instance; this adapter does not preserve Spring AOP
+advice. Native Tachyon annotations support proxies through the [Spring Boot starter](spring-boot/_index.md).
 
 ## Implement a provider for another framework
 
@@ -323,5 +322,5 @@ themselves — registering two features under the same name silently replaces th
 ## Next steps
 
 - [Tools](features/tools.md) — declare annotated tools and return typed results
-- [Extensions](extensions/) — add negotiated protocol behaviour
+- [Extensions](extensions/_index.md) — add negotiated protocol behaviour
 - [Quickstart](quickstart.md) — run a minimal server

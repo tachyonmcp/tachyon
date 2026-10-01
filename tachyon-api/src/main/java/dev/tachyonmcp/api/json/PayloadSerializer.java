@@ -21,6 +21,10 @@ public interface PayloadSerializer {
 
     /**
      * Serializes a value to its JSON string representation.
+     *
+     * @param <T> the value type
+     * @param value the value
+     * @return the encoded JSON
      */
     <T> String serialize(T value);
 }

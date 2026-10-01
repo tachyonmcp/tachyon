@@ -3,7 +3,7 @@ title: tachyon-extensions
 tags: [module, extensions]
 sources: [extensions/tachyon-extensions/src/main/java/dev/tachyonmcp/extensions/, extensions/tachyon-extensions/src/main/resources/, extensions/tachyon-extensions/pom.xml]
 updated: 2026-09-19
-commit: 2dad742b
+commit: cf8f85f7
 ---
 
 # 🧩 tachyon-extensions

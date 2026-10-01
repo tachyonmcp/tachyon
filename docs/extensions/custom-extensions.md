@@ -104,7 +104,7 @@ public final class MyMcpServer {
 `withExtensions(...)` adds the extension. `session(...)` turns on server sessions. MCP `2026-07-28`
 clients don't need them. `2025-11-25` clients declare extensions once, in `initialize`, so without
 sessions the declaration lasts only for the `initialize` request. Reusing the TCP connection
-does not preserve it; later calls to this `REQUIRED` extension are rejected.
+does not preserve it; later calls are rejected if you make the extension `REQUIRED` below.
 
 ### 3. Run the server
 
@@ -204,10 +204,10 @@ You now have a working extension. The rest of this page explains the other optio
 | `advertiseMode()` | Yes | When the server lists the extension; see [advertisement](#advertisement) |
 | `serverSettings()` | No | Settings sent to clients with the advertisement; empty by default |
 | `negotiation()` | No | `OPTIONAL` (default) or `REQUIRED`; see [negotiation policy](_index.md#negotiation-policy) |
-| `bootstrap(ExtensionContext)` | No | Registers methods and features at startup |
+| `bootstrap(ExtensionContext)` | No | Registers methods and features during server construction |
 | `onConnectionInit(InteractionContext, ExtensionSettings)` | No | Runs when a client declares the extension |
 | `methods()` | No | Claims methods whose handlers are registered outside `bootstrap` |
-| `shutdown()` | No | Releases resources when the server stops |
+| `shutdown()` | No | Releases resources when the server is closed |
 
 `ExtensionContext`, passed to `bootstrap`, gives access to the tool, resource, prompt, and
 completion registries, the handler executor, and runtime settings. It doesn't expose the network
@@ -295,11 +295,19 @@ still declare and use it.
 
 ### Lifecycle
 
-| Callback | When it runs |
+| Operation or callback | When it runs |
 |---|---|
 | `bootstrap(ExtensionContext)` | Once, when the server is built |
+| `server.start()` | Binds the transport; restarting after `stop()` does not bootstrap extensions again |
 | `onConnectionInit(InteractionContext, ExtensionSettings)` | When a client declares the extension: at `initialize` on MCP `2025-11-25`, on each declaring request on MCP `2026-07-28` |
-| `shutdown()` | When the server stops |
+| `server.stop()` | Drains in-flight requests and closes the transport; extensions, registries, executor, and sessions remain available for restart |
+| `server.close()` → `shutdown()` | Terminal shutdown: drains requests, shuts down the handler executor, then invokes extension cleanup and releases sessions, event storage, and transport |
+| `onConnectionClose(InteractionContext)` | Inherited hook; the current server does not invoke it |
+
+`start()` and `stop()` are server operations, not extension callbacks. `shutdown()` also runs for
+extensions already started when server construction fails. On normal `close()`, each cleanup runs
+on its own virtual thread within the remaining shared `shutdownGracePeriod`; cleanup that exceeds
+the deadline continues in the background. Keep cleanup bounded. A closed server cannot restart.
 
 Release resources in `shutdown()`. For example, an extension that owns a scheduler stops it there:
 

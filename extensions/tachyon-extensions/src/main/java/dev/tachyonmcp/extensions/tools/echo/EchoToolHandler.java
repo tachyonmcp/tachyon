@@ -8,6 +8,7 @@ import dev.tachyonmcp.api.server.features.tools.ToolDescriptor;
 import dev.tachyonmcp.api.server.features.tools.ToolRequest;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
 
+/** Tool that returns the supplied message as text. */
 public class EchoToolHandler extends AbstractToolHandler {
 
     static final JsonSchema ECHO_INPUT_SCHEMA = JsonSchema.unchecked("""
@@ -23,6 +24,7 @@ public class EchoToolHandler extends AbstractToolHandler {
         }
         """);
 
+    /** Creates an echo tool with its input schema. */
     public EchoToolHandler() {
         super(ToolDescriptor.builder()
                 .name("echo")

@@ -20,7 +20,11 @@ import org.jspecify.annotations.Nullable;
 @Value.Style(allParameters = true, visibilityString = "PACKAGE", typeImmutable = "Default*")
 public interface ResourceDescriptor extends ServerFeature.Descriptor, HasMeta {
 
-    /** The URI that identifies this resource. */
+    /**
+     * The URI that identifies this resource.
+     *
+     * @return the uri
+     */
     String uri();
 
     /**
@@ -30,30 +34,58 @@ public interface ResourceDescriptor extends ServerFeature.Descriptor, HasMeta {
      */
     String name();
 
-    /** Optional human-readable title. */
+    /**
+     * Optional human-readable title.
+     *
+     * @return the title
+     */
     @Nullable
     String title();
 
-    /** Optional description of this resource. */
+    /**
+     * Optional description of this resource.
+     *
+     * @return the description
+     */
     @Nullable
     String description();
 
-    /** Optional MIME type of the resource content. */
+    /**
+     * Optional MIME type of the resource content.
+     *
+     * @return the mime type
+     */
     @Nullable
     String mimeType();
 
-    /** Optional annotations for this resource. */
+    /**
+     * Optional annotations for this resource.
+     *
+     * @return the annotations
+     */
     @Nullable
     Annotations annotations();
 
-    /** Optional size of the resource in bytes. */
+    /**
+     * Optional size of the resource in bytes.
+     *
+     * @return the size
+     */
     @Nullable
     Long size();
 
-    /** Icons for this resource, or an empty list. */
+    /**
+     * Icons for this resource, or an empty list.
+     *
+     * @return the icons
+     */
     List<Icon> icons();
 
-    /** Optional identifier of the extension that owns this resource. */
+    /**
+     * Optional identifier of the extension that owns this resource.
+     *
+     * @return the extension id
+     */
     @Nullable
     String extensionId();
 
@@ -62,6 +94,9 @@ public interface ResourceDescriptor extends ServerFeature.Descriptor, HasMeta {
     @Override
     Map<String, Object> meta();
 
+    /**
+     * Validates the value invariants.
+     */
     @Value.Check
     default void check() {
         if (name().isBlank()) throw new IllegalArgumentException("name must not be blank");
@@ -70,12 +105,24 @@ public interface ResourceDescriptor extends ServerFeature.Descriptor, HasMeta {
         if (size != null && size < 0) throw new IllegalArgumentException("size must be >= 0, got: " + size);
     }
 
-    /** Creates a new builder for {@link ResourceDescriptor}. */
+    /**
+     * Creates a new builder for {@link ResourceDescriptor}.
+     *
+     * @return a new builder
+     */
     static ResourceDescriptor.Builder builder() {
         return DefaultResourceDescriptor.builder();
     }
 
-    /** Creates a resource descriptor with the given fields. */
+    /**
+     * Creates a resource descriptor with the given fields.
+     *
+     * @param name the name
+     * @param uri the resource URI
+     * @param description the description
+     * @param mimeType the MIME type
+     * @return the resource descriptor
+     */
     static ResourceDescriptor of(String name, String uri, @Nullable String description, @Nullable String mimeType) {
         return DefaultResourceDescriptor.builder()
                 .name(name)
@@ -85,7 +132,19 @@ public interface ResourceDescriptor extends ServerFeature.Descriptor, HasMeta {
                 .build();
     }
 
-    /** Creates a fully specified resource descriptor. */
+    /**
+     * Creates a fully specified resource descriptor.
+     *
+     * @param name the name
+     * @param uri the resource URI
+     * @param description the description
+     * @param mimeType the MIME type
+     * @param title the title
+     * @param annotations the annotations
+     * @param size the size
+     * @param icons the icons
+     * @return the resource descriptor
+     */
     static ResourceDescriptor of(
             String name,
             String uri,
@@ -110,37 +169,119 @@ public interface ResourceDescriptor extends ServerFeature.Descriptor, HasMeta {
     /** Builder for {@link ResourceDescriptor}. */
     interface Builder {
 
-        /** Fills this builder with the attribute values from {@code instance}. */
+        /**
+         * Fills this builder with the attribute values from {@code instance}.
+         *
+         * @param instance the instance to copy
+         * @return this builder
+         */
         Builder from(ResourceDescriptor instance);
 
+        /**
+         * Sets the uri.
+         *
+         * @param uri the resource URI
+         * @return this builder
+         */
         Builder uri(String uri);
 
+        /**
+         * Sets the name.
+         *
+         * @param name the name
+         * @return this builder
+         */
         Builder name(String name);
 
+        /**
+         * Sets the title.
+         *
+         * @param title the title
+         * @return this builder
+         */
         Builder title(@Nullable String title);
 
+        /**
+         * Sets the description.
+         *
+         * @param description the description
+         * @return this builder
+         */
         Builder description(@Nullable String description);
 
+        /**
+         * Sets the mime type.
+         *
+         * @param mimeType the MIME type
+         * @return this builder
+         */
         Builder mimeType(@Nullable String mimeType);
 
+        /**
+         * Sets the annotations.
+         *
+         * @param annotations the annotations
+         * @return this builder
+         */
         Builder annotations(@Nullable Annotations annotations);
 
+        /**
+         * Sets the size.
+         *
+         * @param size the size
+         * @return this builder
+         */
         Builder size(@Nullable Long size);
 
+        /**
+         * Sets the size.
+         *
+         * @param size the size
+         * @return this builder
+         */
         default Builder size(int size) {
             return size((long) size);
         }
 
+        /**
+         * Sets the icons.
+         *
+         * @param elements the elements
+         * @return this builder
+         */
         Builder icons(Iterable<? extends Icon> elements);
 
+        /**
+         * Sets the icons.
+         *
+         * @param elements the elements
+         * @return this builder
+         */
         default Builder icons(Icon... elements) {
             return icons(List.of(elements));
         }
 
+        /**
+         * Sets the extension id.
+         *
+         * @param extensionId the extension identifier
+         * @return this builder
+         */
         Builder extensionId(@Nullable String extensionId);
 
+        /**
+         * Sets the meta.
+         *
+         * @param entries the entries
+         * @return this builder
+         */
         Builder meta(@Nullable Map<String, ?> entries);
 
+        /**
+         * Builds the configured value.
+         *
+         * @return the configured value
+         */
         ResourceDescriptor build();
     }
 }

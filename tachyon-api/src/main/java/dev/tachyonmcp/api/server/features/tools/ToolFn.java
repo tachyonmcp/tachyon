@@ -17,5 +17,13 @@ import dev.tachyonmcp.api.server.domain.Args;
 @FunctionalInterface
 public interface ToolFn {
 
+    /**
+     * Executes the tool with the supplied request.
+     *
+     * @param ctx the interaction context
+     * @param request the request
+     * @return the tool result
+     * @throws Exception if tool execution fails
+     */
     ToolResult apply(InteractionContext ctx, ToolRequest request) throws Exception;
 }
