@@ -24,9 +24,17 @@ import java.lang.annotation.Target;
 @Target(ElementType.PARAMETER)
 public @interface McpParam {
 
-    /** Argument name as advertised to clients; blank means the Java parameter name. */
+    /**
+     * Argument name as advertised to clients; blank means the Java parameter name.
+     *
+     * @return the name
+     */
     String name() default "";
 
-    /** Argument description emitted into the JSON schema / prompt argument; blank means absent. */
+    /**
+     * Argument description emitted into the JSON schema / prompt argument; blank means absent.
+     *
+     * @return the description
+     */
     String description() default "";
 }

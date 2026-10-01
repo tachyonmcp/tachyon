@@ -77,6 +77,8 @@ public interface SessionIdGenerator<T> {
      *
      * <p>Defaults to {@code true} so every custom generator is handed a valid request; override to
      * {@code false} for a request-independent id (like {@link #DEFAULT}) to opt into the fast path.
+     *
+     * @return {@code true} if the generator inspects the request
      */
     default boolean readsRequest() {
         return true;

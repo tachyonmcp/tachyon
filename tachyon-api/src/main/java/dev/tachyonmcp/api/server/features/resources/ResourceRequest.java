@@ -21,12 +21,16 @@ public interface ResourceRequest extends ServerFeature.Request {
 
     /**
      * The resource URI being requested.
+     *
+     * @return the uri
      */
     String uri();
 
     /**
      * URI-template variable values extracted during template matching, keyed by
      * variable name. Empty when the request targets a static (non-template) resource.
+     *
+     * @return the params
      */
     @Value.Default
     default Map<String, UriTemplateValue> params() {
@@ -36,6 +40,8 @@ public interface ResourceRequest extends ServerFeature.Request {
     /**
      * The URI template that matched the request, or {@code null} when the request
      * targets a static (non-template) resource.
+     *
+     * @return the uri template
      */
     @Nullable
     String uriTemplate();
@@ -61,7 +67,11 @@ public interface ResourceRequest extends ServerFeature.Request {
     @Nullable
     String requestState();
 
-    /** Creates a new builder for {@link ResourceRequest}. */
+    /**
+     * Creates a new builder for {@link ResourceRequest}.
+     *
+     * @return a new builder
+     */
     static Builder builder() {
         return DefaultResourceRequest.builder();
     }
@@ -69,25 +79,51 @@ public interface ResourceRequest extends ServerFeature.Request {
     /** Builder for {@link ResourceRequest}. */
     interface Builder {
 
-        /** Fills this builder with the attribute values from {@code instance}. */
+        /**
+         * Fills this builder with the attribute values from {@code instance}.
+         *
+         * @param instance the instance to copy
+         * @return this builder
+         */
         Builder from(ResourceRequest instance);
 
-        /** Sets the resource URI being requested. */
+        /**
+         * Sets the resource URI being requested.
+         *
+         * @param uri the resource URI
+         * @return this builder
+         */
         Builder uri(String uri);
 
-        /** Sets the URI-template variable values extracted during template matching. */
+        /**
+         * Sets the URI-template variable values extracted during template matching.
+         *
+         * @param params the params
+         * @return this builder
+         */
         Builder params(Map<String, ? extends UriTemplateValue> params);
 
-        /** Sets the URI template that matched the request. */
+        /**
+         * Sets the URI template that matched the request.
+         *
+         * @param uriTemplate the URI template
+         * @return this builder
+         */
         Builder uriTemplate(@Nullable String uriTemplate);
 
-        /** Sets the optional protocol extension metadata. */
+        /**
+         * Sets the optional protocol extension metadata.
+         *
+         * @param entries the entries
+         * @return this builder
+         */
         Builder meta(@Nullable Map<String, ?> entries);
 
         /**
          * Sets the client responses supplied when retrying an input-required resource read.
          *
          * @param inputResponses input responses, or {@code null}
+         * @return this builder
          */
         Builder inputResponses(@Nullable Map<String, ?> inputResponses);
 
@@ -95,10 +131,15 @@ public interface ResourceRequest extends ServerFeature.Request {
          * Sets the opaque request state supplied when retrying an input-required resource read.
          *
          * @param requestState request state, or {@code null}
+         * @return this builder
          */
         Builder requestState(@Nullable String requestState);
 
-        /** Builds the {@link ResourceRequest}. */
+        /**
+         * Builds the {@link ResourceRequest}.
+         *
+         * @return the configured value
+         */
         ResourceRequest build();
     }
 }

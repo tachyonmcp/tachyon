@@ -17,11 +17,15 @@ public interface CompletionRequest extends ServerFeature.Request {
 
     /**
      * The name of the argument being completed.
+     *
+     * @return the argument name
      */
     String argumentName();
 
     /**
      * The current (partial) value typed for the argument.
+     *
+     * @return the argument value
      */
     String argumentValue();
 
@@ -39,6 +43,9 @@ public interface CompletionRequest extends ServerFeature.Request {
         return Map.of();
     }
 
+    /**
+     * Validates the value invariants.
+     */
     @Value.Check
     default void check() {
         if (argumentName().isBlank()) throw new IllegalArgumentException("argumentName must not be blank");
@@ -70,6 +77,9 @@ public interface CompletionRequest extends ServerFeature.Request {
         return DefaultCompletionRequest.builder();
     }
 
+    /**
+     * Builder for the enclosing type.
+     */
     interface Builder {
         /**
          * Fills this builder with the attribute values from {@code instance}.

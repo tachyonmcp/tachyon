@@ -19,6 +19,12 @@ public record InputRequestBundle(
         Map<String, ? extends InputRequest> inputRequests,
         @Nullable String requestState) {
 
+    /**
+     * Creates an input request bundle.
+     *
+     * @param inputRequests the input requests
+     * @param requestState the request state
+     */
     public InputRequestBundle {
         Objects.requireNonNull(inputRequests, "inputRequests");
         inputRequests = Map.copyOf(inputRequests);

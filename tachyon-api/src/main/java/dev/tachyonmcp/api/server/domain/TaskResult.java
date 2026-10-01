@@ -68,6 +68,11 @@ public sealed interface TaskResult extends HasMeta permits TaskResult.Completed,
      * @param result the tool result
      */
     record Completed(ToolResult result) implements TaskResult {
+        /**
+         * Creates a completed task result.
+         *
+         * @param result the result
+         */
         public Completed {
             Objects.requireNonNull(result, "result");
             if (result instanceof ToolResult.InputRequired || result instanceof ToolResult.Task) {
@@ -88,6 +93,11 @@ public sealed interface TaskResult extends HasMeta permits TaskResult.Completed,
      * @param error the protocol error
      */
     record Failed(ServerError error) implements TaskResult {
+        /**
+         * Creates a failed task result.
+         *
+         * @param error the error
+         */
         public Failed {
             Objects.requireNonNull(error, "error");
         }

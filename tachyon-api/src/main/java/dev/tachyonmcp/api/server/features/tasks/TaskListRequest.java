@@ -15,10 +15,18 @@ import org.jspecify.annotations.Nullable;
 @Value.Style(visibilityString = "PACKAGE", typeImmutable = "Default*")
 public interface TaskListRequest extends HasMeta {
 
-    /** Returns the resolved positive page size. */
+    /**
+     * Returns the resolved positive page size.
+     *
+     * @return the resolved positive page size
+     */
     int limit();
 
-    /** Returns the pagination cursor, or {@code null} for the first page. */
+    /**
+     * Returns the pagination cursor, or {@code null} for the first page.
+     *
+     * @return the pagination cursor, or {@code null} for the first page
+     */
     @Nullable
     String cursor();
 
@@ -33,26 +41,54 @@ public interface TaskListRequest extends HasMeta {
         if (limit() <= 0) throw new IllegalArgumentException("limit must be positive: " + limit());
     }
 
-    /** Creates a request builder. */
+    /**
+     * Creates a request builder.
+     *
+     * @return a new builder
+     */
     static Builder builder() {
         return DefaultTaskListRequest.builder();
     }
 
     /** Builder for {@link TaskListRequest}. */
     interface Builder {
-        /** Copies an existing request. */
+        /**
+         * Copies an existing request.
+         *
+         * @param request the request
+         * @return this builder
+         */
         Builder from(TaskListRequest request);
 
-        /** Sets the resolved page size. */
+        /**
+         * Sets the resolved page size.
+         *
+         * @param limit the maximum number of items
+         * @return this builder
+         */
         Builder limit(int limit);
 
-        /** Sets the pagination cursor. */
+        /**
+         * Sets the pagination cursor.
+         *
+         * @param cursor the pagination cursor
+         * @return this builder
+         */
         Builder cursor(@Nullable String cursor);
 
-        /** Sets request metadata. */
+        /**
+         * Sets request metadata.
+         *
+         * @param meta the metadata entries
+         * @return this builder
+         */
         Builder meta(@Nullable Map<String, ?> meta);
 
-        /** Builds the request. */
+        /**
+         * Builds the request.
+         *
+         * @return the configured value
+         */
         TaskListRequest build();
     }
 }

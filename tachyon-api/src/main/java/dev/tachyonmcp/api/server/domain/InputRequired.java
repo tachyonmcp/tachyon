@@ -18,12 +18,20 @@ public interface InputRequired extends HasMeta {
      */
     InputRequestBundle request();
 
-    /** Returns the requested inputs, keyed by request id. */
+    /**
+     * Returns the requested inputs, keyed by request id.
+     *
+     * @return the requested inputs, keyed by request id
+     */
     default Map<String, ? extends InputRequest> inputRequests() {
         return request().inputRequests();
     }
 
-    /** Returns the opaque state token to echo back with the caller's response, or {@code null}. */
+    /**
+     * Returns the opaque state token to echo back with the caller's response, or {@code null}.
+     *
+     * @return the opaque state token to echo back with the caller's response, or {@code null}
+     */
     default @Nullable String requestState() {
         return request().requestState();
     }

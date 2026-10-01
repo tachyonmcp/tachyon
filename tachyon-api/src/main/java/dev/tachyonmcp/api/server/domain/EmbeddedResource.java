@@ -16,6 +16,11 @@ import org.jspecify.annotations.Nullable;
 @Value.Style(allParameters = true, visibilityString = "PACKAGE", typeImmutable = "Default*")
 public non-sealed interface EmbeddedResource extends ContentBlock, HasMeta {
 
+    /**
+     * Returns the resource.
+     *
+     * @return the resource
+     */
     ResourceContents resource();
 
     /**
@@ -39,6 +44,11 @@ public non-sealed interface EmbeddedResource extends ContentBlock, HasMeta {
         return Type.RESOURCE;
     }
 
+    /**
+     * Creates a new builder.
+     *
+     * @return a new builder
+     */
     static Builder builder() {
         return DefaultEmbeddedResource.builder();
     }
@@ -77,6 +87,9 @@ public non-sealed interface EmbeddedResource extends ContentBlock, HasMeta {
         return DefaultEmbeddedResource.of(resource, annotations, meta);
     }
 
+    /**
+     * Builder for the enclosing type.
+     */
     interface Builder {
         /** Fills this builder with the attribute values from {@code instance}.
          *
@@ -85,12 +98,35 @@ public non-sealed interface EmbeddedResource extends ContentBlock, HasMeta {
          */
         Builder from(EmbeddedResource instance);
 
+        /**
+         * Sets the resource.
+         *
+         * @param resource the resource
+         * @return this builder
+         */
         Builder resource(ResourceContents resource);
 
+        /**
+         * Sets the annotations.
+         *
+         * @param annotations the annotations
+         * @return this builder
+         */
         Builder annotations(@Nullable Annotations annotations);
 
+        /**
+         * Sets the meta.
+         *
+         * @param entries the entries
+         * @return this builder
+         */
         Builder meta(@Nullable Map<String, ?> entries);
 
+        /**
+         * Builds the configured value.
+         *
+         * @return the configured value
+         */
         EmbeddedResource build();
     }
 }

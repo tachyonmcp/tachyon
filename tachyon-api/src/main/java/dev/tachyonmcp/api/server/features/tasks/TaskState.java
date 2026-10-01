@@ -25,17 +25,41 @@ import dev.tachyonmcp.api.annotations.ExperimentalApi;
  */
 @ExperimentalApi
 public enum TaskState {
+    /**
+     * Submitted.
+     */
     SUBMITTED(false),
+    /**
+     * Rejected.
+     */
     REJECTED(true),
     /**
      * Indicates that authentication is required to proceed. This is an interrupted state.
      */
     AUTH_REQUIRED(false),
+    /**
+     * Working.
+     */
     WORKING(false),
+    /**
+     * Input required.
+     */
     INPUT_REQUIRED(false),
+    /**
+     * Completed.
+     */
     COMPLETED(true),
+    /**
+     * Failed.
+     */
     FAILED(true),
+    /**
+     * Cancelled.
+     */
     CANCELLED(true),
+    /**
+     * Unknown.
+     */
     UNKNOWN(true);
     private final boolean terminal;
 
@@ -43,6 +67,11 @@ public enum TaskState {
         this.terminal = terminal;
     }
 
+    /**
+     * Reports whether this state is terminal.
+     *
+     * @return {@code true} for COMPLETED, FAILED, CANCELLED, REJECTED, or UNKNOWN
+     */
     public boolean isTerminal() {
         return terminal;
     }

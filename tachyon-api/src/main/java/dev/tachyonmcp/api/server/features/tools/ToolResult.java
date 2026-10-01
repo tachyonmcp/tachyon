@@ -70,7 +70,11 @@ public sealed interface ToolResult extends HasMeta
         @Nullable
         Map<String, Object> meta();
 
-        /** Returns the structured value, or empty when none was set. */
+        /**
+         * Returns the structured value, or empty when none was set.
+         *
+         * @return the structured value, or empty when none was set
+         */
         default Optional<Object> structured() {
             return Optional.ofNullable(structuredValue());
         }
@@ -305,7 +309,11 @@ public sealed interface ToolResult extends HasMeta
     @ExperimentalApi
     non-sealed interface Task extends ToolResult {
 
-        /** Returns the initial task projection. */
+        /**
+         * Returns the initial task projection.
+         *
+         * @return the initial task projection
+         */
         TaskSnapshot snapshot();
 
         @Override
@@ -323,7 +331,12 @@ public sealed interface ToolResult extends HasMeta
             return of(snapshot);
         }
 
-        /** Creates a task result for the supplied initial projection. */
+        /**
+         * Creates a task result for the supplied initial projection.
+         *
+         * @param snapshot the snapshot
+         * @return the task
+         */
         @ExperimentalApi
         static Task of(TaskSnapshot snapshot) {
             return DefaultTask.builder().snapshot(snapshot).build();
@@ -332,10 +345,19 @@ public sealed interface ToolResult extends HasMeta
         /** Builder for {@link Task}. */
         @ExperimentalApi
         interface Builder {
-            /** Sets the initial task projection. */
+            /**
+             * Sets the initial task projection.
+             *
+             * @param snapshot the snapshot
+             * @return this builder
+             */
             Builder snapshot(TaskSnapshot snapshot);
 
-            /** Builds the task result. */
+            /**
+             * Builds the task result.
+             *
+             * @return the configured value
+             */
             Task build();
         }
     }
@@ -367,6 +389,7 @@ public sealed interface ToolResult extends HasMeta
      * @param payload the structured payload
      * @param text    the text content for the content block
      * @return a successful tool result
+     * @param <T> the value type
      */
     static <T> ToolResult structured(T payload, String text) {
         return Success.of(payload, List.of(TextContent.of(text)));
@@ -381,6 +404,7 @@ public sealed interface ToolResult extends HasMeta
      *
      * @param payload the structured payload
      * @return a successful tool result
+     * @param <T> the value type
      */
     static <T> ToolResult structured(T payload) {
         return Success.of(payload, List.of());
@@ -406,12 +430,21 @@ public sealed interface ToolResult extends HasMeta
         return Error.of(List.of(blocks));
     }
 
-    /** Creates a successful result with no structured value and no content. */
+    /**
+     * Creates a successful result with no structured value and no content.
+     *
+     * @return the empty tool result
+     */
     static ToolResult empty() {
         return Success.of(null, List.of());
     }
 
-    /** Creates a task result carrying its initial immutable projection. */
+    /**
+     * Creates a task result carrying its initial immutable projection.
+     *
+     * @param snapshot the snapshot
+     * @return the tool result
+     */
     @ExperimentalApi
     static ToolResult task(TaskSnapshot snapshot) {
         return Task.of(snapshot);
@@ -424,6 +457,7 @@ public sealed interface ToolResult extends HasMeta
      *
      * @param json a pre-serialized JSON object string
      * @param text the text content for the content block
+     * @return the tool result
      */
     static ToolResult raw(String json, String text) {
         return Success.of(JsonDocument.of(json), List.of(TextContent.of(text)));

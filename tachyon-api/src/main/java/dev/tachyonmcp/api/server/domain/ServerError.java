@@ -37,6 +37,12 @@ public record ServerError(
         UNSUPPORTED_PROTOCOL_VERSION
     }
 
+    /**
+     * Creates a server error.
+     *
+     * @param kind the kind
+     * @param message the message
+     */
     public ServerError(Kind kind, String message) {
         this(kind, message, null);
     }

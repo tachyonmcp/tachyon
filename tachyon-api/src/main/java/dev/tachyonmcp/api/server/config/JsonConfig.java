@@ -23,6 +23,11 @@ public record JsonConfig(
         @Nullable JsonSchemaValidator inputValidator,
         @Nullable JsonSchemaValidator outputValidator) {
 
+    /**
+     * Creates a new builder.
+     *
+     * @return a new builder
+     */
     public static Builder builder() {
         return new Builder();
     }
@@ -40,35 +45,73 @@ public record JsonConfig(
 
         /**
          * Sets both serializer and deserializer from a combined serde.
+         *
+         * @param serde the payload serializer and deserializer
+         * @return this builder
          */
         public Builder serde(PayloadSerde serde) {
             return serializer(serde).deserializer(serde);
         }
 
+        /**
+         * Sets the serializer.
+         *
+         * @param serializer the payload serializer
+         * @return this builder
+         */
         public Builder serializer(@Nullable PayloadSerializer serializer) {
             this.serializer = serializer;
             return this;
         }
 
+        /**
+         * Sets the deserializer.
+         *
+         * @param deserializer the payload deserializer
+         * @return this builder
+         */
         public Builder deserializer(@Nullable PayloadDeserializer deserializer) {
             this.deserializer = deserializer;
             return this;
         }
 
+        /**
+         * Sets the schema validator.
+         *
+         * @param validator the validator
+         * @return this builder
+         */
         public Builder schemaValidator(@Nullable JsonSchemaValidator validator) {
             return inputSchemaValidator(validator).outputSchemaValidator(validator);
         }
 
+        /**
+         * Sets the input schema validator.
+         *
+         * @param inputValidator the input validator
+         * @return this builder
+         */
         public Builder inputSchemaValidator(@Nullable JsonSchemaValidator inputValidator) {
             this.inputValidator = inputValidator;
             return this;
         }
 
+        /**
+         * Sets the output schema validator.
+         *
+         * @param outputValidator the output validator
+         * @return this builder
+         */
         public Builder outputSchemaValidator(@Nullable JsonSchemaValidator outputValidator) {
             this.outputValidator = outputValidator;
             return this;
         }
 
+        /**
+         * Builds the configured value.
+         *
+         * @return the configured value
+         */
         public JsonConfig build() {
             return new JsonConfig(serializer, deserializer, inputValidator, outputValidator);
         }

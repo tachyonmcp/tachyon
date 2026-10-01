@@ -17,6 +17,10 @@ import java.lang.annotation.Target;
 @Target({ElementType.TYPE, ElementType.METHOD, ElementType.CONSTRUCTOR, ElementType.FIELD, ElementType.PACKAGE})
 public @interface InternalApi {
 
-    /** Version in which the annotated API became internal. */
+    /**
+     * Version in which the annotated API became internal.
+     *
+     * @return the version in which this API status began
+     */
     String since() default "";
 }

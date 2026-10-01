@@ -17,10 +17,20 @@ public interface ServerFeature<D extends ServerFeature.Descriptor> {
      */
     D descriptor();
 
+    /**
+     * Descriptor.
+     */
     interface Descriptor {
-        /** Unique name of this feature. */
+        /**
+         * Unique name of this feature.
+         *
+         * @return the name
+         */
         String name();
     }
 
+    /**
+     * Request.
+     */
     interface Request extends HasMeta {}
 }

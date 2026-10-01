@@ -119,6 +119,7 @@ public interface CompletionResult extends HasMeta {
          * Sets the candidate values ranked by relevance.
          *
          * @param values candidate values
+         * @return this builder
          */
         default Builder values(String... values) {
             return values(List.of(values));
@@ -141,6 +142,7 @@ public interface CompletionResult extends HasMeta {
          * Sets the total number of matches, if known.
          *
          * @param total total match count, or {@code null} if unknown
+         * @return this builder
          */
         default Builder total(int total) {
             return total((long) total);

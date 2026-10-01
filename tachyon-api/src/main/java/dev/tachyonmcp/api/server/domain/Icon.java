@@ -101,7 +101,12 @@ public interface Icon {
     /** Builder for {@link Icon}. */
     interface Builder {
 
-        /** Fills this builder with the attribute values from {@code instance}. */
+        /**
+         * Fills this builder with the attribute values from {@code instance}.
+         *
+         * @param instance the instance to copy
+         * @return this builder
+         */
         Builder from(Icon instance);
 
         /**

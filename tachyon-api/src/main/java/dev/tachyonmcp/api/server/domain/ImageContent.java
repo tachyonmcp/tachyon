@@ -98,12 +98,27 @@ public non-sealed interface ImageContent extends ContentBlock {
         return of(BinaryData.readAllBytes(data), mimeType);
     }
 
-    /** Creates an image content block with given annotations and no metadata. */
+    /**
+     * Creates an image content block with given annotations and no metadata.
+     *
+     * @param data the content data
+     * @param mimeType the MIME type
+     * @param annotations the annotations
+     * @return the image content
+     */
     static ImageContent of(byte[] data, String mimeType, @Nullable Annotations annotations) {
         return DefaultImageContent.of(data, mimeType, annotations, null);
     }
 
-    /** Creates an image content block with metadata and optional annotations. */
+    /**
+     * Creates an image content block with metadata and optional annotations.
+     *
+     * @param data the content data
+     * @param mimeType the MIME type
+     * @param annotations the annotations
+     * @param meta the metadata entries
+     * @return the image content
+     */
     static ImageContent of(
             byte[] data, String mimeType, @Nullable Annotations annotations, @Nullable Map<String, Object> meta) {
         return DefaultImageContent.of(data, mimeType, annotations, meta);
@@ -113,7 +128,12 @@ public non-sealed interface ImageContent extends ContentBlock {
      * Builder for {@link ImageContent}.
      */
     interface Builder {
-        /** Fills this builder with the attribute values from {@code instance}. */
+        /**
+         * Fills this builder with the attribute values from {@code instance}.
+         *
+         * @param instance the instance to copy
+         * @return this builder
+         */
         Builder from(ImageContent instance);
 
         /**

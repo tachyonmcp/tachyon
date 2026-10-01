@@ -23,35 +23,67 @@ public interface ToolDescriptor extends ServerFeature.Descriptor, HasMeta {
     /** The tool name, unique within the server. */
     String name();
 
-    /** Optional human-readable title. */
+    /**
+     * Optional human-readable title.
+     *
+     * @return the title
+     */
     @Nullable
     String title();
 
-    /** Optional description of this tool. */
+    /**
+     * Optional description of this tool.
+     *
+     * @return the description
+     */
     @Nullable
     String description();
 
-    /** Optional JSON schema describing the tool's input arguments. */
+    /**
+     * Optional JSON schema describing the tool's input arguments.
+     *
+     * @return the input schema
+     */
     @Nullable
     JsonSchema inputSchema();
 
-    /** Optional JSON schema describing the tool's output. */
+    /**
+     * Optional JSON schema describing the tool's output.
+     *
+     * @return the output schema
+     */
     @Nullable
     JsonSchema outputSchema();
 
-    /** Optional declaration of this tool's support for long-running tasks. */
+    /**
+     * Optional declaration of this tool's support for long-running tasks.
+     *
+     * @return the task support
+     */
     @Nullable
     @ExperimentalApi
     TaskSupport taskSupport();
 
-    /** Optional behavioural annotations (e.g. read-only, destructive) for this tool. */
+    /**
+     * Optional behavioural annotations (e.g. read-only, destructive) for this tool.
+     *
+     * @return the annotations
+     */
     @Nullable
     ToolAnnotations annotations();
 
-    /** Icons for this tool, or an empty list. */
+    /**
+     * Icons for this tool, or an empty list.
+     *
+     * @return the icons
+     */
     List<Icon> icons();
 
-    /** Optional identifier of the extension that owns this tool. */
+    /**
+     * Optional identifier of the extension that owns this tool.
+     *
+     * @return the extension id
+     */
     @Nullable
     String extensionId();
 
@@ -70,17 +102,32 @@ public interface ToolDescriptor extends ServerFeature.Descriptor, HasMeta {
         if (name().isBlank()) throw new IllegalArgumentException("name must not be blank");
     }
 
-    /** Creates a new builder for {@link ToolDescriptor}. */
+    /**
+     * Creates a new builder for {@link ToolDescriptor}.
+     *
+     * @return a new builder
+     */
     static Builder builder() {
         return DefaultToolDescriptor.builder();
     }
 
-    /** Creates a tool descriptor with just a name. */
+    /**
+     * Creates a tool descriptor with just a name.
+     *
+     * @param name the name
+     * @return the tool descriptor
+     */
     static ToolDescriptor of(String name) {
         return DefaultToolDescriptor.of(name, null, null, null, null, null, null, List.of(), null, null);
     }
 
-    /** Creates a tool descriptor with a name and description. */
+    /**
+     * Creates a tool descriptor with a name and description.
+     *
+     * @param name the name
+     * @param description the description
+     * @return the tool descriptor
+     */
     static ToolDescriptor of(String name, @Nullable String description) {
         return DefaultToolDescriptor.of(name, null, description, null, null, null, null, List.of(), null, null);
     }
@@ -88,60 +135,130 @@ public interface ToolDescriptor extends ServerFeature.Descriptor, HasMeta {
     /** Builder for {@link ToolDescriptor}. */
     interface Builder {
 
-        /** Fills this builder with the attribute values from {@code instance}. */
+        /**
+         * Fills this builder with the attribute values from {@code instance}.
+         *
+         * @param instance the instance to copy
+         * @return this builder
+         */
         Builder from(ToolDescriptor instance);
 
-        /** Sets the tool name, unique within the server. */
+        /**
+         * Sets the tool name, unique within the server.
+         *
+         * @param name the name
+         * @return this builder
+         */
         Builder name(String name);
 
-        /** Sets the optional human-readable title. */
+        /**
+         * Sets the optional human-readable title.
+         *
+         * @param title the title
+         * @return this builder
+         */
         Builder title(@Nullable String title);
 
-        /** Sets the optional description of this tool. */
+        /**
+         * Sets the optional description of this tool.
+         *
+         * @param description the description
+         * @return this builder
+         */
         Builder description(@Nullable String description);
 
-        /** Sets the optional JSON schema describing the tool's input arguments. */
+        /**
+         * Sets the optional JSON schema describing the tool's input arguments.
+         *
+         * @param inputSchema the input schema
+         * @return this builder
+         */
         Builder inputSchema(@Nullable JsonSchema inputSchema);
 
-        /** Sets the optional JSON schema describing the tool's output. */
+        /**
+         * Sets the optional JSON schema describing the tool's output.
+         *
+         * @param outputSchema the output schema
+         * @return this builder
+         */
         Builder outputSchema(@Nullable JsonSchema outputSchema);
 
-        /** Sets the optional JSON schema describing the tool's input arguments, parsed from a string. */
+        /**
+         * Sets the optional JSON schema describing the tool's input arguments, parsed from a string.
+         *
+         * @param inputSchema the input schema
+         * @return this builder
+         */
         default Builder inputSchema(@Nullable String inputSchema) {
             return inputSchema(inputSchema != null ? JsonSchema.unchecked(inputSchema) : null);
         }
 
-        /** Sets the optional JSON schema describing the tool's output, parsed from a string. */
+        /**
+         * Sets the optional JSON schema describing the tool's output, parsed from a string.
+         *
+         * @param outputSchema the output schema
+         * @return this builder
+         */
         default Builder outputSchema(@Nullable String outputSchema) {
             return outputSchema(outputSchema != null ? JsonSchema.unchecked(outputSchema) : null);
         }
 
-        /** Sets the optional declaration of this tool's support for long-running tasks. */
+        /**
+         * Sets the optional declaration of this tool's support for long-running tasks.
+         *
+         * @param taskSupport the task support
+         * @return this builder
+         */
         @ExperimentalApi
         Builder taskSupport(@Nullable TaskSupport taskSupport);
 
-        /** Sets the optional behavioural annotations (e.g. read-only, destructive) for this tool. */
+        /**
+         * Sets the optional behavioural annotations (e.g. read-only, destructive) for this tool.
+         *
+         * @param annotations the annotations
+         * @return this builder
+         */
         Builder annotations(@Nullable ToolAnnotations annotations);
 
-        /** Sets the icons for this tool. */
+        /**
+         * Sets the icons for this tool.
+         *
+         * @param icons the icons
+         * @return this builder
+         */
         Builder icons(Iterable<? extends Icon> icons);
 
-        /** Sets the icons for this tool; an empty array means no icons. */
+        /**
+         * Sets the icons for this tool; an empty array means no icons.
+         *
+         * @param icons the icons
+         * @return this builder
+         */
         default Builder icons(Icon... icons) {
             return icons(List.of(icons));
         }
 
-        /** Sets the optional identifier of the extension that owns this tool. */
+        /**
+         * Sets the optional identifier of the extension that owns this tool.
+         *
+         * @param extensionId the extension identifier
+         * @return this builder
+         */
         Builder extensionId(@Nullable String extensionId);
 
         /**
          * Sets optional protocol extension metadata.
          *
          * @param entries metadata entries, or {@code null} for none
+         * @return this builder
          */
         Builder meta(@Nullable Map<String, ?> entries);
 
-        /** Builds the {@link ToolDescriptor}. */
+        /**
+         * Builds the {@link ToolDescriptor}.
+         *
+         * @return the configured value
+         */
         ToolDescriptor build();
     }
 }

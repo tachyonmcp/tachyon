@@ -13,22 +13,46 @@ import java.util.concurrent.Executor;
  */
 public interface ExtensionContext {
 
-    /** Returns the tool registry façade. */
+    /**
+     * Returns the tool registry façade.
+     *
+     * @return the tool registry façade
+     */
     Tools tools();
 
-    /** Returns the resource registry façade. */
+    /**
+     * Returns the resource registry façade.
+     *
+     * @return the resource registry façade
+     */
     Resources resources();
 
-    /** Returns the prompt registry façade. */
+    /**
+     * Returns the prompt registry façade.
+     *
+     * @return the prompt registry façade
+     */
     Prompts prompts();
 
-    /** Returns the completion registry façade. */
+    /**
+     * Returns the completion registry façade.
+     *
+     * @return the completion registry façade
+     */
     Completions completions();
 
-    /** Returns the handler executor. */
+    /**
+     * Returns the handler executor.
+     *
+     * @return the handler executor
+     */
     Executor executor();
 
-    /** Returns handler runtime settings. */
+    /**
+     * Returns handler runtime settings.
+     *
+     * @return handler runtime settings
+     */
     RuntimeConfig runtime();
 
     /**

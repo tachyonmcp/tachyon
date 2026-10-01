@@ -19,6 +19,9 @@ public interface Tasks {
      * id that the {@link TaskConnector} let read it when the stream opened, with
      * {@code notifications/tasks}. Publishing never picks a session from the calling thread, and
      * status is never broadcast to other sessions.
+     *
+     * @param snapshot the snapshot
+     * @return the effective cached snapshot
      */
     TaskSnapshot publish(TaskSnapshot snapshot);
 
@@ -44,7 +47,12 @@ public interface Tasks {
         return publish(builder.build());
     }
 
-    /** Returns the cached task projection, or {@code null} when absent. */
+    /**
+     * Returns the cached task projection, or {@code null} when absent.
+     *
+     * @param taskId the task id
+     * @return the cached task projection, or {@code null} when absent
+     */
     @Nullable
     TaskSnapshot get(String taskId);
 
@@ -52,6 +60,7 @@ public interface Tasks {
      * Removes a cached task projection without changing externally owned work.
      *
      * @return {@code true} if a task with this id existed and was removed
+     * @param taskId the task id
      */
     boolean remove(String taskId);
 
