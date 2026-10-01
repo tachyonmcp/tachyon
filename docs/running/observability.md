@@ -232,7 +232,7 @@ Configure capture through `payloadCapture { }`: `PayloadCapturePolicy.Builder` i
 
 ## Trace context
 
-Spans parent from `Context.current()` on the dispatch thread. The listener only attaches scope around synchronous dispatch work (decode, kicking off async handler, and — after reattach — completion callback), so handler-started spans join as children without blocking `CompletionStage`s.
+Spans use a valid request `_meta.traceparent` as their remote parent, falling back to `Context.current()` on the dispatch thread when it is absent or invalid. The listener only attaches scope around synchronous dispatch work (decode, kicking off async handler, and — after reattach — completion callback), so handler-started spans join as children without blocking `CompletionStage`s.
 
 Registering two listeners produces two spans per operation, the second nested under the first, and a handler-started span parents from the innermost one.
 

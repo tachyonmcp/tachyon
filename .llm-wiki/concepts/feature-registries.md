@@ -2,8 +2,8 @@
 title: Feature registries
 tags: [concept, tools, resources, prompts, completions]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/handlers/, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java]
-updated: 2026-09-30
-commit: 74c732e9
+updated: 2026-10-01
+commit: cf8f85f7
 ---
 
 # 🧰 Feature registries

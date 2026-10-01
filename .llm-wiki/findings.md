@@ -10,6 +10,7 @@ commit: 4b4b6f7e
 
 Spotted while reading code. Runtime verification noted per finding. Fixed in code ⇒ 🗑️ remove row.
 
+- 🪶 Extension close hook is unused: `Extension#onConnectionClose` has no server call site. Cleanup currently relies on `ServerExtension#shutdown` during terminal close. Static source search. [Extension#onConnectionClose](../tachyon-api/src/main/java/dev/tachyonmcp/api/runtime/Extension.java), [DefaultTachyonServer#close](../tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java).
 - ⚠️ `UnsupportedProtocolVersionHandler` encodes the rejection with `ProtocolVersionHandler#LATEST_PROTOCOL` (not `Protocols#baseline`) + HTTP 400, even for legacy-looking clients. Intentional per SEP-2575? `UnsupportedProtocolVersionHandler#channelRead`
 - ⚠️ POST-SSE budget per stream only; no global cap or connection limit. `PostSseStream#reserve`
 - ⚠️ Perf: notifications round-trip bytes → `String` → bytes. `DefaultTachyonServer#sendSerializedNotification` builds `notificationJson` as a `String`; `SseSerializer#measure` then counts its UTF-8 size (~0.7 ns/char, charAt loop, not vectorized) and `SseSerializer#encode` transcodes it back. Carry `byte[]` end to end (like the final response, `PostSseStream#writeEvent(long, byte[], Runnable)`): length is free, encode is a copy. Touches `SseEvent`, `JsonRpcCodec`, event log (stores `String`).

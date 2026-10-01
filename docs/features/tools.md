@@ -113,7 +113,7 @@ names. Error and input-validation behavior is described [below](#error-behavior)
 | `ToolResult.structured(payload, text)`  | Structured + explicit human-readable text |
 | `ToolResult.raw(json, text)`            | Pre-serialized JSON — bypasses the payload serde |
 | `ToolResult.empty()`                    | No content                             |
-| `ToolResult.task(snapshot)`             | Hand off to a long-running [task](tasks.md) |
+| `ToolResult.task(snapshot)`             | Hand off to a long-running [task](../extensions/tasks.md) |
 | `ToolResult.inputRequired(reqs, state)` | Elicitation request                    |
 
 Under MCP 2026-07-28, `structuredContent`/`outputSchema` may be any JSON value — object, array, or
@@ -158,7 +158,7 @@ server.tools().register(b -> b.name("reindex"), (context, request) -> {
 
 ## Test the tool
 
-Start with the [Quickstart curl call](../quickstart.md#3-test-with-curl). Change the `name` argument
+Start with the [Quickstart curl call](../quickstart.md#3-call-the-greeting-tool). Change the `name` argument
 and check that the greeting changes. For the annotated `ToolResult` handler, also try an empty string, a missing
 `name`, and a number: these exercise the tool-error and input-validation paths.
 

@@ -2,8 +2,8 @@
 title: Configuration
 tags: [concept, config, builder]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/server/ServerBuilder.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultServerBuilder.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/, tachyon-api/src/main/java/dev/tachyonmcp/api/server/config/]
-updated: 2026-09-29
-commit: 4b4b6f7e
+updated: 2026-10-01
+commit: cf8f85f7
 ---
 
 # 🎛️ Configuration

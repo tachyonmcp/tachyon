@@ -154,12 +154,12 @@ when you need custom validation behaviour:
 var server = TachyonServer.builder()
     .json(json -> json
         .inputSchemaValidator(myInputValidator)
-        .outputSchemaValidator(JsonSchemaValidator.NOOP))
+        .outputSchemaValidator(JsonSchemaValidator.noop()))
     .port(8080)
     .build();
 ```
 
-`JsonSchemaValidator.NOOP` disables validation for that direction.
+`JsonSchemaValidator.noop()` disables validation for that direction.
 
 Next, see [Tools](features/tools.md) to attach schemas to tool descriptors or
 [Configuration](running/configuration.md) for all JSON settings. Kotlin developers can use the equivalent

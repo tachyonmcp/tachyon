@@ -2,8 +2,8 @@
 title: Tasks
 tags: [concept, tasks, experimental]
 sources: [tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/tasks/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tasks/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tools/ToolMethodHandlers.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tools/DefaultToolRegistry.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java, extensions/tachyon-extensions-tasks/src/main/java/dev/tachyonmcp/extensions/tasks/, integrations/tachyon-tasks-temporal/]
-updated: 2026-09-30
-commit: 74c732e9
+updated: 2026-10-01
+commit: cf8f85f7
 ---
 
 # ⏳ Tasks

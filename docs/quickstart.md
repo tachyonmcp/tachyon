@@ -304,7 +304,7 @@ extracted into the test suite.
 
 ## Next steps
 
-- [Spring Boot starter](spring-boot/) — expose Spring beans as MCP tools.
+- [Spring Boot starter](spring-boot/_index.md) — expose Spring beans as MCP tools.
 
 - [Tools](features/tools.md) — bind typed arguments, return structured output, and handle errors.
 - [Annotations](annotations.md) — share registration and binding rules across feature services.

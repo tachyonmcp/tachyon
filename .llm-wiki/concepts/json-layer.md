@@ -2,8 +2,8 @@
 title: JSON layer
 tags: [concept, json, schema]
 sources: [tachyon-api/src/main/java/dev/tachyonmcp/api/json/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/json/, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/, tachyon-core/src/main/resources/META-INF/services/, tachyon-kotlin/src/main/kotlin/dev/tachyonmcp/kotlin/server/json/]
-updated: 2026-09-26
-commit: 31900e6a
+updated: 2026-10-01
+commit: cf8f85f7
 ---
 
 # 🧾 JSON layer

@@ -91,7 +91,7 @@ return ToolResult.inputRequired(
 
 Use the optional state string as an opaque correlation value. For long-running task workflows,
 put the same `InputRequestBundle` on an `INPUT_REQUIRED` task snapshot and accept the submitted
-values through `TaskConnector.update(...)`. See [Tasks](tasks.md).
+values through `TaskConnector.update(...)`. See [Tasks](../extensions/tasks.md).
 
 ## Programmatic handlers
 

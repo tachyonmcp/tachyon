@@ -1,7 +1,7 @@
 # Examples
 
 Standalone, runnable MCP servers built with Tachyon. Each example is its own Maven project with
-the Maven wrapper build in, so you can run it without installing anything else — just a JDK 21+.
+the Maven wrapper built in, so you can run it without installing anything else — just a JDK 21+.
 
 - [**echo-kotlin**](echo-kotlin) — Minimal server with `echo` and `reverse-echo` tools in Kotlin.
 - [**weather-mcp**](weather-mcp) — Java. Full MCP surface: tools, resources, resource templates,
@@ -28,7 +28,8 @@ Run a server from its own directory — each example's README has the exact buil
 
 ## Binding and access from Docker
 
-Every example reads the same three environment variables:
+The standalone servers below, except Spring Boot, read the same three environment variables.
+The Spring Boot server uses `tachyon.*` properties; Temporal is a library and test example.
 
 | Variable | Default | Meaning |
 |---|---|---|
