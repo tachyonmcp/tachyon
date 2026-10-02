@@ -126,9 +126,10 @@ docs-check: ## Check Markdown doc snippets are in sync with source (snips --chec
 	@snips --check $$(find docs -name '*.md')
 	@echo " ✅  Done!"
 
-docs-sync: ## Rewrite Markdown doc snippets from source (snips)
+docs-sync: ## Rewrite Markdown doc snippets from source (snips), then restore java/kotlin/json fence tags
 	@echo " 📝  Syncing doc snippets..."
 	@snips $$(find docs -name '*.md')
+	@python3 .github/scripts/fix-doc-fences.py $$(find docs -name '*.md')
 	@echo " ✅  Done!"
 
 mcp-inspector: ## Launch MCP Inspector UI

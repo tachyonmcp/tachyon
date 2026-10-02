@@ -21,6 +21,9 @@ the Maven wrapper built in, so you can run it without installing anything else �
 - [**temporal**](temporal) — Java. MCP tasks backed by Temporal workflows through
   `tachyon-tasks-temporal`. Library plus tests; Docker is needed for the Testcontainers test.
 
+- [**doc-examples**](doc-examples) — Java and Kotlin. Not a server: the compiled, tested code
+  behind the snippets in [`docs/`](../docs), synced into the Markdown by `snips`.
+
 Start with **echo-kotlin** to see the smallest viable server, then move to **weather-mcp** (or its
 Kotlin twin) for a realistic feature-rich example backed by the Open-Meteo API.
 
