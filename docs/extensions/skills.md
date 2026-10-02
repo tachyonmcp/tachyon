@@ -15,24 +15,33 @@ Tachyon's `SkillsExtension` (`tachyon-extensions-skills`) implements [SEP-2640][
 
 ## Enable the extension
 
+This server serves the `skills` directory from disk (see [Skill directory layout](#skill-directory-layout)) and `bundled-skills` from the classpath ([source](https://github.com/tachyonmcp/tachyon/blob/main/examples/doc-examples/src/main/java/dev/tachyonmcp/docs/extensions/skills/SkillsServer.java)):
+
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/extensions/skills/SkillsServer.java#skills_enable -->
 ```java
+import dev.tachyonmcp.core.server.TachyonServer;
 import dev.tachyonmcp.extensions.skills.ClasspathSkillsRegistry;
 import dev.tachyonmcp.extensions.skills.FilesystemSkillsRegistry;
 import dev.tachyonmcp.extensions.skills.SkillsExtension;
 import java.nio.file.Path;
 
-var server = TachyonServer.builder()
-        .withExtension(SkillsExtension.class, skills -> skills
-                .registry(new FilesystemSkillsRegistry(Path.of("skills")))      // every subdirectory with a SKILL.md
-                .registry(new ClasspathSkillsRegistry("bundled-skills")))       // same, packaged inside the jar
-        .port(8080)
-        .build();
-server.start();
+public final class SkillsServer {
+    public static void main(String[] args) {
+        var server = TachyonServer.builder()
+                .withExtension(SkillsExtension.class, skills -> skills
+                        .registry(new FilesystemSkillsRegistry(Path.of("skills")))      // every subdirectory with a SKILL.md
+                        .registry(new ClasspathSkillsRegistry("bundled-skills")))       // same, packaged inside the jar
+                .port(8080)
+                .build();
+        server.start();
+    }
+}
 ```
 
 With `tachyon-kotlin`, add `dev.tachyonmcp:tachyon-extensions-skills` explicitly
-(the dependency is optional) and use the receiver adapter:
+(the dependency is optional) and use the receiver adapter ([source](https://github.com/tachyonmcp/tachyon/blob/main/examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/extensions/skills/SkillsKotlin.kt)):
 
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/extensions/skills/SkillsKotlin.kt#skills_kotlin -->
 ```kotlin
 import dev.tachyonmcp.extensions.skills.ClasspathSkillsRegistry
 import dev.tachyonmcp.extensions.skills.FilesystemSkillsRegistry
@@ -41,11 +50,13 @@ import dev.tachyonmcp.kotlin.server.config.skills
 import java.nio.file.Path
 import kotlin.time.Duration.Companion.minutes
 
-val server = TachyonServer(port = 8080) {
-    skills(FilesystemSkillsRegistry(Path.of("skills"))) {
-        registry(ClasspathSkillsRegistry("bundled-skills"))
-        cacheTtl = 5.minutes
-        cacheScope = "public"
+fun main() {
+    val server = TachyonServer(port = 8080) {
+        skills(FilesystemSkillsRegistry(Path.of("skills"))) {
+            registry(ClasspathSkillsRegistry("bundled-skills"))
+            cacheTtl = 5.minutes
+            cacheScope = "public"
+        }
     }
 }
 ```
@@ -120,6 +131,7 @@ registry — not the builder — resolves where skills come from; the builder ju
 
 The explicit-path constructors let you namespace skills instead of using the bare directory name:
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/extensions/skills/NamespacedSkills.java#skills_namespaced -->
 ```java
 .withExtension(SkillsExtension.class, skills -> skills
         .registry(new FilesystemSkillsRegistry(Path.of("skills/git-workflow"), "team/git-workflow"))
@@ -225,6 +237,7 @@ such as MCP Inspector that don't declare the extension, and stateless servers se
 
 To reject clients that don't declare the extension, opt in to `REQUIRED`:
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/extensions/skills/RequiredNegotiation.java#skills_required_negotiation -->
 ```java
 .withExtension(SkillsExtension.class, skills -> skills
         .registry(new ClasspathSkillsRegistry("skills"))

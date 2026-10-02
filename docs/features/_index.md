@@ -18,6 +18,7 @@ Start with plain Java methods annotated with `@McpTool`, `@McpResource`, `@McpPr
 `@McpCompletion`. Tachyon binds arguments and maps return values to MCP responses. Register your
 service instances once:
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/features/FeaturesServer.java#features_register_annotations -->
 ```java
 var server = TachyonServer.builder()
         .annotations(annotations -> annotations.register(new GreetingService()))

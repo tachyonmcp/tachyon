@@ -48,8 +48,9 @@ tachyon-kotlin = { module = "dev.tachyonmcp:tachyon-kotlin", version.ref = "tach
 ## 2. Server and transport — where most of the code disappears
 
 The SDK hands you a `Server` and leaves the streamable-HTTP transport, session lifecycle, and
-reaping to you. `TachyonServer { }` is the whole thing:
+reaping to you. `TachyonServer { }` is the whole thing ([source](https://github.com/tachyonmcp/tachyon/blob/main/examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/kotlin/migratefromkotlinsdk/MigratedServer.kt)):
 
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/kotlin/migratefromkotlinsdk/MigratedServer.kt#migrate_server -->
 ```kotlin
 val server = TachyonServer(port = mcpPort) {
     info {
@@ -60,8 +61,11 @@ val server = TachyonServer(port = mcpPort) {
         icons.add(logoIcon)
     }
     capabilities {
-        tools(listChanged = true)
-        resources(subscribe = false, listChanged = true)
+        tools { listChanged = true }
+        resources {
+            subscribe = false
+            listChanged = true
+        }
         logging = true
     }
     json { serde = KxSerializationSerde(json = yourJson) }   // reuse your kotlinx Json config
@@ -71,7 +75,12 @@ val server = TachyonServer(port = mcpPort) {
     }
     session { sessionTtl = 10.minutes }
 }
+```
 
+Then use the server through its registries and stop it from your application:
+
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/kotlin/migratefromkotlinsdk/MigratedServer.kt#migrate_lifecycle -->
+```kotlin
 server.tools()    // register tools through feature registries or Kotlin extensions
 server.port()
 server.close()    // wire to your app's stop hook
@@ -83,6 +92,7 @@ the Java `ServerBuilder` and add suspend handlers and Kotlin-specific types on t
 The identity block is easy to under-fill. `info { }` supports `title`, `websiteUrl`, and
 `icons` — port all of them, not just `name`/`version`:
 
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/kotlin/migratefromkotlinsdk/LogoIcon.kt#migrate_logo_icon -->
 ```kotlin
 import dev.tachyonmcp.kotlin.server.domain.Icon
 import java.util.Base64
@@ -105,8 +115,9 @@ val logoIcon =
 
 `addTool` becomes the `registerTool` member of `dev.tachyonmcp.kotlin.server.TachyonServer`. The
 handler receiver changes from `ClientConnection.(CallToolRequest)` to `ToolScope`, and it
-returns a `ToolResult`. `registerTool` returns the `TachyonServer`, so registrations chain.
+returns a `ToolResult`. `registerTool` returns the `TachyonServer`, so registrations chain ([source](https://github.com/tachyonmcp/tachyon/blob/main/examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/kotlin/migratefromkotlinsdk/MigratedTools.kt)).
 
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/kotlin/migratefromkotlinsdk/MigratedTools.kt#migrate_register_tool -->
 ```kotlin
 server.registerTool(
     name = "search",
@@ -166,6 +177,7 @@ ToolResult.structured(pojo)                                     // configured se
 The `LoggingMessageNotification` wrapper is gone. From a handler, publish through
 `ctx.notifications()`. Note the enum casing; data may be any JSON-serializable object.
 
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/kotlin/migratefromkotlinsdk/MigratedTools.kt#migrate_logging -->
 ```kotlin
 // before: server.sendLoggingMessage(LoggingMessageNotification(...LoggingLevel.Info, data = McpJson...))
 ctx.notifications().log(LoggingLevel.INFO, loggerName, entry)
@@ -176,6 +188,10 @@ current client and applies its selected threshold.
 
 ## 8. Resources
 
+Inside `TextResourceContents { }`, `uri` is the builder's property, so name the handler's receiver
+(`this@resource`, `this@resourceTemplate`) to read the requested URI ([source](https://github.com/tachyonmcp/tachyon/blob/main/examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/kotlin/migratefromkotlinsdk/MigratedResources.kt)):
+
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/kotlin/migratefromkotlinsdk/MigratedResources.kt#migrate_resources -->
 ```kotlin
 val server = TachyonServer(port = mcpPort) {
     // Concrete resource: appears in resources/list.
@@ -187,7 +203,7 @@ val server = TachyonServer(port = mcpPort) {
         title = "README",
     ) {
         TextResourceContents {
-            text = read(uri) ?: error("not found")
+            text = read(this@resource.uri) ?: error("not found")
         }
     }
 
@@ -211,6 +227,7 @@ text and binary builders also keep `param("path")` and `sequence("segments")` in
 
 Use a receiver factory when you need a reusable descriptor:
 
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/kotlin/migratefromkotlinsdk/MigratedResources.kt#migrate_resource_descriptor -->
 ```kotlin
 val docs = ResourceTemplateDescriptor {
     name = "docs"
@@ -236,8 +253,9 @@ one matching resource; names need not be unique.
 ## 9. Client requests
 
 Client requests now hang off `InteractionContext` (available as `ToolScope.ctx`) instead of a
-`Server` + `sessionId` pair:
+`Server` + `sessionId` pair ([source](https://github.com/tachyonmcp/tachyon/blob/main/examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/kotlin/migratefromkotlinsdk/MigratedTools.kt)):
 
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/kotlin/migratefromkotlinsdk/MigratedTools.kt#migrate_client_request -->
 ```kotlin
 val response = ctx.sendRequest("elicitation/create", params).join()
 ```

@@ -39,8 +39,9 @@ directory with its `pom.xml`. `tachyon-core` already contains everything an exte
 
 ### 1. Create the extension
 
-Create `src/main/java/GreetingsExtension.java`:
+Create `src/main/java/GreetingsExtension.java` ([source](https://github.com/tachyonmcp/tachyon/blob/main/examples/doc-examples/src/main/java/dev/tachyonmcp/docs/extensions/customextensions/GreetingsExtension.java)):
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/extensions/customextensions/GreetingsExtension.java#custom_ext_greetings -->
 ```java
 import dev.tachyonmcp.api.server.extensions.AdvertiseMode;
 import dev.tachyonmcp.api.server.extensions.ExtensionContext;
@@ -80,8 +81,9 @@ What each part does:
 
 ### 2. Register the extension
 
-Replace `src/main/java/MyMcpServer.java` with:
+Replace `src/main/java/MyMcpServer.java` with ([source](https://github.com/tachyonmcp/tachyon/blob/main/examples/doc-examples/src/main/java/dev/tachyonmcp/docs/extensions/customextensions/MyMcpServer.java)):
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/extensions/customextensions/MyMcpServer.java#custom_ext_server -->
 ```java
 import dev.tachyonmcp.core.server.TachyonServer;
 
@@ -164,6 +166,7 @@ returns `false` for this call, which lets you fall back to core behavior.
 
 To make the extension mandatory, override `negotiation()` in `GreetingsExtension`:
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/extensions/customextensions/RequiredGreetingsExtension.java#custom_ext_required -->
 ```java
 @Override
 public ExtensionNegotiation negotiation() {
@@ -238,10 +241,8 @@ methods whose handlers are registered elsewhere.
 
 A tool, resource, or prompt can belong to an extension. Set `extensionId(...)` on its descriptor:
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/extensions/customextensions/FarewellExtension.java#custom_ext_gated_tool -->
 ```java
-import dev.tachyonmcp.api.server.features.tools.ToolDescriptor;
-import dev.tachyonmcp.api.server.features.tools.ToolResult;
-
 @Override
 public void bootstrap(ExtensionContext context) {
     context.tools().register(
@@ -262,6 +263,7 @@ registered in `bootstrap`.
 
 `serverSettings()` returns settings that the server advertises with the extension:
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/extensions/customextensions/SettingsExtension.java#custom_ext_server_settings -->
 ```java
 @Override
 public ExtensionSettings serverSettings() {
@@ -272,6 +274,7 @@ public ExtensionSettings serverSettings() {
 A client sends its own settings as the value of its declaration, for example
 `"extensions": {"com.example/greetings": {"language": "fr"}}`. Read them in `onConnectionInit`:
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/extensions/customextensions/SettingsExtension.java#custom_ext_client_settings -->
 ```java
 @Override
 public void onConnectionInit(InteractionContext interaction, ExtensionSettings clientSettings) {
@@ -311,6 +314,7 @@ the deadline continues in the background. Keep cleanup bounded. A closed server 
 
 Release resources in `shutdown()`. For example, an extension that owns a scheduler stops it there:
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/extensions/customextensions/SchedulerExtension.java#custom_ext_shutdown -->
 ```java
 private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 

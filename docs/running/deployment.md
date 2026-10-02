@@ -39,6 +39,7 @@ built-in authentication or authorization, so a public deployment has to supply b
 `host` defaults to `127.0.0.1`. A platform routes to the process from outside,
 so the server has to listen on every interface.
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/running/deployment/BindAllInterfaces.java#deploy_bind_all -->
 ```java
 .network(n -> n.host("0.0.0.0"))
 ```
@@ -48,6 +49,7 @@ so the server has to listen on every interface.
 Most platforms assign the port and pass it in the environment. Read it there
 instead of hard-coding one.
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/running/deployment/PortFromEnvServer.java#deploy_port_env -->
 ```java
 .network(n -> n.port(Integer.parseInt(System.getenv().getOrDefault("PORT", "8080"))))
 ```
@@ -65,6 +67,7 @@ hostname is neither. Until `allowedHosts` names it, the server answers
 server binds. `allowedHosts` decides which `Host` headers it answers. Binding
 more widely never affects the `403`.
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/running/deployment/PublicHostServer.java#deploy_allowed_host -->
 ```java
 .network(n -> {
     var allowedHost = System.getenv("ALLOWED_HOST");
@@ -129,6 +132,7 @@ header that is not loopback is rejected with `403` unless that origin is listed
 in [`allowedOrigins`](configuration.md#cors). A browser page on
 `https://app.example.com` reaching Tachyon at `mcp.example.com` needs both:
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/running/deployment/BrowserServer.java#deploy_browser -->
 ```java
 .network(n -> n.allowedHosts("mcp.example.com").allowedOrigins("https://app.example.com"))
 ```

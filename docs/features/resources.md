@@ -15,9 +15,9 @@ the content. Register a URI template when part of the URI selects a record, file
 Use `@McpResource` for both fixed URIs and URI templates. Register a service containing your resource
 methods:
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/features/resources/AppResources.java#resources_app_resources -->
 ```java
 import dev.tachyonmcp.api.annotations.McpResource;
-import dev.tachyonmcp.core.server.TachyonServer;
 
 class AppResources {
     public record UserProfile(String id, String displayName) {}
@@ -34,7 +34,12 @@ class AppResources {
         return new UserProfile(id, "Ada");
     }
 }
+```
 
+Then register the service:
+
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/features/resources/AnnotatedResourcesServer.java#resources_annotated_server -->
+```java
 var server = TachyonServer.builder()
         .annotations(annotations -> annotations.register(new AppResources()))
         .port(8080)
@@ -58,6 +63,7 @@ default. Return `ResourceContents` directly when you need full control of its fi
 
 For binary content, return raw bytes and declare the MIME type. Add this method to your service:
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/features/resources/BinaryResources.java#resources_logo -->
 ```java
 @McpResource(uri = "app://logo", mimeType = "image/png")
 public byte[] logo() throws java.io.IOException {
@@ -78,10 +84,8 @@ list variables. For dependencies returning `CompletionStage`, use the async regi
 Configure resources while building the server. The descriptor's `uri` identifies the resource;
 `name` is a display label and doesn't need to be unique.
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/features/resources/ProgrammaticResourcesServer.java#resources_programmatic_server -->
 ```java
-import dev.tachyonmcp.api.server.domain.TextResourceContents;
-import dev.tachyonmcp.core.server.TachyonServer;
-
 var server = TachyonServer.builder()
         .withResources(resources -> resources.register(
                 descriptor -> descriptor
@@ -91,7 +95,7 @@ var server = TachyonServer.builder()
                         .mimeType("application/json"),
                 (context, request) -> TextResourceContents.of(
                         request.uri(),
-                        "{\"environment\":\"production\"}", 
+                        "{\"environment\":\"production\"}",
                         "application/json")))
         .port(8080)
         .build();
@@ -104,8 +108,9 @@ name replaces its descriptor and handler. Registering the same URI under a diffe
 ### Register a URI template
 
 Templates match parameterized URIs such as `app://users/{id}`. The request exposes each matched
-value through `params()`.
+value through `params()` ([source](https://github.com/tachyonmcp/tachyon/blob/main/examples/doc-examples/src/main/java/dev/tachyonmcp/docs/features/resources/TemplateResources.java)).
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/features/resources/TemplateResources.java#resources_template -->
 ```java
 server.resources().registerTemplate(
         template -> template
@@ -127,13 +132,10 @@ values are `UriTemplateValue.Scalar` or `UriTemplateValue.Sequence`; exploded li
 ### Use an asynchronous handler
 
 Synchronous handlers run on virtual threads and can block. Use `registerAsync` or
-`registerTemplateAsync` when an existing API already returns `CompletionStage`.
+`registerTemplateAsync` when an existing API already returns `CompletionStage` ([source](https://github.com/tachyonmcp/tachyon/blob/main/examples/doc-examples/src/main/java/dev/tachyonmcp/docs/features/resources/AsyncResources.java)):
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/features/resources/AsyncResources.java#resources_async -->
 ```java
-import java.net.URI;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse.BodyHandlers;
-
 server.resources().registerAsync(
         descriptor,
         (context, request) -> httpClient.sendAsync(
@@ -148,11 +150,10 @@ method.
 
 ### Return binary content
 
-Pass raw bytes to `BlobResourceContents.of`. Tachyon performs the wire encoding.
+Pass raw bytes to `BlobResourceContents.of`. Tachyon performs the wire encoding ([source](https://github.com/tachyonmcp/tachyon/blob/main/examples/doc-examples/src/main/java/dev/tachyonmcp/docs/features/resources/BlobResources.java)):
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/features/resources/BlobResources.java#resources_blob -->
 ```java
-import dev.tachyonmcp.api.server.domain.BlobResourceContents;
-
 (context, request) -> BlobResourceContents.of(request.uri(), imageBytes, "image/png")
 ```
 
@@ -163,6 +164,7 @@ Don't Base64-encode the byte array before passing it to Tachyon.
 Resource subscriptions require stateful sessions and the resource subscription capability. Enable
 both before calling `notifyResourceUpdated`:
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/features/resources/NotifySubscribersServer.java#resources_notify -->
 ```java
 var server = TachyonServer.builder()
         .session(session -> session.enabled())
@@ -179,10 +181,10 @@ session has subscribed.
 
 ## Use the Kotlin DSL
 
-```kotlin
-import dev.tachyonmcp.api.server.domain.TextResourceContents
-import dev.tachyonmcp.kotlin.server.TachyonServer
+`TachyonServer` here is the Kotlin one, from `dev.tachyonmcp.kotlin.server` ([source](https://github.com/tachyonmcp/tachyon/blob/main/examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/features/resources/ResourcesKotlin.kt)).
 
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/features/resources/ResourcesKotlin.kt#resources_kotlin -->
+```kotlin
 val server = TachyonServer(port = 8080) {
     resource(name = "config", uri = "app://config", mimeType = "application/json") {
         TextResourceContents.of(uri, """{"environment":"production"}""", "application/json")

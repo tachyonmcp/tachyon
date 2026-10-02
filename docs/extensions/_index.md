@@ -32,8 +32,11 @@ Add the extension's module. `tachyon-bom` manages its version:
 </dependency>
 ```
 
-Then register it on the server builder by class and configure its builder:
+Then register it on the server builder by class and configure its builder. `SkillsExtension` and
+`FilesystemSkillsRegistry` are in `dev.tachyonmcp.extensions.skills`
+([source](https://github.com/tachyonmcp/tachyon/blob/main/examples/doc-examples/src/main/java/dev/tachyonmcp/docs/extensions/SkillsServer.java)):
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/extensions/SkillsServer.java#extensions_add_skills -->
 ```java
 var server = TachyonServer.builder()
         .withExtension(SkillsExtension.class, skills -> skills

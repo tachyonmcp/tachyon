@@ -10,6 +10,7 @@ description: |-
 All configuration flows through `TachyonServer.builder()` (Java) or the `TachyonServer { }` DSL (Kotlin).
 
 Java:
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/running/configuration/BasicServer.java#config_basic_server -->
 ```java
 var server = TachyonServer.builder()
     .info(i -> i.name("my-server").version("1.0"))
@@ -20,6 +21,7 @@ server.start();
 ```
 
 Kotlin:
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/running/configuration/KotlinBasicMain.kt#config_kotlin_basic -->
 ```kotlin
 val server = TachyonServer {
     info { name = "my-server"; version = "1.0" }
@@ -97,6 +99,7 @@ The progress token is available only from `ToolRequest`, so override `handle(ctx
 `handleAsync(ctx, ToolRequest)` when forwarding progress. `comment(...)` needs no token and is
 available from any handler's `InteractionContext`:
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/running/configuration/SlowTool.java#config_slow_tool -->
 ```java
 class SlowTool extends AbstractToolHandler {
     SlowTool() {
@@ -251,10 +254,12 @@ differs from it is rejected with `400 Bad Request`.
 |---|---|---|
 | `allowedHosts` | — (localhost-only) | Extra `Host` authorities (`host` or `host:port`) accepted beyond localhost |
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/running/configuration/NetworkOptions.java#config_allowed_hosts -->
 ```java
 .network(n -> n.allowedHosts("host.docker.internal:8096"))
 ```
 
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/running/configuration/KotlinConfiguration.kt#config_kotlin_allowed_hosts -->
 ```kotlin
 network { allowedHosts += "host.docker.internal:8096" }
 ```
@@ -370,10 +375,12 @@ for a complete working setup.
 
 Requesting an explicit engine whose transport is not on the classpath (or not supported by the OS) throws `UnsupportedOperationException` at startup, with Netty's unavailability cause in the message:
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/running/configuration/NetworkOptions.java#config_io_engine -->
 ```java
-network(n -> n.ioEngine(NettyIoEngine.EPOLL)) // fails fast on macOS
+.network(n -> n.ioEngine(NettyIoEngine.EPOLL)) // fails fast on macOS
 ```
 
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/running/configuration/KotlinConfiguration.kt#config_kotlin_io_engine -->
 ```kotlin
 network { ioEngine = NettyIoEngine.EPOLL }
 ```
@@ -385,14 +392,17 @@ not of a session — a stateless server simply keeps no sessions, and that is th
 **Configuring a session option is the opt-in**: setting `sessionTtl`, `janitorInterval`,
 `sessionStore`, `sessionEventStore` or `sessionIdGenerator` turns sessions on by itself. `enabled()`
 turns them on with the defaults, and `stateless()` writes the opt-out down. A stateless server keeps
-no session state: `SessionStore.noop()` and `SessionEventStore.noop()` persist nothing.
+no session state: `SessionStore.noop()` and `SessionEventStore.noop()` persist nothing. The three
+lines below are alternatives, not one chain:
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/running/configuration/SessionAlternatives.java#config_session_alternatives -->
 ```java
 .session(s -> s.sessionTtl(Duration.ofMinutes(5)))   // sessions on, custom TTL
 .session(s -> s.enabled())                           // sessions on, all defaults
 .stateless()                                         // explicitly stateless (the default)
 ```
 
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/running/configuration/KotlinConfiguration.kt#config_kotlin_session_alternatives -->
 ```kotlin
 session { sessionTtl = 5.minutes }   // sessions on, custom TTL
 session { enable() }                 // sessions on, all defaults
@@ -458,6 +468,7 @@ Turning `slowRequestLogging` on activates two diagnostics:
 
 Both share the same threshold and are silenced at default (flag off, zero overhead).
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/running/configuration/ObservabilityServer.java#config_observability -->
 ```java
 var server = TachyonServer.builder()
     .observability(o -> o.slowRequestLogging().slowRequestThreshold(Duration.ofSeconds(5)))
@@ -466,6 +477,7 @@ var server = TachyonServer.builder()
 server.start();
 ```
 
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/running/configuration/KotlinObservabilityMain.kt#config_kotlin_observability -->
 ```kotlin
 TachyonServer(port = 8080) {
     observability {
@@ -500,6 +512,7 @@ not a capability setting: register [`TasksExtension`](../extensions/tasks.md), w
 - **`ON`** — advertised from `initialize`, even with zero handlers registered yet (needed for dynamic registration + `list_changed` after startup).
 - **`OFF`** — never advertised, **and registration becomes a no-op**: `tools().register(...)`, `resources().register(...)`, and `prompts().register(...)` are silently skipped (logged at `debug`).
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/running/configuration/CapabilitiesServer.java#config_capabilities -->
 ```java
 var server = TachyonServer.builder()
     .capabilities(c -> c
@@ -512,12 +525,15 @@ var server = TachyonServer.builder()
 server.start();
 ```
 
+In Kotlin, `completionsMode` replaces the Java `.completions()` shortcut:
+
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/running/configuration/KotlinCapabilitiesMain.kt#config_kotlin_capabilities -->
 ```kotlin
 TachyonServer(port = 8080) {
     capabilities {
         tools { mode = Mode.ON; listChanged = true }
         resources { mode = Mode.ON; subscribe = true }
-        completions = true
+        completionsMode = Mode.ON
         logging = true
     }
 }

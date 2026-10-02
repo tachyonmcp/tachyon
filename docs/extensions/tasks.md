@@ -32,8 +32,9 @@ and let clients retrieve the result. Clients on MCP 2025-11-25 get the [legacy b
 ## Configure a task connector
 
 Build a `TaskConnector` (package `dev.tachyonmcp.api.server.features.tasks`) from the three operations in the modern Tasks extension. Lookup, cooperative
-cancellation, and input submission are one required contract:
+cancellation, and input submission are one required contract ([source](https://github.com/tachyonmcp/tachyon/blob/main/examples/doc-examples/src/main/java/dev/tachyonmcp/docs/extensions/tasks/TasksServer.java), with an in-memory workflow engine):
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/extensions/tasks/TasksServer.java#tasks_connector -->
 ```java
 var tasks = TaskConnector.builder()
         .get((ctx, request) -> workflows.snapshot(request.taskId()))
@@ -58,6 +59,7 @@ registering it without a connector fails the build, and so does a tool declaring
 Mark the tool as task-capable. Its handler starts external work once and returns the initial
 immutable projection:
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/extensions/tasks/TasksServer.java#tasks_register_tool -->
 ```java
 server.tools().register(
         tool -> tool.name("book_appointment").taskSupport(TaskSupport.REQUIRED),
@@ -91,6 +93,7 @@ on that cache: it asks the connector for authoritative state.
 
 Push updates through the public `Tasks` façade when the external system sends a callback:
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/extensions/tasks/PublishSnapshots.java#tasks_publish -->
 ```java
 TasksExtension.tasks(server).publish(s -> s
         .taskId(workflowId)
@@ -120,6 +123,7 @@ starts work.
 
 A tool handler reaches the same façade through its context, e.g. to hand it to the work it starts:
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/extensions/tasks/ContextFacade.java#tasks_ctx_facade -->
 ```java
 (ctx, request) -> {
     var tasks = TasksExtension.tasks(ctx);
@@ -136,6 +140,7 @@ a tool handler that throws it answers `-32603 Internal error`.
 Terminal snapshots carry the result. Publish one when the work completes; `next(previous)` copies
 the previous snapshot and bumps its revision, since `publish` ignores a revision that is not newer:
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/extensions/tasks/PublishSnapshots.java#tasks_publish_completed -->
 ```java
 TasksExtension.tasks(server).publish(s -> s.next(previous)
         .status(TaskState.COMPLETED)
@@ -184,6 +189,7 @@ uniqueness and unpredictability.
 To keep a task private to the session that started it, record the session with the job and check
 it in the connector. Answer a task the caller may not see like an unknown id:
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/extensions/tasks/SessionScopedConnector.java#tasks_session_scoped_get -->
 ```java
 .get((ctx, request) -> {
     var job = jobs.find(request.taskId());
@@ -208,6 +214,7 @@ its `ttl` has passed, whatever its status.
 5 minutes; zero or negative keeps them indefinitely). `pollInterval` is the interval suggested to
 requestors when a snapshot sets none:
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/extensions/tasks/RetentionServer.java#tasks_retention -->
 ```java
 .withExtension(TasksExtension.class, t -> t
         .connector(connector)
@@ -226,6 +233,7 @@ their streams opened.
 task-augmented tool call that created the task — it is not part of `TaskSnapshot` and carries no
 revision:
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/extensions/tasks/PublishSnapshots.java#tasks_report_progress -->
 ```java
 TasksExtension.tasks(server).reportProgress(workflowId, 40.0, 100.0, "Charging card");
 ```
@@ -249,11 +257,10 @@ Without it, `tasks(connector) { }`, `ToolScope.tasks`, and `TachyonServer.tasks`
 `IllegalStateException` naming the missing dependency when first used; a tool handler that touches
 `tasks` answers `-32603 Internal error`. Servers that never use tasks run without the module.
 
-Kotlin uses the same Java connector:
+Kotlin uses the same Java connector. Import `dev.tachyonmcp.kotlin.server.config.tasks` first:
 
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/extensions/tasks/TasksKotlin.kt#tasks_kotlin_builder -->
 ```kotlin
-import dev.tachyonmcp.kotlin.server.config.tasks
-
 buildServer {
     tasks(taskConnector) {
         pollInterval = 1.seconds
@@ -267,6 +274,7 @@ replace scoped settings, including defaults.
 Tool handlers return the same `ToolResult.task(TaskSnapshot)` branch. The façade is a property on
 the server and on the tool scope:
 
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/extensions/tasks/TasksKotlin.kt#tasks_kotlin_server -->
 ```kotlin
 val server = TachyonServer(port = 8080) {
     tasks(taskConnector)
@@ -281,6 +289,7 @@ server.tasks.publish(snapshot) // TachyonServer.tasks, e.g. from a workflow call
 Build snapshots with `TaskSnapshot { }`. Pass `from` to build the next revision of a previous
 snapshot: its fields carry over and the revision is bumped, like Java's `next(previous)`:
 
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/extensions/tasks/TasksKotlin.kt#tasks_kotlin_next -->
 ```kotlin
 server.tasks.publish(
     TaskSnapshot(from = previous) {
@@ -317,6 +326,7 @@ requires, the wait has no time limit. It ends only when:
 | client sent `notifications/cancelled` for the request | none (cancelled) |
 | response undeliverable: session ended (`DELETE` or idle expiry) or, without a session, connection closed | none; the wait stops polling |
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/extensions/tasks/LegacyResultPolling.java#tasks_legacy_result_poll -->
 ```java
 .withExtension(TasksExtension.class, tasks -> tasks
         .connector(connector)

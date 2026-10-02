@@ -18,13 +18,13 @@ injects it without adding a client argument. Call `context.client().elicitation(
 define the accepted response with a restricted JSON Schema whose top-level properties are primitive
 values.
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/features/clientinteractions/CityTools.java#ci_city_tools -->
 ```java
 import dev.tachyonmcp.api.annotations.McpTool;
 import dev.tachyonmcp.api.json.JsonSchema;
 import dev.tachyonmcp.api.runtime.ElicitationRequest;
 import dev.tachyonmcp.api.runtime.InteractionContext;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
-import dev.tachyonmcp.core.server.TachyonServer;
 
 class CityTools {
     private static final JsonSchema CITY_SCHEMA = JsonSchema.unchecked("""
@@ -52,7 +52,12 @@ class CityTools {
         };
     }
 }
+```
 
+Register it on a server with sessions enabled:
+
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/features/clientinteractions/CityServer.java#ci_city_server -->
+```java
 var server = TachyonServer.builder()
         .session(session -> session.enabled())
         .annotations(annotations -> annotations.register(new CityTools()))
@@ -80,10 +85,8 @@ Tools and prompts can instead return an input-required result. In `CityTools.cho
 the elicitation call and switch with the return below. This ends the current handler call
 with one or more input requests rather than waiting for an immediate client response.
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/features/clientinteractions/InputRequiredCityTools.java#ci_input_required -->
 ```java
-import dev.tachyonmcp.api.server.domain.FormInputRequest;
-import java.util.Map;
-
 return ToolResult.inputRequired(
         Map.of("city", FormInputRequest.of("Choose a forecast city", CITY_SCHEMA)),
         "forecast-draft-42");
@@ -98,6 +101,7 @@ values through `TaskConnector.update(...)`. See [Tasks](../extensions/tasks.md).
 Programmatic handlers receive the same context. With a `CityTools` instance, the equivalent
 registration is:
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/features/clientinteractions/ProgrammaticCityTools.java#ci_programmatic -->
 ```java
 var cityTools = new CityTools();
 server.tools().register(
