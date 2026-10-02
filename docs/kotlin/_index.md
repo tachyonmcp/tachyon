@@ -29,8 +29,9 @@ Import `dev.tachyonmcp.kotlin.server.config.tasks` for builder configuration.
 `dev.tachyonmcp.kotlin.server.config.skills` extension and require
 `tachyon-extensions-skills` explicitly.
 
-A minimal Gradle build for the examples below, with JDK 21:
+A minimal Gradle build for the examples below, with JDK 21 ([source](https://github.com/tachyonmcp/tachyon/blob/main/examples/doc-examples/kotlin-gradle/build.gradle.kts)):
 
+<!-- snips: ../../examples/doc-examples/kotlin-gradle/build.gradle.kts#kotlin_gradle_build -->
 ```kotlin
 plugins {
     kotlin("jvm") version "2.2.21"
@@ -51,6 +52,7 @@ application { mainClass = "MyMcpServerKt" }
 
 ## Entry points
 
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/kotlin/ServerEntryPoints.kt#kotlin_entry_points -->
 ```kotlin
 // Start Netty transport — returns the Kotlin TachyonServer
 val server = TachyonServer(port = 8080) { /* configure */ }
@@ -61,14 +63,15 @@ val testServer: TachyonServer = buildServer { /* configure */ }
 
 Both entry points configure a `TachyonServerBuilder`. `TachyonServer(port)` also binds the
 transport and starts serving; `buildServer` returns a configured server you start yourself, which
-is what you want in tests.
+is what you want in tests. `start()` needs a port, so set `network { port = ... }` first.
 
 ## Tool handlers
 
 Tool lambdas are `suspend` functions with access to `ToolScope`, including `ctx`, `request`,
-and `arguments`. Start with a simple string tool. Save this as `src/main/kotlin/MyMcpServer.kt`
+and `arguments`. Start with a simple string tool. Save this as `src/main/kotlin/MyMcpServer.kt` ([source](https://github.com/tachyonmcp/tachyon/blob/main/examples/doc-examples/kotlin-gradle/src/main/kotlin/MyMcpServer.kt))
 in a Kotlin JVM project with the build above, then run it with `gradle run`:
 
+<!-- snips: ../../examples/doc-examples/kotlin-gradle/src/main/kotlin/MyMcpServer.kt#kotlin_reverse_echo_server -->
 ```kotlin
 import dev.tachyonmcp.api.json.JsonSchema
 import dev.tachyonmcp.api.server.config.Mode
@@ -121,13 +124,13 @@ For the experimental class-based escape hatch, extend `AbstractToolHandler` and 
 
 ## Configuration example
 
-This complete file configures server info, capabilities, sessions, and runtime settings, and registers a tool, a resource, and a prompt. Save it as `src/main/kotlin/DemoServer.kt`
+This complete file configures server info, capabilities, sessions, and runtime settings, and registers a tool, a resource, and a prompt. Save it as `src/main/kotlin/DemoServer.kt` ([source](https://github.com/tachyonmcp/tachyon/blob/main/examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/kotlin/DemoServer.kt))
 in the project from [Tool handlers](#tool-handlers), and set `mainClass` to `DemoServerKt` to run it.
 It starts a server on port 8080 and closes it when the JVM stops:
 
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/kotlin/DemoServer.kt#kotlin_demo_server -->
 ```kotlin
 import dev.tachyonmcp.api.server.domain.PromptMessage
-import dev.tachyonmcp.api.server.domain.TextResourceContents
 import dev.tachyonmcp.api.server.features.tools.ToolResult
 import dev.tachyonmcp.kotlin.server.TachyonServer
 import java.util.UUID
@@ -135,46 +138,52 @@ import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 fun main() {
-    val server = TachyonServer(port = 8080) {
-        info {
-            name = "demo-server"
-            version = "1.0"
-            description = "Demo MCP server"
-        }
-        capabilities {
-            tools { listChanged = true }
-            resources {
-                subscribe = true
-                listChanged = true
+    val server =
+        TachyonServer(port = 8080) {
+            info {
+                name = "demo-server"
+                version = "1.0"
+                description = "Demo MCP server"
             }
-            prompts { listChanged = true }
-        }
-        session {
-            sessionTtl = 5.minutes
-            sessionIdGenerator { _, _ -> "sess_" + UUID.randomUUID().toString().replace("-", "") }
-        }
-        tool(name = "ping", description = "Ping the server") {
-            ToolResult.text("pong")
-        }
-        runtime {
-            shutdownGracePeriod = 5.seconds
-        }
-        resource(
-            name = "config",
-            uri = "demo://config",
-            description = "Server configuration",
-            mimeType = "application/json",
-        ) {
-            TextResourceContents {
-                uri = this@resource.uri
-                text = """{"env":"prod"}"""
-                mimeType = "application/json"
+            capabilities {
+                tools { listChanged = true }
+                resources {
+                    subscribe = true
+                    listChanged = true
+                }
+                prompts { listChanged = true }
+            }
+            session {
+                sessionTtl = 5.minutes
+                sessionIdGenerator {
+                    _,
+                    _,
+                    ->
+                    "sess_" + UUID.randomUUID().toString().replace("-", "")
+                }
+            }
+            tool(name = "ping", description = "Ping the server") {
+                ToolResult.text("pong")
+            }
+            runtime {
+                shutdownGracePeriod = 5.seconds
+            }
+            resource(
+                name = "config",
+                uri = "demo://config",
+                description = "Server configuration",
+                mimeType = "application/json",
+            ) {
+                TextResourceContents {
+                    uri = this@resource.uri
+                    text = """{"env":"prod"}"""
+                    mimeType = "application/json"
+                }
+            }
+            prompt(name = "greet", description = "Greeting prompt") {
+                listOf(PromptMessage.user("Say hello, ${arguments.stringOr("name", "world")}"))
             }
         }
-        prompt(name = "greet", description = "Greeting prompt") {
-            listOf(PromptMessage.user("Say hello, ${arguments.stringOr("name", "world")}"))
-        }
-    }
     Runtime.getRuntime().addShutdownHook(Thread { server.close() })
 }
 ```
@@ -184,18 +193,21 @@ fun main() {
 Kotlin factories use receiver blocks for structured values with more than three fields.
 `Annotations` follows the same shape because it is commonly nested inside descriptors:
 
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/kotlin/StructuredValues.kt#kotlin_structured_factories -->
 ```kotlin
-val annotations = Annotations {
-    audience = listOf(Role.USER)
-    priority = 0.8
-}
+val annotations =
+    Annotations {
+        audience = listOf(Role.USER)
+        priority = 0.8
+    }
 
-val icon = Icon {
-    src = "https://example.com/icon.svg"
-    mimeType = "image/svg+xml"
-    sizes = listOf("any")
-    theme = "light"
-}
+val icon =
+    Icon {
+        src = "https://example.com/icon.svg"
+        mimeType = "image/svg+xml"
+        sizes = listOf("any")
+        theme = "light"
+    }
 ```
 
 Required fields fail fast when the block finishes. Flat overloads remain available for source
@@ -204,12 +216,14 @@ content objects, and resource, prompt, and tool descriptors.
 
 Experimental binary icons accept raw bytes and encode `src` as a Base64 data URI:
 
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/kotlin/StructuredValues.kt#kotlin_binary_icon -->
 ```kotlin
-val icon = Icon {
-    data = imageBytes
-    mimeType = "image/png"
-    sizes = listOf("32x32")
-}
+val icon =
+    Icon {
+        data = imageBytes
+        mimeType = "image/png"
+        sizes = listOf("32x32")
+    }
 ```
 
 Set either `src` or `data`. Binary data must be nonempty and requires a nonblank `mimeType`.
@@ -219,6 +233,7 @@ Java callers can use the experimental `Icon.of(bytes, mimeType, sizes, theme)` o
 
 Resource and prompt lambdas are `suspend` functions too — call suspending APIs directly:
 
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/kotlin/HandlerExamples.kt#kotlin_resource_handler -->
 ```kotlin
 resource(
     name = "config",
@@ -232,7 +247,7 @@ resource(
     meta = mapOf("owner" to "team-x"),
 ) {
     // this: ResourceScope — ctx, uri, params, uriTemplate
-    val config = fetchConfig()  // suspend call
+    val config = fetchConfig() // suspend call
     TextResourceContents { text = config }
 }
 
@@ -244,6 +259,7 @@ prompt(name = "greet", description = "Greeting prompt") {
 
 `prompt(...)` accepts the full `PromptDescriptor` attribute set as named params too:
 
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/kotlin/HandlerExamples.kt#kotlin_prompt_attributes -->
 ```kotlin
 prompt(
     name = "rewrite",
@@ -279,17 +295,20 @@ property.
 
 For metadata shared across registrations, pass a prebuilt descriptor:
 
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/kotlin/HandlerExamples.kt#kotlin_resource_descriptor -->
 ```kotlin
-val descriptor = ResourceDescriptor {
-    name = "config"
-    uri = "demo://config"
-    description = "Application configuration"
-    mimeType = "application/json"
-    title = "Configuration"
-}
+val descriptor =
+    ResourceDescriptor {
+        name = "config"
+        uri = "demo://config"
+        description = "Application configuration"
+        mimeType = "application/json"
+        title = "Configuration"
+    }
 
 resource(descriptor) {
-    TextResourceContents { text = fetchConfig() }
+    val config = fetchConfig() // suspend call
+    TextResourceContents { text = config }
 }
 ```
 
@@ -301,6 +320,7 @@ cancels active Kotlin handlers before shutting down the executor.
 
 Template metadata stays in named parameters. The trailing `block` handles matched requests:
 
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/kotlin/HandlerExamples.kt#kotlin_resource_template -->
 ```kotlin
 resourceTemplate(
     name = "user-profile",
@@ -309,12 +329,13 @@ resourceTemplate(
     mimeType = "application/json",
     title = "User profile",
     annotations = Annotations { priority = 0.8 },
-    icons = listOf(
-        Icon {
-            src = "https://example.com/user.svg"
-            mimeType = "image/svg+xml"
-        },
-    ),
+    icons =
+        listOf(
+            Icon {
+                src = "https://example.com/user.svg"
+                mimeType = "image/svg+xml"
+            },
+        ),
 ) {
     TextResourceContents {
         text = """{"id":"${param("userId")}"}"""
@@ -327,39 +348,45 @@ Template handlers use the same contextual defaults. Both `TextResourceContents {
 
 For a descriptor shared across registrations, build it once and use the descriptor overload:
 
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/kotlin/HandlerExamples.kt#kotlin_resource_template_descriptor -->
 ```kotlin
-val descriptor = ResourceTemplateDescriptor {
-    name = "document"
-    uriTemplate = "docs://{path}"
-    description = "Documentation"
-    mimeType = "text/markdown"
-}
+val descriptor =
+    ResourceTemplateDescriptor {
+        name = "document"
+        uriTemplate = "docs://{path}"
+        description = "Documentation"
+        mimeType = "text/markdown"
+    }
 
 resourceTemplate(descriptor) {
-    TextResourceContents {
-        text = loadDocument(param("path"))
-    }
+    val document = loadDocument(param("path")) // suspend call
+    TextResourceContents { text = document }
 }
 ```
 
 ## Tool schemas
 
-`inputSchema` / `outputSchema` accept three shapes on every registration overload
-(`tool(...)` in the DSL, `TachyonServer.registerTool(...)` post-build, `ToolDescriptor { }`):
+`inputSchema` / `outputSchema` accept a `JsonSchema` or a kotlinx.serialization `JsonObject` on `tool(...)` in the
+DSL and `TachyonServer.registerTool(...)` post-build. The DSL overload that takes a JSON string is deprecated; use
+`JsonSchema.parse(...)`:
 
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/kotlin/ToolExamples.kt#kotlin_tool_schema_shapes -->
 ```kotlin
-// Jackson JsonNode
-tool("a", inputSchema = jacksonNode) { /* ... */ }
-
-// Raw JSON string — parsed by Tachyon
+// JsonSchema — parse a JSON string, or generate one from a class
 tool(
-    "b",
-    inputSchema = """{"type":"object","properties":{"msg":{"type":"string"}}}""",
-    outputSchema = """{"type":"object","properties":{"echo":{"type":"string"}}}""",
-) { /* ... */ }
+    "a",
+    inputSchema =
+        JsonSchema.parse(
+            """{"type":"object","properties":{"msg":{"type":"string"}}}""",
+        ),
+    outputSchema =
+        JsonSchema.parse(
+            """{"type":"object","properties":{"echo":{"type":"string"}}}""",
+        ),
+) { text("a") }
 
 // kotlinx.serialization JsonObject — requires kotlinx-serialization-json (optional)
-tool("c", inputSchema = buildJsonObject { put("type", "object") }) { /* ... */ }
+tool("b", inputSchema = buildJsonObject { put("type", "object") }) { text("b") }
 ```
 
 Schema roots are validated at registration time: `inputSchema` must declare `"type": "object"`
@@ -376,34 +403,40 @@ warning — clients may truncate them.
 
 Add `tachyon-kotlin-kt-schema` for runtime schema generation and configure the
 [serialization dependency and compiler plugin](kt-schema-json.md#typed-echo-and-simple-reverse-tools).
-This complete server uses the echo project's `message` input and `reply` output:
+This complete server ([source](https://github.com/tachyonmcp/tachyon/blob/main/examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/kotlin/TypedEchoServer.kt)) uses the echo project's `message` input and `reply` output:
 
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/kotlin/TypedEchoServer.kt#kotlin_typed_echo_server -->
 ```kotlin
 import dev.tachyonmcp.kotlin.server.TachyonServer
 import dev.tachyonmcp.kotlin.server.json.KxSerializationSerde
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class EchoRequest(val message: String)
+data class EchoRequest(
+    val message: String,
+)
 
 @Serializable
-data class EchoResponse(val reply: String)
+data class EchoResponse(
+    val reply: String,
+)
 
 fun main() {
-    val server = TachyonServer(port = 8080) {
-        info {
-            name = "echo-server"
-            version = "1.0"
+    val server =
+        TachyonServer(port = 8080) {
+            info {
+                name = "echo-server"
+                version = "1.0"
+            }
+            network { host = "127.0.0.1" }
+            json { serde = KxSerializationSerde.Default }
+            typedTool<EchoRequest, EchoResponse>(
+                name = "echo",
+                description = "Echo message",
+            ) { input ->
+                EchoResponse(input.message)
+            }
         }
-        network { host = "127.0.0.1" }
-        json { serde = KxSerializationSerde.Default }
-        typedTool<EchoRequest, EchoResponse>(
-            name = "echo",
-            description = "Echo message",
-        ) { input ->
-            EchoResponse(input.message)
-        }
-    }
     Runtime.getRuntime().addShutdownHook(Thread { server.close() })
 }
 ```
@@ -443,12 +476,11 @@ Add the reflection back-stop to use `typedTool` without generating resources at 
 ```
 
 It registers itself through `META-INF/services`, so no wiring is needed. To control generation for
-one call, pass `schemaGenerator`:
+one call, pass `schemaGenerator` (`ktSchemaGenerator` lives in `dev.tachyonmcp.kotlin.server.json.ktschema`,
+`JsonSchemaConfig` in `me.kpavlov.kt.schema.generator.json`):
 
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/kotlin/ToolExamples.kt#kotlin_typed_tool_schema_generator -->
 ```kotlin
-import dev.tachyonmcp.kotlin.server.json.ktschema.ktSchemaGenerator
-import me.kpavlov.kt.schema.generator.json.JsonSchemaConfig
-
 typedTool<EchoRequest, EchoResponse>(
     name = "echo",
     schemaGenerator = ktSchemaGenerator(JsonSchemaConfig.Default),
@@ -475,23 +507,44 @@ Add it to use `JsonObject` schemas, `arguments.decode<T>()`, and `success(value)
 </dependency>
 ```
 
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/kotlin/ToolExamples.kt#kotlin_serialization_types -->
 ```kotlin
-@Serializable data class EchoArgs(val message: String, val loud: Boolean = false)
+@Serializable
+data class EchoArgs(
+    val message: String,
+    val loud: Boolean = false,
+)
 
-@Serializable data class EchoReply(val echo: String)
+@Serializable
+data class EchoReply(
+    val echo: String,
+)
+```
+
+Register a tool that decodes the arguments and returns the reply:
+
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/kotlin/ToolExamples.kt#kotlin_serialization_tool -->
+```kotlin
+json { serde = KxSerializationSerde.Default }
 
 tool(
     "echo",
-    inputSchema = """{"type":"object","properties":{"message":{"type":"string"}}}""",
-    outputSchema = """{"type":"object","properties":{"echo":{"type":"string"}}}""",
+    inputSchema =
+        JsonSchema.parse(
+            """{"type":"object","properties":{"message":{"type":"string"}}}""",
+        ),
+    outputSchema =
+        JsonSchema.parse(
+            """{"type":"object","properties":{"echo":{"type":"string"}}}""",
+        ),
 ) {
     val input = arguments.decode<EchoArgs>() // typed decode via configured serde
     success(EchoReply(input.message)) // structuredContent via configured serde
 }
 ```
 
-The Kotlin DSL retains Tachyon's Jackson serde by default. Select kotlinx serialization explicitly:
-`json { serde = KxSerializationSerde.Default }`. Configure a strict `Json` via
+The Kotlin DSL retains Tachyon's Jackson serde by default, which cannot decode Kotlin data classes.
+Select kotlinx serialization explicitly, as above: `json { serde = KxSerializationSerde.Default }`. Configure a strict `Json` via
 `json { serde = KxSerializationSerde(Json { ignoreUnknownKeys = false }) }`.
 `success(value)` encodes via the configured serde and pairs with the declared `outputSchema` —
 the resulting JSON must match whatever shape that schema declares (object, array, or scalar; see
@@ -512,17 +565,40 @@ configured serde in the Kotlin DSL:
 `decode<T>` uses `T::class.java → Args.decode(Class<T>)`, which routes
 through the deserializer set in `json { serde = ... }`.
 
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/kotlin/ToolExamples.kt#kotlin_greet_types -->
 ```kotlin
-@Serializable data class GreetArgs(val name: String, val greeting: String = "Hello")
-@Serializable data class GreetReply(val message: String)
+@Serializable
+data class GreetArgs(
+    val name: String,
+    val greeting: String = "Hello",
+)
 
+@Serializable
+data class GreetReply(
+    val message: String,
+)
+```
+
+Register a tool that decodes them and returns a typed result with explicit text:
+
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/kotlin/ToolExamples.kt#kotlin_greet_tool -->
+```kotlin
 tool(
     name = "greet",
-    inputSchema = """{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}""",
-    outputSchema = """{"type":"object","properties":{"message":{"type":"string"}}}""",
+    inputSchema =
+        JsonSchema.parse(
+            """{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}""",
+        ),
+    outputSchema =
+        JsonSchema.parse(
+            """{"type":"object","properties":{"message":{"type":"string"}}}""",
+        ),
 ) {
     val input = arguments.decode<GreetArgs>() // honors configured serde
-    success(GreetReply("${input.greeting}, ${input.name}!"), "greeting response")  // symmetric typed result
+    success(
+        GreetReply("${input.greeting}, ${input.name}!"),
+        "greeting response",
+    ) // symmetric typed result
 }
 ```
 
@@ -538,6 +614,8 @@ Available via `ToolScope.arguments` (or `PromptScope.arguments`):
 | `arguments.stringOrNull("k")` / `intOrNull` / `booleanOrNull` / `doubleOrNull` | Returns `null` when missing |
 | `arguments.stringOr("k", "d")` / `int("k", 0)` / `boolean("k", true)` / `double("k", 0.0)` | Falls back to default |
 | `arguments.decode<T>()` | typed decode via configured serde (Jackson by default) |
+
+The `...OrNull` and default-value accessors and `decode<T>()` are extensions from `dev.tachyonmcp.kotlin.server.domain`.
 
 ## Scope reference
 
@@ -572,18 +650,17 @@ with no handler yields an empty result rather than an error. `CompletionResult {
 response (`values`, `total`, `hasMore`, `meta`); the protocol caps a response at 100 values and the
 dispatcher truncates and forces `hasMore = true` beyond that.
 
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/kotlin/RegistrationExamples.kt#kotlin_completions -->
 ```kotlin
-TachyonServer(port = 8080) {
-    promptCompletion("rewrite-forecast") {
-        CompletionResult {
-            values = listOf("plain", "concise", "pirate").filter { it.startsWith(argumentValue) }
-        }
+promptCompletion("rewrite-forecast") {
+    CompletionResult {
+        values = listOf("plain", "concise", "pirate").filter { it.startsWith(argumentValue) }
     }
-    resourceCompletion("myapp://users/{userId}/profile") {
-        CompletionResult {
-            values = listOf("alice", "bob").filter { it.startsWith(argumentValue) }
-            hasMore = false
-        }
+}
+resourceCompletion("myapp://users/{userId}/profile") {
+    CompletionResult {
+        values = listOf("alice", "bob").filter { it.startsWith(argumentValue) }
+        hasMore = false
     }
 }
 ```
@@ -596,8 +673,9 @@ Every builder-time registration function has a `register*` twin accepting a susp
 `server.prompts().register(...)`, and `server.completions().registerForPrompt/Resource(...)`.
 Each takes either flat named parameters or a prebuilt descriptor.
 
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/kotlin/RegistrationExamples.kt#kotlin_post_build_registration -->
 ```kotlin
-val server = buildServer { /* base config */ }
+val server = buildServer { network { port = 0 } }
 
 server.registerTool(
     ToolDescriptor {
@@ -612,7 +690,10 @@ server.registerResource(name = "config", uri = "myapp://config") {
     TextResourceContents { text = """{"mode":"demo"}""" }
 }
 
-server.registerResourceTemplate(name = "user-profile", uriTemplate = "myapp://users/{userId}/profile") {
+server.registerResourceTemplate(
+    name = "user-profile",
+    uriTemplate = "myapp://users/{userId}/profile",
+) {
     TextResourceContents { text = """{"userId":"${param("userId")}"}""" }
 }
 
@@ -642,13 +723,14 @@ misconfigured capability shows up as a missing feature rather than an exception.
 
 ## Netty pipeline customization
 
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/kotlin/RegistrationExamples.kt#kotlin_pipeline_customizer -->
 ```kotlin
-TachyonServer(port = 8080) {
-    pipelineCustomizer {
-        addLast("metrics", MetricsHandler())
-    }
+pipelineCustomizer {
+    addFirst("metrics", MetricsHandler())
 }
 ```
+
+The customizer runs after Tachyon's own handlers, so a handler added with `addLast` never sees inbound requests; use `addFirst`.
 
 ## Returning results
 
@@ -686,6 +768,7 @@ serialized JSON as the backwards-compatible text block.
 
 Use `TachyonServer(port = 0) { }` for zero-setup E2E tests — it starts Netty on an ephemeral port:
 
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/kotlin/ServerEntryPoints.kt#kotlin_testing_server -->
 ```kotlin
 val server = TachyonServer(port = 0) { tool("ping") { ToolResult.text("pong") } }
 // server.host() → bound host, server.port() → ephemeral port

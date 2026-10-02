@@ -80,6 +80,11 @@ port-0 server and asserts what the page claims.
 - For a block that is a whole example (not a one-line fragment), link its source file inline in
   the lead-in sentence: ``Create `Foo.java` ([source](https://github.com/tachyonmcp/tachyon/blob/main/<repo path>)):``,
   the same `blob/main` form the docs already use.
+- snips takes only the first region when a name repeats, so a block mixing top-level types with a builder
+  call is two snippets in two fences. Imports can't sit inside a fragment: name their packages in the prose.
+- Gradle build files come from `examples/doc-examples/kotlin-gradle/build.gradle.kts`; its `buildSrc` defines
+  `tachyon.version` so the embedded text keeps the docs' `${tachyon.version}` placeholder. Verify with
+  `gradle run` (Gradle 8.14.3, JDK 21); the Maven build does not run it.
 - A doc claim that the code contradicts is a doc bug: fix the doc, don't bend the test.
 - Build files and shell blocks (`${tachyon.version}` placeholders) stay inline; the SNAPSHOT
   switch is the commented `tachyon.version` line in the module pom.

@@ -21,6 +21,7 @@
         <tachyon.version>1.0.0</tachyon.version>
 <!--        <tachyon.version>1.0.1-SNAPSHOT</tachyon.version>-->
         <spring-boot.version>4.1.1</spring-boot.version>
+        <jackson.version>3.2.3</jackson.version>
         <mcp-java.version>1.0.0</mcp-java.version>
         <kt-schema.version>0.8.3</kt-schema.version>
         <kotlinx-serialization-json.version>1.11.0</kotlinx-serialization-json.version>
@@ -37,6 +38,13 @@
                 <groupId>dev.tachyonmcp</groupId>
                 <artifactId>tachyon-bom</artifactId>
                 <version>${tachyon.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>tools.jackson</groupId>
+                <artifactId>jackson-bom</artifactId>
+                <version>${jackson.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -203,6 +211,7 @@
                             <sourceDirs>
                                 <sourceDir>${project.basedir}/src/main/kotlin</sourceDir>
                                 <sourceDir>${project.basedir}/src/main/java</sourceDir>
+                                <sourceDir>${project.basedir}/kotlin-gradle/src/main/kotlin</sourceDir>
                             </sourceDirs>
                         </configuration>
                     </execution>
