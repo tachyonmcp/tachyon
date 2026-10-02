@@ -16,10 +16,10 @@ your server.
 Put the prompt and its completion in one service. `@McpCompletion` names the target prompt; its first
 string parameter names the argument being completed and receives the current partial text.
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/features/completions/ReviewService.java#completions_review_service -->
 ```java
 import dev.tachyonmcp.api.annotations.McpCompletion;
 import dev.tachyonmcp.api.annotations.McpPrompt;
-import dev.tachyonmcp.core.server.TachyonServer;
 import java.util.List;
 import java.util.Locale;
 
@@ -37,7 +37,12 @@ class ReviewService {
                 .toList();
     }
 }
+```
 
+Then register the service:
+
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/features/completions/ReviewServer.java#completions_review_server -->
+```java
 var server = TachyonServer.builder()
         .annotations(annotations -> annotations.register(new ReviewService()))
         .port(8080)
@@ -53,9 +58,8 @@ arguments other than `concern` return no candidates without calling this method.
 Add a resource template and its completion to a service. Match the exact URI template in
 `resource`, and match its variable name in the parameter:
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/features/completions/WeatherService.java#completions_resource_variable -->
 ```java
-import dev.tachyonmcp.api.annotations.McpResource;
-
 @McpResource(uri = "weather://current/{city}")
 public String weather(String city) {
     return "Forecast for " + city;
@@ -77,6 +81,7 @@ Specify exactly one of `prompt` or `resource`. The target may also be registered
 Later scalar parameters receive values the client has already selected. Mark a sibling optional
 when it may not have been filled in yet:
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/features/completions/TripService.java#completions_siblings -->
 ```java
 @McpPrompt(name = "trip")
 public String trip(String city, @org.jspecify.annotations.Nullable String country) {
@@ -104,6 +109,7 @@ completion method per target in a service; don't mix a full request with named p
 Use an enum when the allowed values are fixed. This prompt gets completion candidates from its enum
 constant names without an `@McpCompletion` method:
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/features/completions/EnumPromptService.java#completions_enum -->
 ```java
 public enum Concern { CLARITY, PERFORMANCE, SECURITY }
 
@@ -120,10 +126,9 @@ declares it and whichever order the services register in.
 
 Turn it off per provider:
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/features/completions/EnumCompletionsOff.java#completions_enum_off -->
 ```java
-import dev.tachyonmcp.core.server.annotations.TachyonAnnotationProvider;
-
-TachyonServer.builder()
+var server = TachyonServer.builder()
     .annotations(a -> a
         .withProvider(TachyonAnnotationProvider.withEnumCompletions(false))
         .register(new ReviewService()))
@@ -141,9 +146,8 @@ Register a handler directly for dynamic targets or dependencies returning `Compl
 
 ### Complete a prompt argument
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/features/completions/ProgrammaticCompletions.java#completions_programmatic_prompt -->
 ```java
-import dev.tachyonmcp.api.server.features.completions.CompletionResult;
-
 server.completions().registerForPrompt("review-code", (context, request) -> {
     if (!request.argumentName().equals("concern")) {
         return CompletionResult.empty();
@@ -162,8 +166,9 @@ client has already selected. Return `CompletionResult.empty()` for argument name
 
 ### Complete a resource variable
 
-Use the exact URI template string, not the resource name:
+Use the exact URI template string, not the resource name ([source](https://github.com/tachyonmcp/tachyon/blob/main/examples/doc-examples/src/main/java/dev/tachyonmcp/docs/features/completions/ProgrammaticCompletions.java)):
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/features/completions/ProgrammaticCompletions.java#completions_programmatic_resource -->
 ```java
 server.completions().registerForResourceAsync(
         "weather://current/{city}",
@@ -176,6 +181,7 @@ response to 100 values and sets `hasMore` when it truncates a larger result.
 
 ## Use the Kotlin DSL
 
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/features/completions/KotlinCompletions.kt#completions_kotlin -->
 ```kotlin
 promptCompletion("review-code") {
     if (request.argumentName() != "concern") {

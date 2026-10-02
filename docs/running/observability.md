@@ -74,8 +74,9 @@ dependencies {
 
 ## 2. Register the listener
 
-Replace `src/main/java/MyMcpServer.java`:
+Replace `src/main/java/MyMcpServer.java` ([source](https://github.com/tachyonmcp/tachyon/blob/main/examples/doc-examples/src/main/java/dev/tachyonmcp/docs/running/observability/MyMcpServer.java)):
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/running/observability/MyMcpServer.java#otel_server -->
 ```java
 import dev.tachyonmcp.api.annotations.McpTool;
 import dev.tachyonmcp.core.server.TachyonServer;
@@ -130,8 +131,9 @@ The span processor exports each span as soon as it ends. The metric reader expor
 its default interval is one minute. The shutdown hook closes the SDK after the server, so pending
 telemetry is flushed.
 
-With the [Kotlin DSL](../kotlin/), pass the same listener to `observability { }`:
+With the [Kotlin DSL](../kotlin/), pass the same listener to `observability { }`. `openTelemetry` is the SDK built above:
 
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/running/observability/KotlinListenerMain.kt#otel_kotlin_listener -->
 ```kotlin
 TachyonServer(port = 8080) {
     observability {
@@ -203,12 +205,14 @@ and they leave the process with your telemetry. Each toggle gates its own conten
 With `McpOpenTelemetryListener`, `requestArgs` and `responseContent` add tool arguments and results to
 spans as `gen_ai.tool.call.arguments` and `gen_ai.tool.call.result`:
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/running/observability/PayloadCapture.java#otel_payload_capture -->
 ```java
 .observability(o -> o
     .listener(McpOpenTelemetryListener.create(openTelemetry))
     .payloadCapture(p -> p.requestArgs(true).responseContent(true)))
 ```
 
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/running/observability/KotlinObservability.kt#otel_kotlin_payload -->
 ```kotlin
 observability {
     listener(McpOpenTelemetryListener.create(openTelemetry))
@@ -291,8 +295,9 @@ the dispatch lifecycle:
 
 `OperationInfo` exposes trace context and server address/port through getters. When constructing one programmatically, supply these values through `OperationInfo.builder(...)`.
 
-Register a listener the same way as the OpenTelemetry one:
+Register a listener the same way as the OpenTelemetry one ([source](https://github.com/tachyonmcp/tachyon/blob/main/examples/doc-examples/src/main/java/dev/tachyonmcp/docs/running/observability/CustomListenerServer.java)):
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/running/observability/CustomListenerServer.java#otel_custom_listener -->
 ```java
 var server = TachyonServer.builder()
     .observability(o -> o.listener(myListener))
@@ -300,6 +305,7 @@ var server = TachyonServer.builder()
     .build();
 ```
 
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/running/observability/KotlinCustomListenerMain.kt#otel_kotlin_custom_listener -->
 ```kotlin
 TachyonServer(port = 8080) {
     observability {

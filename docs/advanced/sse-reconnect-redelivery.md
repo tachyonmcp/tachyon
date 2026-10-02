@@ -55,10 +55,11 @@ client then resumes from the last event it received (`NettySseConnectionTest`).
 Some tools deliberately close their SSE stream *before* producing a result, to force the client to
 reconnect and resume (the MCP conformance suite's `test_reconnection` tool does exactly this):
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/advanced/ssereconnectredelivery/SelfClosingTool.java#sse_self_closing_tool -->
 ```java
 var stream = OutboundSseStreamMessageRouter.currentOutboundSseStream();
-stream.start();   // upgrades POST → SSE, sends the priming event  (id 4#3)
-stream.close();   // closes the channel; the client observes a disconnect
+stream.start(); // upgrades POST → SSE, sends the priming event  (id 4#3)
+stream.close(); // closes the channel; the client observes a disconnect
 // ...tool keeps working, then returns its result
 ```
 

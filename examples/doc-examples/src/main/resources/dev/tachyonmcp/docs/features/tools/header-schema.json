@@ -1,0 +1,7 @@
+{
+  "type": "object",
+  "properties": {
+    "region": {"type": "string", "x-mcp-header": "Region"},
+    "query": {"type": "string"}
+  }
+}

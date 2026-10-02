@@ -1,0 +1,93 @@
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "tools": [
+      {
+        "description": "Get current weather for a city",
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$id": "GetWeatherRequest",
+          "type": "object",
+          "properties": {
+            "city": {
+              "type": "string",
+              "description": "City name (e.g., London, Tokyo, New York)"
+            },
+            "units": {
+              "$ref": "#/$defs/TemperatureUnit",
+              "default": "Celsius",
+              "description": "Temperature unit (default: Celsius)"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "city"
+          ],
+          "$defs": {
+            "TemperatureUnit": {
+              "type": "string",
+              "description": "Unit used to represent temperature",
+              "enum": [
+                "Celsius",
+                "Fahrenheit"
+              ]
+            }
+          }
+        },
+        "outputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$id": "GetWeatherResponse",
+          "type": "object",
+          "properties": {
+            "city": {
+              "type": "string",
+              "description": "City name"
+            },
+            "condition": {
+              "type": "string",
+              "description": "Weather condition"
+            },
+            "temperature": {
+              "type": "number",
+              "description": "Temperature in the response unit"
+            },
+            "temperatureUnit": {
+              "$ref": "#/$defs/TemperatureUnit",
+              "description": "Temperature unit"
+            },
+            "humidity": {
+              "type": "integer",
+              "description": "Relative humidity percentage"
+            },
+            "windSpeed": {
+              "type": "number",
+              "description": "Wind speed in km/h"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "city",
+            "condition",
+            "temperature",
+            "temperatureUnit",
+            "humidity",
+            "windSpeed"
+          ],
+          "$defs": {
+            "TemperatureUnit": {
+              "type": "string",
+              "description": "Unit used to represent temperature",
+              "enum": [
+                "Celsius",
+                "Fahrenheit"
+              ]
+            }
+          }
+        },
+        "name": "get-weather",
+        "title": "Current Weather"
+      }
+    ]
+  }
+}

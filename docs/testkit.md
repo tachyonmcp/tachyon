@@ -24,9 +24,10 @@ Version is pinned by the `tachyon-bom` — see [Quickstart](quickstart.md#1-add-
 ## A complete test
 
 This JUnit class starts a server on a free port, calls a tool over HTTP, and checks both the success
-and the error path. It compiles and runs as is, and the testkit's own build runs the same code as
-`EchoToolDocsExampleTest`:
+and the error path. It compiles and runs as is ([source](https://github.com/tachyonmcp/tachyon/blob/main/examples/doc-examples/src/test/java/dev/tachyonmcp/docs/testkit/EchoToolTest.java)), and the testkit's own
+build runs the same code as `EchoToolDocsExampleTest`:
 
+<!-- snips: ../examples/doc-examples/src/test/java/dev/tachyonmcp/docs/testkit/EchoToolTest.java#testkit_echo_tool_test -->
 ```java
 import static dev.tachyonmcp.testkit.JsonRpcResponseAssert.assertThat;
 import static dev.tachyonmcp.testkit.McpHttpResponseAssert.assertThatResponse;
@@ -90,8 +91,9 @@ The sections below cover each piece on its own.
 ## Servers
 
 `McpTestServers.start` builds a port-0 server, registers handlers, and starts it — closing the
-transport if anything fails, so a broken test never leaks a listener:
+transport if anything fails, so a broken test never leaks a listener ([source](https://github.com/tachyonmcp/tachyon/blob/main/examples/doc-examples/src/test/java/dev/tachyonmcp/docs/testkit/TestkitSetupTest.java)):
 
+<!-- snips: ../examples/doc-examples/src/test/java/dev/tachyonmcp/docs/testkit/TestkitSetupTest.java#testkit_servers -->
 ```java
 var server = McpTestServers.start(
     b -> b.session(c -> c.enabled()),
@@ -105,6 +107,7 @@ var port = server.port();
 (session-based, `initialize` handshake) or `Mcp20260728Client` (sessionless, self-describing
 requests):
 
+<!-- snips: ../examples/doc-examples/src/test/java/dev/tachyonmcp/docs/testkit/TestkitSetupTest.java#testkit_clients -->
 ```java
 try (var client = McpTestClients.latest(port)) {
     client.post("""
@@ -116,6 +119,7 @@ try (var client = McpTestClients.latest(port)) {
 `McpTestClients.builder(port)` skips the manual `initialize()` dance and returns an
 already-initialized client for the chosen protocol version:
 
+<!-- snips: ../examples/doc-examples/src/test/java/dev/tachyonmcp/docs/testkit/TestkitSetupTest.java#testkit_client_builder -->
 ```java
 try (var client = McpTestClients.builder(port).protocolVersion("2025-11-25").build()) {
     client.sendRpc("""
@@ -130,11 +134,10 @@ to drive a remote server instead of a local one.
 ## Assertions
 
 `JsonRpcResponseAssert` first selects the JSON-RPC branch, then exposes only assertions valid for
-that branch:
+that branch. Statically import `JsonRpcResponseAssert.assertThat`:
 
+<!-- snips: ../examples/doc-examples/src/test/java/dev/tachyonmcp/docs/testkit/TestkitAssertionsTest.java#testkit_assert_success -->
 ```java
-import static dev.tachyonmcp.testkit.JsonRpcResponseAssert.assertThat;
-
 var response = client.post("""
     {"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"echo","arguments":{"message":"hi"}}}
     """);
@@ -145,11 +148,11 @@ assertThat(response).isSuccess().hasTextContent("echo:hi");
 Use `hasResult(expected)` or `hasContentExactly(blocks...)` when the complete result or content
 array is stable. `hasContent()` requires at least one content block.
 
-Error assertions follow the same staged shape:
+Error assertions follow the same staged shape. Statically import
+`McpHttpResponseAssert.assertThatResponse`:
 
+<!-- snips: ../examples/doc-examples/src/test/java/dev/tachyonmcp/docs/testkit/TestkitAssertionsTest.java#testkit_assert_error -->
 ```java
-import static dev.tachyonmcp.testkit.McpHttpResponseAssert.assertThatResponse;
-
 var response = client.post("""
     {"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"missing","arguments":{}}}
     """);
@@ -165,11 +168,11 @@ assertThatResponse(response)
 `JsonRpcResponseAssert` reads the body as a JSON-RPC envelope, so it cannot speak for the HTTP
 status, nor for a rejection the transport answers in plain text before an envelope exists —
 a duplicate MCP header, a protocol version that cannot validate mirrored headers, an oversized
-body. `McpHttpResponseAssert` covers both and chains into the JSON-RPC assertions:
+body. `McpHttpResponseAssert` covers both and chains into the JSON-RPC assertions. These three lines are
+alternatives for different responses, not one sequence:
 
+<!-- snips: ../examples/doc-examples/src/test/java/dev/tachyonmcp/docs/testkit/TestkitAssertionsTest.java#testkit_assert_http -->
 ```java
-import static dev.tachyonmcp.testkit.McpHttpResponseAssert.assertThatResponse;
-
 assertThatResponse(response).hasStatus(200).isSuccess().hasTextContent("echo:hi");
 assertThatResponse(response).hasStatus(400).isJsonRpcError().hasId(9).hasErrorCode(-32020);
 assertThatResponse(response).isRejectedWith(400, "Duplicate MCP header");
@@ -186,14 +189,19 @@ Three fixtures cover the parts of a server that are awkward to drive over the wi
 connector. Seed it with snapshots, hand `connector()` to the builder, then assert on what
 Tachyon asked it for:
 
+<!-- snips: ../examples/doc-examples/src/test/java/dev/tachyonmcp/docs/testkit/TestkitFixturesTest.java#testkit_task_connector -->
 ```java
 var tasks = new TestTaskConnector().start(TaskSnapshot.working("t-1", Instant.now(), 1));
 
 var server = McpTestServers.start(
     b -> b.withExtension(TasksExtension.class, t -> t.connector(tasks.connector())),
     s -> {});
+```
 
-// later
+After a `tasks/get` for `t-1`, assert on what Tachyon asked the connector for:
+
+<!-- snips: ../examples/doc-examples/src/test/java/dev/tachyonmcp/docs/testkit/TestkitFixturesTest.java#testkit_task_assert -->
+```java
 assertThat(tasks.refreshedTaskIds()).containsExactly("t-1");
 ```
 
@@ -205,10 +213,16 @@ clears both the snapshots and the recorded calls.
 the recorded calls in order; `failOnStart(...)` / `failOnComplete(...)` make it throw, which is
 how you verify that a listener failure never reaches the handler:
 
+<!-- snips: ../examples/doc-examples/src/test/java/dev/tachyonmcp/docs/testkit/TestkitFixturesTest.java#testkit_listener -->
 ```java
 var listener = new TestObservationListener();
 var server = McpTestServers.start(b -> b.observability(o -> o.listener(listener)), s -> {});
-// ...
+```
+
+After a `tools/call`, assert on the recorded lifecycle:
+
+<!-- snips: ../examples/doc-examples/src/test/java/dev/tachyonmcp/docs/testkit/TestkitFixturesTest.java#testkit_listener_assert -->
+```java
 assertThat(listener.completed()).singleElement()
     .satisfies(c -> assertThat(c.info().method()).isEqualTo("tools/call"));
 ```
@@ -216,6 +230,7 @@ assertThat(listener.completed()).singleElement()
 `DiscoverResponseAssert` covers the 2026-07-28 `server/discover` response. `Mcp20260728Client.discover()`
 returns it directly:
 
+<!-- snips: ../examples/doc-examples/src/test/java/dev/tachyonmcp/docs/testkit/TestkitFixturesTest.java#testkit_discover -->
 ```java
 try (var client = McpTestClients.latest(port)) {
     client.discover().isSuccess().hasCapabilities("""
@@ -229,6 +244,7 @@ try (var client = McpTestClients.latest(port)) {
 Every client captures server-to-client notifications delivered over SSE; await one by method
 name, or take a snapshot of everything received so far:
 
+<!-- snips: ../examples/doc-examples/src/test/java/dev/tachyonmcp/docs/testkit/TestkitSetupTest.java#testkit_notifications -->
 ```java
 client.awaitNotification("notifications/progress")
     .satisfies(params -> assertThat(params.path("progressToken").asString()).isEqualTo("tok-1"));
@@ -238,6 +254,7 @@ For long-lived streaming POSTs, including `subscriptions/listen`, use `openPostS
 the SSE response and exposes parsed `SseFrame` values through the same `SseStream` API used by GET
 subscriptions:
 
+<!-- snips: ../examples/doc-examples/src/test/java/dev/tachyonmcp/docs/testkit/TestkitSetupTest.java#testkit_post_stream -->
 ```java
 try (var stream = client.openPostStream(null, """
     {"jsonrpc":"2.0","id":1,"method":"subscriptions/listen",

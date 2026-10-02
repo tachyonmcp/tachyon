@@ -125,8 +125,9 @@ serialization are separate steps.
 
 ### Define the models and register both tools
 
-Save this as `src/main/kotlin/EchoServer.kt`:
+Save this as `src/main/kotlin/EchoServer.kt` ([source](https://github.com/tachyonmcp/tachyon/blob/main/examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/kotlin/ktschemajson/EchoServer.kt)):
 
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/kotlin/ktschemajson/EchoServer.kt#ktschema_echo_server -->
 ```kotlin
 import dev.tachyonmcp.api.json.JsonSchema
 import dev.tachyonmcp.api.server.config.Mode
@@ -212,8 +213,10 @@ For a standalone simple server with no model dependency, see
 
 ## Complete weather tool integration
 
-The following code comes from `examples/weather-mcp-kotlin`. The production example keeps each
-model in its own file.
+The following code is a trimmed version of `examples/weather-mcp-kotlin`, compiled and tested in
+[`examples/doc-examples`](https://github.com/tachyonmcp/tachyon/tree/main/examples/doc-examples). The production
+example keeps each model in its own file and adds icons, annotations, progress notifications and an
+elicitation fallback.
 
 ### Define the input and output models
 
@@ -221,6 +224,7 @@ model in its own file.
 temperature unit. `@SerialName` pins the generated `$id`/`$ref` name so it doesn't change if the
 class is renamed or moved:
 
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/com/example/weather/model/GetWeatherRequest.kt#ktschema_get_weather_request -->
 ```kotlin
 package com.example.weather.model
 
@@ -238,6 +242,7 @@ data class GetWeatherRequest(
 
 The enum supplies the schema values:
 
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/com/example/weather/model/TemperatureUnit.kt#ktschema_temperature_unit -->
 ```kotlin
 package com.example.weather.model
 
@@ -256,6 +261,7 @@ The handler's domain provider returns `WeatherObservation`, an SPI type owned by
 providers. It carries no `city` field — the caller already knows which city it asked for, so
 echoing it back would be redundant:
 
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/com/example/weather/spi/WeatherObservation.kt#ktschema_weather_observation -->
 ```kotlin
 package com.example.weather.spi
 
@@ -277,6 +283,7 @@ The tool returns a dedicated wire model instead of the SPI type. `GetWeatherResp
 Keeping it separate from `WeatherObservation` lets the domain type evolve independently of the
 tool's public contract:
 
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/com/example/weather/model/GetWeatherResponse.kt#ktschema_get_weather_response -->
 ```kotlin
 package com.example.weather.model
 
@@ -304,15 +311,12 @@ data class GetWeatherResponse(
 
 ### Generate both tool schemas
 
-Create one generator and use the same source models as the handler:
+Create one generator and use the same source models as the handler. `ToolDescriptor` is in
+`dev.tachyonmcp.kotlin.server.features.tools`; the generator classes are in
+`me.kpavlov.kt.schema.generator.json`:
 
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/kotlin/ktschemajson/GetWeatherTool.kt#ktschema_descriptor -->
 ```kotlin
-import com.example.weather.model.GetWeatherRequest
-import com.example.weather.model.GetWeatherResponse
-import dev.tachyonmcp.kotlin.server.features.tools.ToolDescriptor
-import me.kpavlov.kt.schema.generator.json.JsonSchemaConfig
-import me.kpavlov.kt.schema.generator.json.ReflectionClassJsonSchemaGenerator
-
 private val schemaGenerator =
     ReflectionClassJsonSchemaGenerator(
         json = kotlinx.serialization.json.Json { encodeDefaults = false },
@@ -337,6 +341,7 @@ The running weather server publishes both generated schemas through `tools/list`
 <details>
 <summary>Show the complete <code>tools/list</code> JSON response</summary>
 
+<!-- snips: ../../examples/doc-examples/src/main/resources/dev/tachyonmcp/docs/kotlin/ktschemajson/tools-list.json -->
 ```json
 {
   "jsonrpc": "2.0",
@@ -356,6 +361,7 @@ The running weather server publishes both generated schemas through `tools/list`
             },
             "units": {
               "$ref": "#/$defs/TemperatureUnit",
+              "default": "Celsius",
               "description": "Temperature unit (default: Celsius)"
             }
           },
@@ -439,6 +445,7 @@ The running weather server publishes both generated schemas through `tools/list`
 The weather handler maps the provider's `WeatherObservation` to a `GetWeatherResponse` before
 passing it to `ToolResult.structured`:
 
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/kotlin/ktschemajson/GetWeatherTool.kt#ktschema_attempt -->
 ```kotlin
 fun attempt(city: String): ToolResult =
     try {
@@ -458,7 +465,12 @@ fun attempt(city: String): ToolResult =
         if (e is CityNotFoundException) throw e
         internalError(e)
     }
+```
 
+The mapping function copies the provider fields into the response model:
+
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/kotlin/ktschemajson/GetWeatherTool.kt#ktschema_to_response -->
+```kotlin
 private fun toResponse(city: String, weather: WeatherObservation): GetWeatherResponse =
     GetWeatherResponse(
         city = city,
@@ -475,6 +487,7 @@ serialized value against the generated `outputSchema` before writing the MCP res
 
 The server selects kotlinx.serialization and registers the generated descriptor with the handler:
 
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/kotlin/ktschemajson/GetWeatherTool.kt#ktschema_build_server -->
 ```kotlin
 return buildServer {
     network { this.port = port }
@@ -511,6 +524,7 @@ sources for progress notifications, elicitation, resources, prompts, and error h
 The same generator creates the weather example's elicitation and prompt input schemas. APIs that
 take `JsonSchema` instead of an encoded string use `JsonSchema.parse`:
 
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/kotlin/ktschemajson/GetWeatherTool.kt#ktschema_city_schema -->
 ```kotlin
 private val CITY_SCHEMA =
     JsonSchema.parse(

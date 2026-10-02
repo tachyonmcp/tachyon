@@ -100,11 +100,11 @@ MCP remains at `http://127.0.0.1:8080/mcp`. Spring HTTP endpoints use port `8081
 `tachyon.*` covers values. Everything else — stores, id generators, clocks, JSON codecs,
 observability listeners, programmatic feature registration — is wiring, and goes through a
 `TachyonServerCustomizer` bean. For example, this configuration plugs in a custom session store —
-sessions themselves are already on, because `tachyon.session.session-ttl` is set:
+sessions themselves are already on, because `tachyon.session.session-ttl` is set. Put the class in your
+application package ([source](https://github.com/tachyonmcp/tachyon/blob/main/examples/doc-examples/src/main/java/dev/tachyonmcp/docs/springboot/reference/McpConfiguration.java)):
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/springboot/reference/McpConfiguration.java#springboot_customizer -->
 ```java
-package example;
-
 import dev.tachyonmcp.spring.boot.TachyonServerCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -216,8 +216,9 @@ handles this for you: at AOT processing time it finds every bean type declaring 
 annotations and registers method-invocation hints for it and for each of its interfaces that declares them.
 
 What it does **not** cover are the types you bind to, because nothing declares them as beans —
-tool input records, structured output types and their nested types. Register those yourself:
+tool input records, structured output types and their nested types. Register those yourself ([source](https://github.com/tachyonmcp/tachyon/blob/main/examples/doc-examples/src/main/java/dev/tachyonmcp/docs/springboot/reference/NativeHints.java)):
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/springboot/reference/NativeHints.java#springboot_native_hints -->
 ```java
 @Configuration(proxyBeanMethods = false)
 @RegisterReflectionForBinding({GreetingRequest.class, GreetingResponse.class})

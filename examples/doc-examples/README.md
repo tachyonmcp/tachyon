@@ -41,11 +41,48 @@ cd examples/doc-examples/kotlin-gradle && gradle run   # serves reverse-echo on 
 
 ## Covered pages
 
-| Page | Example | Test |
-|---|---|---|
-| [`quickstart.md`](../../docs/quickstart.md) | `quickstart/MyMcpServer.java` | `quickstart/MyMcpServerTest.java` |
-| [`kotlin/_index.md`](../../docs/kotlin/_index.md) | `kotlin/*.kt` | `kotlin/*Test.kt` |
+| Page | Package under `dev.tachyonmcp.docs` |
+|---|---|
+| [`quickstart.md`](../../docs/quickstart.md) | `quickstart` |
+| [`annotations.md`](../../docs/annotations.md) | `annotations` |
+| [`json.md`](../../docs/json.md) | `json` |
+| [`advanced/sse-reconnect-redelivery.md`](../../docs/advanced/sse-reconnect-redelivery.md) | `advanced.ssereconnectredelivery` |
+| [`extensions/_index.md`](../../docs/extensions/_index.md) | `extensions` |
+| [`extensions/skills.md`](../../docs/extensions/skills.md) | `extensions.skills` |
+| [`extensions/custom-extensions.md`](../../docs/extensions/custom-extensions.md) | `extensions.customextensions` |
+| [`extensions/tasks.md`](../../docs/extensions/tasks.md) | `extensions.tasks` |
+| [`features/_index.md`](../../docs/features/_index.md) | `features` |
+| [`features/tools.md`](../../docs/features/tools.md) | `features.tools` |
+| [`features/resources.md`](../../docs/features/resources.md) | `features.resources` |
+| [`features/prompts.md`](../../docs/features/prompts.md) | `features.prompts` |
+| [`features/completions.md`](../../docs/features/completions.md) | `features.completions` |
+| [`features/client-interactions.md`](../../docs/features/client-interactions.md) | `features.clientinteractions` |
+| [`kotlin/_index.md`](../../docs/kotlin/_index.md) | `kotlin` |
+| [`kotlin/kt-schema-json.md`](../../docs/kotlin/kt-schema-json.md) | `kotlin.ktschemajson` (plus `com.example.weather.*`, the models the page shows) |
+| [`kotlin/migrate-from-kotlin-sdk.md`](../../docs/kotlin/migrate-from-kotlin-sdk.md) | `kotlin.migratefromkotlinsdk` |
+| [`running/configuration.md`](../../docs/running/configuration.md) | `running.configuration` |
+| [`running/deployment.md`](../../docs/running/deployment.md) | `running.deployment` |
+| [`running/observability.md`](../../docs/running/observability.md) | `running.observability` |
+| [`spring-boot/_index.md`](../../docs/spring-boot/_index.md) | `example` (the page's own `package example`) |
+| [`spring-boot/reference.md`](../../docs/spring-boot/reference.md) | `springboot.reference` |
+| [`testkit.md`](../../docs/testkit.md) | `testkit` (the snippets are test classes under `src/test/java`) |
 
-XML dependency blocks and shell commands in the docs stay inline: they use the `${tachyon.version}` placeholder
-that the docs site fills in. A snippet name can appear once per file, so a block that mixes top-level types with a
-builder call is embedded as two consecutive fences.
+Each package holds the page's examples in `src/main`; the matching tests in `src/test` run them.
+Not covered: `architecture/` and `assets/` pages, and blocks that stay inline: build files, shell,
+XML, YAML (except the Spring Boot guide's `application.yaml`), JSON wire samples, and quotes of
+the library's own interfaces (`AnnotationProvider`, `Tasks`, `SkillsRegistry`).
+
+## Patterns
+
+- **Fixed-port snippets** (`.port(8080)`, `TachyonServer(port = 8080)`) live in a `main` that a test forks with
+  `ForkedMain` (`src/test/java/.../ForkedMain.java`), so the page's code runs verbatim. The test skips itself
+  when the port is busy. `ForkedMain.output()` returns the console output, for pages that assert on logs.
+- **Mid-chain fragments** (`.network(...)`, `.withTools(...)`) sit between `.port(0)` and `.build()` in a helper
+  that returns a started server, so the exact text from the page runs on a free port.
+- **Builder snippets that show alternatives** (for example the three `session` options) cannot run as one chain;
+  the test asserts the documented build-time failure and checks each alternative separately.
+- **Collaborators the page leaves undefined** (`workflows`, `cityService`, `read(uri)`) are small stand-ins next
+  to the example; the page says so in the lead-in.
+- `JsonRpc` and `RawHttp` (`src/test/java/dev/tachyonmcp/docs`) are the shared test helpers.
+- Fixtures the pages read from the working directory: `skills/` and `logo.png` (module root), and
+  `src/main/resources` (`bundled-skills/`, `skills/`, `logo-32x32.png`, `application.yaml`).

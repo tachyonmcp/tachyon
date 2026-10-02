@@ -22,6 +22,7 @@ your application to a specific JSON library. Most applications need four types f
 
 Use `JsonSchema.unchecked` for schema literals you control:
 
+<!-- snips: ../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/json/JsonSchemas.java#json_schema_unchecked -->
 ```java
 var inputSchema = JsonSchema.unchecked("""
     {
@@ -38,12 +39,14 @@ var inputSchema = JsonSchema.unchecked("""
 Use `JsonSchema.parse` when the JSON comes from a file, database, or another external source.
 It rejects malformed JSON immediately:
 
+<!-- snips: ../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/json/JsonSchemas.java#json_schema_parse -->
 ```java
 JsonSchema inputSchema = JsonSchema.parse(userSuppliedSchema);
 ```
 
 `JsonDocument` follows the same pattern:
 
+<!-- snips: ../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/json/JsonSchemas.java#json_document_factories -->
 ```java
 JsonDocument trusted = JsonDocument.of(jsonLiteral);
 JsonDocument checked = JsonDocument.parse(externalJson);
@@ -56,6 +59,7 @@ See the [kt-schema integration](kotlin/kt-schema-json.md) for a complete example
 
 Create a provider-neutral object from standard Java collections:
 
+<!-- snips: ../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/json/JsonAccess.java#json_object_access -->
 ```java
 var user = JsonObject.of(Map.of(
     "name", "Ada",
@@ -82,6 +86,7 @@ or overflowing the requested numeric type throws `IllegalArgumentException`.
 
 `JsonArray` provides the same access patterns by index:
 
+<!-- snips: ../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/json/JsonAccess.java#json_array_access -->
 ```java
 var coordinates = JsonArray.of(List.of(59.437, 24.7536));
 
@@ -91,8 +96,9 @@ double longitude = coordinates.doubleValue(1);
 
 ## Reuse an existing JSON tree
 
-If your application already has a Jackson `JsonNode`, wrap it without converting it to a `Map`:
+If your application already has a Jackson `JsonNode`, wrap it without converting it to a `Map`. Jackson 3 lives in `tools.jackson.databind`:
 
+<!-- snips: ../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/json/JsonAccess.java#json_wrap_node -->
 ```java
 JsonNode node = objectMapper.readTree(source);
 JsonDocument document = JsonDocument.from(node, JsonNode.class);
@@ -100,6 +106,7 @@ JsonDocument document = JsonDocument.from(node, JsonNode.class);
 
 You can recover a retained provider value when you need library-specific operations:
 
+<!-- snips: ../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/json/JsonAccess.java#json_unwrap_node -->
 ```java
 JsonNode node = document.unwrap(JsonNode.class).orElseThrow();
 ```
@@ -133,8 +140,9 @@ META-INF/services/dev.tachyonmcp.api.json.spi.JsonSchemaFactory
 ## Configure payload serialization
 
 Tachyon uses Jackson by default. Supply a `PayloadSerde` when your application needs different
-serialization behaviour:
+serialization behaviour ([source](https://github.com/tachyonmcp/tachyon/blob/main/examples/doc-examples/src/main/java/dev/tachyonmcp/docs/json/CustomSerdeServer.java)):
 
+<!-- snips: ../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/json/CustomSerdeServer.java#json_serde -->
 ```java
 var server = TachyonServer.builder()
     .json(json -> json.serde(myPayloadSerde))
@@ -148,8 +156,9 @@ You can also configure `PayloadSerializer` and `PayloadDeserializer` separately.
 ## Configure schema validation
 
 Tachyon validates tool input and output against their declared schemas. Replace either validator
-when you need custom validation behaviour:
+when you need custom validation behaviour ([source](https://github.com/tachyonmcp/tachyon/blob/main/examples/doc-examples/src/main/java/dev/tachyonmcp/docs/json/CustomValidatorsServer.java)):
 
+<!-- snips: ../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/json/CustomValidatorsServer.java#json_validators -->
 ```java
 var server = TachyonServer.builder()
     .json(json -> json

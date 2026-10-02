@@ -14,9 +14,9 @@ Tools are the primary way clients invoke server-side logic. Tachyon validates in
 Put `@McpTool` on a service method. Its parameters define the input schema, and a string return
 value becomes text content. Register the service with the server:
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/features/tools/GreetingService.java#tools_greeting_service -->
 ```java
 import dev.tachyonmcp.api.annotations.McpTool;
-import dev.tachyonmcp.core.server.TachyonServer;
 
 class GreetingService {
     @McpTool(description = "Say hello to someone")
@@ -24,7 +24,12 @@ class GreetingService {
         return "Hello, " + name + "!";
     }
 }
+```
 
+Then register the service:
+
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/features/tools/GreetingServer.java#tools_greeting_server -->
+```java
 var server = TachyonServer.builder()
         .annotations(annotations -> annotations.register(new GreetingService()))
         .port(8080)
@@ -41,6 +46,7 @@ Named parameters are required unless marked with JSpecify `@Nullable` or typed a
 Tachyon injects `InteractionContext` wherever it appears in the signature; it is never a client
 argument. Add this method to your service:
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/features/tools/WelcomeService.java#tools_welcome -->
 ```java
 @McpTool
 public String welcome(String name, @org.jspecify.annotations.Nullable String title) {
@@ -51,6 +57,7 @@ public String welcome(String name, @org.jspecify.annotations.Nullable String tit
 A single record, POJO, or `Map` parameter receives the whole arguments object. Return a record or
 POJO for structured output and a generated output schema:
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/features/tools/ForecastService.java#tools_forecast -->
 ```java
 public record ForecastRequest(String city, int days) {}
 public record Forecast(String city, int days, double highC) {}
@@ -85,9 +92,8 @@ from both annotated methods and programmatic handlers.
 
 Return `ToolResult.error(...)` for an expected failure that the caller can act on:
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/features/tools/GreetingWithErrors.java#tools_greet_errors -->
 ```java
-import dev.tachyonmcp.api.server.features.tools.ToolResult;
-
 @McpTool(description = "Say hello to someone")
 public ToolResult greet(String name) {
     if (name.isBlank()) {
@@ -141,8 +147,9 @@ included. A client cancels with `notifications/cancelled`, which interrupts the 
 
 When the response can no longer be delivered, `context.responseUndeliverable()` completes: the session
 ended, or, without a session, the connection closed. Nothing is interrupted; long work may check
-it and stop at a safe point (experimental):
+it and stop at a safe point (experimental) ([source](https://github.com/tachyonmcp/tachyon/blob/main/examples/doc-examples/src/main/java/dev/tachyonmcp/docs/features/tools/ReindexTool.java)):
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/features/tools/ReindexTool.java#tools_reindex -->
 ```java
 server.tools().register(b -> b.name("reindex"), (context, request) -> {
     var undeliverable = context.responseUndeliverable().toCompletableFuture();
@@ -176,9 +183,8 @@ or register handlers dynamically through `server.tools()`.
 Add the `.withTools(...)` registration snippets to `TachyonServer.builder()`. For a complete project, start
 with the [Quickstart](../quickstart.md).
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/features/tools/ProgrammaticTools.java#tools_with_tools_hello -->
 ```java
-import dev.tachyonmcp.api.server.features.tools.ToolResult;
-
 .withTools(tools -> tools.register(
         tool -> tool.name("hello").description("Say hello"),
         (ctx, request) -> ToolResult.text("Hello!")))
@@ -187,6 +193,7 @@ import dev.tachyonmcp.api.server.features.tools.ToolResult;
 Need an input schema? Configure the descriptor with the builder overload. `.inputSchema(...)` /
 `.outputSchema(...)` take a raw JSON `String` or a provider-neutral `JsonSchema`:
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/features/tools/ProgrammaticTools.java#tools_with_tools_schema -->
 ```java
 .withTools(tools -> tools.register(
         b -> b.name("hello")
@@ -226,6 +233,7 @@ Blocking handlers run on a virtual thread, so most tools need no async plumbing.
 hold a `CompletionStage` (a non-blocking client, another async service), return it directly with
 `registerAsync`. Async handlers stay async — they are not funneled through the blocking path.
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/features/tools/ProgrammaticTools.java#tools_with_tools_async -->
 ```java
 .withTools(tools -> tools.registerAsync(
         tool -> tool.name("get_weather_async"),
@@ -242,10 +250,16 @@ Instead of reading arguments key by key, register a tool against an input and an
 Tachyon decodes the call arguments into `I` with the configured `PayloadDeserializer` and wraps
 your return value as `structuredContent`:
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/features/tools/TypedForecastTool.java#tools_typed_records -->
 ```java
 record ForecastRequest(String city, int days) {}
 record Forecast(String summary, double highC) {}
+```
 
+Then register the tool on the builder ([source](https://github.com/tachyonmcp/tachyon/blob/main/examples/doc-examples/src/main/java/dev/tachyonmcp/docs/features/tools/TypedForecastTool.java)):
+
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/features/tools/TypedForecastTool.java#tools_typed_register -->
+```java
 .withTools(tools -> tools.register(
         ForecastRequest.class,
         Forecast.class,
@@ -269,6 +283,9 @@ Set `inputSchema`/`outputSchema` on the descriptor when you need explicit constr
 
 ## Add metadata
 
+Return it from any handler that produces a `ToolResult`:
+
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/features/tools/MetaTool.java#tools_meta -->
 ```java
 return ToolResult.text("done").withMeta("taskId", "t-123");
 ```
@@ -282,6 +299,7 @@ header, so load balancers, WAFs and rate limiters can route on it without parsin
 Use an explicit input schema in programmatic registration and annotate the property with
 `x-mcp-header` (a JSON Schema keyword):
 
+<!-- snips: ../../examples/doc-examples/src/main/resources/dev/tachyonmcp/docs/features/tools/header-schema.json -->
 ```json
 {
   "type": "object",
@@ -318,6 +336,7 @@ Values must be ASCII; see [Configuration](../running/configuration.md) for the c
 
 ## Kotlin DSL
 
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/features/tools/KotlinTools.kt#tools_kotlin_reverse -->
 ```kotlin
 tool(name = "reverse", description = "Reverse a string") {
     val msg = arguments.stringValue("message")
@@ -331,6 +350,7 @@ Enable the Kotlin serialization compiler plugin and add the
 [kotlinx.serialization dependency](../kotlin/#kotlinxserialization-integration).
 Configure `json` in the same server builder scope as `tool`:
 
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/features/tools/KotlinTypedTools.kt#tools_kotlin_typed_types -->
 ```kotlin
 import dev.tachyonmcp.api.json.JsonSchema
 import dev.tachyonmcp.kotlin.server.domain.decode
@@ -341,7 +361,12 @@ import kotlinx.serialization.Serializable
 data class EchoArgs(val message: String)
 @Serializable
 data class EchoReply(val echo: String)
+```
 
+Then configure `json` and the tool in the same server builder scope:
+
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/features/tools/KotlinTypedTools.kt#tools_kotlin_typed_tool -->
+```kotlin
 json { serde = KxSerializationSerde.Default }
 
 tool(

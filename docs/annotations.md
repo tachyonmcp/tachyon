@@ -32,28 +32,53 @@ tasks.withType<JavaCompile>().configureEach {
 }
 ```
 
+Create `WeatherService.java` ([source](https://github.com/tachyonmcp/tachyon/blob/main/examples/doc-examples/src/main/java/dev/tachyonmcp/docs/annotations/WeatherService.java)):
 
+<!-- snips: ../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/annotations/WeatherService.java#annotations_weather_service -->
 ```java
+import dev.tachyonmcp.api.annotations.McpPrompt;
+import dev.tachyonmcp.api.annotations.McpResource;
+import dev.tachyonmcp.api.annotations.McpTool;
+import dev.tachyonmcp.api.runtime.InteractionContext;
+import dev.tachyonmcp.api.server.domain.Role;
+import java.util.Optional;
+import org.jspecify.annotations.Nullable;
+
 class WeatherService {
     record ForecastRequest(String city, int days) {}
     record Forecast(String city, int days, double celsius) {}
 
     @McpTool(description = "Forecast for a city")
-    Forecast forecast(ForecastRequest request) { ... }
+    Forecast forecast(ForecastRequest request) {
+        return new Forecast(request.city(), request.days(), 18.5);
+    }
 
     @McpTool
-    String greet(String name, @Nullable String title, InteractionContext ctx) { ... }
+    String greet(String name, @Nullable String title, InteractionContext ctx) {
+        return title == null ? "Hello, " + name : "Hello, " + title + " " + name;
+    }
 
     @McpResource(uri = "weather://cities/{city}")
-    String city(String city) { ... }
+    String city(String city) {
+        return city + " has a temperate climate";
+    }
 
     @McpPrompt
-    String trip(String city, Optional<String> season) { ... }
+    String trip(String city, Optional<String> season) {
+        return "Plan a " + season.orElse("year-round") + " trip to " + city;
+    }
 
     @McpPrompt(role = Role.ASSISTANT)
-    String opener(String city) { ... }
+    String opener(String city) {
+        return "Welcome to " + city + "!";
+    }
 }
+```
 
+Then register an instance when you build the server:
+
+<!-- snips: ../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/annotations/WeatherServer.java#annotations_weather_server -->
+```java
 var server = TachyonServer.builder()
     .annotations(a -> a.register(new WeatherService()))
     .build();
@@ -88,6 +113,7 @@ Single-object tool binding remains available: after excluding injected context a
 metadata, one record, POJO, or map receives the whole arguments object.
 Adding `@McpParam`, even with only a description, switches that tool to named binding.
 
+<!-- snips: ../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/annotations/SearchService.java#annotations_param_and_meta -->
 ```java
 record TenantMeta(String tenant) {}
 
@@ -132,8 +158,9 @@ Specify exactly one target. The target can be declared elsewhere; a completion-o
 is discovered too.
 
 The simple signature uses explicit `@McpParam(name)` values or reflection parameter names
-(`-parameters` required for reflection names):
+(`-parameters` required for reflection names; [source](https://github.com/tachyonmcp/tachyon/blob/main/examples/doc-examples/src/main/java/dev/tachyonmcp/docs/annotations/SimpleCompletions.java)):
 
+<!-- snips: ../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/annotations/SimpleCompletions.java#annotations_completion_simple -->
 ```java
 @McpCompletion(prompt = "trip")
 List<String> completeCity(String city, @Nullable String country) {
@@ -149,8 +176,9 @@ payload codecs for conversion. Missing siblings need `@Nullable` (or a supported
 unless they are required. The partial value wins if context also contains a stale value for `city`.
 Requests completing a different argument return no candidates without invoking the method.
 
-For a target that completes several arguments, take `CompletionRequest` instead:
+For a target that completes several arguments, take `CompletionRequest` instead ([source](https://github.com/tachyonmcp/tachyon/blob/main/examples/doc-examples/src/main/java/dev/tachyonmcp/docs/annotations/RequestCompletions.java)):
 
+<!-- snips: ../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/annotations/RequestCompletions.java#annotations_completion_request -->
 ```java
 @McpCompletion(prompt = "trip")
 CompletionResult completeTrip(CompletionRequest request, InteractionContext context) {
@@ -203,6 +231,10 @@ objects.
 
 ## Register third-party annotated objects
 
+`WeatherService` and `CalculatorService` are annotated with mcp-java's `@Tool` ([source](https://github.com/tachyonmcp/tachyon/blob/main/examples/doc-examples/src/main/java/dev/tachyonmcp/docs/annotations/ThirdPartyServer.java)).
+`McpJavaAnnotationProvider` lives in `dev.tachyonmcp.annotations.mcpjava`.
+
+<!-- snips: ../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/annotations/ThirdPartyServer.java#annotations_third_party_register -->
 ```java
 var server = TachyonServer.builder()
     .annotations(a -> a
@@ -297,7 +329,16 @@ advice. Native Tachyon annotations support proxies through the [Spring Boot star
 
 ## Implement a provider for another framework
 
+`MyTool` is the other framework's method annotation; here it only carries a `name()`.
+
+<!-- snips: ../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/annotations/MyFrameworkAnnotationProvider.java#annotations_custom_provider -->
 ```java
+import dev.tachyonmcp.api.server.features.annotations.AnnotationProvider;
+import dev.tachyonmcp.api.server.features.annotations.AnnotationRegistrationContext;
+import dev.tachyonmcp.api.server.features.tools.ToolDescriptor;
+import dev.tachyonmcp.api.server.features.tools.ToolResult;
+import java.lang.reflect.Method;
+
 public class MyFrameworkAnnotationProvider implements AnnotationProvider {
     @Override
     public void register(Object instance, AnnotationRegistrationContext context) {
@@ -306,7 +347,7 @@ public class MyFrameworkAnnotationProvider implements AnnotationProvider {
             if (tool == null) continue;
             context.tools().register(
                 ToolDescriptor.builder().name(tool.name()).build(),
-                (ctx, req) -> ToolResult.text(method.invoke(instance, /* ... */).toString()));
+                (ctx, req) -> ToolResult.text(method.invoke(instance).toString()));
         }
     }
 }

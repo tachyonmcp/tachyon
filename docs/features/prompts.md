@@ -12,9 +12,9 @@ and turn its return value into messages.
 
 ## Declare a prompt with annotations
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/features/prompts/ReviewPrompts.java#prompts_review_prompts -->
 ```java
 import dev.tachyonmcp.api.annotations.McpPrompt;
-import dev.tachyonmcp.core.server.TachyonServer;
 import org.jspecify.annotations.Nullable;
 
 class ReviewPrompts {
@@ -24,7 +24,12 @@ class ReviewPrompts {
                 + (language == null ? "" : " in " + language) + ".";
     }
 }
+```
 
+Then register the service:
+
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/features/prompts/AnnotatedPromptsServer.java#prompts_annotated_server -->
+```java
 var server = TachyonServer.builder()
         .annotations(annotations -> annotations.register(new ReviewPrompts()))
         .port(8080)
@@ -42,12 +47,8 @@ A string becomes one user message. Set `@McpPrompt(role = Role.ASSISTANT)` to ge
 message, importing `dev.tachyonmcp.api.server.domain.Role`. Return a `PromptMessage`, a list of
 messages, or a `PromptResult` for full control; explicit messages retain their own roles:
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/features/prompts/ConversationPrompts.java#prompts_conversation -->
 ```java
-import dev.tachyonmcp.api.server.domain.PromptMessage;
-import dev.tachyonmcp.api.server.domain.Role;
-import dev.tachyonmcp.api.server.domain.TextContent;
-import java.util.List;
-
 @McpPrompt(name = "review-conversation")
 public List<PromptMessage> conversation(String concern) {
     return List.of(
@@ -68,13 +69,8 @@ registration. Both styles use the same prompt registry.
 
 ### Register a prompt
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/features/prompts/ProgrammaticPromptsServer.java#prompts_programmatic_server -->
 ```java
-import dev.tachyonmcp.api.server.domain.PromptArgument;
-import dev.tachyonmcp.api.server.domain.PromptMessage;
-import dev.tachyonmcp.api.server.features.prompts.PromptResult;
-import dev.tachyonmcp.core.server.TachyonServer;
-import java.util.List;
-
 var server = TachyonServer.builder()
         .withPrompts(prompts -> prompts.register(
                 prompt -> prompt
@@ -97,8 +93,9 @@ Use `PromptArgument.required()` to tell clients whether an argument is required.
 ### Use asynchronous work
 
 Synchronous prompt handlers run on virtual threads. Register an `AsyncPromptFn` with
-`registerAsync(...)` when your dependency already returns `CompletionStage`.
+`registerAsync(...)` when your dependency already returns `CompletionStage` ([source](https://github.com/tachyonmcp/tachyon/blob/main/examples/doc-examples/src/main/java/dev/tachyonmcp/docs/features/prompts/AsyncPrompts.java)):
 
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/features/prompts/AsyncPrompts.java#prompts_async -->
 ```java
 server.prompts().registerAsync(
         descriptor,
@@ -110,6 +107,7 @@ server.prompts().registerAsync(
 
 Kotlin handlers are suspending functions:
 
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/features/prompts/KotlinPrompts.kt#prompts_kotlin -->
 ```kotlin
 prompt(
     name = "review-code",

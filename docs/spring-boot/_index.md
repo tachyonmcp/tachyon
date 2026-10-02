@@ -83,8 +83,9 @@ POM enables this; without that parent, set `maven.compiler.parameters` to `true`
 
 ## 2. Create a tool
 
-Create `src/main/java/example/GreetingApplication.java`:
+Create `src/main/java/example/GreetingApplication.java` ([source](https://github.com/tachyonmcp/tachyon/blob/main/examples/doc-examples/src/main/java/example/GreetingApplication.java)):
 
+<!-- snips: ../../examples/doc-examples/src/main/java/example/GreetingApplication.java#springboot_application -->
 ```java
 package example;
 
@@ -99,8 +100,9 @@ public class GreetingApplication {
 }
 ```
 
-Create `src/main/java/example/GreetingService.java`:
+Create `src/main/java/example/GreetingService.java` ([source](https://github.com/tachyonmcp/tachyon/blob/main/examples/doc-examples/src/main/java/example/GreetingService.java)):
 
+<!-- snips: ../../examples/doc-examples/src/main/java/example/GreetingService.java#springboot_service -->
 ```java
 package example;
 
@@ -127,6 +129,7 @@ Spring's web server.** This example has no Spring web starter, so only the MCP l
 
 Create `src/main/resources/application.yaml`:
 
+<!-- snips: ../../examples/doc-examples/src/main/resources/application.yaml -->
 ```yaml
 tachyon:
   name: greeting-server
