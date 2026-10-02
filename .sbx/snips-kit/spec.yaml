@@ -1,0 +1,55 @@
+schemaVersion: "2"
+kind: mixin
+name: snips
+version: "1"
+description: Install the Rust toolchain (rustup, stable) and snips for syncing Markdown code snippets.
+
+agentInstructions:
+  content: |
+    ## Rust + snips
+
+    `rustup`, `cargo`, `rustc`, `rustfmt`, `clippy` and `snips` are on `PATH`.
+    `cargo install` puts new binaries in `/usr/local/cargo/bin` (not on `PATH`).
+
+    `snips` syncs code blocks in Markdown with source files
+    (`<!-- snips: path/to/File.java#name -->` + `snips-start: name` / `snips-end: name`).
+    - `snips --check <files>` — CI-style check, non-zero if docs drift.
+    - `snips --diff <files>` — preview changes.
+    - `snips --quiet <files>` — rewrite docs without output.
+    - `snips <files>` — rewrite docs.
+    With no files, snips processes `.md` and `.markdown` files in the current directory only (not recursive).
+    Marker paths resolve relative to the Markdown file. snips 0.0.6 supports named snippets and
+    whole-file markers only.
+
+permissions:
+  network:
+    allow:
+      - static.rust-lang.org
+      - crates.io
+      - index.crates.io
+      - static.crates.io
+
+environment:
+  variables:
+    RUSTUP_HOME: /usr/local/rustup
+    CARGO_HOME: /usr/local/cargo
+
+setup:
+  install:
+    - command: |
+        set -eu
+        export RUSTUP_HOME=/usr/local/rustup CARGO_HOME=/usr/local/cargo
+        command -v cc >/dev/null || { apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev; }
+        curl --proto '=https' --tlsv1.2 -fsSL -o /tmp/rustup-init \
+          "https://static.rust-lang.org/rustup/dist/$(uname -m)-unknown-linux-gnu/rustup-init"
+        chmod +x /tmp/rustup-init
+        /tmp/rustup-init -y --no-modify-path --profile minimal \
+          --component rustfmt,clippy --default-toolchain stable
+        rm /tmp/rustup-init
+        "$CARGO_HOME/bin/cargo" install --locked snips@0.0.6
+        rm -rf "$CARGO_HOME/registry"
+        ln -sf "$CARGO_HOME"/bin/* /usr/local/bin/
+        chown -R 1000:1000 "$RUSTUP_HOME" "$CARGO_HOME"
+        snips --version
+      user: "0"
+      description: Install Rust stable via rustup and snips 0.0.6

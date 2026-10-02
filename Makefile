@@ -1,4 +1,4 @@
-.PHONY: all ci ci-lite build test lint package install-server conformance apidocs e2e clean format help mcp-inspector examples examples-snapshot jmh deploy
+.PHONY: all ci ci-lite build test lint package install-server conformance apidocs e2e clean format help mcp-inspector examples examples-snapshot jmh deploy claude-sbx docs-check docs-sync
 
 .DEFAULT_GOAL := help
 
@@ -27,7 +27,7 @@ SKIP_REPORT_ARGS := -Dmaven.javadoc.skip=true -Dmaven.source.skip=true -Djacoco.
 help: ## List available targets
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-22s %s\n", $$1, $$2}'
 
-all: clean format lint revapi examples-snapshot examples ## Full build: clean, format, lint, live examples, build+install, SNAPSHOT examples
+all: clean format lint docs-check revapi examples-snapshot examples ## Full build: clean, format, lint, doc-snippet check, live examples, build+install, SNAPSHOT examples
 
 ci: ## CI pipeline: one reactor for clean + lint + build + revapi
 	@echo " 🏗️ 🔍  Building with lint + API compatibility..."
@@ -121,6 +121,21 @@ lint: ## Check code style (Spotless + Detekt); SpotBugs runs automatically durin
 	@./mvnw process-test-classes -pl tachyon-kotlin-kt-schema -am -Plint
 	@echo " ✅  Done..."
 
+docs-check: ## Check Markdown doc snippets are in sync with source (snips --check); CI-style, non-zero on drift
+	@echo " 📝  Checking doc snippets..."
+	@snips --check $$(find docs -name '*.md')
+	@echo " ✅  Done!"
+
+docs-sync: ## Rewrite Markdown doc snippets from source (snips), then restore java/kotlin/json fence tags
+	@echo " 📝  Syncing doc snippets..."
+	@snips $$(find docs -name '*.md')
+	@python3 .github/scripts/fix-doc-fences.py $$(find docs -name '*.md')
+	@echo " ✅  Done!"
+
 mcp-inspector: ## Launch MCP Inspector UI
 	@echo "🧐 MCP Inspector"
 	@npx -y @modelcontextprotocol/inspector --config mcp-inspector.json
+
+claude-sbx: ## Run an agent in a Docker sandbox from sbxenv.yaml (maven + snips kits); AGENT=codex to switch agent, M2=path for local Maven home
+	@echo " 📦  Starting sandbox..."
+	@sbx env run --env-arg agent=$(or $(AGENT),claude) --env-arg m2=$(or $(M2),$(HOME)/.m2) ./sbxenv.yaml

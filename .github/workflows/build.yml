@@ -54,6 +54,19 @@ jobs:
           distribution: ${{ matrix.java.distribution }}
           cache: maven
 
+      # Doc snippets are JDK-independent: check them once, on the primary JDK, before the long build.
+      - name: Set up Rust
+        if: ${{ matrix.java.primary }}
+        run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
+
+      - name: Install snips
+        if: ${{ matrix.java.primary }}
+        run: cargo install --locked snips@0.0.6
+
+      - name: Check doc snippets
+        if: ${{ matrix.java.primary }}
+        run: make docs-check
+
       - name: Build and Verify
         run: make ${{ matrix.java.command }}
 

@@ -15,6 +15,7 @@
     <url>https://github.com/tachyonmcp/tachyon</url>
 
     <modules>
+        <module>doc-examples</module>
         <module>echo-kotlin</module>
         <module>langchain4j-mcp</module>
         <module>mcp-java</module>

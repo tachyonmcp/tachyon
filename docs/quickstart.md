@@ -137,9 +137,11 @@ The server registers an annotated service, requires a string `name`, and closes 
 Tachyon derives the tool's input schema from the method signature. The build configurations above
 enable `-parameters` to preserve argument names.
 
-Create `src/main/java/MyMcpServer.java`:
+Create `src/main/java/MyMcpServer.java` ([source](https://github.com/tachyonmcp/tachyon/blob/main/examples/doc-examples/src/main/java/dev/tachyonmcp/docs/quickstart/MyMcpServer.java)):
 
+<!-- snips: ../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/quickstart/MyMcpServer.java#quickstart_server -->
 ```java
+
 import dev.tachyonmcp.api.annotations.McpTool;
 import dev.tachyonmcp.core.server.TachyonServer;
 
@@ -153,12 +155,12 @@ public final class MyMcpServer {
 
     public static void main(String[] args) {
         final var server = TachyonServer.builder()
-                .name("my-server")
-                .version("1.0")
-                .annotations(annotations -> annotations.register(new GreetingService()))
-                .host("127.0.0.1")
-                .port(8080)
-                .build();
+            .name("my-server")
+            .version("1.0")
+            .annotations(annotations -> annotations.register(new GreetingService()))
+            .host("127.0.0.1")
+            .port(8080)
+            .build();
         Runtime.getRuntime().addShutdownHook(new Thread(server::close));
         server.start();
     }
@@ -188,7 +190,7 @@ enter arguments, and inspect results in your browser. This is the recommended pa
 With your server still running, open a second terminal and launch MCP Inspector:
 
 ```bash
-npx -y @modelcontextprotocol/inspector@2.7.0 \
+npx -y @modelcontextprotocol/inspector \
   --server-url http://127.0.0.1:8080/mcp \
   --transport http \
   --protocol-era modern
@@ -214,7 +216,7 @@ for more ways to inspect tools, resources, and prompts.
 For a terminal call without composing JSON-RPC headers, use MCP Inspector's CLI:
 
 ```bash
-npx -y @modelcontextprotocol/inspector@2.7.0 --cli \
+npx -y @modelcontextprotocol/inspector --cli \
   --server-url http://127.0.0.1:8080/mcp \
   --transport http --protocol-era modern \
   --connect-timeout 10000 \
@@ -296,11 +298,15 @@ See [Agent skill](agent-skill.md) for install options and example prompts.
 
 ## Executable coverage
 
+The server code above is not copied by hand: it is embedded from
+[MyMcpServer](https://github.com/tachyonmcp/tachyon/blob/main/examples/doc-examples/src/main/java/dev/tachyonmcp/docs/quickstart/MyMcpServer.java)
+in the `doc-examples` project, which CI compiles. [MyMcpServerTest](https://github.com/tachyonmcp/tachyon/blob/main/examples/doc-examples/src/test/java/dev/tachyonmcp/docs/quickstart/MyMcpServerTest.java)
+calls it over HTTP and checks the greeting response shown above, the input schema derived from the
+method signature, and the `-32602` rejection of a missing or non-string `name`.
 [DeclarativeFeaturesTest](https://github.com/tachyonmcp/tachyon/blob/main/e2e/src/test/java/dev/tachyonmcp/e2e/mcp/DeclarativeFeaturesTest.java) verifies the same annotation registration,
 named-string binding, greeting response, and missing-argument rejection over HTTP.
 [DeclarativeResultsTest](https://github.com/tachyonmcp/tachyon/blob/main/e2e/src/test/java/dev/tachyonmcp/e2e/mcp/DeclarativeResultsTest.java) also checks mistyped arguments and
-explicit tool errors. These tests cover the handler behavior; the Markdown build files are not
-extracted into the test suite.
+explicit tool errors. The Markdown build files (`pom.xml`, Gradle) are not extracted into the test suite.
 
 ## Next steps
 

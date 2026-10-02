@@ -6,6 +6,8 @@
 - Maven 3.9+ (the `./mvnw` wrapper pins the version; `maven-enforcer-plugin` checks it)
 - Python 3 on `PATH`: `tachyon-core` generates the MCP protocol classes from `protocol/*.ts` with
   `ts2java.py` at `generate-sources`. Skip it with `-Dts2java.skip=true` when `target/generated-sources` is up to date.
+- Rust (`cargo`) and [snips](https://crates.io/crates/snips) 0.0.6 for `make docs-check`, which `make all` runs and which
+  `docs-sync` uses to copy example code into `docs/`: `cargo install --locked snips@0.0.6`
 
 ## Build & test
 
@@ -18,7 +20,7 @@ make lint    # check style: Spotless + Detekt (SpotBugs runs automatically durin
 make format  # auto-fix style: Spotless + Detekt
 make jmh     # JMH benchmarks + throughput regression gate (BenchmarkGate)
 make ci      # what CI runs: clean + lint + build + revapi
-make all     # everything: clean + format + lint + full install + examples
+make all     # everything: clean + format + lint + docs-check + full install + examples
 ```
 
 `make deploy` runs the release build (`-P release,lint`, revapi, GPG signing, aggregate SBOM).

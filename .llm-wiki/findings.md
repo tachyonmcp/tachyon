@@ -25,6 +25,8 @@ Spotted while reading code. Runtime verification noted per finding. Fixed in cod
 - 🪶 A2A placement undecided: the tasks `engine` package is protocol-neutral so it can become `tachyon-tasks` (MCP binding + future A2A binding on one engine). If A2A ships inside `tachyon-core`, the engine must move into core instead (core cannot depend on an extension). Decide before the split; engine ownership when both bindings are present is open. `EngineBoundaryTest`
 - 🪶 Dead code: `DefaultTachyonServer#drainEvents` has no caller; `Session#cursor` only feeds it. Delete or wire up. `DefaultTachyonServer#drainEvents`
 - 🪶 Task codecs still live in core (`McpTaskMapper` v2025/v2026, task methods on `ProtocolRequestMapper`/`ProtocolResponseMapper`, `capabilities.tasks` in `ServerInfoMapper`); the generated `…extensions.tasks.protocol.v2026_07_28` models are unused. `McpTaskMapper`
+- ⚠️ Kotlin DSL defaults to the Jackson serde, which cannot decode Kotlin data classes: `arguments.decode<T>()` and `typedTool` fail with `-32602 … could not be decoded` until `json { serde = KxSerializationSerde.Default }` is set. Verified at runtime (doc-examples `ToolExamplesTest`). `TachyonServerBuilder#json`
+- 🪶 `ServerBuilder#pipelineCustomizer` keeps a single customizer: a second call replaces the first instead of composing. Verified at runtime (doc-examples `RegistrationExamplesTest`). `DefaultServerBuilder#pipelineCustomizer`
 
 ## 🪶 Polish
 

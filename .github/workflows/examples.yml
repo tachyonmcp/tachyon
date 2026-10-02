@@ -37,6 +37,7 @@ jobs:
         java:
           - 21
         example:
+          - doc-examples
           - echo-kotlin
           - langchain4j-mcp
           - mcp-java
