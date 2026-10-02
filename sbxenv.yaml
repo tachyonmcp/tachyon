@@ -13,6 +13,7 @@ args:
 workspace: .
 kits:
   - ./.sbx/maven-kit
+  - ./.sbx/snips-kit
 
 additionalWorkspaces:
   - path: ${{ env.args.m2 }}
@@ -26,3 +27,8 @@ mcp:
   servers:
     - name: javadocs
       url: https://www.javadocs.dev/mcp
+    - name: codegraph
+      command: codegraph
+      args: [serve, --mcp]
+    - name: tachyon
+      url: http://localhost:8080/mcp

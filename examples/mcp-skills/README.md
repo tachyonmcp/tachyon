@@ -25,7 +25,7 @@ java -jar target/mcp-skills-example.jar
 Connect an MCP 2026-07-28 client to `http://localhost:8080/mcp` and declare the
 `io.modelcontextprotocol/skills` extension.
 
-The included `.mcp.json` registers that endpoint as `elvish-magic-skill-mcp` for clients that load project MCP configuration.
+The included `../../.mcp.json` registers that endpoint as `elvish-magic-skill-mcp` for clients that load project MCP configuration.
 
 ## Resources
 
