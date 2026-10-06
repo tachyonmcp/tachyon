@@ -2,7 +2,7 @@
 title: tachyon-kotlin
 tags: [module, kotlin, dsl]
 sources: [tachyon-kotlin/src/main/kotlin/dev/tachyonmcp/kotlin/server/, tachyon-kotlin/src/main/resources/META-INF/services/, tachyon-kotlin-kt-schema/src/main/kotlin/dev/tachyonmcp/kotlin/server/json/ktschema/]
-updated: 2026-10-01
+updated: 2026-10-06
 commit: 5bbf33fa
 ---
 
@@ -13,7 +13,7 @@ Verdict: thin adapter. DSL builder wraps Java `ServerBuilder`; `suspend` handler
 ## 🚪 Entry points
 
 `tachyon-kotlin/src/main/kotlin/dev/tachyonmcp/kotlin/server/TachyonServerFactory.kt`:
-- `TachyonServer(port) { … }` — build **and start** `TachyonServerFactory#TachyonServer`.
+- `TachyonServer(port) { … }` — build **and start** `TachyonServerFactory#TachyonServer`. If bind fails, `TachyonServerBuilder#start` closes the built server (extensions shutdown, janitor stopped) and rethrows; close failure → suppressed.
 - `buildServer { … }` — build only `TachyonServerFactory#buildServer`.
 
 ## 🏗️ DSL

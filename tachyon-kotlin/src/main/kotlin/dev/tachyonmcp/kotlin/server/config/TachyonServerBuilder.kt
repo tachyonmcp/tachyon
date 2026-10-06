@@ -51,9 +51,7 @@ public class TachyonServerBuilder
 
         @JvmSynthetic
         @OptIn(ExperimentalContracts::class)
-        public fun info(
-            configure: (@TachyonDsl ServerInfoScope).() -> Unit,
-        ): TachyonServerBuilder {
+        public fun info(configure: (@TachyonDsl ServerInfoScope).() -> Unit): TachyonServerBuilder {
             contract { callsInPlace(configure, InvocationKind.EXACTLY_ONCE) }
             val scope = ServerInfoScope()
             scope.configure()
@@ -75,9 +73,7 @@ public class TachyonServerBuilder
 
         @JvmSynthetic
         @OptIn(ExperimentalContracts::class)
-        public fun network(
-            configure: (@TachyonDsl NetworkScope).() -> Unit,
-        ): TachyonServerBuilder {
+        public fun network(configure: (@TachyonDsl NetworkScope).() -> Unit): TachyonServerBuilder {
             contract { callsInPlace(configure, InvocationKind.EXACTLY_ONCE) }
             val scope = NetworkScope()
             scope.configure()
@@ -90,9 +86,7 @@ public class TachyonServerBuilder
 
         @JvmSynthetic
         @OptIn(ExperimentalContracts::class)
-        public fun session(
-            configure: (@TachyonDsl SessionScope).() -> Unit,
-        ): TachyonServerBuilder {
+        public fun session(configure: (@TachyonDsl SessionScope).() -> Unit): TachyonServerBuilder {
             contract { callsInPlace(configure, InvocationKind.EXACTLY_ONCE) }
             val scope = SessionScope()
             scope.configure()
@@ -102,9 +96,7 @@ public class TachyonServerBuilder
 
         @JvmSynthetic
         @OptIn(ExperimentalContracts::class)
-        public fun runtime(
-            configure: (@TachyonDsl RuntimeScope).() -> Unit,
-        ): TachyonServerBuilder {
+        public fun runtime(configure: (@TachyonDsl RuntimeScope).() -> Unit): TachyonServerBuilder {
             contract { callsInPlace(configure, InvocationKind.EXACTLY_ONCE) }
             val scope = RuntimeScope()
             scope.configure()
@@ -566,7 +558,17 @@ public class TachyonServerBuilder
                 }
             }
 
-        internal fun start(): TachyonServer = build().also { it.start() }
+        @Suppress("TooGenericExceptionCaught")
+        internal fun start(): TachyonServer {
+            val server = build()
+            try {
+                server.start()
+            } catch (e: Throwable) {
+                runCatching { server.close() }.exceptionOrNull()?.let(e::addSuppressed)
+                throw e
+            }
+            return server
+        }
 
         internal fun build(): TachyonServer =
             DefaultKotlinTachyonServer(delegate.build(), coroutineRuntime)
