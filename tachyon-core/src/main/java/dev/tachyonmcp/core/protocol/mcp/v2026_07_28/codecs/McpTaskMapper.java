@@ -135,7 +135,7 @@ final class McpTaskMapper {
             }
             return;
         }
-        var merged = new LinkedHashMap<String, Object>(meta != null ? meta : Map.of());
+        var merged = new LinkedHashMap<>(meta != null ? meta : Map.of());
         merged.putAll(serverMeta);
         target.put("_meta", merged);
     }

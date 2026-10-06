@@ -1,18 +1,18 @@
 package dev.tachyonmcp.docs;
 
-import static org.awaitility.Awaitility.await;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
-
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.nio.file.Files;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+
+import static org.awaitility.Awaitility.await;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 public final class ForkedMain implements AutoCloseable {
 

@@ -1,20 +1,20 @@
 package dev.tachyonmcp.docs.running.configuration;
 
-import static dev.tachyonmcp.docs.ForkedMain.DOCUMENTED_PORT;
-import static dev.tachyonmcp.docs.JsonRpc.request;
-import static dev.tachyonmcp.docs.JsonRpc.result;
-import static dev.tachyonmcp.testkit.McpHttpResponseAssert.assertThatResponse;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
+import dev.tachyonmcp.core.server.ServerBuilder;
+import dev.tachyonmcp.core.server.config.SessionConfig;
 import dev.tachyonmcp.docs.ForkedMain;
 import dev.tachyonmcp.docs.RawHttp;
 import dev.tachyonmcp.testkit.McpTestClients;
 import dev.tachyonmcp.testkit.McpTestServers;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+
+import static dev.tachyonmcp.docs.ForkedMain.DOCUMENTED_PORT;
+import static dev.tachyonmcp.docs.JsonRpc.request;
+import static dev.tachyonmcp.docs.JsonRpc.result;
+import static dev.tachyonmcp.testkit.McpHttpResponseAssert.assertThatResponse;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ConfigurationDocsTest {
 
@@ -84,8 +84,8 @@ class ConfigurationDocsTest {
         record Case(String name, java.util.function.Consumer<dev.tachyonmcp.core.server.ServerBuilder> config, boolean sessions) {}
         var cases = java.util.List.of(
                 new Case("ttl", b -> b.session(s -> s.sessionTtl(java.time.Duration.ofMinutes(5))), true),
-                new Case("enabled", b -> b.session(s -> s.enabled()), true),
-                new Case("stateless", b -> b.stateless(), false),
+                new Case("enabled", b -> b.session(SessionConfig.Builder::enabled), true),
+                new Case("stateless", ServerBuilder::stateless, false),
                 new Case("default", b -> {}, false));
         for (var c : cases) {
             try (var server = McpTestServers.start(c.config(), s -> {});

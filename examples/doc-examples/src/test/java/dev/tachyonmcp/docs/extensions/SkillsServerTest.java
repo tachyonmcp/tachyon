@@ -1,12 +1,12 @@
 package dev.tachyonmcp.docs.extensions;
 
+import dev.tachyonmcp.docs.ForkedMain;
+import org.junit.jupiter.api.Test;
+
 import static dev.tachyonmcp.docs.ForkedMain.DOCUMENTED_PORT;
 import static dev.tachyonmcp.docs.JsonRpc.items;
 import static dev.tachyonmcp.docs.JsonRpc.result;
 import static org.assertj.core.api.Assertions.assertThat;
-
-import dev.tachyonmcp.docs.ForkedMain;
-import org.junit.jupiter.api.Test;
 
 class SkillsServerTest {
 

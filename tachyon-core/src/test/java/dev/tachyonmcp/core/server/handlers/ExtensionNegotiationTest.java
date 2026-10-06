@@ -80,7 +80,7 @@ class ExtensionNegotiationTest {
     }
 
     private static DispatchContext context(Session session, ServerEngine server) {
-        var ctx = DefaultDispatchContext.create(Protocols.list().get(0), server);
+        var ctx = DefaultDispatchContext.create(Protocols.list().getFirst(), server);
         ctx.setSession(session);
         return ctx;
     }

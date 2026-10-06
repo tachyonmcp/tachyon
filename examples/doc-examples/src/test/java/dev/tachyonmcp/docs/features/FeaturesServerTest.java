@@ -1,11 +1,11 @@
 package dev.tachyonmcp.docs.features;
 
+import dev.tachyonmcp.testkit.McpTestServers;
+import org.junit.jupiter.api.Test;
+
 import static dev.tachyonmcp.docs.JsonRpc.result;
 import static dev.tachyonmcp.docs.JsonRpc.text;
 import static org.assertj.core.api.Assertions.assertThat;
-
-import dev.tachyonmcp.testkit.McpTestServers;
-import org.junit.jupiter.api.Test;
 
 class FeaturesServerTest {
 

@@ -26,7 +26,7 @@ public final class FakeTasksExtension implements EngineExtension {
             @Nullable ProgressToken token) {}
 
     public final List<Published> published = new ArrayList<>();
-    public Set<String> readable = Set.of();
+    public final Set<String> readable = Set.of();
 
     @Override
     public String extensionId() {

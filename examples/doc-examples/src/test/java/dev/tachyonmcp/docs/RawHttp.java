@@ -1,5 +1,7 @@
 package dev.tachyonmcp.docs;
 
+import org.jspecify.annotations.Nullable;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -9,7 +11,6 @@ import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import org.jspecify.annotations.Nullable;
 
 public final class RawHttp {
 

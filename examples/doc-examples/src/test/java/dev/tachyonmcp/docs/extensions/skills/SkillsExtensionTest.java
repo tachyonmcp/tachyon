@@ -1,19 +1,20 @@
 package dev.tachyonmcp.docs.extensions.skills;
 
+import dev.tachyonmcp.docs.ForkedMain;
+import dev.tachyonmcp.testkit.McpTestClients;
+import org.junit.jupiter.api.Test;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+
+import java.util.List;
+import java.util.Map;
+
 import static dev.tachyonmcp.docs.ForkedMain.DOCUMENTED_PORT;
 import static dev.tachyonmcp.docs.JsonRpc.items;
 import static dev.tachyonmcp.docs.JsonRpc.post;
 import static dev.tachyonmcp.docs.JsonRpc.result;
 import static dev.tachyonmcp.testkit.McpHttpResponseAssert.assertThatResponse;
 import static org.assertj.core.api.Assertions.assertThat;
-
-import dev.tachyonmcp.docs.ForkedMain;
-import dev.tachyonmcp.testkit.McpTestClients;
-import java.util.List;
-import java.util.Map;
-import org.junit.jupiter.api.Test;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
 
 class SkillsExtensionTest {
 

@@ -1,16 +1,17 @@
 package dev.tachyonmcp.docs.advanced.ssereconnectredelivery;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 import dev.tachyonmcp.core.server.TachyonServer;
 import dev.tachyonmcp.core.server.config.SessionConfig;
 import dev.tachyonmcp.testkit.Mcp20251125Client;
 import dev.tachyonmcp.testkit.McpTestServers;
-import java.time.Duration;
-import java.util.regex.Pattern;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+
+import java.time.Duration;
+import java.util.regex.Pattern;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 class SelfClosingToolTest {
 

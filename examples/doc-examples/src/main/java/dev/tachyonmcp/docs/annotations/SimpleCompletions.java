@@ -1,8 +1,9 @@
 package dev.tachyonmcp.docs.annotations;
 
 import dev.tachyonmcp.api.annotations.McpCompletion;
-import java.util.List;
 import org.jspecify.annotations.Nullable;
+
+import java.util.List;
 
 final class SimpleCompletions {
     private final CityIndex cities = new CityIndex();

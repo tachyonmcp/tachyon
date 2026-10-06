@@ -6,8 +6,9 @@ import dev.tachyonmcp.api.annotations.McpResource;
 import dev.tachyonmcp.api.annotations.McpTool;
 import dev.tachyonmcp.api.runtime.InteractionContext;
 import dev.tachyonmcp.api.server.domain.Role;
-import java.util.Optional;
 import org.jspecify.annotations.Nullable;
+
+import java.util.Optional;
 
 class WeatherService {
     record ForecastRequest(String city, int days) {}

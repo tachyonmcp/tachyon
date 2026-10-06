@@ -1,17 +1,18 @@
 package dev.tachyonmcp.docs.features.prompts;
 
+import dev.tachyonmcp.api.server.features.prompts.PromptDescriptor;
+import dev.tachyonmcp.docs.ForkedMain;
+import dev.tachyonmcp.testkit.McpTestServers;
+import org.junit.jupiter.api.Test;
+import tools.jackson.databind.JsonNode;
+
+import java.util.List;
+
 import static dev.tachyonmcp.docs.ForkedMain.DOCUMENTED_PORT;
 import static dev.tachyonmcp.docs.JsonRpc.items;
 import static dev.tachyonmcp.docs.JsonRpc.named;
 import static dev.tachyonmcp.docs.JsonRpc.result;
 import static org.assertj.core.api.Assertions.assertThat;
-
-import dev.tachyonmcp.api.server.features.prompts.PromptDescriptor;
-import dev.tachyonmcp.docs.ForkedMain;
-import dev.tachyonmcp.testkit.McpTestServers;
-import java.util.List;
-import org.junit.jupiter.api.Test;
-import tools.jackson.databind.JsonNode;
 
 class PromptsDocsTest {
 

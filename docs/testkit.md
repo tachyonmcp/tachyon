@@ -29,8 +29,6 @@ build runs the same code as `EchoToolDocsExampleTest`:
 
 <!-- snips: ../examples/doc-examples/src/test/java/dev/tachyonmcp/docs/testkit/EchoToolTest.java#testkit_echo_tool_test -->
 ```java
-import static dev.tachyonmcp.testkit.JsonRpcResponseAssert.assertThat;
-import static dev.tachyonmcp.testkit.McpHttpResponseAssert.assertThatResponse;
 
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
 import dev.tachyonmcp.core.server.TachyonServer;
@@ -39,6 +37,9 @@ import dev.tachyonmcp.testkit.McpTestServers;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+
+import static dev.tachyonmcp.testkit.JsonRpcResponseAssert.assertThat;
+import static dev.tachyonmcp.testkit.McpHttpResponseAssert.assertThatResponse;
 
 class EchoToolTest {
 

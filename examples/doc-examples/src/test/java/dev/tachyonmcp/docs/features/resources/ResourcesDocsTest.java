@@ -1,28 +1,29 @@
 package dev.tachyonmcp.docs.features.resources;
 
-import static dev.tachyonmcp.docs.ForkedMain.DOCUMENTED_PORT;
-import static dev.tachyonmcp.docs.JsonRpc.items;
-import static dev.tachyonmcp.docs.JsonRpc.result;
-import static dev.tachyonmcp.testkit.McpHttpResponseAssert.assertThatResponse;
-import static java.time.Duration.ofSeconds;
-import static org.assertj.core.api.Assertions.assertThat;
-
 import com.sun.net.httpserver.HttpServer;
 import dev.tachyonmcp.api.server.features.resources.ResourceDescriptor;
 import dev.tachyonmcp.core.server.TachyonServer;
 import dev.tachyonmcp.docs.ForkedMain;
 import dev.tachyonmcp.testkit.Mcp20251125Client;
 import dev.tachyonmcp.testkit.McpTestServers;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+
 import java.net.InetSocketAddress;
 import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Base64;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
+
+import static dev.tachyonmcp.docs.ForkedMain.DOCUMENTED_PORT;
+import static dev.tachyonmcp.docs.JsonRpc.items;
+import static dev.tachyonmcp.docs.JsonRpc.result;
+import static dev.tachyonmcp.testkit.McpHttpResponseAssert.assertThatResponse;
+import static java.time.Duration.ofSeconds;
+import static org.assertj.core.api.Assertions.assertThat;
 
 class ResourcesDocsTest {
 

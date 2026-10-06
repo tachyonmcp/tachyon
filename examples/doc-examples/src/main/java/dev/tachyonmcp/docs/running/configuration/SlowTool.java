@@ -1,13 +1,13 @@
 package dev.tachyonmcp.docs.running.configuration;
 
-import static dev.tachyonmcp.docs.running.configuration.SlowWork.doSlowStep;
-import static dev.tachyonmcp.docs.running.configuration.SlowWork.total;
-
 import dev.tachyonmcp.api.runtime.InteractionContext;
 import dev.tachyonmcp.api.server.features.tools.AbstractToolHandler;
 import dev.tachyonmcp.api.server.features.tools.ToolDescriptor;
 import dev.tachyonmcp.api.server.features.tools.ToolRequest;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
+
+import static dev.tachyonmcp.docs.running.configuration.SlowWork.doSlowStep;
+import static dev.tachyonmcp.docs.running.configuration.SlowWork.total;
 
 // snips-start: config_slow_tool
 class SlowTool extends AbstractToolHandler {

@@ -1,14 +1,15 @@
 package dev.tachyonmcp.docs.testkit;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 import dev.tachyonmcp.api.server.features.tools.ToolDescriptor;
 import dev.tachyonmcp.api.server.features.tools.ToolFn;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
 import dev.tachyonmcp.testkit.McpTestClients;
 import dev.tachyonmcp.testkit.McpTestServers;
-import java.time.Duration;
 import org.junit.jupiter.api.Test;
+
+import java.time.Duration;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 class TestkitSetupTest {
 

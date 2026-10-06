@@ -117,7 +117,7 @@ class NotificationDeliveryTest {
                 .filter(e -> e.data().contains("notifications/progress"))
                 .toList();
         assertThat(progressEvents).hasSize(3);
-        assertThat(progressEvents.get(0).data()).contains("\"progressToken\":\"abc123\"");
+        assertThat(progressEvents.getFirst().data()).contains("\"progressToken\":\"abc123\"");
     }
 
     @Test

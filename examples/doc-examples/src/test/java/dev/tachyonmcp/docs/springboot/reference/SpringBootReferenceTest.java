@@ -1,7 +1,5 @@
 package dev.tachyonmcp.docs.springboot.reference;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 import dev.tachyonmcp.core.server.TachyonServer;
 import dev.tachyonmcp.spring.boot.TachyonAutoConfiguration;
 import dev.tachyonmcp.testkit.McpTestClients;
@@ -18,6 +16,8 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.aot.ApplicationContextAotGenerator;
 import org.springframework.context.support.GenericApplicationContext;
 import org.springframework.javapoet.ClassName;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 class SpringBootReferenceTest {
 

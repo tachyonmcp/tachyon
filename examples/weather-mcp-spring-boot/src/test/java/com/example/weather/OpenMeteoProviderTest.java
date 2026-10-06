@@ -16,6 +16,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -34,7 +35,7 @@ class OpenMeteoProviderTest {
 
     private final AtomicReference<String> geocodingBody = new AtomicReference<>(TALLINN);
     private final AtomicReference<String> forecastBody = new AtomicReference<>(CURRENT);
-    private final AtomicReference<String> forecastQuery = new AtomicReference<>();
+    private final AtomicReference<@Nullable String> forecastQuery = new AtomicReference<>();
     private final AtomicInteger forecastRequests = new AtomicInteger();
     private HttpServer server;
     private HttpClient client;

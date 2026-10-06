@@ -44,7 +44,9 @@ public class ProtocolVersionHandler extends ChannelInboundHandlerAdapter {
                 .toList();
     }
 
-    /** Creates a protocol binder for a server with session support. */
+    /**
+     * Creates a protocol binder for a server with session support.
+     */
     public ProtocolVersionHandler() {
         this(false);
     }
@@ -64,20 +66,21 @@ public class ProtocolVersionHandler extends ChannelInboundHandlerAdapter {
             // A flagged request refused before UnsupportedProtocolVersionHandler (e.g. 413 from the
             // aggregator on a kept-alive connection) must not leave its verdict for the next one.
             ctx.channel().attr(UNSUPPORTED_VERSION_KEY).set(null);
-        }
-        if (msg instanceof HttpRequest req && req.method() == HttpMethod.POST) {
-            var protoVersion = req.headers().get(McpHeaderNames.MCP_PROTOCOL_VERSION);
-            var protocol = Protocols.resolve(req);
-            if (protocol.isEmpty()) {
-                ctx.channel().attr(UNSUPPORTED_VERSION_KEY).set(protoVersion != null ? protoVersion : "");
-            } else {
-                var interaction = ctx.channel().attr(InteractionHandler.INTERACTION_CONTEXT_KEY);
-                var current = interaction.get();
-                if (stateless
-                        || McpProtocol.VERSION.equals(protocol.get().versionString())
-                        || current == null
-                        || !protocol.get().versionString().equals(current.protocolVersion())) {
-                    interaction.set(protocol.get().createInteractionContext());
+
+            if (req.method() == HttpMethod.POST) {
+                var protoVersion = req.headers().get(McpHeaderNames.MCP_PROTOCOL_VERSION);
+                var protocol = Protocols.resolve(req);
+                if (protocol.isEmpty()) {
+                    ctx.channel().attr(UNSUPPORTED_VERSION_KEY).set(protoVersion != null ? protoVersion : "");
+                } else {
+                    var interaction = ctx.channel().attr(InteractionHandler.INTERACTION_CONTEXT_KEY);
+                    var current = interaction.get();
+                    if (stateless
+                            || McpProtocol.VERSION.equals(protocol.get().versionString())
+                            || current == null
+                            || !protocol.get().versionString().equals(current.protocolVersion())) {
+                        interaction.set(protocol.get().createInteractionContext());
+                    }
                 }
             }
         }

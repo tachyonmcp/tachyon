@@ -160,7 +160,6 @@ class McpRequestMapperTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"get", "cancel", "result"})
-    @SuppressWarnings("deprecation")
     void taskIdRequestsMapJsonTreeParams(String method) {
         final var mapper = new McpRequestMapper();
         final var params = parseJson("""

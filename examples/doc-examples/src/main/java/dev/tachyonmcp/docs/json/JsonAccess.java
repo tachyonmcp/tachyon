@@ -3,11 +3,12 @@ package dev.tachyonmcp.docs.json;
 import dev.tachyonmcp.api.json.JsonArray;
 import dev.tachyonmcp.api.json.JsonDocument;
 import dev.tachyonmcp.api.json.JsonObject;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
 
 final class JsonAccess {
 

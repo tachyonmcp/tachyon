@@ -1,13 +1,9 @@
 package dev.tachyonmcp.docs.features.clientinteractions;
 
-import static dev.tachyonmcp.docs.JsonRpc.result;
-import static java.time.Duration.ofSeconds;
-import static org.assertj.core.api.Assertions.assertThat;
-
 import dev.tachyonmcp.core.server.TachyonServer;
+import dev.tachyonmcp.core.server.config.SessionConfig;
 import dev.tachyonmcp.testkit.Mcp20251125Client;
 import dev.tachyonmcp.testkit.McpTestServers;
-import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -15,17 +11,23 @@ import org.junit.jupiter.params.provider.CsvSource;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
+import java.util.function.Consumer;
+
+import static dev.tachyonmcp.docs.JsonRpc.result;
+import static java.time.Duration.ofSeconds;
+import static org.assertj.core.api.Assertions.assertThat;
+
 class ClientInteractionsTest {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private static TachyonServer startAnnotated() {
         return McpTestServers.start(
-                b -> b.session(session -> session.enabled()).annotations(a -> a.register(new CityTools())), s -> {});
+                b -> b.session(SessionConfig.Builder::enabled).annotations(a -> a.register(new CityTools())), s -> {});
     }
 
     private static TachyonServer startProgrammatic() {
-        return McpTestServers.start(b -> b.session(session -> session.enabled()), ProgrammaticCityTools::register);
+        return McpTestServers.start(b -> b.session(SessionConfig.Builder::enabled), ProgrammaticCityTools::register);
     }
 
     private record RoundTrip(JsonNode elicitation, JsonNode toolResult) {}

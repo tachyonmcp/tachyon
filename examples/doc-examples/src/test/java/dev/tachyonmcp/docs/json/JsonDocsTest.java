@@ -1,22 +1,23 @@
 package dev.tachyonmcp.docs.json;
 
+import dev.tachyonmcp.api.json.JsonDocument;
+import dev.tachyonmcp.api.json.JsonObject;
+import dev.tachyonmcp.api.server.features.tools.ToolResult;
+import dev.tachyonmcp.docs.ForkedMain;
+import dev.tachyonmcp.testkit.McpTestServers;
+import org.junit.jupiter.api.Test;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.StringNode;
+
+import java.util.Map;
+
 import static dev.tachyonmcp.docs.ForkedMain.DOCUMENTED_PORT;
 import static dev.tachyonmcp.docs.JsonRpc.post;
 import static dev.tachyonmcp.docs.JsonRpc.result;
 import static dev.tachyonmcp.testkit.McpHttpResponseAssert.assertThatResponse;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
-import dev.tachyonmcp.api.json.JsonDocument;
-import dev.tachyonmcp.api.json.JsonObject;
-import dev.tachyonmcp.api.server.features.tools.ToolResult;
-import dev.tachyonmcp.docs.ForkedMain;
-import dev.tachyonmcp.testkit.McpTestServers;
-import java.util.Map;
-import org.junit.jupiter.api.Test;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.node.StringNode;
 
 class JsonDocsTest {
 
