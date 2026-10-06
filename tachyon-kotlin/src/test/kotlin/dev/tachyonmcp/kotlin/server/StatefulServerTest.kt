@@ -4,6 +4,9 @@ package dev.tachyonmcp.kotlin.server
 import dev.tachyonmcp.api.json.JsonSchema
 import dev.tachyonmcp.api.server.config.Mode
 import dev.tachyonmcp.api.server.domain.Role
+import dev.tachyonmcp.api.server.extensions.AdvertiseMode
+import dev.tachyonmcp.api.server.extensions.ExtensionContext
+import dev.tachyonmcp.api.server.extensions.ServerExtension
 import dev.tachyonmcp.api.server.features.PaginatedResult
 import dev.tachyonmcp.api.server.features.tasks.TaskConnector
 import dev.tachyonmcp.api.server.features.tools.ToolResult
@@ -23,11 +26,15 @@ import dev.tachyonmcp.kotlin.server.features.prompts.PromptDescriptor
 import dev.tachyonmcp.kotlin.server.features.resources.ResourceDescriptor
 import dev.tachyonmcp.kotlin.server.features.tools.ToolDescriptor
 import io.kotest.assertions.json.shouldEqualJson
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
 import kotlinx.coroutines.delay
 import org.junit.jupiter.api.Test
+import java.io.IOException
+import java.net.InetAddress
+import java.net.ServerSocket
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.toJavaDuration
@@ -267,6 +274,41 @@ internal class StatefulServerTest {
         ).use { handle ->
             (handle.port() > 0) shouldBe true
         }
+    }
+
+    @Test
+    fun `failed bind closes the built server and its extensions`() {
+        var bootstrapped = false
+        var shutdown = false
+        val recorder =
+            object : ServerExtension {
+                override fun extensionId(): String = "bind-failure-recorder"
+
+                override fun advertiseMode(): AdvertiseMode = AdvertiseMode.ALWAYS
+
+                override fun bootstrap(context: ExtensionContext) {
+                    bootstrapped = true
+                }
+
+                override fun shutdown() {
+                    shutdown = true
+                }
+            }
+
+        ServerSocket(0, 1, InetAddress.getLoopbackAddress()).use { occupant ->
+            val failure =
+                shouldThrow<IOException> {
+                    TachyonServer(occupant.localPort) {
+                        name("bind-failure-test")
+                        session { enable() }
+                        network { host = InetAddress.getLoopbackAddress().hostAddress }
+                        extensions(recorder)
+                    }
+                }
+            failure.message shouldContain "Address already in use"
+        }
+        bootstrapped shouldBe true
+        shutdown shouldBe true
     }
 
     @Test
