@@ -3,20 +3,24 @@ package dev.tachyonmcp.core.transport.jsonrpc;
 
 import static net.javacrumbs.jsonunit.assertj.JsonAssertions.assertThatJson;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 import dev.tachyonmcp.api.server.domain.RequestId;
-import dev.tachyonmcp.core.protocol.codec.CodecSupport;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
-import java.io.IOException;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Stream;
+import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.JsonNodeFactory;
 
 class JsonRpcCodecTest {
 
@@ -91,20 +95,24 @@ class JsonRpcCodecTest {
                 .isEqualTo("{\"ratio\":0.1}");
     }
 
-    @ParameterizedTest
-    @CsvSource(
-            delimiter = '|',
-            value = {"[]|2|END_ARRAY", "{}|2|END_OBJECT", "{\"a\":1}|2|PROPERTY_NAME"})
-    void readGenericValueRejectsNonValueTokens(String json, int advance, String token) throws Exception {
-        try (var parser = CodecSupport.createParser(json)) {
-            for (var i = 0; i < advance; i++) {
-                parser.nextToken();
-            }
+    @Test
+    void readValueTurnsJsonIntoMapsListsAndScalars() {
+        // language=JSON
+        var json = """
+            {"count":1,"ratio":1.5,"enabled":true,"name":"tachyon","nothing":null,"tags":["a","b"],"nested":{}}
+            """;
 
-            assertThatThrownBy(() -> JsonRpcCodec.readGenericValue(parser))
-                    .isInstanceOf(IOException.class)
-                    .hasMessage("Unexpected token: " + token);
-        }
+        var value = JsonRpcCodec.readValue(json);
+
+        assertThat(value)
+                .asInstanceOf(InstanceOfAssertFactories.map(String.class, Object.class))
+                .containsEntry("count", 1L)
+                .containsEntry("ratio", 1.5)
+                .containsEntry("enabled", true)
+                .containsEntry("name", "tachyon")
+                .containsEntry("nothing", null)
+                .containsEntry("tags", List.of("a", "b"))
+                .containsEntry("nested", Map.of());
     }
 
     @Test
@@ -174,7 +182,119 @@ class JsonRpcCodecTest {
         });
     }
 
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "{'id':1,'method':'ping'}",
+                "{'jsonrpc':2.0,'id':1,'method':'ping'}",
+                "{'jsonrpc':null,'id':1,'method':'ping'}",
+                "{'jsonrpc':'2.0','jsonrpc':'2.0','id':1,'method':'ping'}",
+                "{'jsonrpc':'2.0','id':1,'method':5}",
+                "{'jsonrpc':'2.0','id':1,'method':null}",
+                "{'jsonrpc':'2.0','id':1,'method':{}}",
+                "{'jsonrpc':'2.0','id':true,'method':'ping'}",
+                "{'jsonrpc':'2.0','id':{},'method':'ping'}",
+                "{'jsonrpc':'2.0','id':[],'method':'ping'}",
+                "{'jsonrpc':'2.0','id':null,'method':'ping'}",
+                "{'jsonrpc':'2.0','id':null,'result':{}}",
+                "{'jsonrpc':'2.0','id':null,'error':{'code':-32600,'message':'bad'}}",
+                "{'jsonrpc':'2.0','id':1,'id':2,'method':'ping'}",
+                "{'jsonrpc':'2.0','id':1,'method':'ping','method':'tools/call'}",
+                "{'jsonrpc':'2.0','id':1,'method':'ping','params':{},'params':{}}",
+                "{'jsonrpc':'2.0','id':1,'method':'ping','result':{}}",
+                "{'jsonrpc':'2.0','id':1,'result':{},'method':'ping'}",
+                "{'jsonrpc':'2.0','id':1,'method':'ping','error':{'code':1,'message':'x'}}",
+                "{'jsonrpc':'2.0','id':1,'result':{},'error':{'code':1,'message':'x'}}",
+                "{'jsonrpc':'2.0','id':1}",
+                "{'jsonrpc':'2.0','result':{}}",
+                "{'jsonrpc':'2.0','id':1,'error':5}",
+                "{'jsonrpc':'2.0','id':1,'error':[]}",
+                "{'jsonrpc':'2.0','id':1,'error':{}}",
+                "{'jsonrpc':'2.0','id':1,'error':{'message':'x'}}",
+                "{'jsonrpc':'2.0','id':1,'error':{'code':1}}",
+                "{'jsonrpc':'2.0','id':1,'error':{'code':'1','message':'x'}}",
+                "{'jsonrpc':'2.0','id':1,'error':{'code':1.5,'message':'x'}}",
+                "{'jsonrpc':'2.0','id':1,'error':{'code':99999999999,'message':'x'}}",
+                "{'jsonrpc':'2.0','id':1,'error':{'code':1,'message':5}}",
+                "{'jsonrpc':'2.0','id':1,'method':'ping','params':5}",
+                "{'jsonrpc':'2.0','id':1,'method':'ping','params':'x'}",
+                "{'jsonrpc':'2.0','id':1,'method':'ping','params':true}",
+                "{'jsonrpc':'9.9'} x",
+                "{'jsonrpc':'9.9','id':}",
+                "{'id':1,'method':'ping'} x",
+            })
+    void envelopeViolationsAreInvalidRequestsAndTheFirstOneWins(String body) {
+        var parse = JsonRpcCodec.tryParseRequest(json(body));
+
+        assertThat(parse.message()).isNull();
+        assertThat(parse.invalidRequest())
+                .as("valid JSON that breaks the JSON-RPC envelope must answer -32600")
+                .isTrue();
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "{'jsonrpc':'2.0','id':1,'method':'ping'} garbage",
+                "{'jsonrpc':'2.0','id':1,'method':'ping'}{'jsonrpc':'2.0','id':2,'method':'ping'}",
+                "{'jsonrpc':'2.0','id':1,'method':'ping'}[",
+                "{'jsonrpc':'2.0','id':1,'method':'ping'},",
+            })
+    void contentAfterTheRootObjectIsAParseError(String body) {
+        var parse = JsonRpcCodec.tryParseRequest(json(body));
+
+        assertThat(parse.message()).isNull();
+        assertThat(parse.invalidRequest())
+                .as("more than one JSON text is not JSON at all: -32700")
+                .isFalse();
+    }
+
+    static Stream<Arguments> validEnvelopes() {
+        var nodes = JsonNodeFactory.instance;
+        return Stream.of(
+                arguments(
+                        "{'jsonrpc':'2.0','method':'notifications/initialized'}\n ",
+                        new JsonRpcMessage.Notification<>("notifications/initialized", null)),
+                arguments(
+                        "{'jsonrpc':'2.0','method':'notifications/x','params':null}",
+                        new JsonRpcMessage.Notification<>("notifications/x", null)),
+                arguments(
+                        "{'jsonrpc':'2.0','id':1,'method':'ping','params':null}",
+                        new JsonRpcMessage.Request<>(RequestId.of(1L), "ping", null)),
+                arguments(
+                        "{'x':{'y':[1,{'z':2}]},'jsonrpc':'2.0','id':'a','method':'m','params':{}}",
+                        new JsonRpcMessage.Request<>(RequestId.of("a"), "m", nodes.objectNode())),
+                arguments(
+                        "{'jsonrpc':'2.0','id':1,'method':'m','params':[]}",
+                        new JsonRpcMessage.Request<>(RequestId.of(1L), "m", nodes.arrayNode())),
+                arguments(
+                        "{'jsonrpc':'2.0','id':7,'result':{'a':1}}",
+                        new JsonRpcMessage.Response(RequestId.of(7L), "{\"a\":1}")),
+                arguments(
+                        "{'jsonrpc':'2.0','id':7,'result':null}",
+                        new JsonRpcMessage.Response(RequestId.of(7L), "null")),
+                arguments(
+                        "{'jsonrpc':'2.0','id':3,'error':{'code':-32602,'message':'bad','data':{'k':[1]},'x':1}}",
+                        new JsonRpcMessage.Error(RequestId.of(3L), -32602, "bad", "{\"k\":[1]}")),
+                arguments(
+                        "{'jsonrpc':'2.0','error':{'code':-32700,'message':'Parse error'}}",
+                        new JsonRpcMessage.Error(null, -32700, "Parse error", null)));
+    }
+
+    @ParameterizedTest
+    @MethodSource("validEnvelopes")
+    void validEnvelopesParse(String body, JsonRpcMessage expected) {
+        var parse = JsonRpcCodec.tryParseRequest(json(body));
+
+        assertThat(parse.invalidRequest()).isFalse();
+        assertThat(parse.message()).isEqualTo(expected);
+    }
+
     private static ByteBuf buf(String body) {
         return Unpooled.copiedBuffer(body, StandardCharsets.UTF_8);
+    }
+
+    private static ByteBuf json(String singleQuoted) {
+        return buf(singleQuoted.replace('\'', '"'));
     }
 }

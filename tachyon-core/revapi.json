@@ -1510,6 +1510,33 @@
           "attachments": {
             "since": "1.0.0-beta.33"
           }
+        },
+        {
+          "ignore": true,
+          "code": "java.method.visibilityReduced",
+          "old": "method java.lang.Object dev.tachyonmcp.core.transport.jsonrpc.JsonRpcCodec::readGenericValue(tools.jackson.core.JsonParser) throws java.io.IOException",
+          "justification": "Parser internals of the strict JSON-RPC envelope parser; no callers outside JsonRpcCodec",
+          "attachments": {
+            "since": "1.0.1"
+          }
+        },
+        {
+          "ignore": true,
+          "code": "java.method.visibilityReduced",
+          "old": "method java.lang.String dev.tachyonmcp.core.transport.jsonrpc.JsonRpcCodec::readRawJson(tools.jackson.core.JsonParser)",
+          "justification": "Parser internals of the strict JSON-RPC envelope parser; no callers outside JsonRpcCodec",
+          "attachments": {
+            "since": "1.0.1"
+          }
+        },
+        {
+          "ignore": true,
+          "code": "java.method.removed",
+          "old": "method tools.jackson.databind.JsonNode dev.tachyonmcp.core.transport.jsonrpc.JsonRpcCodec::readTreeValue(tools.jackson.core.JsonParser)",
+          "justification": "Parser internals of the strict JSON-RPC envelope parser; no callers outside JsonRpcCodec",
+          "attachments": {
+            "since": "1.0.1"
+          }
         }
       ]
     }
