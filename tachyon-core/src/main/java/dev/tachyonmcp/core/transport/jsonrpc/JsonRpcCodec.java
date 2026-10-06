@@ -13,6 +13,7 @@ import java.io.InputStream;
 import java.io.StringWriter;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -24,7 +25,6 @@ import tools.jackson.core.JsonParser;
 import tools.jackson.core.JsonToken;
 import tools.jackson.core.ObjectReadContext;
 import tools.jackson.core.ObjectWriteContext;
-import tools.jackson.databind.JsonNode;
 
 /** Low-level JSON-RPC 2.0 codec: parse and serialize messages to/from Netty {@link ByteBuf}. */
 public final class JsonRpcCodec {
@@ -40,9 +40,26 @@ public final class JsonRpcCodec {
     private static final String MESSAGE = "message";
     private static final String DATA = "data";
 
+    private static final int F_JSONRPC = 1;
+    private static final int F_ID = 1 << 1;
+    private static final int F_METHOD = 1 << 2;
+    private static final int F_PARAMS = 1 << 3;
+    private static final int F_RESULT = 1 << 4;
+    private static final int F_ERROR = 1 << 5;
+    private static final int F_KIND = F_METHOD | F_RESULT | F_ERROR;
+
     private JsonRpcCodec() {}
 
-    /** Parses a JSON-RPC message from a {@link ByteBuf}. */
+    /**
+     * Parses exactly one JSON-RPC 2.0 message from a {@link ByteBuf}: {@code "jsonrpc":"2.0"}
+     * required, exactly one of {@code method}/{@code result}/{@code error}, no duplicate envelope
+     * fields, a non-null {@code id}, and nothing but whitespace after the root object.
+     *
+     * @param buf the buffer to parse
+     * @return the parsed message
+     * @throws IllegalArgumentException when the body is valid JSON but not a JSON-RPC envelope
+     * @throws RuntimeException when the body is not a single valid JSON value
+     */
     public static JsonRpcMessage parseRequest(ByteBuf buf) {
         try (var in = new ByteBufInputStream(buf);
                 JsonParser p = FACTORY.createParser(ObjectReadContext.empty(), (InputStream) in)) {
@@ -180,97 +197,145 @@ public final class JsonRpcCodec {
             p.skipChildren();
             throw new IllegalArgumentException("Expected JSON object");
         }
-        return parseMessage(p);
+        var message = parseMessage(p);
+        if (p.nextToken() != null) {
+            throw new IOException("Trailing content after JSON-RPC message");
+        }
+        return message;
     }
 
-    private static JsonRpcMessage parseMessage(JsonParser p) {
+    /**
+     * Reads one envelope, throwing {@link IllegalArgumentException} at the first violation so the
+     * rest of an already-invalid message is never parsed.
+     */
+    private static JsonRpcMessage parseMessage(JsonParser p) throws IOException {
         RequestId id = null;
         String method = null;
-        Object paramsObj = null;
+        Object params = null;
         String resultJson = null;
-        Integer errorCode = null;
-        String errorMessage = null;
-        String errorDataJson = null;
-        boolean hasResult = false;
-        boolean hasError = false;
+        JsonRpcMessage.Error error = null;
+        int seen = 0;
 
         while (p.nextToken() != JsonToken.END_OBJECT) {
-            String fieldName = p.currentName();
-            JsonToken token = p.nextToken();
-
-            if (token == null) break;
-
-            switch (fieldName) {
-                case JSONRPC -> {}
-                case ID -> id = parseId(p);
-                case METHOD -> method = p.getString();
-                case PARAMS -> paramsObj = readTreeValue(p);
+            final var field = p.currentName();
+            final var token = p.nextToken();
+            switch (field) {
+                case JSONRPC -> {
+                    seen = mark(seen, F_JSONRPC, field);
+                    if (token != JsonToken.VALUE_STRING || !JSONRPC_VERSION.equals(p.getString())) {
+                        throw new IllegalArgumentException("Unsupported JSON-RPC version");
+                    }
+                }
+                case ID -> {
+                    seen = mark(seen, F_ID, field);
+                    id = parseId(p);
+                }
+                case METHOD -> {
+                    seen = mark(seen, F_METHOD, field);
+                    method = requireString(p, field);
+                }
+                case PARAMS -> {
+                    seen = mark(seen, F_PARAMS, field);
+                    params = switch (token) {
+                        case VALUE_NULL -> null;
+                        case START_OBJECT, START_ARRAY -> CodecSupport.readWireTree(p);
+                        default -> throw new IllegalArgumentException("params must be an object or array");
+                    };
+                }
                 case RESULT -> {
-                    hasResult = true;
+                    seen = mark(seen, F_RESULT, field);
                     resultJson = readRawJson(p);
                 }
                 case ERROR -> {
-                    hasError = true;
-                    if (token == JsonToken.START_OBJECT) {
-                        while (p.nextToken() != JsonToken.END_OBJECT) {
-                            String ef = p.currentName();
-                            p.nextToken();
-                            switch (ef) {
-                                case CODE -> errorCode = p.getIntValue();
-                                case MESSAGE -> errorMessage = p.getString();
-                                case DATA -> errorDataJson = readRawJson(p);
-                                default -> p.skipChildren();
-                            }
-                        }
-                    }
+                    seen = mark(seen, F_ERROR, field);
+                    error = parseError(p);
                 }
                 default -> p.skipChildren();
             }
         }
 
-        if (hasError && errorCode != null && errorMessage != null) {
-            return new JsonRpcMessage.Error(id, errorCode, errorMessage, errorDataJson);
+        if ((seen & F_JSONRPC) == 0) {
+            throw new IllegalArgumentException("Missing JSON-RPC version");
         }
-
-        if (hasResult) {
-            return new JsonRpcMessage.Response(id, resultJson != null ? resultJson : "null");
-        }
-
         if (method != null) {
-            if (id != null) {
-                return new JsonRpcMessage.Request<>(id, method, paramsObj);
-            }
-            return new JsonRpcMessage.Notification<>(method, paramsObj);
+            return id != null
+                    ? new JsonRpcMessage.Request<>(id, method, params)
+                    : new JsonRpcMessage.Notification<>(method, params);
         }
-
+        if (resultJson != null) {
+            if (id == null) {
+                throw new IllegalArgumentException("JSON-RPC response requires an id");
+            }
+            return new JsonRpcMessage.Response(id, resultJson);
+        }
+        if (error != null) {
+            return id == null ? error : new JsonRpcMessage.Error(id, error.code(), error.message(), error.dataJson());
+        }
         throw new IllegalArgumentException("Invalid JSON-RPC message: no method, result, or error");
     }
 
-    private static @Nullable RequestId parseId(JsonParser p) {
+    private static int mark(int seen, int bit, String field) {
+        if ((seen & bit) != 0 || ((bit & F_KIND) != 0 && (seen & F_KIND) != 0)) {
+            throw new IllegalArgumentException("Duplicate or conflicting JSON-RPC field: " + field);
+        }
+        return seen | bit;
+    }
+
+    private static String requireString(JsonParser p, String field) {
+        if (p.currentToken() != JsonToken.VALUE_STRING) {
+            throw new IllegalArgumentException(field + " must be a string");
+        }
+        return p.getString();
+    }
+
+    private static JsonRpcMessage.Error parseError(JsonParser p) {
+        if (p.currentToken() != JsonToken.START_OBJECT) {
+            throw new IllegalArgumentException("error must be an object");
+        }
+        Integer code = null;
+        String message = null;
+        String dataJson = null;
+        while (p.nextToken() != JsonToken.END_OBJECT) {
+            String field = p.currentName();
+            JsonToken token = p.nextToken();
+            switch (field) {
+                case CODE -> {
+                    if (token != JsonToken.VALUE_NUMBER_INT || p.getNumberType() != JsonParser.NumberType.INT) {
+                        throw new IllegalArgumentException("error.code must be an integer");
+                    }
+                    code = p.getIntValue();
+                }
+                case MESSAGE -> message = requireString(p, "error.message");
+                case DATA -> dataJson = readRawJson(p);
+                default -> p.skipChildren();
+            }
+        }
+        if (code == null || message == null) {
+            throw new IllegalArgumentException("error requires code and message");
+        }
+        return new JsonRpcMessage.Error(null, code, message, dataJson);
+    }
+
+    private static RequestId parseId(JsonParser p) {
         return switch (p.currentToken()) {
             case VALUE_NUMBER_INT -> RequestId.of(p.getLongValue());
             case VALUE_NUMBER_FLOAT -> RequestId.of(p.getDoubleValue());
             case VALUE_STRING -> RequestId.of(p.getString());
-            case VALUE_NULL -> null;
             default -> throw new IllegalArgumentException("Unexpected id token: " + p.currentToken());
         };
     }
 
-    /** Reads the remainder of the current JSON value as a raw JSON string. */
-    public static String readRawJson(JsonParser p) {
-        var writer = new StringWriter();
+    private static String readRawJson(JsonParser p) {
+        var writer = new StringWriter(256);
         try (JsonGenerator gen = FACTORY.createGenerator(ObjectWriteContext.empty(), writer)) {
             gen.copyCurrentStructure(p);
         }
         return writer.toString();
     }
 
-    /** Reads the current JSON value as a {@link JsonNode}. */
-    public static JsonNode readTreeValue(JsonParser p) {
-        return CodecSupport.readWireTree(p);
-    }
-
-    /** Deserializes a JSON string to a generic Java object (Map, List, String, Number, Boolean, or null). */
+    /**
+     * Deserializes a JSON string to a generic Java object (Map, List, String, Number, Boolean, or null).
+     */
     public static @Nullable Object readValue(String json) {
         try (var p = FACTORY.createParser(ObjectReadContext.empty(), json)) {
             p.nextToken();
@@ -280,8 +345,7 @@ public final class JsonRpcCodec {
         }
     }
 
-    /** Reads the current JSON token as a generic Java value. */
-    public static @Nullable Object readGenericValue(JsonParser p) throws IOException {
+    private static @Nullable Object readGenericValue(JsonParser p) throws IOException {
         return switch (p.currentToken()) {
             case START_OBJECT -> readObject(p);
             case START_ARRAY -> readArray(p);
@@ -306,7 +370,7 @@ public final class JsonRpcCodec {
     }
 
     private static List<Object> readArray(JsonParser p) throws IOException {
-        List<Object> list = new java.util.ArrayList<>();
+        final List<Object> list = new ArrayList<>();
         while (p.nextToken() != JsonToken.END_ARRAY) {
             list.add(readGenericValue(p));
         }
