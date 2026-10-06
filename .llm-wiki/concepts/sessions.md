@@ -2,8 +2,8 @@
 title: Sessions
 tags: [concept, session, state]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/runtime/Session.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/session/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/SessionConfig.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultServerBuilder.java, tachyon-api/src/main/java/dev/tachyonmcp/api/server/session/SessionIdGenerator.java]
-updated: 2026-10-01
-commit: cf8f85f7
+updated: 2026-10-06
+commit: 279ed72e
 ---
 
 # 🪪 Sessions
@@ -39,6 +39,7 @@ Verdict: **stateless by default** (`SessionConfig.enabled=false`) — a stateles
 - `createSession` → `store.create(newKey, expiresAt)` under per-id `LifecycleLock` (ref-counted `ReentrantLock` map); replaced local session closed `SessionManager#createSession`, `SessionManager`.
 - `getSession` → local map, else **hydrate** from store (skip + terminate if CLOSED or expired; incompatible protocol version ⇒ empty) `SessionManager`. `getLocalSession` never hits store (used on hot paths: GET SSE, redelivery).
 - Mutations (`activate`, `protocol`, `enableExtension`, `loggingLevel`, `close`) call `onChange` → `persist` → `store.compareAndSet(expected, revision+1)`; lost CAS ⇒ **evict local** (another node owns it) `SessionManager#persist`.
+- `removeSession` + janitor `sweep` → drop from local map, then `store.terminate` + `session.close()`. Close always runs; `terminate` failure logged WARN. `removeSession` rethrows it (DELETE ⇒ 500); janitor swallows it; shutdown cleanup logs DEBUG. Snapshot stays restorable on any node until TTL [SessionManager#terminateAndClose](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/session/SessionManager.java), [SessionManager#removeSession](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/session/SessionManager.java), [McpHandlerManager#onShutdownStarted](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpHandlerManager.java), `SessionStore`. E2E: `SessionTerminationFailureTest` (DELETE ⇒ 500 + `Connection: close`, SSE stream ends, retry ⇒ 200).
 - `touch()` → `onTouch` → async expiry refresh only when within `ttl/2` of `expiresAt`, deduped per key, on persistence executor `SessionManager`.
 - Store choice is resolved once per `build()` from the published `ServerConfig`, so `TachyonServer#config` exposes the very stores the server writes to `DefaultServerBuilder#build`, `SessionConfig#sessionStoreOrDefault`.
 - ⚠️ Stateless ⇒ `NoopSessionStore`: `create` mints a snapshot it never keeps, `find` is always empty, and `compareAndSet`/`touch`/`terminate` answer **`true`** — "accepted, nothing to persist". A `false` would read as lost ownership and evict the local session on its first state change `SessionManager#persist`.

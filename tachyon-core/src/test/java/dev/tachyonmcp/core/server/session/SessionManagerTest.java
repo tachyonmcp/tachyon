@@ -2,6 +2,7 @@
 package dev.tachyonmcp.core.server.session;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.tachyonmcp.api.server.domain.LoggingLevel;
 import dev.tachyonmcp.core.protocol.Protocols;
@@ -344,6 +345,47 @@ class SessionManagerTest {
         assertThat(store.find("s1")).isPresent();
     }
 
+    @Test
+    void removeSessionClosesRuntimeWhenSnapshotTerminationFails() {
+        final var store = new TrackingSessionStore();
+        final var manager = manager(store);
+        final var connectionClosed = new AtomicBoolean();
+        final var session = manager.createSession("s1", new TestConnection(() -> connectionClosed.set(true)));
+        final var request = session.attachRequest();
+        store.armTerminateFailure();
+
+        assertThatThrownBy(() -> manager.removeSession("s1"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("terminate failed");
+
+        assertThat(store.terminateCount()).isOne();
+        assertThat(connectionClosed).isTrue();
+        assertThat(session.state()).isEqualTo(SessionState.CLOSED);
+        assertThat(request.sessionClosed()).isCompleted();
+        assertThat(manager.getLocalSession("s1")).isEmpty();
+        assertThat(manager.allSessions()).isEmpty();
+    }
+
+    @Test
+    void sweepClosesRuntimeWhenSnapshotTerminationFails() {
+        final var store = new TrackingSessionStore();
+        final var manager = manager(store);
+        final var connectionClosed = new AtomicBoolean();
+        final var session = manager.createSession("s1", new TestConnection(() -> connectionClosed.set(true)));
+        final var request = session.attachRequest();
+        request.disconnected();
+        store.armTerminateFailure();
+
+        manager.sweep(-1);
+
+        assertThat(store.terminateCount()).isOne();
+        assertThat(connectionClosed).isTrue();
+        assertThat(session.state()).isEqualTo(SessionState.CLOSED);
+        assertThat(request.sessionClosed()).isCompleted();
+        assertThat(manager.getLocalSession("s1")).isEmpty();
+        assertThat(manager.allSessions()).isEmpty();
+    }
+
     private static SessionManager manager(SessionStore store) {
         return new SessionManager(store, Clock.fixed(NOW, ZoneOffset.UTC), Duration.ofSeconds(30));
     }
@@ -367,6 +409,7 @@ class SessionManagerTest {
         private final CountDownLatch overlappingFindEntered = new CountDownLatch(1);
         private volatile boolean trackCreates;
         private volatile boolean trackFinds;
+        private volatile boolean failTerminate;
 
         @Override
         public SessionSnapshot create(SessionKey key, Instant expiresAt) {
@@ -426,6 +469,9 @@ class SessionManagerTest {
         @Override
         public boolean terminate(SessionKey key) {
             terminateCount.incrementAndGet();
+            if (failTerminate) {
+                throw new IllegalStateException("terminate failed");
+            }
             return delegate.terminate(key);
         }
 
@@ -437,6 +483,10 @@ class SessionManagerTest {
 
         void armCreateTracking() {
             trackCreates = true;
+        }
+
+        void armTerminateFailure() {
+            failTerminate = true;
         }
 
         void armFindTracking() {

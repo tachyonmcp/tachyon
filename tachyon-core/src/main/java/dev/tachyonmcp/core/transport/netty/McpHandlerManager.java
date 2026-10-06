@@ -49,7 +49,13 @@ public class McpHandlerManager implements ProtocolHandlerManager {
     public void onShutdownStarted(@Nullable String sessionId) {
         if (sessionId != null) {
             try {
-                executor.execute(() -> server.removeSession(sessionId));
+                executor.execute(() -> {
+                    try {
+                        server.removeSession(sessionId);
+                    } catch (RuntimeException e) {
+                        logger.debug("Session cleanup failed during server shutdown: {}", sessionId, e);
+                    }
+                });
             } catch (RejectedExecutionException e) {
                 logger.debug("Session cleanup rejected during server shutdown: {}", sessionId);
             }

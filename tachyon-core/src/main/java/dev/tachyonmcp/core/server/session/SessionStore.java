@@ -12,6 +12,12 @@ import java.util.Set;
  *
  * <p>Methods execute synchronously and may perform I/O. Tachyon invokes them outside transport
  * event-loop threads. Implementations must be thread-safe.
+ *
+ * <p>A {@link RuntimeException} from {@link #terminate} never keeps the local session alive: Tachyon
+ * closes its connection and in-flight waiters anyway. Explicit removal (HTTP {@code DELETE}) then
+ * answers {@code 500}; idle expiry logs the failure and moves on. The snapshot stays restorable on
+ * any node until its {@link SessionSnapshot#expiresAt()}, so a failed termination is bounded by the
+ * session TTL.
  */
 @ExperimentalApi(since = "1.0.0-beta.26")
 public interface SessionStore extends AutoCloseable {
