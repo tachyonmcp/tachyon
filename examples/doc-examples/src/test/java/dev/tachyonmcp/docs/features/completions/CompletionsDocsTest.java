@@ -1,17 +1,18 @@
 package dev.tachyonmcp.docs.features.completions;
 
-import static dev.tachyonmcp.docs.JsonRpc.items;
-import static dev.tachyonmcp.docs.JsonRpc.result;
-import static org.assertj.core.api.Assertions.assertThat;
-
 import dev.tachyonmcp.api.server.features.completions.CompletionResult;
 import dev.tachyonmcp.core.server.TachyonServer;
 import dev.tachyonmcp.core.server.annotations.TachyonAnnotationProvider;
 import dev.tachyonmcp.testkit.McpTestServers;
-import java.util.List;
-import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
+
+import java.util.List;
+import java.util.stream.IntStream;
+
+import static dev.tachyonmcp.docs.JsonRpc.items;
+import static dev.tachyonmcp.docs.JsonRpc.result;
+import static org.assertj.core.api.Assertions.assertThat;
 
 class CompletionsDocsTest {
 

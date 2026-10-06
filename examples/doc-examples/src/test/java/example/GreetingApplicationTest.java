@@ -1,16 +1,17 @@
 package example;
 
+import dev.tachyonmcp.docs.ForkedMain;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+
+import java.util.Map;
+
 import static dev.tachyonmcp.docs.ForkedMain.DOCUMENTED_PORT;
 import static dev.tachyonmcp.docs.JsonRpc.post;
 import static dev.tachyonmcp.docs.JsonRpc.result;
 import static dev.tachyonmcp.docs.JsonRpc.text;
 import static dev.tachyonmcp.testkit.McpHttpResponseAssert.assertThatResponse;
 import static org.assertj.core.api.Assertions.assertThat;
-
-import dev.tachyonmcp.docs.ForkedMain;
-import java.util.Map;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
 
 class GreetingApplicationTest {
 

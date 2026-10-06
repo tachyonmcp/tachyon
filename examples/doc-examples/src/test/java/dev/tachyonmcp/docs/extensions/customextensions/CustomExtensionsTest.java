@@ -1,16 +1,5 @@
 package dev.tachyonmcp.docs.extensions.customextensions;
 
-import static dev.tachyonmcp.docs.ForkedMain.DOCUMENTED_PORT;
-import static dev.tachyonmcp.docs.JsonRpc.declaring;
-import static dev.tachyonmcp.docs.JsonRpc.items;
-import static dev.tachyonmcp.docs.JsonRpc.names;
-import static dev.tachyonmcp.docs.JsonRpc.request;
-import static dev.tachyonmcp.docs.JsonRpc.result;
-import static dev.tachyonmcp.docs.JsonRpc.text;
-import static dev.tachyonmcp.testkit.McpHttpResponseAssert.assertThatResponse;
-import static net.javacrumbs.jsonunit.assertj.JsonAssertions.assertThatJson;
-import static org.assertj.core.api.Assertions.assertThat;
-
 import dev.tachyonmcp.api.runtime.InteractionContext;
 import dev.tachyonmcp.api.server.extensions.AdvertiseMode;
 import dev.tachyonmcp.api.server.extensions.ExtensionContext;
@@ -18,12 +7,21 @@ import dev.tachyonmcp.api.server.extensions.ExtensionSettings;
 import dev.tachyonmcp.api.server.extensions.ServerExtension;
 import dev.tachyonmcp.core.server.TachyonServer;
 import dev.tachyonmcp.docs.ForkedMain;
-import dev.tachyonmcp.testkit.McpTestClients;
 import dev.tachyonmcp.testkit.McpTestServers;
-import java.util.List;
+import org.junit.jupiter.api.Test;
+
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
-import org.junit.jupiter.api.Test;
+
+import static dev.tachyonmcp.docs.ForkedMain.DOCUMENTED_PORT;
+import static dev.tachyonmcp.docs.JsonRpc.declaring;
+import static dev.tachyonmcp.docs.JsonRpc.names;
+import static dev.tachyonmcp.docs.JsonRpc.request;
+import static dev.tachyonmcp.docs.JsonRpc.result;
+import static dev.tachyonmcp.docs.JsonRpc.text;
+import static dev.tachyonmcp.testkit.McpHttpResponseAssert.assertThatResponse;
+import static net.javacrumbs.jsonunit.assertj.JsonAssertions.assertThatJson;
+import static org.assertj.core.api.Assertions.assertThat;
 
 class CustomExtensionsTest {
 

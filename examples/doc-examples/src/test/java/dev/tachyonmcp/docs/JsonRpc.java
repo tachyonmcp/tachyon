@@ -1,16 +1,17 @@
 package dev.tachyonmcp.docs;
 
-import static dev.tachyonmcp.testkit.McpHttpResponseAssert.assertThatResponse;
-
 import dev.tachyonmcp.core.server.TachyonServer;
 import dev.tachyonmcp.testkit.Mcp20260728Client;
 import dev.tachyonmcp.testkit.McpTestClients;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+
 import java.net.http.HttpResponse;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
+
+import static dev.tachyonmcp.testkit.McpHttpResponseAssert.assertThatResponse;
 
 public final class JsonRpc {
 

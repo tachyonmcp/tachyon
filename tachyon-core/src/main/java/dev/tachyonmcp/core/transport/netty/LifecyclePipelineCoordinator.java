@@ -20,7 +20,7 @@ public class LifecyclePipelineCoordinator extends ChannelInboundHandlerAdapter {
     @Override
     public void userEventTriggered(ChannelHandlerContext ctx, Object evt) {
         switch (evt) {
-            case InteractionEvent.OperationStarted os -> {
+            case InteractionEvent.OperationStarted ignore -> {
                 logger.debug("Lifecycle: INITIALIZATION → OPERATION");
                 ctx.pipeline()
                         .replace(

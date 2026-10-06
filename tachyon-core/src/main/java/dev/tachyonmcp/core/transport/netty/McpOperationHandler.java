@@ -128,7 +128,7 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
         // against ProtocolVersionHandler rebinding a fresh one for the next request. May be
         // null (e.g. no InteractionHandler configured); enforced non-null only where the
         // original code enforced it, in handlePostRequest.
-        final @Nullable ChannelContext ic = ChannelHandlerUtils.getInteractionContext(ctx);
+        final var ic = ChannelHandlerUtils.getInteractionContext(ctx);
         // Read for the same reason and in the same place: the entry belongs to this request, and a
         // pipelined next request must not be able to overwrite it between the hop and the read.
         final PeekedBody.@Nullable Parsed peeked = PeekedBody.cached(ctx, req);
@@ -282,7 +282,7 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
     private void handlePostRequest(
             ChannelHandlerContext ctx,
             @Nullable String sessionId,
-            JsonRpcMessage.Request req,
+            JsonRpcMessage.Request<?> req,
             CorsDecision cors,
             ChannelContext ic) {
         var network = server.config().network();
@@ -448,7 +448,7 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
     /**
      * Builds the fallback that runs when the final response could not be written because the tool
      * already closed its POST-SSE stream: if the client has reconnected and explicitly resumed this
-     * stream key, deliver the response live on that stream. Otherwise it stays in the event log for
+     * stream key, deliver the response live on that stream. Otherwise, it stays in the event log for
      * {@code Last-Event-ID} replay. Never crosses to a different stream (MCP resumability rule).
      */
     private @Nullable Runnable redeliverOnReconnect(

@@ -1,17 +1,17 @@
 package dev.tachyonmcp.docs.annotations;
 
+import dev.tachyonmcp.core.server.TachyonServer;
+import dev.tachyonmcp.testkit.McpTestServers;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+
 import static dev.tachyonmcp.docs.JsonRpc.items;
 import static dev.tachyonmcp.docs.JsonRpc.named;
 import static dev.tachyonmcp.docs.JsonRpc.names;
 import static dev.tachyonmcp.docs.JsonRpc.result;
 import static dev.tachyonmcp.docs.JsonRpc.text;
 import static org.assertj.core.api.Assertions.assertThat;
-
-import dev.tachyonmcp.core.server.TachyonServer;
-import dev.tachyonmcp.testkit.McpTestServers;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
 
 class WeatherServiceTest {
 

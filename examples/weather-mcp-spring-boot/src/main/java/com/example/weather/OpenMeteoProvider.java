@@ -16,15 +16,15 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 final class OpenMeteoProvider implements WeatherProvider {
-    private static final URI GEOCODING = URI.create("https://geocoding-api.open-meteo.com/v1/search");
-    private static final URI FORECAST = URI.create("https://api.open-meteo.com/v1/forecast");
+    private static final URI GEOCODING_URL = URI.create("https://geocoding-api.open-meteo.com/v1/search");
+    private static final URI FORECAST_URL = URI.create("https://api.open-meteo.com/v1/forecast");
     private final HttpClient client;
     private final URI geocoding;
     private final URI forecast;
     private final ObjectMapper mapper = new ObjectMapper();
 
     OpenMeteoProvider(HttpClient client) {
-        this(client, GEOCODING, FORECAST);
+        this(client, GEOCODING_URL, FORECAST_URL);
     }
 
     OpenMeteoProvider(HttpClient client, URI geocoding, URI forecast) {

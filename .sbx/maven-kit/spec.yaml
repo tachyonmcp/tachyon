@@ -17,4 +17,4 @@ permissions:
       - ports.ubuntu.com:80
       - download.docker.com:443
       - repo1.maven.org:443
-      - repo.meven.apache.org:443
+      - repo.maven.apache.org

@@ -1,23 +1,24 @@
 package dev.tachyonmcp.docs.running.observability;
 
+import dev.tachyonmcp.core.server.TachyonServer;
+import dev.tachyonmcp.core.server.observability.ObservationListener;
+import dev.tachyonmcp.core.server.observability.ObservationScope;
+import dev.tachyonmcp.core.server.observability.OperationInfo;
+import dev.tachyonmcp.core.server.observability.OperationOutcome;
+import dev.tachyonmcp.docs.ForkedMain;
+import dev.tachyonmcp.opentelemetry.McpOpenTelemetryListener;
+import dev.tachyonmcp.testkit.McpTestServers;
+import io.opentelemetry.api.common.AttributeKey;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+
+import java.time.Duration;
+
 import static dev.tachyonmcp.docs.ForkedMain.DOCUMENTED_PORT;
 import static dev.tachyonmcp.docs.JsonRpc.result;
 import static dev.tachyonmcp.docs.JsonRpc.text;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
-
-import dev.tachyonmcp.core.server.TachyonServer;
-import dev.tachyonmcp.docs.ForkedMain;
-import dev.tachyonmcp.core.server.observability.ObservationListener;
-import dev.tachyonmcp.core.server.observability.ObservationScope;
-import dev.tachyonmcp.core.server.observability.OperationInfo;
-import dev.tachyonmcp.core.server.observability.OperationOutcome;
-import dev.tachyonmcp.opentelemetry.McpOpenTelemetryListener;
-import dev.tachyonmcp.testkit.McpTestServers;
-import io.opentelemetry.api.common.AttributeKey;
-import java.time.Duration;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
 
 class ObservabilityDocsTest {
 

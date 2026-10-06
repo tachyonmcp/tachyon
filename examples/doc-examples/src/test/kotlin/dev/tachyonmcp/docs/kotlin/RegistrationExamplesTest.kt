@@ -3,7 +3,6 @@ package dev.tachyonmcp.docs.kotlin
 import dev.tachyonmcp.api.server.config.Mode
 import dev.tachyonmcp.kotlin.server.TachyonServer
 import dev.tachyonmcp.kotlin.server.buildServer
-import dev.tachyonmcp.kotlin.server.domain.TextResourceContents
 import dev.tachyonmcp.kotlin.server.features.completions.CompletionResult
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldBeEmpty
@@ -30,7 +29,8 @@ class RegistrationExamplesTest {
                 """{"ref":$ref,"argument":{"name":"$argumentName","value":"$value"}}""",
             ).path("completion")
 
-    private fun JsonNode.completionValues(): List<String> = path("values").items().map { it.asString() }
+    private fun JsonNode.completionValues(): List<String> =
+        path("values").items().map { it.asString() }
 
     private val promptRef = """{"type":"ref/prompt","name":"rewrite-forecast"}"""
     private val resourceRef = """{"type":"ref/resource","uri":"myapp://users/{userId}/profile"}"""
@@ -41,13 +41,19 @@ class RegistrationExamplesTest {
             completions()
             promptCompletion("big") { CompletionResult { values = List(150) { "v$it" } } }
         }.use { server ->
-            complete(server, promptRef, "style", "p").completionValues() shouldContainExactly listOf("plain", "pirate")
+            complete(server, promptRef, "style", "p").completionValues() shouldContainExactly
+                listOf("plain", "pirate")
 
             val users = complete(server, resourceRef, "userId", "a")
             users.completionValues() shouldContainExactly listOf("alice")
             users.path("hasMore").asBoolean() shouldBe false
 
-            complete(server, """{"type":"ref/prompt","name":"unknown"}""", "x", "").completionValues().shouldBeEmpty()
+            complete(
+                server,
+                """{"type":"ref/prompt","name":"unknown"}""",
+                "x",
+                "",
+            ).completionValues().shouldBeEmpty()
 
             val capped = complete(server, """{"type":"ref/prompt","name":"big"}""", "x", "")
             capped.path("values").size() shouldBe 100
@@ -61,16 +67,30 @@ class RegistrationExamplesTest {
             server.start()
             server.port() shouldBeGreaterThan 0
 
-            server.rpcResult("tools/call", """{"name":"echo","arguments":{"msg":"hello"}}""").text() shouldBe "hello"
-            server.rpcResult("resources/read", """{"uri":"myapp://config"}""")
-                .path("contents").get(0).path("text").asString() shouldBe """{"mode":"demo"}"""
-            server.rpcResult("resources/read", """{"uri":"myapp://users/7/profile"}""")
-                .path("contents").get(0).path("text").asString() shouldBe """{"userId":"7"}"""
+            server
+                .rpcResult(
+                    "tools/call",
+                    """{"name":"echo","arguments":{"msg":"hello"}}""",
+                ).text() shouldBe
+                "hello"
+            server
+                .rpcResult("resources/read", """{"uri":"myapp://config"}""")
+                .path("contents")
+                .get(0)
+                .path("text")
+                .asString() shouldBe """{"mode":"demo"}"""
+            server
+                .rpcResult("resources/read", """{"uri":"myapp://users/7/profile"}""")
+                .path("contents")
+                .get(0)
+                .path("text")
+                .asString() shouldBe """{"userId":"7"}"""
             server.rpcResult("prompts/get", """{"name":"rewrite-forecast"}""").promptText() shouldBe
                 "Rewrite this forecast."
             complete(server, promptRef, "style", "").completionValues() shouldContainExactly
                 listOf("plain", "concise", "pirate")
-            complete(server, resourceRef, "userId", "").completionValues() shouldContainExactly listOf("alice", "bob")
+            complete(server, resourceRef, "userId", "").completionValues() shouldContainExactly
+                listOf("alice", "bob")
 
             server.registerTool(name = "late") { text("registered after start") }
             server.rpcResult("tools/call", """{"name":"late","arguments":{}}""").text() shouldBe
@@ -84,10 +104,21 @@ class RegistrationExamplesTest {
             server.registerTool("t") { text("first") }
             server.registerTool("t") { text("second") }
 
-            server.registerResource(name = "r", uri = "x://r") { TextResourceContents { text = "one" } }
-            server.registerResource(name = "r", uri = "x://r") { TextResourceContents { text = "two" } }
+            server.registerResource(
+                name = "r",
+                uri = "x://r",
+            ) { TextResourceContents { text = "one" } }
+            server.registerResource(
+                name = "r",
+                uri = "x://r",
+            ) { TextResourceContents { text = "two" } }
             shouldThrow<IllegalArgumentException> {
-                server.registerResource(name = "other", uri = "x://r") { TextResourceContents { text = "three" } }
+                server.registerResource(name = "other", uri = "x://r") {
+                    TextResourceContents {
+                        text =
+                            "three"
+                    }
+                }
             }
 
             server.registerResourceTemplate(name = "tpl", uriTemplate = "x://{id}") {
@@ -100,9 +131,14 @@ class RegistrationExamplesTest {
             }
 
             server.start()
-            server.rpcResult("tools/call", """{"name":"t","arguments":{}}""").text() shouldBe "second"
-            server.rpcResult("resources/read", """{"uri":"x://r"}""")
-                .path("contents").get(0).path("text").asString() shouldBe "two"
+            server.rpcResult("tools/call", """{"name":"t","arguments":{}}""").text() shouldBe
+                "second"
+            server
+                .rpcResult("resources/read", """{"uri":"x://r"}""")
+                .path("contents")
+                .get(0)
+                .path("text")
+                .asString() shouldBe "two"
         }
     }
 

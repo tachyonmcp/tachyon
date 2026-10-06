@@ -1,8 +1,9 @@
 package dev.tachyonmcp.docs.annotations;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.List;
 import java.util.Map;
-import org.jspecify.annotations.Nullable;
 
 final class CityIndex {
     private static final Map<String, List<String>> CITIES_BY_COUNTRY = Map.of(

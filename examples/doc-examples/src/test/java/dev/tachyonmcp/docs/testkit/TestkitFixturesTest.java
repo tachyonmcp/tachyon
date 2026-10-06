@@ -1,7 +1,5 @@
 package dev.tachyonmcp.docs.testkit;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
 import dev.tachyonmcp.extensions.tasks.TasksExtension;
@@ -9,11 +7,14 @@ import dev.tachyonmcp.testkit.McpTestClients;
 import dev.tachyonmcp.testkit.McpTestServers;
 import dev.tachyonmcp.testkit.TestObservationListener;
 import dev.tachyonmcp.testkit.TestTaskConnector;
-import java.time.Instant;
-import java.util.Map;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+
+import java.time.Instant;
+import java.util.Map;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 class TestkitFixturesTest {
 

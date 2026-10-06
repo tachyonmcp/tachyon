@@ -1,8 +1,6 @@
 package dev.tachyonmcp.docs.testkit;
 
 // snips-start: testkit_echo_tool_test
-import static dev.tachyonmcp.testkit.JsonRpcResponseAssert.assertThat;
-import static dev.tachyonmcp.testkit.McpHttpResponseAssert.assertThatResponse;
 
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
 import dev.tachyonmcp.core.server.TachyonServer;
@@ -11,6 +9,9 @@ import dev.tachyonmcp.testkit.McpTestServers;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+
+import static dev.tachyonmcp.testkit.JsonRpcResponseAssert.assertThat;
+import static dev.tachyonmcp.testkit.McpHttpResponseAssert.assertThatResponse;
 
 class EchoToolTest {
 

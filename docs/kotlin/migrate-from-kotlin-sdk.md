@@ -193,32 +193,33 @@ Inside `TextResourceContents { }`, `uri` is the builder's property, so name the 
 
 <!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/kotlin/migratefromkotlinsdk/MigratedResources.kt#migrate_resources -->
 ```kotlin
-val server = TachyonServer(port = mcpPort) {
-    // Concrete resource: appears in resources/list.
-    resource(
-        name = "readme",
-        uri = "example://docs/readme",
-        description = "Project documentation",
-        mimeType = "text/markdown",
-        title = "README",
-    ) {
-        TextResourceContents {
-            text = read(this@resource.uri) ?: error("not found")
+val server =
+    TachyonServer(port = mcpPort) {
+        // Concrete resource: appears in resources/list.
+        resource(
+            name = "readme",
+            uri = "example://docs/readme",
+            description = "Project documentation",
+            mimeType = "text/markdown",
+            title = "README",
+        ) {
+            TextResourceContents {
+                text = read(this@resource.uri) ?: error("not found")
+            }
         }
-    }
 
-    // URI template: appears in resources/templates/list.
-    resourceTemplate(
-        name = "docs",
-        uriTemplate = "example://docs/{path}",
-        description = "Docs",
-        mimeType = "text/markdown",
-    ) {
-        TextResourceContents {
-            text = read(this@resourceTemplate.uri) ?: error("not found")
+        // URI template: appears in resources/templates/list.
+        resourceTemplate(
+            name = "docs",
+            uriTemplate = "example://docs/{path}",
+            description = "Docs",
+            mimeType = "text/markdown",
+        ) {
+            TextResourceContents {
+                text = read(this@resourceTemplate.uri) ?: error("not found")
+            }
         }
     }
-}
 ```
 
 Static and template result builders inherit the requested URI and registered MIME type.
@@ -229,20 +230,22 @@ Use a receiver factory when you need a reusable descriptor:
 
 <!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/kotlin/migratefromkotlinsdk/MigratedResources.kt#migrate_resource_descriptor -->
 ```kotlin
-val docs = ResourceTemplateDescriptor {
-    name = "docs"
-    uriTemplate = "example://docs/{path}"
-    description = "Docs"
-    mimeType = "text/markdown"
-}
+val docs =
+    ResourceTemplateDescriptor {
+        name = "docs"
+        uriTemplate = "example://docs/{path}"
+        description = "Docs"
+        mimeType = "text/markdown"
+    }
 
-val server = TachyonServer(port = mcpPort) {
-    resourceTemplate(docs) {
-        TextResourceContents {
-            text = read(this@resourceTemplate.uri) ?: error("not found")
+val server =
+    TachyonServer(port = mcpPort) {
+        resourceTemplate(docs) {
+            TextResourceContents {
+                text = read(this@resourceTemplate.uri) ?: error("not found")
+            }
         }
     }
-}
 ```
 
 `list_changed` fires automatically when the registry changes (given `listChanged = true`) — drop

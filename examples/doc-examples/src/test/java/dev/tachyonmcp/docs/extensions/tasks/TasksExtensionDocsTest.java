@@ -1,5 +1,22 @@
 package dev.tachyonmcp.docs.extensions.tasks;
 
+import dev.tachyonmcp.api.server.domain.TaskResult;
+import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
+import dev.tachyonmcp.api.server.features.tasks.TaskState;
+import dev.tachyonmcp.api.server.features.tools.ToolResult;
+import dev.tachyonmcp.core.server.config.SessionConfig;
+import dev.tachyonmcp.docs.ForkedMain;
+import dev.tachyonmcp.extensions.tasks.TasksExtension;
+import dev.tachyonmcp.testkit.Mcp20251125Client;
+import dev.tachyonmcp.testkit.McpTestServers;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+import tools.jackson.databind.JsonNode;
+
+import java.time.Clock;
+import java.time.Instant;
+import java.util.concurrent.CompletableFuture;
+
 import static dev.tachyonmcp.docs.ForkedMain.DOCUMENTED_PORT;
 import static dev.tachyonmcp.docs.JsonRpc.declaring;
 import static dev.tachyonmcp.docs.JsonRpc.request;
@@ -7,23 +24,6 @@ import static dev.tachyonmcp.testkit.McpHttpResponseAssert.assertThatResponse;
 import static java.time.Duration.ofSeconds;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
-import dev.tachyonmcp.api.server.domain.TaskResult;
-import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
-import dev.tachyonmcp.api.server.features.tasks.TaskState;
-import dev.tachyonmcp.api.server.features.tools.ToolResult;
-import dev.tachyonmcp.core.server.TachyonServer;
-import dev.tachyonmcp.core.server.config.SessionConfig;
-import dev.tachyonmcp.docs.ForkedMain;
-import dev.tachyonmcp.extensions.tasks.TasksExtension;
-import dev.tachyonmcp.testkit.Mcp20251125Client;
-import dev.tachyonmcp.testkit.McpTestServers;
-import java.time.Clock;
-import java.time.Instant;
-import java.util.concurrent.CompletableFuture;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
-import tools.jackson.databind.JsonNode;
 
 class TasksExtensionDocsTest {
 

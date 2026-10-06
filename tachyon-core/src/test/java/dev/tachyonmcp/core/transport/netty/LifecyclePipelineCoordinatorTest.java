@@ -97,7 +97,7 @@ class LifecyclePipelineCoordinatorTest {
 
     @Test
     void interactionContextLifecycleTransitionsViaEvents() {
-        var protocol = Protocols.list().get(0);
+        var protocol = Protocols.list().getFirst();
         channel.attr(INTERACTION_CONTEXT_KEY).set(new DefaultChannelContext(protocol));
 
         var ic = channel.attr(INTERACTION_CONTEXT_KEY).get();

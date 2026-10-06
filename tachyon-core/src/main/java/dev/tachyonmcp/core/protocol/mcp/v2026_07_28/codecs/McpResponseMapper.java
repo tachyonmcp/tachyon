@@ -384,10 +384,10 @@ public final class McpResponseMapper extends dev.tachyonmcp.core.protocol.mcp.v2
      * {@link #taskErrorNode(TaskSnapshot)}.
      */
     private @Nullable JsonNode taskResultNode(TaskSnapshot snapshot) {
-        if (!(snapshot.result() instanceof TaskResult.Completed c)) {
+        if (!(snapshot.result() instanceof TaskResult.Completed(ToolResult result))) {
             return null;
         }
-        return encodeToTree(CallToolResult.class, (CallToolResult) callToolResult(c.result()));
+        return encodeToTree(CallToolResult.class, (CallToolResult) callToolResult(result));
     }
 
     /**
@@ -402,10 +402,10 @@ public final class McpResponseMapper extends dev.tachyonmcp.core.protocol.mcp.v2
 
     /** Inlines a genuine JSON-RPC protocol failure into {@code tasks/get}'s {@code error} field. */
     private @Nullable JsonNode taskErrorNode(TaskSnapshot snapshot) {
-        if (!(snapshot.result() instanceof TaskResult.Failed f)) {
+        if (!(snapshot.result() instanceof TaskResult.Failed(ServerError error))) {
             return null;
         }
-        var mapped = error(f.error());
+        var mapped = error(error);
         var fields = new LinkedHashMap<String, Object>();
         fields.put("code", mapped.code());
         fields.put("message", mapped.message());

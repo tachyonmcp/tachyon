@@ -189,7 +189,6 @@ public abstract class AbstractMcpRequestMapper implements ProtocolRequestMapper 
     }
 
     @Override
-    @SuppressWarnings("deprecation")
     public TaskAwaitResultRequest taskAwaitResult(@Nullable Object params) {
         var node = asObject(params);
         return TaskAwaitResultRequest.builder()

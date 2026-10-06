@@ -1,9 +1,24 @@
 package dev.tachyonmcp.docs.features.tools;
 
+import dev.tachyonmcp.core.server.TachyonServer;
+import dev.tachyonmcp.docs.ForkedMain;
+import dev.tachyonmcp.testkit.McpTestClients;
+import dev.tachyonmcp.testkit.McpTestServers;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import tools.jackson.databind.JsonNode;
+
+import java.io.IOException;
+import java.net.Socket;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.Map;
+
 import static dev.tachyonmcp.docs.ForkedMain.DOCUMENTED_PORT;
 import static dev.tachyonmcp.docs.JsonRpc.items;
 import static dev.tachyonmcp.docs.JsonRpc.named;
-import static dev.tachyonmcp.docs.JsonRpc.names;
 import static dev.tachyonmcp.docs.JsonRpc.post;
 import static dev.tachyonmcp.docs.JsonRpc.request;
 import static dev.tachyonmcp.docs.JsonRpc.result;
@@ -12,21 +27,6 @@ import static dev.tachyonmcp.testkit.McpHttpResponseAssert.assertThatResponse;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
-
-import dev.tachyonmcp.core.server.TachyonServer;
-import dev.tachyonmcp.docs.ForkedMain;
-import dev.tachyonmcp.testkit.McpTestClients;
-import dev.tachyonmcp.testkit.McpTestServers;
-import java.io.IOException;
-import java.net.Socket;
-import java.nio.charset.StandardCharsets;
-import java.time.Duration;
-import java.util.Map;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
-import tools.jackson.databind.JsonNode;
 
 class ToolsDocsTest {
 

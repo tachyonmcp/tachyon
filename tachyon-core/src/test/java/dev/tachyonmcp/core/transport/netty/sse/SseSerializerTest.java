@@ -68,7 +68,7 @@ class SseSerializerTest {
                 "\n\n",
                 "crlf\r\nline",
                 "cr\ronly",
-                "caf\u00e9 \u65e5\u672c",
+                "café 日本",
                 "emoji \ud83d\ude80",
                 "lone \ud83d surrogate",
                 "a\nb\nc\nd\ne"
@@ -76,7 +76,7 @@ class SseSerializerTest {
     void measuredEncodingMatchesPlainEncodingInAnExactlySizedBuffer(String text) {
         // Unpooled: capacity is exactly what was asked for, so growth would show.
         var alloc = new UnpooledByteBufAllocator(false);
-        var event = new SseEvent("12#\u00e9", "m\u00e9ssage", text);
+        var event = new SseEvent("12#é", "méssage", text);
         var measured = SseSerializer.measure(event);
         var plain = SseSerializer.encode(alloc, event);
         var sized = SseSerializer.encode(alloc, event, measured);
@@ -93,13 +93,13 @@ class SseSerializerTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"", "{\"ok\":true}", "caf\u00e9 \u65e5\u672c"})
+    @ValueSource(strings = {"", "{\"ok\":true}", "café 日本"})
     void rawBodyWithoutLineBreaksIsEncodedIntoAnExactlySizedBuffer(String text) {
-        var buf = SseSerializer.encode(
-                new UnpooledByteBufAllocator(false), "3#\u00e9", text.getBytes(StandardCharsets.UTF_8));
+        var buf =
+                SseSerializer.encode(new UnpooledByteBufAllocator(false), "3#é", text.getBytes(StandardCharsets.UTF_8));
         try {
             assertThat(buf.toString(StandardCharsets.UTF_8))
-                    .isEqualTo("id: 3#\u00e9\nevent: message\ndata: " + text + "\n\n");
+                    .isEqualTo("id: 3#é\nevent: message\ndata: " + text + "\n\n");
             assertThat(buf.capacity()).isEqualTo(buf.readableBytes());
         } finally {
             buf.release();

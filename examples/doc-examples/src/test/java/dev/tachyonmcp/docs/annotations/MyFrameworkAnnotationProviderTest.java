@@ -1,12 +1,12 @@
 package dev.tachyonmcp.docs.annotations;
 
+import dev.tachyonmcp.testkit.McpTestServers;
+import org.junit.jupiter.api.Test;
+
 import static dev.tachyonmcp.docs.JsonRpc.names;
 import static dev.tachyonmcp.docs.JsonRpc.result;
 import static dev.tachyonmcp.docs.JsonRpc.text;
 import static org.assertj.core.api.Assertions.assertThat;
-
-import dev.tachyonmcp.testkit.McpTestServers;
-import org.junit.jupiter.api.Test;
 
 class MyFrameworkAnnotationProviderTest {
 

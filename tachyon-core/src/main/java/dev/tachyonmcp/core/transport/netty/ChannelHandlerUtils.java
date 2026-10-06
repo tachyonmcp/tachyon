@@ -130,6 +130,7 @@ public final class ChannelHandlerUtils {
      * @return {@code true} if the message was dropped and the caller must return
      */
     public static boolean dropIfRejected(ChannelHandlerContext ctx, Object msg) {
+        //noinspection PointlessBooleanExpression
         if (!Boolean.TRUE.equals(ctx.channel().attr(REJECTED).get())) {
             return false;
         }
