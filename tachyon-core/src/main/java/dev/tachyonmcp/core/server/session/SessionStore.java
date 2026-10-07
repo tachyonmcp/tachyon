@@ -19,6 +19,10 @@ import java.util.Set;
  * any node until its {@link SessionSnapshot#expiresAt()}. That expiry is an idle TTL, not an
  * absolute revocation deadline: activity on a node that restores the snapshot extends it through
  * {@link #touch}.
+ *
+ * <p>Idle expiry is node-local: the janitor terminates a snapshot only when its node wrote the
+ * current revision or the snapshot's {@link SessionSnapshot#expiresAt()} has passed, so a node that
+ * restored the session keeps serving it.
  */
 @ExperimentalApi(since = "1.0.0-beta.26")
 public interface SessionStore extends AutoCloseable {

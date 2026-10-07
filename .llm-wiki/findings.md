@@ -2,8 +2,8 @@
 title: Findings
 tags: [meta, findings]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/]
-updated: 2026-09-30
-commit: 4b4b6f7e
+updated: 2026-10-07
+commit: 9f004e71
 ---
 
 # 🔎 Findings
@@ -42,3 +42,4 @@ Spotted while reading code. Runtime verification noted per finding. Fixed in cod
 - ⚠️ Generated skills `Skill.resources` is `List<SkillResource>` (config override): schema's `SkillResource[] | "dynamic"` has no ts2java mapping. Fine while registries only publish scanned files; dynamic skills need a union type. `extensions/tachyon-extensions-skills/protocol/skills-2026-07-28_config.json`
 - ⚠️ Legacy waits poll `get` per `pollInterval` each: N waiters ⇒ N/interval connector calls. `TaskEngine#pollUntilTerminal`
 - ⚠️ `responseUndeliverable` node-local: `DELETE` on another node leaves waiter polling until local janitor evicts. `Session.InFlightRequest#sessionClosed`
+- ⚠️ Janitor `find` → `terminate` not atomic: a foreign `touch` landing between them is lost and the other node's session dies. Fix: compare-and-delete `SessionStore#terminate(SessionSnapshot)`. `SessionManager#terminateIfLastWriterOrExpired`

@@ -438,6 +438,9 @@ event-loop threads. Implementations must be thread-safe.
 Store failures answer `500`: a failed `find` on `POST`/`GET` gives "Session lookup failed"; on
 `DELETE`, a failed `find` or `terminate` gives "Session termination failed". A failed `terminate` still closes the local
 session, its SSE connection, and in-flight waiters; idle expiry logs the failure and moves on.
+Idle expiry is local to each node: the janitor closes the idle runtime but terminates the snapshot
+only when this node wrote its current revision or the snapshot has expired. A node that restored
+the session and keeps it active is not cut off by the node it left.
 The snapshot stays restorable on any node until its `expiresAt`. Expiry is an idle TTL, not an
 absolute deadline: activity on a node that restores the snapshot refreshes it through
 `SessionStore.touch`, so an active session can outlast the original TTL after a failed `DELETE`.

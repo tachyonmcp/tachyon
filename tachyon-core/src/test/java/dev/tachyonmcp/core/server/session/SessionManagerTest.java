@@ -347,6 +347,24 @@ class SessionManagerTest {
     }
 
     @Test
+    void sweepTerminatesExpiredSnapshotLastWrittenByAnotherNode() {
+        final var store = new InMemorySessionStore();
+        final var manager = manager(store);
+        final var session = manager.createSession("s1");
+        assertThat(store.touch(session.key(), NOW))
+                .as("another node wrote last, and the snapshot is expired")
+                .isTrue();
+
+        manager.sweep(-1);
+
+        assertThat(session.state()).isEqualTo(SessionState.CLOSED);
+        assertThat(manager.getLocalSession("s1")).isEmpty();
+        assertThat(store.find("s1"))
+                .as("an expired snapshot leaks unless the janitor terminates it")
+                .isEmpty();
+    }
+
+    @Test
     void removeSessionClosesRuntimeWhenSnapshotTerminationFails() {
         final var store = new TrackingSessionStore();
         final var manager = manager(store);

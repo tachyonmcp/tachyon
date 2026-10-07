@@ -3,7 +3,7 @@ title: Sessions
 tags: [concept, session, state]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/runtime/Session.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/session/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/SessionConfig.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultServerBuilder.java, tachyon-api/src/main/java/dev/tachyonmcp/api/server/session/SessionIdGenerator.java]
 updated: 2026-10-07
-commit: abe48397
+commit: 9f004e71
 ---
 
 # 🪪 Sessions
@@ -31,7 +31,7 @@ Verdict: **stateless by default** (`SessionConfig.enabled=false`) — a stateles
 4. `notifications/initialized` → `Session.activate()` CAS `INITIALIZING→ACTIVE` `Session#activate`. Before that only `ping` allowed `McpDispatcher#dispatchTrackedRequestAsync`.
 5. `DELETE` with header → `removeSession` → 200 / 404 `McpOperationHandler#handleDelete`.
 6. Channel close in init phase → `ShutdownStarted` → removal.
-7. Janitor removes `CLOSED` or idle > TTL `SessionManager#sweep`.
+7. Janitor evicts `CLOSED` or idle > TTL locally; terminates the snapshot only if this node wrote last or it expired `SessionManager#sweep`, `SessionManager#terminateIfLastWriterOrExpired`.
 
 ## 💾 Persistence model
 
@@ -40,10 +40,11 @@ Verdict: **stateless by default** (`SessionConfig.enabled=false`) — a stateles
 - `getSession` → local map, else **hydrate** from store (skip + terminate if CLOSED or expired; incompatible protocol version ⇒ empty) `SessionManager`. `getLocalSession` never hits store (used on hot paths: GET SSE, redelivery).
 - Mutations (`activate`, `protocol`, `enableExtension`, `loggingLevel`, `close`) call `onChange` → `persist` → `store.compareAndSet(expected, revision+1)`; lost CAS ⇒ **evict local** (another node owns it) `SessionManager#persist`.
 - `removeSession` + janitor `sweep` → under the per-id lifecycle lock (same lock as hydrate, so a racing lookup can't restore the snapshot being deleted): drop from local map, then `session.close()` **before** `store.terminate`, so a slow store never holds the SSE stream or in-flight waiters open. Close always runs; `closeAndTerminate` throws, never logs: a `terminate` failure wins over a connection-close failure (attached as suppressed), and a close failure alone propagates too. One log per failure, at the caller: DELETE ⇒ 500 + ERROR (`McpOperationHandler`), janitor ⇒ WARN `SessionManager#sweep`, init-phase disconnect cleanup ⇒ WARN `McpHandlerManager#onShutdownStarted`. Snapshot stays restorable on any node until it expires — an idle TTL refreshed by activity via `SessionStore#touch`, not an absolute revocation deadline [SessionManager#closeAndTerminate](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/session/SessionManager.java), [SessionManager#removeSession](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/session/SessionManager.java), [McpHandlerManager#onShutdownStarted](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpHandlerManager.java), `SessionStore`. E2E: `SessionTerminationFailureTest` (DELETE ⇒ 500 + `Connection: close`, SSE stream ends, retry ⇒ 200).
+- Janitor ≠ DELETE: idle expiry is local, so after `close()` it calls `terminateIfLastWriterOrExpired` — `find`, then `terminate` only when the current snapshot has the same key and either the revision equals `Session#persistedSnapshot` (no other node wrote) or `expiresAt` ≤ `clock` (expired anyway). Otherwise local eviction only: a node that hydrated and keeps touching the snapshot keeps serving. DELETE terminates unconditionally. ⚠️ `find`→`terminate` not atomic (see findings) `SessionManager#removeIfCurrent`, `SessionManager#closeAndTerminate`. E2E: `SessionJanitorForeignSnapshotTest` (two nodes, shared store).
 - `touch()` → `onTouch` → async expiry refresh only when within `ttl/2` of `expiresAt`, deduped per key, on persistence executor `SessionManager`.
 - Store choice is resolved once per `build()` from the published `ServerConfig`, so `TachyonServer#config` exposes the very stores the server writes to `DefaultServerBuilder#build`, `SessionConfig#sessionStoreOrDefault`.
 - ⚠️ Stateless ⇒ `NoopSessionStore`: `create` mints a snapshot it never keeps, `find` is always empty, and `compareAndSet`/`touch`/`terminate` answer **`true`** — "accepted, nothing to persist". A `false` would read as lost ownership and evict the local session on its first state change `SessionManager#persist`.
-- In-memory store `InMemorySessionStore` — `ConcurrentHashMap` keyed by session id. CAS requires same key + higher revision `InMemorySessionStore#compareAndSet`. `touch`/`terminate` are lock-free `get` → `replace`/`remove` loops: replacement snapshot built outside the map's bin monitor, lost race re-reads and retries `InMemorySessionStore#touch`, `InMemorySessionStore#terminate`. JMH: `tachyon-core/src/test/java/dev/tachyonmcp/core/server/session/InMemorySessionStoreBenchmark.java` (`make jmh`). Manager create → remove cycle: `SessionManagerBenchmark#createAndRemove`.
+- In-memory store `InMemorySessionStore` — `ConcurrentHashMap` keyed by session id. CAS requires same key + higher revision `InMemorySessionStore#compareAndSet`. `touch`/`terminate` are lock-free `get` → `replace`/`remove` loops: replacement snapshot built outside the map's bin monitor, lost race re-reads and retries `InMemorySessionStore#touch`, `InMemorySessionStore#terminate`. JMH: `tachyon-core/src/test/java/dev/tachyonmcp/core/server/session/InMemorySessionStoreBenchmark.java` (`make jmh`). Manager create → remove cycle: `SessionManagerBenchmark#createAndRemove`; create → janitor expiry: `SessionManagerBenchmark#createAndExpire`.
 
 ## 📚 Event log
 

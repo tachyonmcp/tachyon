@@ -20,7 +20,7 @@ import org.openjdk.jmh.annotations.Warmup;
 /**
  * Session lifecycle through {@link SessionManager} over an {@link InMemorySessionStore}. Removal
  * needs a live generation, so each operation creates one and removes it; every worker thread owns
- * its own session ID.
+ * its own session ID. Idle expiry sweeps every local session, so each worker sweeps its own manager.
  */
 @BenchmarkMode(Mode.Throughput)
 @OutputTimeUnit(TimeUnit.SECONDS)
@@ -48,9 +48,31 @@ public class SessionManagerBenchmark {
         private final String sessionId = UUID.randomUUID().toString();
     }
 
+    @State(Scope.Thread)
+    public static class OwnedManager {
+        private final String sessionId = UUID.randomUUID().toString();
+        private SessionManager manager;
+
+        @Setup(Level.Trial)
+        public void setUp() {
+            manager = new SessionManager(new InMemorySessionStore());
+        }
+
+        @TearDown(Level.Trial)
+        public void tearDown() {
+            manager.close();
+        }
+    }
+
     @Benchmark
     public void createAndRemove(OwnedId owned) {
         manager.createSession(owned.sessionId);
         manager.removeSession(owned.sessionId);
+    }
+
+    @Benchmark
+    public void createAndExpire(OwnedManager owned) {
+        owned.manager.createSession(owned.sessionId);
+        owned.manager.sweep(-1);
     }
 }
