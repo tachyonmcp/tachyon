@@ -19,6 +19,9 @@ import java.net.http.HttpResponse;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
@@ -26,9 +29,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * A {@link SessionStore} whose {@code terminate} fails must not leave the local session alive:
- * {@code DELETE} answers {@code 500} and closes the connection, the session's own SSE stream ends,
- * and the snapshot stays in the store until a retry (or its TTL) removes it.
+ * A {@link SessionStore} whose {@code terminate} fails or stalls must not keep the local session
+ * alive: the session's own SSE stream ends before the store answers. A failed {@code terminate} makes
+ * {@code DELETE} answer {@code 500} and close the connection, and the snapshot stays in the store
+ * until a retry (or its TTL) removes it.
  */
 class SessionTerminationFailureTest {
 
@@ -56,22 +60,7 @@ class SessionTerminationFailureTest {
         try (var client = new Mcp20251125Client(server.port());
                 var http = HttpClient.newHttpClient()) {
             final var sessionId = client.initialize();
-            final var stream = http.send(
-                    HttpRequest.newBuilder(URI.create("http://localhost:" + server.port() + "/mcp"))
-                            .header("MCP-Session-Id", sessionId)
-                            .header("MCP-Protocol-Version", Mcp20251125Client.PROTOCOL_VERSION)
-                            .header("Accept", "text/event-stream")
-                            .GET()
-                            .build(),
-                    HttpResponse.BodyHandlers.ofInputStream());
-            assertThat(stream.statusCode()).isEqualTo(200);
-            final var streamEnd = CompletableFuture.supplyAsync(() -> {
-                try (var body = stream.body()) {
-                    return body.readAllBytes();
-                } catch (IOException e) {
-                    return new byte[0];
-                }
-            });
+            final var streamEnd = openSessionStream(http, sessionId);
             assertThat(streamEnd).isNotDone();
             assertThat(engine.getLocalSession(sessionId)).isPresent();
             store.failTerminate.set(true);
@@ -94,10 +83,71 @@ class SessionTerminationFailureTest {
         }
     }
 
+    @Test
+    void deleteEndsSessionStreamBeforeSlowTerminateReturns() throws Exception {
+        try (var client = new Mcp20251125Client(server.port());
+                var http = HttpClient.newHttpClient();
+                var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            final var sessionId = client.initialize();
+            final var streamEnd = openSessionStream(http, sessionId);
+            assertThat(streamEnd).isNotDone();
+            store.holdTerminate();
+            try {
+                final var delete = executor.submit(() -> client.delete(sessionId));
+                assertThat(store.terminateEntered.await(5, TimeUnit.SECONDS)).isTrue();
+
+                assertThat(streamEnd)
+                        .as("a stalled store must not hold the session's SSE stream open")
+                        .succeedsWithin(ofSeconds(5));
+                assertThat(delete).isNotDone();
+
+                store.releaseTerminate();
+
+                assertThat(delete)
+                        .succeedsWithin(ofSeconds(5))
+                        .satisfies(response -> assertThat(response.statusCode()).isEqualTo(200));
+            } finally {
+                store.releaseTerminate();
+            }
+            assertThat(store.terminateCount.get()).isOne();
+            assertThat(store.find(sessionId)).isEmpty();
+            assertThat(client.ping(sessionId, 1).statusCode()).isEqualTo(404);
+        }
+    }
+
+    private CompletableFuture<byte[]> openSessionStream(HttpClient http, String sessionId) throws Exception {
+        final var stream = http.send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + server.port() + "/mcp"))
+                        .header("MCP-Session-Id", sessionId)
+                        .header("MCP-Protocol-Version", Mcp20251125Client.PROTOCOL_VERSION)
+                        .header("Accept", "text/event-stream")
+                        .GET()
+                        .build(),
+                HttpResponse.BodyHandlers.ofInputStream());
+        assertThat(stream.statusCode()).isEqualTo(200);
+        return CompletableFuture.supplyAsync(() -> {
+            try (var body = stream.body()) {
+                return body.readAllBytes();
+            } catch (IOException e) {
+                return new byte[0];
+            }
+        });
+    }
+
     private static final class FailingTerminateStore implements SessionStore {
         private final InMemorySessionStore delegate = new InMemorySessionStore();
         final AtomicBoolean failTerminate = new AtomicBoolean();
         final AtomicInteger terminateCount = new AtomicInteger();
+        final CountDownLatch terminateEntered = new CountDownLatch(1);
+        private volatile CountDownLatch terminateGate = new CountDownLatch(0);
+
+        void holdTerminate() {
+            terminateGate = new CountDownLatch(1);
+        }
+
+        void releaseTerminate() {
+            terminateGate.countDown();
+        }
 
         @Override
         public SessionSnapshot create(SessionKey key, Instant expiresAt) {
@@ -122,6 +172,15 @@ class SessionTerminationFailureTest {
         @Override
         public boolean terminate(SessionKey key) {
             terminateCount.incrementAndGet();
+            terminateEntered.countDown();
+            try {
+                if (!terminateGate.await(5, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("terminate gate not released");
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(e);
+            }
             if (failTerminate.get()) {
                 throw new IllegalStateException("terminate failed");
             }
