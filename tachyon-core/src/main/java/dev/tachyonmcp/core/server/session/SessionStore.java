@@ -16,8 +16,9 @@ import java.util.Set;
  * <p>A {@link RuntimeException} from {@link #terminate} never keeps the local session alive: Tachyon
  * closes its connection and in-flight waiters anyway. Explicit removal (HTTP {@code DELETE}) then
  * answers {@code 500}; idle expiry logs the failure and moves on. The snapshot stays restorable on
- * any node until its {@link SessionSnapshot#expiresAt()}, so a failed termination is bounded by the
- * session TTL.
+ * any node until its {@link SessionSnapshot#expiresAt()}. That expiry is an idle TTL, not an
+ * absolute revocation deadline: activity on a node that restores the snapshot extends it through
+ * {@link #touch}.
  */
 @ExperimentalApi(since = "1.0.0-beta.26")
 public interface SessionStore extends AutoCloseable {
