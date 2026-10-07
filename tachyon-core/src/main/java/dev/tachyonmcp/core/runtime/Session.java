@@ -314,9 +314,12 @@ public class Session {
                 || state.compareAndSet(SessionState.INITIALIZING, SessionState.CLOSED);
         if (closed) {
             var conn = connection.getAndSet(SseConnection.noop());
-            conn.close();
-            inFlightRequests.forEach(request -> request.sessionClosed.complete(null));
-            onChange.accept(this);
+            try {
+                conn.close();
+            } finally {
+                inFlightRequests.forEach(request -> request.sessionClosed.complete(null));
+                onChange.accept(this);
+            }
         }
         return closed;
     }

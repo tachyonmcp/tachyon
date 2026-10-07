@@ -2,8 +2,8 @@
 title: Sessions
 tags: [concept, session, state]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/runtime/Session.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/session/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/SessionConfig.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultServerBuilder.java, tachyon-api/src/main/java/dev/tachyonmcp/api/server/session/SessionIdGenerator.java]
-updated: 2026-10-06
-commit: 279ed72e
+updated: 2026-10-07
+commit: 8510346e
 ---
 
 # 🪪 Sessions
@@ -39,7 +39,7 @@ Verdict: **stateless by default** (`SessionConfig.enabled=false`) — a stateles
 - `createSession` → `store.create(newKey, expiresAt)` under per-id `LifecycleLock` (ref-counted `ReentrantLock` map); replaced local session closed `SessionManager#createSession`, `SessionManager`.
 - `getSession` → local map, else **hydrate** from store (skip + terminate if CLOSED or expired; incompatible protocol version ⇒ empty) `SessionManager`. `getLocalSession` never hits store (used on hot paths: GET SSE, redelivery).
 - Mutations (`activate`, `protocol`, `enableExtension`, `loggingLevel`, `close`) call `onChange` → `persist` → `store.compareAndSet(expected, revision+1)`; lost CAS ⇒ **evict local** (another node owns it) `SessionManager#persist`.
-- `removeSession` + janitor `sweep` → drop from local map, then `store.terminate` + `session.close()`. Close always runs; `terminate` failure logged WARN. `removeSession` rethrows it (DELETE ⇒ 500); janitor swallows it; shutdown cleanup logs DEBUG. Snapshot stays restorable on any node until TTL [SessionManager#terminateAndClose](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/session/SessionManager.java), [SessionManager#removeSession](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/session/SessionManager.java), [McpHandlerManager#onShutdownStarted](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpHandlerManager.java), `SessionStore`. E2E: `SessionTerminationFailureTest` (DELETE ⇒ 500 + `Connection: close`, SSE stream ends, retry ⇒ 200).
+- `removeSession` + janitor `sweep` → drop from local map, then `store.terminate` + `session.close()`. Close always runs; `terminate` failure logged WARN and wins over a connection-close failure (attached as suppressed). `removeSession` rethrows it (DELETE ⇒ 500); a close failure alone is rethrown only when terminate succeeded; janitor swallows both; shutdown cleanup logs DEBUG. Snapshot stays restorable on any node until TTL [SessionManager#terminateAndClose](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/session/SessionManager.java), [SessionManager#removeSession](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/session/SessionManager.java), [McpHandlerManager#onShutdownStarted](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpHandlerManager.java), `SessionStore`. E2E: `SessionTerminationFailureTest` (DELETE ⇒ 500 + `Connection: close`, SSE stream ends, retry ⇒ 200).
 - `touch()` → `onTouch` → async expiry refresh only when within `ttl/2` of `expiresAt`, deduped per key, on persistence executor `SessionManager`.
 - Store choice is resolved once per `build()` from the published `ServerConfig`, so `TachyonServer#config` exposes the very stores the server writes to `DefaultServerBuilder#build`, `SessionConfig#sessionStoreOrDefault`.
 - ⚠️ Stateless ⇒ `NoopSessionStore`: `create` mints a snapshot it never keeps, `find` is always empty, and `compareAndSet`/`touch`/`terminate` answer **`true`** — "accepted, nothing to persist". A `false` would read as lost ownership and evict the local session on its first state change `SessionManager#persist`.
@@ -58,7 +58,7 @@ Stateless ⇒ `NoopSessionEventStore`: `append` discards, `drain` returns the cu
 - Defaults: TTL **30s**, janitor **5s** `SessionConfig#DEFAULT_SESSION_TTL`; `SessionConfig` compact ctor rejects session options when disabled `SessionConfig#STATELESS`.
 - Liveness bumped by: any request (`session.touch()` in dispatcher), any outbound byte (`SessionTouchHandler`), SSE heartbeat (15s default) — so open GET stream keeps session alive.
 - In-flight request ⇒ tracked from dispatch to completion: dispatcher `Session#attachRequest` per request ⇒ `Session.InFlightRequest`. Connected ⇒ not idle; its stream's close ⇒ `InFlightRequest#disconnected` (touches); completion ⇒ `InFlightRequest#completed` (untracks). Janitor expires only `Session#idle` sessions `SessionManager#sweep`. A disconnected waiter never pins its session.
-- `close` (local node only) completes each tracked `InFlightRequest#sessionClosed` ⇒ `InteractionContext#responseUndeliverable`. Registrations die with the request: long sessions accumulate nothing.
+- `close` (local node only) completes each tracked `InFlightRequest#sessionClosed` ⇒ `InteractionContext#responseUndeliverable`, and fires `onChange`, even when the connection's `close` throws [Session#close](../../tachyon-core/src/main/java/dev/tachyonmcp/core/runtime/Session.java). Registrations die with the request: long sessions accumulate nothing.
 - `DefaultTachyonServer` passes `config.runtime().clock()` + executor as persistence executor `DefaultTachyonServer#DefaultTachyonServer`.
 
 ## 📨 Server → client

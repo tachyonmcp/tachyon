@@ -185,15 +185,24 @@ public final class SessionManager implements AutoCloseable {
     }
 
     private @Nullable RuntimeException terminateAndClose(Session session) {
+        RuntimeException failure = null;
         try {
             store.terminate(session.key());
-            return null;
         } catch (RuntimeException e) {
-            logger.warn("Failed to terminate session snapshot: {}", session.id(), e);
-            return e;
-        } finally {
-            session.close();
+            failure = e;
         }
+        try {
+            session.close();
+        } catch (RuntimeException closeFailure) {
+            if (failure == null) {
+                throw closeFailure;
+            }
+            failure.addSuppressed(closeFailure);
+        }
+        if (failure != null) {
+            logger.warn("Failed to terminate session snapshot: {}", session.id(), failure);
+        }
+        return failure;
     }
 
     private Session runtime(SessionSnapshot snapshot, SseConnection connection) {

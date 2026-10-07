@@ -386,6 +386,45 @@ class SessionManagerTest {
         assertThat(manager.allSessions()).isEmpty();
     }
 
+    @Test
+    void removeSessionKeepsTerminationFailureWhenConnectionCloseAlsoFails() {
+        final var store = new TrackingSessionStore();
+        final var manager = manager(store);
+        final var closeFailure = new IllegalStateException("close failed");
+        final var session = manager.createSession("s1", new TestConnection(() -> {
+            throw closeFailure;
+        }));
+        final var request = session.attachRequest();
+        store.armTerminateFailure();
+
+        assertThatThrownBy(() -> manager.removeSession("s1"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("terminate failed")
+                .hasSuppressedException(closeFailure);
+
+        assertThat(session.state()).isEqualTo(SessionState.CLOSED);
+        assertThat(request.sessionClosed()).isCompleted();
+        assertThat(manager.getLocalSession("s1")).isEmpty();
+    }
+
+    @Test
+    void removeSessionThrowsConnectionCloseFailureWhenTerminationSucceeds() {
+        final var store = new TrackingSessionStore();
+        final var manager = manager(store);
+        final var closeFailure = new IllegalStateException("close failed");
+        final var session = manager.createSession("s1", new TestConnection(() -> {
+            throw closeFailure;
+        }));
+        final var request = session.attachRequest();
+
+        assertThatThrownBy(() -> manager.removeSession("s1")).isSameAs(closeFailure);
+
+        assertThat(store.terminateCount()).isOne();
+        assertThat(session.state()).isEqualTo(SessionState.CLOSED);
+        assertThat(request.sessionClosed()).isCompleted();
+        assertThat(manager.getLocalSession("s1")).isEmpty();
+    }
+
     private static SessionManager manager(SessionStore store) {
         return new SessionManager(store, Clock.fixed(NOW, ZoneOffset.UTC), Duration.ofSeconds(30));
     }
