@@ -461,6 +461,42 @@ class SessionManagerTest {
         assertThat(manager.allSessions()).isEmpty();
     }
 
+    // DELETE's ordering is covered end to end by SessionTerminationFailureTest; the janitor has no client-driven
+    // trigger.
+    @Test
+    void sweepClosesRuntimeBeforeCallingStore() {
+        final var store = new TrackingSessionStore();
+        final var manager = manager(store);
+        final var connectionClosed = new AtomicBoolean();
+        final var session = manager.createSession("s1", new TestConnection(() -> connectionClosed.set(true)));
+        final var request = session.attachRequest();
+        request.disconnected();
+        final var stateAtTerminate = new AtomicReference<SessionState>();
+        final var connectionClosedAtTerminate = new AtomicBoolean();
+        final var waiterReleasedAtTerminate = new AtomicBoolean();
+        store.onTerminate(() -> {
+            stateAtTerminate.set(session.state());
+            connectionClosedAtTerminate.set(connectionClosed.get());
+            waiterReleasedAtTerminate.set(
+                    request.sessionClosed().toCompletableFuture().isDone());
+        });
+
+        manager.sweep(-1);
+
+        assertThat(store.terminateCount()).isOne();
+        assertThat(stateAtTerminate)
+                .as("a slow store must not hold the session open")
+                .hasValue(SessionState.CLOSED);
+        assertThat(connectionClosedAtTerminate)
+                .as("SSE stream closed before store I/O")
+                .isTrue();
+        assertThat(waiterReleasedAtTerminate)
+                .as("in-flight waiters released before store I/O")
+                .isTrue();
+        assertThat(store.find("s1")).isEmpty();
+        assertThat(manager.allSessions()).isEmpty();
+    }
+
     private static SessionManager manager(SessionStore store) {
         return new SessionManager(store, Clock.fixed(NOW, ZoneOffset.UTC), Duration.ofSeconds(30));
     }
@@ -486,6 +522,7 @@ class SessionManagerTest {
         private volatile boolean trackFinds;
         private volatile boolean failTerminate;
         private volatile boolean holdTerminate;
+        private volatile Runnable onTerminate = () -> {};
         private final CountDownLatch terminateEntered = new CountDownLatch(1);
         private final CountDownLatch findDuringTerminate = new CountDownLatch(1);
 
@@ -550,6 +587,7 @@ class SessionManagerTest {
         @Override
         public boolean terminate(SessionKey key) {
             terminateCount.incrementAndGet();
+            onTerminate.run();
             if (holdTerminate) {
                 terminateEntered.countDown();
                 await(findDuringTerminate, 250, TimeUnit.MILLISECONDS);
@@ -572,6 +610,10 @@ class SessionManagerTest {
 
         void armTerminateFailure() {
             failTerminate = true;
+        }
+
+        void onTerminate(Runnable action) {
+            onTerminate = action;
         }
 
         void armTerminateHold() {

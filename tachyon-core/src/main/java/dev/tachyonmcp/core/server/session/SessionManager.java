@@ -162,7 +162,7 @@ public final class SessionManager implements AutoCloseable {
                 store.find(sessionId).ifPresent(snapshot -> store.terminate(snapshot.key()));
                 return;
             }
-            terminateAndClose(local);
+            closeAndTerminate(local);
             logger.info("Session removed: {}", sessionId);
         });
     }
@@ -204,23 +204,33 @@ public final class SessionManager implements AutoCloseable {
     private void removeIfCurrent(Session expected) {
         withLifecycleLock(expected.id(), () -> {
             if (sessions.remove(expected.id(), expected)) {
-                terminateAndClose(expected);
+                closeAndTerminate(expected);
             }
         });
     }
 
-    private void terminateAndClose(Session session) {
+    /**
+     * Closes before terminating, so a slow store never holds the connection or in-flight waiters
+     * open. A terminate failure wins; a close failure is attached to it, or thrown alone.
+     */
+    private void closeAndTerminate(Session session) {
+        RuntimeException closeFailure = null;
+        try {
+            session.close();
+        } catch (RuntimeException e) {
+            closeFailure = e;
+        }
         try {
             store.terminate(session.key());
         } catch (RuntimeException failure) {
-            try {
-                session.close();
-            } catch (RuntimeException closeFailure) {
+            if (closeFailure != null) {
                 failure.addSuppressed(closeFailure);
             }
             throw failure;
         }
-        session.close();
+        if (closeFailure != null) {
+            throw closeFailure;
+        }
     }
 
     private Session runtime(SessionSnapshot snapshot, SseConnection connection) {
