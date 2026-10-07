@@ -53,7 +53,7 @@ public class McpHandlerManager implements ProtocolHandlerManager {
                     try {
                         server.removeSession(sessionId);
                     } catch (RuntimeException e) {
-                        logger.debug("Session cleanup failed during server shutdown: {}", sessionId, e);
+                        logger.warn("Session cleanup failed: {}", sessionId, e);
                     }
                 });
             } catch (RejectedExecutionException e) {

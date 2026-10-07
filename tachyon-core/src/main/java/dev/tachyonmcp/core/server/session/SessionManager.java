@@ -22,7 +22,9 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/** Coordinates process-local session runtimes with immutable persisted snapshots. */
+/**
+ * Coordinates process-local session runtimes with immutable persisted snapshots.
+ */
 @InternalApi
 public final class SessionManager implements AutoCloseable {
 
@@ -37,17 +39,23 @@ public final class SessionManager implements AutoCloseable {
     private volatile Duration expiryRefreshMargin;
     private @Nullable AbstractJanitor janitor;
 
-    /** Creates a manager using the system clock and a five-minute snapshot TTL. */
+    /**
+     * Creates a manager using the system clock and a five-minute snapshot TTL.
+     */
     public SessionManager(SessionStore store) {
         this(store, Clock.systemUTC(), Duration.ofMinutes(5), Runnable::run);
     }
 
-    /** Creates a manager with explicit time sources for deterministic lifecycle handling. */
+    /**
+     * Creates a manager with explicit time sources for deterministic lifecycle handling.
+     */
     public SessionManager(SessionStore store, Clock clock, Duration ttl) {
         this(store, clock, ttl, Runnable::run);
     }
 
-    /** Creates a manager that delegates expiry refreshes to the supplied executor. */
+    /**
+     * Creates a manager that delegates expiry refreshes to the supplied executor.
+     */
     public SessionManager(SessionStore store, Clock clock, Duration ttl, Executor persistenceExecutor) {
         this.store = store;
         this.clock = clock;
@@ -56,12 +64,16 @@ public final class SessionManager implements AutoCloseable {
         this.persistenceExecutor = persistenceExecutor;
     }
 
-    /** Creates a session with no initial connection. */
+    /**
+     * Creates a session with no initial connection.
+     */
     public Session createSession(String sessionId) {
         return createSession(sessionId, SseConnection.noop());
     }
 
-    /** Creates a new persisted generation with the given process-local SSE connection. */
+    /**
+     * Creates a new persisted generation with the given process-local SSE connection.
+     */
     public Session createSession(String sessionId, SseConnection connection) {
         final var creation = createAndInstall(sessionId, connection);
         final var previous = creation.replaced();
@@ -73,7 +85,9 @@ public final class SessionManager implements AutoCloseable {
         return creation.created();
     }
 
-    /** Returns the local runtime, reconstructing it from a non-expired snapshot when absent. */
+    /**
+     * Returns the local runtime, reconstructing it from a non-expired snapshot when absent.
+     */
     public Optional<Session> getSession(@Nullable String sessionId) {
         if (sessionId == null) {
             return Optional.empty();
@@ -85,7 +99,9 @@ public final class SessionManager implements AutoCloseable {
         return hydrate(sessionId);
     }
 
-    /** Returns the process-local runtime without consulting the snapshot store. */
+    /**
+     * Returns the process-local runtime without consulting the snapshot store.
+     */
     public Optional<Session> getLocalSession(@Nullable String sessionId) {
         return Optional.ofNullable(sessionId == null ? null : sessions.get(sessionId));
     }
@@ -129,26 +145,31 @@ public final class SessionManager implements AutoCloseable {
         return Optional.of(hydrated);
     }
 
-    /** Returns all process-local runtime sessions. */
+    /**
+     * Returns all process-local runtime sessions.
+     */
     public Collection<Session> allSessions() {
         return sessions.values();
     }
 
-    /** Removes and closes the current generation for the session ID. */
+    /**
+     * Removes and closes the current generation for the session ID.
+     */
     public void removeSession(String sessionId) {
-        final var local = sessions.remove(sessionId);
-        if (local != null) {
-            final var failure = terminateAndClose(local);
-            logger.info("Session removed: {}", sessionId);
-            if (failure != null) {
-                throw failure;
+        withLifecycleLock(sessionId, () -> {
+            final var local = sessions.remove(sessionId);
+            if (local == null) {
+                store.find(sessionId).ifPresent(snapshot -> store.terminate(snapshot.key()));
+                return;
             }
-            return;
-        }
-        store.find(sessionId).ifPresent(snapshot -> store.terminate(snapshot.key()));
+            terminateAndClose(local);
+            logger.info("Session removed: {}", sessionId);
+        });
     }
 
-    /** Starts the background janitor that closes expired sessions. */
+    /**
+     * Starts the background janitor that closes expired sessions.
+     */
     public void startJanitor(Duration ttl, Duration interval) {
         this.ttl = ttl;
         this.expiryRefreshMargin = ttl.dividedBy(2);
@@ -163,7 +184,9 @@ public final class SessionManager implements AutoCloseable {
         logger.debug("Session janitor started (interval={}ms, ttl={}ms)", interval.toMillis(), ttlNanos / 1_000_000);
     }
 
-    /** One janitor pass: closes and evicts local sessions that are closed, or idle past the TTL with no attached request. */
+    /**
+     * One janitor pass: closes and evicts local sessions that are closed, or idle past the TTL with no attached request.
+     */
     void sweep(long ttlNanos) {
         var now = System.nanoTime();
         for (var session : sessions.values()) {
@@ -179,30 +202,25 @@ public final class SessionManager implements AutoCloseable {
     }
 
     private void removeIfCurrent(Session expected) {
-        if (sessions.remove(expected.id(), expected)) {
-            terminateAndClose(expected);
-        }
+        withLifecycleLock(expected.id(), () -> {
+            if (sessions.remove(expected.id(), expected)) {
+                terminateAndClose(expected);
+            }
+        });
     }
 
-    private @Nullable RuntimeException terminateAndClose(Session session) {
-        RuntimeException failure = null;
+    private void terminateAndClose(Session session) {
         try {
             store.terminate(session.key());
-        } catch (RuntimeException e) {
-            failure = e;
-        }
-        try {
-            session.close();
-        } catch (RuntimeException closeFailure) {
-            if (failure == null) {
-                throw closeFailure;
+        } catch (RuntimeException failure) {
+            try {
+                session.close();
+            } catch (RuntimeException closeFailure) {
+                failure.addSuppressed(closeFailure);
             }
-            failure.addSuppressed(closeFailure);
+            throw failure;
         }
-        if (failure != null) {
-            logger.warn("Failed to terminate session snapshot: {}", session.id(), failure);
-        }
-        return failure;
+        session.close();
     }
 
     private Session runtime(SessionSnapshot snapshot, SseConnection connection) {
@@ -219,10 +237,10 @@ public final class SessionManager implements AutoCloseable {
     }
 
     /**
-     * Runs {@code action} while holding the session's lifecycle lock, so creation, snapshot
-     * persistence and expiry refreshes for one id never interleave. The lock is private to this
-     * manager and reentrant: {@link #evictLocal(Session)} closes the session from inside the lock,
-     * which re-enters through {@link #persist(Session)}.
+     * Runs {@code action} while holding the session's lifecycle lock, so creation, hydration,
+     * removal, snapshot persistence and expiry refreshes for one id never interleave. The lock is
+     * private to this manager and reentrant: removal and {@link #evictLocal(Session)} close the
+     * session from inside the lock, which re-enters through {@link #persist(Session)}.
      */
     private <T> T withLifecycleLock(String sessionId, Supplier<T> action) {
         final var lifecycleLock = acquireLifecycleLock(sessionId);

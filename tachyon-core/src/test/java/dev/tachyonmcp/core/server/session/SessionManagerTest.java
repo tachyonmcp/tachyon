@@ -24,6 +24,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 
 class SessionManagerTest {
@@ -425,6 +426,41 @@ class SessionManagerTest {
         assertThat(manager.getLocalSession("s1")).isEmpty();
     }
 
+    @Test
+    void removeSessionDoesNotLetConcurrentLookupRestoreTerminatingSnapshot() throws Exception {
+        assertLookupDuringTerminationFindsNothing(manager -> manager.removeSession("s1"));
+    }
+
+    @Test
+    void sweepDoesNotLetConcurrentLookupRestoreTerminatingSnapshot() throws Exception {
+        assertLookupDuringTerminationFindsNothing(manager -> manager.sweep(-1));
+    }
+
+    private static void assertLookupDuringTerminationFindsNothing(Consumer<SessionManager> termination)
+            throws Exception {
+        final var store = new TrackingSessionStore();
+        final var manager = manager(store);
+        final var session = manager.createSession("s1");
+        store.armTerminateHold();
+
+        try (final var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            final var terminating = executor.submit(() -> termination.accept(manager));
+            assertThat(store.awaitTerminate()).isTrue();
+            final var lookup = executor.submit(() -> manager.getSession("s1"));
+
+            terminating.get(2, TimeUnit.SECONDS);
+            assertThat(lookup.get(2, TimeUnit.SECONDS))
+                    .as("a lookup racing termination must not restore the snapshot being deleted")
+                    .isEmpty();
+        }
+
+        assertThat(session.state()).isEqualTo(SessionState.CLOSED);
+        assertThat(store.terminateCount()).isOne();
+        assertThat(store.find("s1")).isEmpty();
+        assertThat(manager.getLocalSession("s1")).isEmpty();
+        assertThat(manager.allSessions()).isEmpty();
+    }
+
     private static SessionManager manager(SessionStore store) {
         return new SessionManager(store, Clock.fixed(NOW, ZoneOffset.UTC), Duration.ofSeconds(30));
     }
@@ -449,6 +485,9 @@ class SessionManagerTest {
         private volatile boolean trackCreates;
         private volatile boolean trackFinds;
         private volatile boolean failTerminate;
+        private volatile boolean holdTerminate;
+        private final CountDownLatch terminateEntered = new CountDownLatch(1);
+        private final CountDownLatch findDuringTerminate = new CountDownLatch(1);
 
         @Override
         public SessionSnapshot create(SessionKey key, Instant expiresAt) {
@@ -474,6 +513,9 @@ class SessionManagerTest {
         @Override
         public Optional<SessionSnapshot> find(String sessionId) {
             findCount.incrementAndGet();
+            if (holdTerminate) {
+                findDuringTerminate.countDown();
+            }
             if (!trackFinds) {
                 return delegate.find(sessionId);
             }
@@ -508,6 +550,10 @@ class SessionManagerTest {
         @Override
         public boolean terminate(SessionKey key) {
             terminateCount.incrementAndGet();
+            if (holdTerminate) {
+                terminateEntered.countDown();
+                await(findDuringTerminate, 250, TimeUnit.MILLISECONDS);
+            }
             if (failTerminate) {
                 throw new IllegalStateException("terminate failed");
             }
@@ -526,6 +572,14 @@ class SessionManagerTest {
 
         void armTerminateFailure() {
             failTerminate = true;
+        }
+
+        void armTerminateHold() {
+            holdTerminate = true;
+        }
+
+        boolean awaitTerminate() throws InterruptedException {
+            return terminateEntered.await(2, TimeUnit.SECONDS);
         }
 
         void armFindTracking() {
