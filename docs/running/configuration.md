@@ -433,6 +433,15 @@ only the matching generation. Store implementations must make these operations t
 Operations execute synchronously and may perform I/O. Tachyon invokes them outside transport
 event-loop threads. Implementations must be thread-safe.
 
+Store failures answer `500`: a failed `find` on `POST`/`GET` gives "Session lookup failed"; on
+`DELETE`, a failed `find` or `terminate` gives "Session termination failed". A failed `terminate` still closes the local
+session, its SSE connection, and in-flight waiters; idle expiry logs the failure and moves on.
+The snapshot stays restorable on any node until its `expiresAt`. Expiry is an idle TTL, not an
+absolute deadline: activity on a node that restores the snapshot refreshes it through
+`SessionStore.touch`, so an active session can outlast the original TTL after a failed `DELETE`.
+Sessions apply to protocol versions up to `2025-11-25`;
+`2026-07-28` has no protocol-level sessions.
+
 ## Runtime
 
 Configured via `runtime { }` / `RuntimeConfig.Builder`.

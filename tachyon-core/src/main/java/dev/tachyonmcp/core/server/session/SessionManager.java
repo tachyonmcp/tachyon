@@ -138,9 +138,11 @@ public final class SessionManager implements AutoCloseable {
     public void removeSession(String sessionId) {
         final var local = sessions.remove(sessionId);
         if (local != null) {
-            store.terminate(local.key());
-            local.close();
+            final var failure = terminateAndClose(local);
             logger.info("Session removed: {}", sessionId);
+            if (failure != null) {
+                throw failure;
+            }
             return;
         }
         store.find(sessionId).ifPresent(snapshot -> store.terminate(snapshot.key()));
@@ -178,9 +180,29 @@ public final class SessionManager implements AutoCloseable {
 
     private void removeIfCurrent(Session expected) {
         if (sessions.remove(expected.id(), expected)) {
-            store.terminate(expected.key());
-            expected.close();
+            terminateAndClose(expected);
         }
+    }
+
+    private @Nullable RuntimeException terminateAndClose(Session session) {
+        RuntimeException failure = null;
+        try {
+            store.terminate(session.key());
+        } catch (RuntimeException e) {
+            failure = e;
+        }
+        try {
+            session.close();
+        } catch (RuntimeException closeFailure) {
+            if (failure == null) {
+                throw closeFailure;
+            }
+            failure.addSuppressed(closeFailure);
+        }
+        if (failure != null) {
+            logger.warn("Failed to terminate session snapshot: {}", session.id(), failure);
+        }
+        return failure;
     }
 
     private Session runtime(SessionSnapshot snapshot, SseConnection connection) {
