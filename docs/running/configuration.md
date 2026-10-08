@@ -3,6 +3,8 @@ title: "Configuration"
 weight: 30
 sidebar_order: 30
 toc: true
+aliases:
+  - /docs/configuraiton/
 description: |-
   Configure Tachyon servers: network settings, native I/O engines, sessions, CORS, keep-alive, graceful shutdown, and more.
 ---
