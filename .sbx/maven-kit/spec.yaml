@@ -6,4 +6,15 @@ description: Install Maven for Java builds.
 
 setup:
   install:
-    - command: apt-get update && apt-get install -y --no-install-recommends maven
+    - command: |
+        apt-get update && \
+        apt-get install -y maven
+
+permissions:
+  network:
+    allow:
+      - ports.ubuntu.com:443
+      - ports.ubuntu.com:80
+      - download.docker.com:443
+      - repo1.maven.org:443
+      - repo.meven.apache.org:443
