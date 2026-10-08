@@ -128,7 +128,7 @@ public final class SessionManager implements AutoCloseable {
         }
         final var snapshot = persisted.orElseThrow();
         if (snapshot.state() == SessionState.CLOSED || !snapshot.expiresAt().isAfter(clock.instant())) {
-            store.terminate(snapshot.key());
+            store.terminate(snapshot.key(), snapshot.revision());
             return Optional.empty();
         }
         final Session hydrated;
@@ -215,16 +215,16 @@ public final class SessionManager implements AutoCloseable {
      * only when this runtime wrote the current revision or the snapshot has expired anyway.
      */
     private void terminateIfLastWriterOrExpired(Session local) {
-        // ponytail: find → terminate is not atomic; a foreign touch in between is lost.
-        // Close it with a compare-and-delete SessionStore#terminate(SessionSnapshot) if it bites.
-        store.find(local.id()).ifPresent(current -> {
-            if (current.revision() == local.persistedSnapshot().revision()
-                    || !current.expiresAt().isAfter(clock.instant())) {
-                store.terminate(local.key());
-            } else {
-                logger.debug("Session snapshot taken over by another node, evicted locally: {}", local.id());
-            }
-        });
+        store.find(local.id())
+                .filter(current -> current.key().equals(local.key()))
+                .ifPresent(current -> {
+                    if (current.revision() == local.persistedSnapshot().revision()
+                            || !current.expiresAt().isAfter(clock.instant())) {
+                        store.terminate(current.key(), current.revision());
+                    } else {
+                        logger.debug("Session snapshot taken over by another node, evicted locally: {}", local.id());
+                    }
+                });
     }
 
     /**

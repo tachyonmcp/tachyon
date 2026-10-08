@@ -9,6 +9,7 @@ import static org.awaitility.Awaitility.await;
 import dev.tachyonmcp.core.server.TachyonServer;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
 import dev.tachyonmcp.core.server.session.InMemorySessionStore;
+import dev.tachyonmcp.testkit.JsonRpcResponseAssert;
 import dev.tachyonmcp.testkit.Mcp20251125Client;
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -51,8 +52,7 @@ class SessionJanitorForeignSnapshotTest {
             assertThat(engineA.getLocalSession(sessionId)).isPresent();
 
             await().atMost(ofSeconds(10)).pollInterval(ofMillis(200)).untilAsserted(() -> {
-                assertThat(clientB.ping(sessionId, requestIds.incrementAndGet()).statusCode())
-                        .isEqualTo(200);
+                assertPingSucceeds(clientB, sessionId, requestIds.incrementAndGet());
                 assertThat(engineA.getLocalSession(sessionId))
                         .as("node A's janitor evicts its idle runtime")
                         .isEmpty();
@@ -65,11 +65,16 @@ class SessionJanitorForeignSnapshotTest {
             await().during(TTL.multipliedBy(2))
                     .atMost(TTL.multipliedBy(3))
                     .pollInterval(TTL.dividedBy(5))
-                    .untilAsserted(() -> assertThat(clientB.ping(sessionId, requestIds.incrementAndGet())
-                                    .statusCode())
-                            .as("node B keeps serving the session it took over")
-                            .isEqualTo(200));
+                    .untilAsserted(() -> assertPingSucceeds(clientB, sessionId, requestIds.incrementAndGet()));
         }
+    }
+
+    private static void assertPingSucceeds(Mcp20251125Client client, String sessionId, int requestId) throws Exception {
+        final var response = client.ping(sessionId, requestId);
+        assertThat(response.statusCode())
+                .as("node B keeps serving the session it took over")
+                .isEqualTo(200);
+        JsonRpcResponseAssert.assertThat(response).isSuccess().hasId(requestId).hasResult("{}");
     }
 
     private TachyonServer startNode() {

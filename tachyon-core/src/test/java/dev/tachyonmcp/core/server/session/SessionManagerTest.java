@@ -365,6 +365,23 @@ class SessionManagerTest {
     }
 
     @Test
+    void sweepKeepsSnapshotAnotherNodeTouchedAfterLookup() {
+        final var store = new TrackingSessionStore();
+        final var manager = manager(store);
+        final var session = manager.createSession("s1");
+        store.onTerminate(() -> store.touch(session.key(), NOW.plusSeconds(30)));
+
+        manager.sweep(-1);
+
+        assertThat(session.state()).isEqualTo(SessionState.CLOSED);
+        assertThat(manager.getLocalSession("s1")).isEmpty();
+        assertThat(store.terminateCount()).isOne();
+        assertThat(store.find("s1"))
+                .as("a touch from another node after the janitor's lookup keeps the snapshot")
+                .isPresent();
+    }
+
+    @Test
     void removeSessionClosesRuntimeWhenSnapshotTerminationFails() {
         final var store = new TrackingSessionStore();
         final var manager = manager(store);
@@ -604,6 +621,17 @@ class SessionManagerTest {
 
         @Override
         public boolean terminate(SessionKey key) {
+            beforeTerminate();
+            return delegate.terminate(key);
+        }
+
+        @Override
+        public boolean terminate(SessionKey key, long revision) {
+            beforeTerminate();
+            return delegate.terminate(key, revision);
+        }
+
+        private void beforeTerminate() {
             terminateCount.incrementAndGet();
             onTerminate.run();
             if (holdTerminate) {
@@ -613,7 +641,6 @@ class SessionManagerTest {
             if (failTerminate) {
                 throw new IllegalStateException("terminate failed");
             }
-            return delegate.terminate(key);
         }
 
         @Override

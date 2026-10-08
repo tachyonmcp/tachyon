@@ -52,6 +52,29 @@ class InMemorySessionStoreTest {
     }
 
     @Test
+    void revisionTerminateRemovesOnlyTheRevisionThatWasRead() {
+        try (var store = new InMemorySessionStore()) {
+            var key = new SessionKey("s1", "g1");
+            var read = store.create(key, CREATED_AT);
+            assertThat(store.touch(key, CREATED_AT.plusSeconds(30))).isTrue();
+
+            assertThat(store.terminate(key, read.revision()))
+                    .as("a write after the read keeps the snapshot")
+                    .isFalse();
+            assertThat(store.terminate(new SessionKey("s1", "g0"), read.revision() + 1))
+                    .as("another generation never matches")
+                    .isFalse();
+            assertThat(store.find("s1"))
+                    .hasValueSatisfying(
+                            current -> assertThat(current.revision()).isEqualTo(read.revision() + 1));
+
+            assertThat(store.terminate(key, read.revision() + 1)).isTrue();
+            assertThat(store.find("s1")).isEmpty();
+            assertThat(store.terminate(key, read.revision() + 1)).isFalse();
+        }
+    }
+
+    @Test
     void concurrentTouchesLandExactlyOnceEach() throws Exception {
         final int writers = 8;
         final int touchesPerWriter = 5_000;
@@ -90,6 +113,55 @@ class InMemorySessionStoreTest {
             assertThat(store.terminate(key)).isTrue();
             assertThat(store.touch(key, CREATED_AT)).isFalse();
             assertThat(store.find("s1")).isEmpty();
+        }
+    }
+
+    @Test
+    void revisionTerminateRacingTouchesRemovesExactlyTheRevisionLastWritten() throws Exception {
+        final int rounds = 50;
+        final int writers = 4;
+        final int touchesPerWriter = 500;
+        try (var store = new InMemorySessionStore();
+                var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            for (int round = 0; round < rounds; round++) {
+                var key = new SessionKey("s1", "g" + round);
+                var created = store.create(key, CREATED_AT);
+                var start = new CountDownLatch(1);
+                var landedTouches = new AtomicInteger();
+
+                var touchers = IntStream.range(0, writers)
+                        .mapToObj(writer -> executor.submit(() -> {
+                            start.await();
+                            for (int i = 0; i < touchesPerWriter; i++) {
+                                if (store.touch(key, CREATED_AT.plusSeconds(i))) {
+                                    landedTouches.incrementAndGet();
+                                }
+                            }
+                            return null;
+                        }))
+                        .toList();
+                var terminator = executor.submit(() -> {
+                    start.await();
+                    while (true) {
+                        var read = store.find("s1").orElseThrow();
+                        if (store.terminate(key, read.revision())) {
+                            return read.revision();
+                        }
+                    }
+                });
+                start.countDown();
+
+                var removedRevision = terminator.get(30, TimeUnit.SECONDS);
+                for (var toucher : touchers) {
+                    toucher.get(30, TimeUnit.SECONDS);
+                }
+
+                assertThat(removedRevision)
+                        .as("round %d: the removed revision counts every touch that landed before it", round)
+                        .isEqualTo(created.revision() + landedTouches.get());
+                assertThat(store.find("s1")).as("round %d", round).isEmpty();
+                assertThat(store.touch(key, CREATED_AT)).as("round %d", round).isFalse();
+            }
         }
     }
 }
