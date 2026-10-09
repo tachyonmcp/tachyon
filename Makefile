@@ -2,15 +2,12 @@
 
 .DEFAULT_GOAL := help
 
+# One reactor thread per core, one test JVM per thread. No `-b turbo`: it starts `reports`
+# before upstream tests finish, so the JaCoCo gate fails.
+MAVEN_TEST_ARGS := -T1C -Dsurefire.forkCount=1
 ifeq ($(CI),true)
-SUREFIRE_FORK_COUNT ?= 1
-NETTY_ARGS := -Dio.netty.eventLoopThreads=2
-else
-SUREFIRE_FORK_COUNT ?= 1C
-NETTY_ARGS :=
+MAVEN_TEST_ARGS += -Dio.netty.eventLoopThreads=2
 endif
-
-MAVEN_TEST_ARGS := -Dsurefire.forkCount=$(SUREFIRE_FORK_COUNT) $(NETTY_ARGS)
 MAVEN_ARGS := --no-transfer-progress # --offline
 
 # Publishing to Maven Central is opt-in: without PUBLISH=true `make deploy` builds, tests
@@ -67,12 +64,12 @@ install-server: ## Build with tests and install to local Maven repo
 package: ## Install artifacts to local Maven repo (skip tests)
 	@echo "📦 Packaging and installing to local repository..."
 	@rm -rf ~/.m2/repository/dev/tachyonmcp/*/*-SNAPSHOT
-	@./mvnw install -DskipTests $(SKIP_REPORT_ARGS) $(MAVEN_ARGS)
+	@./mvnw install -b turbo -DskipTests $(SKIP_REPORT_ARGS) $(MAVEN_ARGS)
 
 deploy: ## Build, test and sign release artifacts; publishes to Maven Central only with PUBLISH=true
-	@echo " 🚀  Deploying (publish to Central: $(if $(PUBLISH_ARGS),NO — dry run,YES))..."
+	@echo " 🚀  Deploying (publish to Central: $(if $(PUBLISH_ARGS),NO - dry run,YES))..."
 	@./mvnw -P release,lint clean deploy -Drevapi.skip=false \
-		$(MAVEN_TEST_ARGS) $(PUBLISH_ARGS) $(MAVEN_DEPLOY_ARGS) $(MAVEN_ARGS)
+		$(filter-out -T%,$(MAVEN_TEST_ARGS)) $(PUBLISH_ARGS) $(MAVEN_DEPLOY_ARGS) $(MAVEN_ARGS)
 	@echo " ✅  Done!"
 
 apidocs:
