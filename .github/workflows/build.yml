@@ -27,20 +27,18 @@ jobs:
       fail-fast: false
       matrix:
         java:
-          # Primary JDK: lint, coverage, revapi, SpotBugs, javadoc and the JMH gate.
           - version: 21
             distribution: temurin
-            command: ci
-            primary: true
-          # Compatibility JDKs: compile + test only, no report or analysis plugins.
+            command: ci-lite
+            primary: false # Compatibility JDKs: compile + test only
           - version: 25
             distribution: temurin
-            command: ci-lite
-            primary: false
+            command: ci
+            primary: true # Primary JDK: lint, coverage, revapi, SpotBugs, javadoc and reports.
           - version: 27
             distribution: zulu
             command: ci-lite
-            primary: false
+            primary: false # Compatibility JDKs: compile + test only
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
