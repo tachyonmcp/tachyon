@@ -174,7 +174,7 @@ jobs:
           retention-days: 1
 
   examples-snapshot:
-    name: examples-snapshot (${{ matrix.example }})
+    name: examples-snapshot
     needs: snapshot-artifacts
     permissions:
       checks: write
@@ -182,16 +182,6 @@ jobs:
       contents: read
     strategy:
       fail-fast: false
-      matrix:
-        example:
-          - echo-kotlin
-          - langchain4j-mcp
-          - mcp-java
-          - mcp-skills
-          - temporal
-          - weather-mcp
-          - weather-mcp-kotlin
-          - weather-mcp-spring-boot
 
     runs-on: ubuntu-latest
     timeout-minutes: 7
@@ -212,16 +202,15 @@ jobs:
           name: snapshot-repository
           path: ~/.m2/repository/dev/tachyonmcp
 
-      - name: Verify example
-        working-directory: 'examples/${{ matrix.example }}'
-        run: ./mvnw verify -Dtachyon.version=1.0.1-SNAPSHOT --no-transfer-progress
+      - name: Verify examples
+        run: ./mvnw verify -f examples/pom.xml -b turbo -T1C -Dtachyon.version=1.1.0-SNAPSHOT --no-transfer-progress
 
       - name: Publish test results
         uses: mikepenz/action-junit-report@a9170d5795813c01ab4901ffb045b52bab4ab09d # v6
         if: ${{ !cancelled() && github.event.pull_request.head.repo.fork != true }}
         with:
-          report_paths: 'examples/${{ matrix.example }}/target/*-reports/TEST-*.xml'
-          check_name: 'Test Report: ${{ matrix.example }} (SNAPSHOT)'
+          report_paths: 'examples/**/target/*-reports/TEST-*.xml'
+          check_name: 'Examples (SNAPSHOT)'
           detailed_summary: true
           flaky_summary: true
           include_passed: false

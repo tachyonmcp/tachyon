@@ -9,7 +9,7 @@
 
     <groupId>dev.tachyonmcp</groupId>
     <artifactId>root</artifactId>
-    <version>1.0.1-SNAPSHOT</version>
+    <version>1.1.0-SNAPSHOT</version>
     <packaging>pom</packaging>
 
     <name>Tachyon MCP</name>
@@ -65,7 +65,7 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <!-- Reproducible builds: fixed for dev builds, overridden with the tag commit time on release -->
-        <project.build.outputTimestamp>2026-10-01T08:49:07Z</project.build.outputTimestamp>
+        <project.build.outputTimestamp>2026-10-09T20:34:11Z</project.build.outputTimestamp>
         <!-- Published modules override this with their stable JPMS automatic module name -->
         <automatic.module.name>dev.tachyonmcp.internal</automatic.module.name>
         <!-- Java -->
@@ -925,9 +925,10 @@
                             <autoPublish>true</autoPublish>
                             <waitUntil>validated</waitUntil>
                             <excludeArtifacts>
-                                <excludeArtifact>e2e</excludeArtifact>
                                 <excludeArtifact>conformance</excludeArtifact>
+                                <excludeArtifact>e2e</excludeArtifact>
                                 <excludeArtifact>reports</excludeArtifact>
+                                <excludeArtifact>tachyon-integrations</excludeArtifact>
                             </excludeArtifacts>
                         </configuration>
                     </plugin>
