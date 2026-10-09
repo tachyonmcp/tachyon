@@ -91,7 +91,7 @@ jobs:
         env:
           RELEASE_VERSION: ${{ steps.release.outputs.release_version }}
         run: >
-          ./mvnw clean versions:set
+          ./mvnw -q versions:set
           -DnewVersion="${RELEASE_VERSION}"
           -DprocessAllModules=true
           -DgenerateBackupPoms=false
@@ -134,10 +134,13 @@ jobs:
         env:
           DRY_RUN: ${{ inputs.dry_run }}
           RELEASE_VERSION: ${{ steps.release.outputs.release_version }}
+          JOB_STATUS: ${{ job.status }}
         run: |
           set -euo pipefail
-          if [ "${DRY_RUN}" = "true" ]; then
+          if [ "${JOB_STATUS}" != "success" ]; then
+            echo "❌ Release \`${RELEASE_VERSION}\` failed; check the build and publishing logs." >> "${GITHUB_STEP_SUMMARY}"
+          elif [ "${DRY_RUN}" = "true" ]; then
             echo "🧪 Dry run of \`${RELEASE_VERSION}\` — built, tested and signed, nothing published to Maven Central." >> "${GITHUB_STEP_SUMMARY}"
           else
-            echo "🚀 Published \`${RELEASE_VERSION}\` to Maven Central." >> "${GITHUB_STEP_SUMMARY}"
+            echo "🚀 Submitted \`${RELEASE_VERSION}\` to Maven Central; validation completed and automatic publication requested." >> "${GITHUB_STEP_SUMMARY}"
           fi

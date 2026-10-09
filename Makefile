@@ -68,7 +68,7 @@ package: ## Install artifacts to local Maven repo (skip tests)
 
 deploy: ## Build, test and sign release artifacts; publishes to Maven Central only with PUBLISH=true
 	@echo " 🚀  Deploying (publish to Central: $(if $(PUBLISH_ARGS),NO - dry run,YES))..."
-	@./mvnw -P release,lint clean deploy -Drevapi.skip=false \
+	@./mvnw -q -P release,lint clean deploy -Drevapi.skip=false \
 		$(filter-out -T%,$(MAVEN_TEST_ARGS)) $(PUBLISH_ARGS) $(MAVEN_DEPLOY_ARGS) $(MAVEN_ARGS)
 	@echo " ✅  Done!"
 
