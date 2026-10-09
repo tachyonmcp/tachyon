@@ -50,6 +50,16 @@
       ]
     },
     {
+      "description": "Maven 3.10 breaks central-publishing-maven-plugin bundles (mavenplugins/central-publishing-maven-plugin#79); lift once fixed",
+      "matchManagers": [
+        "maven-wrapper"
+      ],
+      "matchPackageNames": [
+        "maven"
+      ],
+      "allowedVersions": "<3.10"
+    },
+    {
       "groupName": "junit",
       "matchPackageNames": [
         "org.junit**",

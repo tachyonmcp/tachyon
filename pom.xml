@@ -963,6 +963,10 @@
                                 </goals>
                                 <configuration>
                                     <rules>
+                                        <requireMavenVersion>
+                                            <version>[3.9.0,3.10.0)</version>
+                                            <message>Maven 3.10 puts maven-metadata-local.xml into the Central bundle and Central rejects it (mavenplugins/central-publishing-maven-plugin#79); release with the 3.9.x wrapper</message>
+                                        </requireMavenVersion>
                                         <requireReleaseDeps>
                                             <message>Release must not depend on SNAPSHOT artifacts</message>
                                         </requireReleaseDeps>

@@ -3,7 +3,7 @@
 ## Setup
 
 - JDK 21+
-- Maven 3.9+ (the `./mvnw` wrapper pins the version; `maven-enforcer-plugin` checks it)
+- Maven 3.9+ (the `./mvnw` wrapper pins the version; `maven-enforcer-plugin` checks it). Releases need 3.9.x: Maven 3.10 breaks the Central bundle
 - Python 3 on `PATH`: `tachyon-core` generates the MCP protocol classes from `protocol/*.ts` with
   `ts2java.py` at `generate-sources`. Skip it with `-Dts2java.skip=true` when `target/generated-sources` is up to date.
 - Rust (`cargo`) and [snips](https://crates.io/crates/snips) 0.0.6 for `make docs-check`, which `make all` runs and which
