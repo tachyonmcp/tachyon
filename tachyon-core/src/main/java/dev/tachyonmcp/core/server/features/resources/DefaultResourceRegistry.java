@@ -35,6 +35,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Predicate;
+import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,6 +47,7 @@ import org.slf4j.LoggerFactory;
 public class DefaultResourceRegistry implements Resources {
 
     private static final int MAX_RESOURCE_URI_LENGTH = 8_192;
+    private static final Pattern URI_TEMPLATE_EXPRESSION = Pattern.compile("\\{([^}]+)\\}");
     private static final Logger logger = LoggerFactory.getLogger(DefaultResourceRegistry.class);
 
     /** Name-sorted per {@code docs/architecture/guidance.md}; URI breaks ties between same-named resources. */
@@ -372,7 +374,7 @@ public class DefaultResourceRegistry implements Resources {
     @Nullable
     TemplateMatch matchTemplate(String uri) {
         return templates.values().stream()
-                .sorted(Comparator.comparingInt((ResourceTemplateEntry t) -> -UriTemplatePatterns.EXPRESSION
+                .sorted(Comparator.comparingInt((ResourceTemplateEntry t) -> -URI_TEMPLATE_EXPRESSION
                                 .matcher(t.descriptor().uriTemplate())
                                 .replaceAll("")
                                 .length())
