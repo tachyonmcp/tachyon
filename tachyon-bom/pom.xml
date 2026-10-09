@@ -216,7 +216,9 @@
                         <version>0.11.0</version>
                         <extensions>true</extensions>
                         <configuration>
+                            <publishingServerId>central</publishingServerId>
                             <autoPublish>true</autoPublish>
+                            <waitUntil>validated</waitUntil>
                         </configuration>
                     </plugin>
                 </plugins>
