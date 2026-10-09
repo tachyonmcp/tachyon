@@ -63,11 +63,6 @@
         </dependency>
     </dependencies>
 
-    <build>
-        <plugins>
-        </plugins>
-    </build>
-
     <profiles>
         <!-- Native Netty transports; disable with -Dnetty.native.enabled=false -->
         <profile>

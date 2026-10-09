@@ -921,9 +921,12 @@
                         <version>0.11.0</version>
                         <extensions>true</extensions>
                         <configuration>
-                            <publishingServerId>central</publishingServerId>
                             <autoPublish>true</autoPublish>
-                            <waitUntil>validated</waitUntil>
+                            <excludeArtifacts>
+                                <excludeArtifact>e2e</excludeArtifact>
+                                <excludeArtifact>conformance</excludeArtifact>
+                                <excludeArtifact>reports</excludeArtifact>
+                            </excludeArtifacts>
                         </configuration>
                     </plugin>
                     <plugin>
@@ -942,7 +945,6 @@
                             </execution>
                         </executions>
                         <configuration>
-                            <outputName>bom</outputName>
                             <skipNotDeployed>false</skipNotDeployed>
                         </configuration>
                     </plugin>
