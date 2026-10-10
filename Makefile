@@ -82,12 +82,12 @@ apidocs:
 
 examples: ## Build live examples against published artifacts
 	@echo "🌤️ 📡  Building LIVE examples..."
-	@./mvnw verify -f examples/pom.xml $(MAVEN_ARGS)
+	@./mvnw verify -b turbo -T1C -f examples/pom.xml $(MAVEN_ARGS)
 	@echo " ✅  Done!"
 
 examples-snapshot: install-server ## Build examples against local SNAPSHOT artifacts
 	@echo "🌤️ 🎬 Building SNAPSHOT examples..."
-	@./mvnw verify -P snapshot-examples -f examples/pom.xml -Dtachyon.version=1.0.1-SNAPSHOT $(MAVEN_ARGS)
+	@./mvnw verify -b turbo -T1C -P snapshot-examples -f examples/pom.xml -Dtachyon.version=1.1.0-SNAPSHOT $(MAVEN_ARGS)
 	@echo " ✅  Done!"
 
 conformance: ## Run MCP conformance suite

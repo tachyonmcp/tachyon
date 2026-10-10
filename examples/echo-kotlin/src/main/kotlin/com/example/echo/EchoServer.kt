@@ -23,7 +23,7 @@ fun assembleServer(
             info {
                 name = "echo-server"
                 title = "Echo Server"
-                version = "1.0.0"
+                version = "1.0.1"
                 description = "Echo MCP server built with Tachyon Kotlin DSL"
             }
             capabilities {

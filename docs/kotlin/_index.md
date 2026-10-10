@@ -40,8 +40,10 @@ plugins {
 
 repositories { mavenCentral() }
 
+val tachyonVersion = project.properties["tachyonVersion"]
+
 dependencies {
-    implementation(platform("dev.tachyonmcp:tachyon-bom:${tachyon.version}"))
+    implementation(platform("dev.tachyonmcp:tachyon-bom:$tachyonVersion"))
     implementation("dev.tachyonmcp:tachyon-kotlin")
 }
 

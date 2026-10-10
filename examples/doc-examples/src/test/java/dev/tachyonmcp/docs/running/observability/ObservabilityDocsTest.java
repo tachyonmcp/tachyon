@@ -119,12 +119,12 @@ class ObservabilityDocsTest {
         ObservationListener throwing = new ObservationListener() {
             @Override
             public ObservationScope start(OperationInfo info) {
-                throw new IllegalStateException("listener bug");
+                throw new IllegalStateException("🔥listener bug: start");
             }
 
             @Override
             public void complete(OperationInfo info, OperationOutcome outcome) {
-                throw new IllegalStateException("listener bug");
+                throw new IllegalStateException("🔥listener bug: complete");
             }
         };
         try (TachyonServer server = McpTestServers.start(
