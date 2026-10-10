@@ -2,8 +2,8 @@
 title: Findings
 tags: [meta, findings]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/]
-updated: 2026-09-30
-commit: 4b4b6f7e
+updated: 2026-10-07
+commit: f34c36fc
 ---
 
 # 🔎 Findings
