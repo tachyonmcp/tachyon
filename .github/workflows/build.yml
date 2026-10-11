@@ -109,7 +109,7 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Upload reports as artifacts
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: always()
         with:
           name: reports-jdk-${{ matrix.java.version }}
@@ -167,7 +167,7 @@ jobs:
         run: make package
 
       - name: Upload SNAPSHOT repository
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: snapshot-repository
           path: ~/.m2/repository/dev/tachyonmcp
@@ -220,7 +220,7 @@ jobs:
           job_summary: true
 
       - name: Upload reports as artifacts
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: always()
         with:
           # Must be unique per job: upload-artifact rejects a name another job already uploaded.
