@@ -16,7 +16,6 @@ import dev.tachyonmcp.api.server.features.tasks.TaskUpdateRequest;
 import dev.tachyonmcp.api.server.features.tools.ToolRequest;
 import java.time.Duration;
 import java.util.Map;
-import java.util.Set;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -114,8 +113,13 @@ public interface ProtocolRequestMapper {
         return false;
     }
 
-    /** Maps {@code subscriptions/listen} params into the requested notification filter. */
-    default SubscriptionListenRequest subscriptionsListen(@Nullable Object params) {
+    /**
+     * Returns the raw notification filter of a {@code subscriptions/listen} request, for the
+     * registered subscription topics to read; empty when the request asks for nothing.
+     *
+     * @throws RequestMappingException with {@code invalid_params} if the filter is not an object
+     */
+    default JsonObject subscriptionFilter(@Nullable Object params) {
         throw new UnsupportedOperationException("subscriptions/listen is not supported by this protocol version");
     }
 
@@ -200,28 +204,4 @@ public interface ProtocolRequestMapper {
      */
     record TaskStatusRequest(
             String taskId, TaskState state, @Nullable String message) {}
-
-    /**
-     * The notification filter requested on a {@code subscriptions/listen} call.
-     *
-     * @param toolsListChanged whether to receive {@code notifications/tools/list_changed}
-     * @param promptsListChanged whether to receive {@code notifications/prompts/list_changed}
-     * @param resourcesListChanged whether to receive {@code notifications/resources/list_changed}
-     * @param resourceSubscriptions resource URIs to receive {@code notifications/resources/updated} for
-     * @param taskIds task IDs to receive {@code notifications/tasks} for (tasks extension, SEP-2663;
-     *     not part of the core 2026-07-28 schema)
-     */
-    record SubscriptionListenRequest(
-            boolean toolsListChanged,
-            boolean promptsListChanged,
-            boolean resourcesListChanged,
-            Set<String> resourceSubscriptions,
-            Set<String> taskIds) {
-
-        /** Returns this filter with {@code taskIds} replaced, e.g. by the subset a listener may read. */
-        public SubscriptionListenRequest withTaskIds(Set<String> taskIds) {
-            return new SubscriptionListenRequest(
-                    toolsListChanged, promptsListChanged, resourcesListChanged, resourceSubscriptions, taskIds);
-        }
-    }
 }

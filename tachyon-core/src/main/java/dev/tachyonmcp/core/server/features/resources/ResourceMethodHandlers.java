@@ -7,10 +7,13 @@ import dev.tachyonmcp.api.server.features.resources.ResourceRequest;
 import dev.tachyonmcp.core.protocol.ProtocolRequestMapper;
 import dev.tachyonmcp.core.server.RpcMethodHandler;
 import dev.tachyonmcp.core.server.domain.ServerErrors;
+import dev.tachyonmcp.core.server.features.subscriptions.SubscriptionRegistry;
+import dev.tachyonmcp.core.server.features.subscriptions.SubscriptionTopic;
 import dev.tachyonmcp.core.server.internal.HandlerFutures;
 import dev.tachyonmcp.core.server.session.DispatchContext;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -21,9 +24,20 @@ import org.slf4j.LoggerFactory;
 /** JSON-RPC adapters for resource operations. */
 public final class ResourceMethodHandlers {
 
+    /** {@code subscriptions/listen} opt-in to {@code notifications/resources/list_changed}. */
+    public static final SubscriptionTopic<Boolean> LIST_CHANGED = SubscriptionTopic.flag("resourcesListChanged");
+
+    /** {@code subscriptions/listen} opt-in to {@code notifications/resources/updated}, per resource URI. */
+    public static final SubscriptionTopic<Set<String>> UPDATED = SubscriptionTopic.strings("resourceSubscriptions");
+
     private ResourceMethodHandlers() {}
 
-    public static void register(Map<String, RpcMethodHandler<?, ?>> handlers, DefaultResourceRegistry registry) {
+    public static void register(
+            Map<String, RpcMethodHandler<?, ?>> handlers,
+            DefaultResourceRegistry registry,
+            SubscriptionRegistry subscriptions) {
+        subscriptions.register(LIST_CHANGED);
+        subscriptions.register(UPDATED);
         handlers.put("resources/list", new ResourcesListHandler(registry));
         handlers.put("resources/templates/list", new ResourcesTemplatesListHandler(registry));
         handlers.put("resources/read", new ResourcesReadHandler(registry));

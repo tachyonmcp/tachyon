@@ -20,6 +20,8 @@ import dev.tachyonmcp.api.server.features.tools.ToolRequest;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
 import dev.tachyonmcp.core.protocol.ProtocolRequestMapper;
 import dev.tachyonmcp.core.server.RpcMethodHandler;
+import dev.tachyonmcp.core.server.features.subscriptions.SubscriptionRegistry;
+import dev.tachyonmcp.core.server.features.subscriptions.SubscriptionTopic;
 import dev.tachyonmcp.core.server.features.tasks.TasksExtensionSupport;
 import dev.tachyonmcp.core.server.internal.HandlerFutures;
 import dev.tachyonmcp.core.server.json.JsonUtils;
@@ -37,15 +39,20 @@ import org.slf4j.LoggerFactory;
 @InternalApi
 public final class ToolMethodHandlers {
 
+    /** {@code subscriptions/listen} opt-in to {@code notifications/tools/list_changed}. */
+    public static final SubscriptionTopic<Boolean> LIST_CHANGED = SubscriptionTopic.flag("toolsListChanged");
+
     private ToolMethodHandlers() {}
 
     public static void register(
             Map<String, RpcMethodHandler<?, ?>> handlers,
             DefaultToolRegistry registry,
+            SubscriptionRegistry subscriptions,
             JsonSchemaValidator inputValidator,
             JsonSchemaValidator outputValidator,
             PayloadSerializer payloadSerializer,
             PayloadDeserializer payloadDeserializer) {
+        subscriptions.register(LIST_CHANGED);
         handlers.put("tools/list", new ToolsListHandler(registry));
         handlers.put(
                 "tools/call",

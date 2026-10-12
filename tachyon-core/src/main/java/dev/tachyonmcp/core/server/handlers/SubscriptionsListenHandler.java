@@ -2,13 +2,12 @@
 package dev.tachyonmcp.core.server.handlers;
 
 import dev.tachyonmcp.api.annotations.InternalApi;
-import dev.tachyonmcp.core.protocol.ProtocolRequestMapper;
 import dev.tachyonmcp.core.protocol.RequestMappingException;
 import dev.tachyonmcp.core.server.RpcMethodHandler;
 import dev.tachyonmcp.core.server.domain.ServerErrors;
+import dev.tachyonmcp.core.server.features.subscriptions.SubscriptionFilter;
 import dev.tachyonmcp.core.server.features.subscriptions.SubscriptionRegistry;
 import dev.tachyonmcp.core.server.features.subscriptions.SubscriptionStreamFailedException;
-import dev.tachyonmcp.core.server.features.tasks.TasksExtensionSupport;
 import dev.tachyonmcp.core.server.session.DispatchContext;
 import java.nio.channels.ClosedChannelException;
 import java.util.concurrent.CompletableFuture;
@@ -21,15 +20,15 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Handles MCP 2026-07-28's {@code subscriptions/listen} (replaces {@code resources/subscribe} and
- * the plain HTTP GET stream, SEP-2575): keeps only the task ids the task connector lets the caller
- * read, acknowledges the subscription on its request-scoped SSE stream, registers it with {@link
+ * the plain HTTP GET stream, SEP-2575): reads the filter through the registered subscription
+ * topics, keeps only what each topic's authorizer lets the caller follow, acknowledges the
+ * subscription on its request-scoped SSE stream, registers it with {@link
  * SubscriptionRegistry}, and defers the JSON-RPC response until the client disconnects (no response)
  * or the server shuts down (graceful {@code resultType: "complete"} response) — see {@link
  * SubscriptionRegistry#closeAll()}.
  */
 @InternalApi
-public final class SubscriptionsListenHandler
-        implements RpcMethodHandler<ProtocolRequestMapper.SubscriptionListenRequest, Object> {
+public final class SubscriptionsListenHandler implements RpcMethodHandler<SubscriptionFilter, Object> {
 
     private static final Logger logger = LoggerFactory.getLogger(SubscriptionsListenHandler.class);
 
@@ -45,33 +44,24 @@ public final class SubscriptionsListenHandler
     }
 
     @Override
-    public ProtocolRequestMapper.SubscriptionListenRequest decode(DispatchContext context, @Nullable Object rawParams) {
+    public SubscriptionFilter decode(DispatchContext context, @Nullable Object rawParams) {
         var requestMapper = context.requestMapper();
         if (!requestMapper.supportsSubscriptionsListen()) {
             throw new RequestMappingException(ServerErrors.methodNotFound("Method not found"));
         }
-        var request = requestMapper.subscriptionsListen(rawParams);
-        if (!request.taskIds().isEmpty()) {
-            var missingCapability = TasksExtensionSupport.requireDeclared(context);
-            if (missingCapability != null) {
-                throw new RequestMappingException(missingCapability);
-            }
-        }
-        return request;
+        return registry.decode(context, requestMapper.subscriptionFilter(rawParams));
     }
 
     @Override
-    public Object handle(DispatchContext context, ProtocolRequestMapper.SubscriptionListenRequest filter) {
+    public Object handle(DispatchContext context, SubscriptionFilter filter) {
         throw new UnsupportedOperationException("subscriptions/listen is stream-based; see handleAsync");
     }
 
     @Override
-    public CompletionStage<Object> handleAsync(
-            DispatchContext context, ProtocolRequestMapper.SubscriptionListenRequest requested) {
-        // Every task-related request is authorized (ext-tasks § Security): the connector decides which
-        // task ids this listener may follow, and the ack lists only those. Runs on the handler executor.
-        var filter =
-                requested.withTaskIds(context.engine().taskRuntime().readableTaskIds(context, requested.taskIds()));
+    public CompletionStage<Object> handleAsync(DispatchContext context, SubscriptionFilter requested) {
+        // Every topic authorizes its own part (e.g. tasks: ext-tasks § Security): the ack lists only
+        // what was honored. Runs on the handler executor.
+        var filter = requested.authorize(context);
         var stream = context.outboundStream();
         if (stream == null) {
             return CompletableFuture.completedFuture(ServerErrors.internalError("No SSE stream available"));

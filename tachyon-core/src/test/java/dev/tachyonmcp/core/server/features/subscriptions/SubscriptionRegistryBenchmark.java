@@ -5,13 +5,13 @@ import static dev.tachyonmcp.core.test.TestUtils.newEngine;
 
 import dev.tachyonmcp.api.server.domain.RequestId;
 import dev.tachyonmcp.core.protocol.Protocol;
-import dev.tachyonmcp.core.protocol.ProtocolRequestMapper.SubscriptionListenRequest;
 import dev.tachyonmcp.core.protocol.ProtocolResponseMapper;
 import dev.tachyonmcp.core.protocol.Protocols;
 import dev.tachyonmcp.core.runtime.SseEvent;
 import dev.tachyonmcp.core.server.OutboundSseStream;
+import dev.tachyonmcp.core.server.features.tools.ToolMethodHandlers;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
-import java.util.Set;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.TimeUnit;
@@ -45,8 +45,8 @@ import org.openjdk.jmh.annotations.Warmup;
 public class SubscriptionRegistryBenchmark {
 
     private static final int LIVE_SUBSCRIPTIONS = 64;
-    private static final SubscriptionListenRequest FILTER =
-            new SubscriptionListenRequest(true, false, false, Set.of(), Set.of());
+    private static final SubscriptionFilter FILTER =
+            new SubscriptionFilter(Map.of(ToolMethodHandlers.LIST_CHANGED, Boolean.TRUE));
 
     private ServerEngine engine;
     private SubscriptionRegistry registry;
@@ -89,7 +89,8 @@ public class SubscriptionRegistryBenchmark {
     @Group("contended")
     @GroupThreads(1)
     public void contendedNotify() {
-        registry.notifyToolsListChanged();
+        registry.publish(
+                ToolMethodHandlers.LIST_CHANGED, on -> true, "notifications/tools/list_changed", mapper -> Map.of());
     }
 
     private long activateAndRemove() {

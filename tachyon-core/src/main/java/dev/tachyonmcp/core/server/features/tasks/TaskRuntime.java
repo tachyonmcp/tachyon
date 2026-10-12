@@ -2,22 +2,20 @@
 package dev.tachyonmcp.core.server.features.tasks;
 
 import dev.tachyonmcp.api.annotations.InternalApi;
-import dev.tachyonmcp.api.runtime.InteractionContext;
 import dev.tachyonmcp.api.server.domain.ProgressToken;
 import dev.tachyonmcp.api.server.domain.ServerCapabilities;
 import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
-import java.util.Set;
 import org.jspecify.annotations.Nullable;
 
 /**
- * What core needs from a tasks implementation: the seam between the tool and subscription handlers
- * and the tasks extension that owns the runtime. An extension installs one through
+ * What core needs from a tasks implementation: the seam between the tool handlers and the
+ * tasks extension that owns the runtime. An extension installs one through
  * {@code ServerEngine#installTaskRuntime}; until then {@link #NONE} answers.
  */
 @InternalApi
 public interface TaskRuntime {
 
-    /** No tasks extension installed: nothing is configured, readable or advertised. */
+    /** No tasks extension installed: nothing is configured or advertised. */
     TaskRuntime NONE = new TaskRuntime() {
         @Override
         public boolean executionConfigured() {
@@ -28,11 +26,6 @@ public interface TaskRuntime {
         public TaskSnapshot publish(
                 TaskSnapshot snapshot, @Nullable String sessionId, @Nullable ProgressToken progressToken) {
             return snapshot;
-        }
-
-        @Override
-        public Set<String> readableTaskIds(InteractionContext ctx, Set<String> taskIds) {
-            return Set.of();
         }
 
         @Override
@@ -56,14 +49,6 @@ public interface TaskRuntime {
      * @return the effective snapshot
      */
     TaskSnapshot publish(TaskSnapshot snapshot, @Nullable String sessionId, @Nullable ProgressToken progressToken);
-
-    /**
-     * Returns the ids of {@code taskIds} that {@code ctx} may read, as the connector's {@code get}
-     * decides: the check behind a {@code subscriptions/listen} stream's task ids. Fails closed: an id
-     * the connector refuses, fails on, or cannot serve (no connector) is left out. Caches nothing.
-     * Blocks on the connector, so never call it on an event loop.
-     */
-    Set<String> readableTaskIds(InteractionContext ctx, Set<String> taskIds);
 
     /**
      * Returns the {@code tasks} capability to advertise, or {@code null} to advertise none.

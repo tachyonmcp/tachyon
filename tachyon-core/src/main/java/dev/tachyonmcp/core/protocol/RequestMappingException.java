@@ -17,6 +17,15 @@ public final class RequestMappingException extends RuntimeException {
     }
 
     /**
+     * @param error the mapping failure to surface as a protocol-level error response
+     * @param cause the underlying failure
+     */
+    public RequestMappingException(ServerError error, Throwable cause) {
+        super(error.message(), cause);
+        this.error = error;
+    }
+
+    /**
      * @return the {@link ServerError} to return to the client
      */
     public ServerError error() {

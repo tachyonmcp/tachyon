@@ -31,6 +31,7 @@ import dev.tachyonmcp.core.protocol.mcp.v2025_11_25.models.ListToolsResult;
 import dev.tachyonmcp.core.protocol.mcp.v2025_11_25.models.TextContent;
 import dev.tachyonmcp.core.server.RpcMethodHandler;
 import dev.tachyonmcp.core.server.config.FeatureConfig;
+import dev.tachyonmcp.core.server.features.subscriptions.SubscriptionRegistry;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
 import dev.tachyonmcp.core.server.json.Jackson3JsonFactory;
 import dev.tachyonmcp.core.server.json.JacksonPayloadSerde;
@@ -69,7 +70,9 @@ class DefaultToolRegistryTest {
 
     private static void registerHandlers(DefaultToolRegistry registry, Map<String, RpcMethodHandler<?, ?>> handlers) {
         var validator = new NetworkntJsonSchemaValidator();
-        ToolMethodHandlers.register(handlers, registry, validator, validator, TEST_SERDE, TEST_SERDE);
+        var server = newEngine(b -> {});
+        ToolMethodHandlers.register(
+                handlers, registry, new SubscriptionRegistry(server), validator, validator, TEST_SERDE, TEST_SERDE);
     }
 
     @Test

@@ -288,6 +288,45 @@ class SubscriptionsListenTest extends AbstractStatelessMcpE2eTest<Mcp20260728Cli
     }
 
     @Test
+    void taskIdsAreIgnoredWithoutTheTasksExtension() throws Exception {
+        var lines = new CopyOnWriteArrayList<String>();
+        try (var client = createModernTestClient()) {
+            var response = client.sendStreamingRequest(null, """
+                {"jsonrpc":"2.0","id":1,"method":"subscriptions/listen",
+                 "params":{"notifications":{"toolsListChanged":true,"taskIds":["task-a"]}}}
+                """);
+            var consume = CompletableFuture.runAsync(() -> response.body().forEach(lines::add));
+            await().atMost(Duration.ofSeconds(10))
+                    .untilAsserted(() -> assertThat(payloads(lines))
+                            .anyMatch(l -> l.contains("notifications/subscriptions/acknowledged")));
+
+            server.tools()
+                    .register(
+                            t -> t.name("trigger-tool").description("d").inputSchema("{\"type\":\"object\"}"),
+                            (ctx, req) -> ToolResult.text("x"));
+            await().atMost(Duration.ofSeconds(10))
+                    .untilAsserted(() ->
+                            assertThat(payloads(lines)).anyMatch(l -> l.contains("notifications/tools/list_changed")));
+
+            // language=JSON
+            assertThatJson(payloads(lines).getFirst()).isEqualTo("""
+                {
+                  "jsonrpc": "2.0",
+                  "method": "notifications/subscriptions/acknowledged",
+                  "params": {
+                    "notifications": {"toolsListChanged": true},
+                    "_meta": {"io.modelcontextprotocol/subscriptionId": 1}
+                  }
+                }
+                """);
+            assertThat(payloads(lines)).noneMatch(l -> l.contains("notifications/tasks"));
+
+            response.body().close();
+            awaitQuietly(consume);
+        }
+    }
+
+    @Test
     void taskStatusSubscriptionRequiresTasksExtension() throws Exception {
         var taskEngine = new TestTaskConnector();
         startServer(b -> b.withExtension(TasksExtension.class, t -> t.connector(taskEngine.connector())));

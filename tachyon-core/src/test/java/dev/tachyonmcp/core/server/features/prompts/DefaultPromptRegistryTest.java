@@ -20,6 +20,7 @@ import dev.tachyonmcp.core.protocol.mcp.v2025_11_25.models.GetPromptResult;
 import dev.tachyonmcp.core.protocol.mcp.v2025_11_25.models.ListPromptsResult;
 import dev.tachyonmcp.core.server.RpcMethodHandler;
 import dev.tachyonmcp.core.server.config.FeatureConfig;
+import dev.tachyonmcp.core.server.features.subscriptions.SubscriptionRegistry;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
 import dev.tachyonmcp.core.server.session.DefaultDispatchContext;
 import java.util.HashMap;
@@ -43,7 +44,7 @@ class DefaultPromptRegistryTest {
 
     @BeforeEach
     void setUp() {
-        PromptMethodHandlers.register(handlers, registry, JsonSchemaValidator.noop());
+        PromptMethodHandlers.register(handlers, registry, new SubscriptionRegistry(server), JsonSchemaValidator.noop());
     }
 
     private Object getPrompt(Object params) throws Exception {

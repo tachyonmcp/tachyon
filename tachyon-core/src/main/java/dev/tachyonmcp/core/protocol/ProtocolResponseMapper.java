@@ -19,7 +19,6 @@ import dev.tachyonmcp.api.server.features.resources.ResourceTemplateDescriptor;
 import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
 import dev.tachyonmcp.api.server.features.tools.ToolDescriptor;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
-import dev.tachyonmcp.core.protocol.ProtocolRequestMapper.SubscriptionListenRequest;
 import dev.tachyonmcp.core.server.domain.InitializeResponse;
 import dev.tachyonmcp.core.server.json.JsonUtils;
 import dev.tachyonmcp.core.transport.jsonrpc.JsonRpcCodec;
@@ -162,33 +161,20 @@ public interface ProtocolResponseMapper {
     /**
      * Builds the ack-first {@code notifications/subscriptions/acknowledged} params sent when a new
      * {@code subscriptions/listen} stream is opened.
+     *
+     * @param honoredFilter the filter the listener was granted, by filter key
      */
-    default Object subscriptionsAcknowledgedParams(RequestId subscriptionId, SubscriptionListenRequest filter) {
+    default Object subscriptionsAcknowledgedParams(RequestId subscriptionId, Map<String, Object> honoredFilter) {
         throw new UnsupportedOperationException("subscriptions/listen is not supported by this protocol version");
     }
 
     /**
-     * Builds the params for a {@code notifications/tools|prompts|resources/list_changed} notification
-     * pushed on a {@code subscriptions/listen} stream.
+     * Tags notification params with the stream's own subscription id: returns {@code params} with
+     * the id merged into its {@code _meta}, keeping the other entries (the id wins).
+     *
+     * @param params the params as this mapper built them
      */
-    default Object subscriptionListChangedParams(RequestId subscriptionId) {
-        throw new UnsupportedOperationException("subscriptions/listen is not supported by this protocol version");
-    }
-
-    /**
-     * Builds the params for a {@code notifications/resources/updated} notification pushed on a
-     * {@code subscriptions/listen} stream.
-     */
-    default Object subscriptionResourceUpdatedParams(RequestId subscriptionId, String uri) {
-        throw new UnsupportedOperationException("subscriptions/listen is not supported by this protocol version");
-    }
-
-    /**
-     * Builds the params for a {@code notifications/tasks} notification pushed on a {@code
-     * subscriptions/listen} stream: the task's status params plus the stream's own subscription id,
-     * keeping the snapshot's other {@code _meta} entries.
-     */
-    default Object subscriptionTaskStatusParams(RequestId subscriptionId, TaskSnapshot snapshot) {
+    default Object subscriptionNotificationParams(RequestId subscriptionId, Object params) {
         throw new UnsupportedOperationException("subscriptions/listen is not supported by this protocol version");
     }
 
