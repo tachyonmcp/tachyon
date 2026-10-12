@@ -69,7 +69,7 @@ jobs:
         run: make ${{ matrix.java.command }}
 
       - name: Publish test results
-        uses: mikepenz/action-junit-report@a9170d5795813c01ab4901ffb045b52bab4ab09d # v6
+        uses: mikepenz/action-junit-report@6ef3fdcfcd5f0b5d14df3e659ef19b8c6820f93d # v6
         if: ${{ !cancelled() && github.event.pull_request.head.repo.fork != true }}
         with:
           report_paths: '**/target/*-reports/TEST-*.xml'
@@ -206,7 +206,7 @@ jobs:
         run: ./mvnw verify -f examples/pom.xml -b turbo -T1C -Dtachyon.version=1.1.0-SNAPSHOT --no-transfer-progress
 
       - name: Publish test results
-        uses: mikepenz/action-junit-report@a9170d5795813c01ab4901ffb045b52bab4ab09d # v6
+        uses: mikepenz/action-junit-report@6ef3fdcfcd5f0b5d14df3e659ef19b8c6820f93d # v6
         if: ${{ !cancelled() && github.event.pull_request.head.repo.fork != true }}
         with:
           report_paths: 'examples/**/target/*-reports/TEST-*.xml'
