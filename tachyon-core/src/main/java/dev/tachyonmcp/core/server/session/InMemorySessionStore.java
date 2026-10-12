@@ -7,6 +7,7 @@ import java.time.Instant;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.LongPredicate;
 
 /**
  * Default process-local session snapshot store.
@@ -56,10 +57,19 @@ public final class InMemorySessionStore implements SessionStore {
 
     @Override
     public boolean terminate(SessionKey key) {
+        return removeIf(key, revision -> true);
+    }
+
+    @Override
+    public boolean terminate(SessionKey key, long revision) {
+        return removeIf(key, current -> current == revision);
+    }
+
+    private boolean removeIf(SessionKey key, LongPredicate revision) {
         final var sessionId = key.sessionId();
         while (true) {
             final var current = snapshots.get(sessionId);
-            if (current == null || !current.key().equals(key)) {
+            if (current == null || !current.key().equals(key) || !revision.test(current.revision())) {
                 return false;
             }
             if (snapshots.remove(sessionId, current)) {

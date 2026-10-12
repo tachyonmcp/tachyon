@@ -430,14 +430,25 @@ connections between nodes.
 
 A persistent implementation can use the session ID as its key and encode the complete snapshot
 as its value. `create` is an atomic put, `find` decodes the value, `compareAndSet` is a conditional
-replace, `touch` conditionally extends the matching generation's expiry, and `terminate` removes
-only the matching generation. Store implementations must make these operations thread-safe.
+replace, `touch` conditionally extends the matching generation's expiry, `terminate(SessionKey)` removes
+only the matching generation, and `terminate(SessionKey, long)` is a conditional delete that removes
+the snapshot only while its generation and revision still match, for example
+`DELETE … WHERE session_id = ? AND generation = ? AND revision = ?`. Every write within a generation
+must increment the revision, so a key and a revision identify one snapshot version.
+The default `terminate(SessionKey, long)` checks with `find` and then calls `terminate(SessionKey)`,
+so a write between the two calls is lost. Stores written for 1.0 keep working; override it with one
+atomic conditional delete to close that window.
+Store implementations must make these operations thread-safe.
 Operations execute synchronously and may perform I/O. Tachyon invokes them outside transport
 event-loop threads. Implementations must be thread-safe.
 
 Store failures answer `500`: a failed `find` on `POST`/`GET` gives "Session lookup failed"; on
 `DELETE`, a failed `find` or `terminate` gives "Session termination failed". A failed `terminate` still closes the local
 session, its SSE connection, and in-flight waiters; idle expiry logs the failure and moves on.
+Idle expiry is local to each node: the janitor closes the idle runtime but terminates the snapshot
+only when this node wrote its current revision or the snapshot has expired, through the
+conditional `terminate(SessionKey, long)`. A node that restored the session and keeps it active is
+not cut off by the node it left, even when its write races the janitor.
 The snapshot stays restorable on any node until its `expiresAt`. Expiry is an idle TTL, not an
 absolute deadline: activity on a node that restores the snapshot refreshes it through
 `SessionStore.touch`, so an active session can outlast the original TTL after a failed `DELETE`.
