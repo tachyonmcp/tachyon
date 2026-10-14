@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Dice roll</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 16px;
+            font-family: var(--font-sans, system-ui, sans-serif);
+            color: var(--color-text-primary, #222);
+            background: var(--color-background-primary, transparent);
+        }
+
+        #dice {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .die {
+            width: 56px;
+            height: 56px;
+            border-radius: var(--border-radius-md, 10px);
+            border: 2px solid currentColor;
+            display: grid;
+            place-items: center;
+            font-size: 32px;
+            font-weight: var(--font-weight-bold, 700);
+        }
+
+        #status {
+            opacity: .7;
+            font-size: 14px;
+        }
+
+        #roll {
+            margin-top: 12px;
+            padding: 8px 16px;
+            font: inherit;
+            color: inherit;
+            background: transparent;
+            border: 2px solid currentColor;
+            border-radius: var(--border-radius-md, 10px);
+            cursor: pointer;
+        }
+
+        #roll:disabled {
+            opacity: .5;
+            cursor: default;
+        }
+    </style>
+</head>
+<body>
+<p id="status">Waiting for a roll…</p>
+<div id="dice"></div>
+<button id="roll" type="button" disabled>Roll again</button>
+<script>
+    // Minimal SEP-1865 app: JSON-RPC 2.0 over postMessage, no SDK.
+    // Lifecycle: ui/initialize -> ui/notifications/initialized -> ui/notifications/tool-result.
+    const pips = ['', '⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
+    const status = document.getElementById('status');
+    const dice = document.getElementById('dice');
+    const rollButton = document.getElementById('roll');
+    const pending = new Map();
+    let nextId = 2;
+    let count = 2;
+
+    function send(message) {
+        window.parent.postMessage({jsonrpc: '2.0', ...message}, '*');
+    }
+
+    function request(method, params) {
+        return new Promise((resolve, reject) => {
+            const id = nextId++;
+            pending.set(id, {resolve, reject});
+            send({id, method, params});
+        });
+    }
+
+    function render(rolls) {
+        if (rolls.length) count = rolls.length;
+        dice.replaceChildren(...rolls.map(n => {
+            const die = document.createElement('div');
+            die.className = 'die';
+            die.textContent = pips[n] || n;
+            return die;
+        }));
+        status.textContent = 'Total: ' + rolls.reduce((a, b) => a + b, 0);
+    }
+
+    window.addEventListener('message', event => {
+        if (event.source !== window.parent) return;
+        const msg = event.data;
+        if (!msg || msg.jsonrpc !== '2.0') return;
+        const call = pending.get(msg.id);
+        if (call) {                                    // answer to a request this view sent
+            pending.delete(msg.id);
+            msg.error ? call.reject(new Error(msg.error.message)) : call.resolve(msg.result);
+        } else if (msg.id === 1 && msg.result) {       // ui/initialize answered
+            send({method: 'ui/notifications/initialized'});
+            rollButton.disabled = false;
+        } else if (msg.method === 'ui/notifications/tool-result') {
+            render(msg.params.structuredContent?.rolls ?? []);
+        } else if (msg.method === 'ui/notifications/tool-cancelled') {
+            status.textContent = 'Roll cancelled.';
+        }
+    });
+
+    rollButton.addEventListener('click', async () => {
+        rollButton.disabled = true;
+        status.textContent = 'Rolling…';
+        try {
+            const result = await request('tools/call', {name: 'roll_dice', arguments: {count}});
+            if (result.isError) throw new Error(result.content?.[0]?.text ?? 'tool error');
+            render(result.structuredContent?.rolls ?? []);
+        } catch (e) {
+            status.textContent = 'Roll failed: ' + e.message;
+        } finally {
+            rollButton.disabled = false;
+        }
+    });
+
+    send({
+        id: 1,
+        method: 'ui/initialize',
+        params: {
+            appInfo: {name: 'dice', version: '1.0'},
+            appCapabilities: {},
+            protocolVersion: '2026-01-26'
+        }
+    });
+</script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+{
+  "basePackage": "dev.tachyonmcp.core.protocol.mcp.v2026_07_28",
+  "typeMappings": {
+    "McpUiToolVisibility": "dev.tachyonmcp.extensions.apps.UiToolVisibility"
+  },
+  "additionalProperties": {
+    "UIResource": [
+      "title?: string;"
+    ]
+  }
+}

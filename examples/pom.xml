@@ -31,11 +31,11 @@
             <activation>
                 <property>
                     <name>tachyon.version</name>
-                    <value>1.0.1-SNAPSHOT</value>
+                    <value>1.1.0-SNAPSHOT</value>
                 </property>
             </activation>
             <modules>
-                <module>weather-mcp-spring-boot</module>
+                <module>mcp-apps</module>
             </modules>
         </profile>
     </profiles>

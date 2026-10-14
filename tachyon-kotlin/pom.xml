@@ -29,12 +29,17 @@
         </dependency>
         <dependency>
             <groupId>dev.tachyonmcp</groupId>
-            <artifactId>tachyon-extensions-tasks</artifactId>
+            <artifactId>tachyon-extensions-apps</artifactId>
             <optional>true</optional>
         </dependency>
         <dependency>
             <groupId>dev.tachyonmcp</groupId>
             <artifactId>tachyon-extensions-skills</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>dev.tachyonmcp</groupId>
+            <artifactId>tachyon-extensions-tasks</artifactId>
             <optional>true</optional>
         </dependency>
         <dependency>
@@ -76,6 +81,11 @@
         <dependency>
             <groupId>org.awaitility</groupId>
             <artifactId>awaitility-kotlin</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>dev.tachyonmcp</groupId>
+            <artifactId>tachyon-testkit</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>

@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "dice-apps-mcp": {
+      "type": "http",
+      "url": "http://localhost:8080/mcp"
+    }
+  }
+}

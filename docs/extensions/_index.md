@@ -8,7 +8,7 @@ description: |-
   Use protocol extensions in your Tachyon server (SEP-2133): built-in extensions, client negotiation per MCP version, and negotiation policy.
 ---
 
-Extensions add optional MCP features beyond the base protocol, such as tasks or skills. The server
+Extensions add optional MCP features beyond the base protocol, such as tasks, skills, or apps. The server
 advertises the extensions it supports; a client declares the ones it uses. To build your own, see
 [Write an extension](custom-extensions.md). Tachyon implements
 [SEP-2133](https://modelcontextprotocol.io/seps/2133-extensions) negotiation for MCP 2025-11-25 and
@@ -20,6 +20,7 @@ advertises the extensions it supports; a client declares the ones it uses. To bu
 |---|---|---|---|
 | [Tasks](tasks.md) | `io.modelcontextprotocol/tasks` | `tachyon-extensions-tasks` | `.withExtension(TasksExtension.class, t -> t.connector(connector))` |
 | [Skills](skills.md) | `io.modelcontextprotocol/skills` | `tachyon-extensions-skills` | `.withExtension(SkillsExtension.class, s -> s.registry(registry))` |
+| [MCP Apps](apps.md) | `io.modelcontextprotocol/ui` | `tachyon-extensions-apps` | `.withExtension(AppsExtension.class, a -> a.app(view))` |
 
 ## Add an extension
 

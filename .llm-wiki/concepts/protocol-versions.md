@@ -1,9 +1,9 @@
 ---
 title: Protocol versions
 tags: [concept, protocol, mcp]
-sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/, tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/codec/, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/http/McpHeaderMatchHandler.java, tachyon-core/src/main/resources/META-INF/services/dev.tachyonmcp.core.protocol.Protocol, tachyon-core/ts2java.py, tachyon-core/protocol/, tachyon-core/pom.xml, extensions/tachyon-extensions-tasks/protocol/, extensions/tachyon-extensions-tasks/pom.xml]
-updated: 2026-09-26
-commit: caaefc64
+sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/, tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/codec/, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/http/McpHeaderMatchHandler.java, tachyon-core/src/main/resources/META-INF/services/dev.tachyonmcp.core.protocol.Protocol, tachyon-core/ts2java.py, tachyon-core/test_ts2java.py, tachyon-core/protocol/, tachyon-core/pom.xml, extensions/tachyon-extensions-tasks/protocol/, extensions/tachyon-extensions-tasks/pom.xml]
+updated: 2026-10-14
+commit: d8dc6214
 ---
 
 # 🔀 Protocol versions
@@ -88,7 +88,9 @@ Header names `McpHeaderNames` `McpHeaderNames#MCP_SESSION_ID`: `MCP-Session-Id`,
 - JSON objects (index signatures, `_meta`, `additionalProperties`, `*MetaObject`) are `ObjectNode`; a `java.util.Map` field fails generation. `RequestId`/`ProgressToken` map to `JsonNode` (numeric ids stay numbers). Body FQNs become imports unless the simple name clashes (`Generator#finalize_imports`).
 - ⚠️ Generated code not in git. Handwritten mappers live next to generated codecs in `codecs/`.
 - Revapi ignores generated classes (commit `3cc96c5f`).
-- Extension mode: config key `basePackage` (e.g. `extensions/tachyon-extensions-tasks/protocol/tasks-2026-07-28_config.json`). Types imported from the core TS schema map to core models via `typeMappings`; their inherited fields come from `additionalProperties`. The extension `CodecRegistry#codecFor` falls back to core's registry (`Generator#add_codec_registry`).
+- Parser ([TsParser#parse_ts](../../tachyon-core/ts2java.py), [TsParser#parse_fields](../../tachyon-core/ts2java.py)): comments stripped in one pass that keeps JSDoc + string literals, so `ui://`, `https://*.x` survive. Member ends at `;`, `,` or body end ([TsParser#_field_end](../../tachyon-core/ts2java.py)); index signature likewise. Inline-object class name drops leading `_` (`_meta` → `Meta`, [Generator#resolve_inline_object](../../tachyon-core/ts2java.py)).
+- Arrays ([Generator#resolve_type](../../tachyon-core/ts2java.py)): `Array<T>` matched whole + balanced before union split, inner resolved recursively ⇒ `Array<"a" | "b">` / `("a" | "b")[]` → `List<String>`, `Array<string>` → `List<String>`; named literal alias → enum (`List<Who>`). Regression check: `cd tachyon-core && python3 -m unittest test_ts2java` (not in CI).
+- Extension mode: config key `basePackage` (e.g. `extensions/tachyon-extensions-tasks/protocol/tasks-2026-07-28_config.json`). Types imported from the core TS schema map to core models via `typeMappings`; their inherited fields come from `additionalProperties`. The extension `CodecRegistry#codecFor` falls back to the `basePackage` registry; `basePackage` = own package ⇒ self-recursion, so point it at core (`Generator#add_codec_registry`).
 - Intersection aliases (`A & B & { … }`) merge local interfaces + inline objects (`Generator#generate`); an intersection with one discriminated union (`GetTaskResult = Result & DetailedTask & …`) becomes a record holding the variant (`DetailedTask detailedTask`) next to its own fields; its codec decodes the variant from a buffered copy, then the own fields, and writes the variant inline via `encodeProperties` (`Generator#flattened_unions`, `Generator#add_codec`). Other union intersections are skipped with a warning.
 - JMH: `CodecBenchmark` (decode/encode, union, JSON-RPC parse, generic writer); `ResponseMapperBenchmark` (2026-07-28 `tasks/get` completed result and `server/discover`, both inlining a generated model as a tree via `CodecSupport#encodeToTree`). Perf rule: `.agents/skills/tachyon-development/SKILL.md` § Performance.
 

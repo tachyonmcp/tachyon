@@ -178,8 +178,11 @@ class TsParser:
     def parse_ts(filepath):
         with open(filepath) as f:
             text = f.read()
-        text = re.sub(r"//[^\n]*", "", text)
-        text = re.sub(r"/\*[^*].*?\*/", "", text, flags=re.DOTALL)
+        text = re.sub(
+            r"""/\*\*[\s\S]*?\*/|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|/\*[\s\S]*?\*/|//[^\n]*""",
+            lambda m: "" if re.match(r"/(?:/|\*(?!\*))", m.group(0)) else m.group(0),
+            text,
+        )
         exports = []
         i = 0
         jsdoc = ""
@@ -361,18 +364,21 @@ class TsParser:
                 continue
             if body[i] == "}":
                 break
-            m = re.match(r"\[\s*(\w+)\s*:\s*(\w+)\s*\]\s*:\s*(.+?);", body[i:])
+            m = re.match(r"\[\s*(\w+)\s*:\s*(\w+)\s*\]\s*:\s*", body[i:])
             if m:
+                after_colon = i + m.end()
+                _, end_idx = TsParser.parse_type(body, after_colon)
+                semicolon = TsParser._field_end(body, end_idx)
                 fields.append(
                     {
                         "kind": "index",
                         "key_name": m.group(1),
                         "key_type": m.group(2),
-                        "value_type": m.group(3).strip(),
+                        "value_type": body[after_colon:semicolon].strip(),
                         "jsdoc": jsdoc,
                     }
                 )
-                i += m.end()
+                i = semicolon + 1
                 jsdoc = ""
                 continue
             m = re.match(r"(\w+)(\??)\s*:\s*", body[i:])
@@ -381,9 +387,7 @@ class TsParser:
                 optional = m.group(2) == "?"
                 after_colon = i + m.end()
                 type_str, end_idx = TsParser.parse_type(body, after_colon)
-                semicolon = body.find(";", end_idx)
-                if semicolon == -1:
-                    break
+                semicolon = TsParser._field_end(body, end_idx)
                 raw_type = body[after_colon:semicolon].strip()
                 fields.append(
                     {
@@ -418,9 +422,7 @@ class TsParser:
                 optional = m.group(3) == "?"
                 after_colon = i + m.end()
                 type_str, end_idx = TsParser.parse_type(body, after_colon)
-                semicolon = body.find(";", end_idx)
-                if semicolon == -1:
-                    break
+                semicolon = TsParser._field_end(body, end_idx)
                 raw_type = body[after_colon:semicolon].strip()
                 fields.append(
                     {
@@ -438,6 +440,14 @@ class TsParser:
                 continue
             i += 1
         return fields
+
+    @staticmethod
+    def _field_end(body, end_idx):
+        """Index of the `;` or `,` ending a member; a last member may omit it."""
+        if end_idx >= len(body) or body[end_idx] in ";,":
+            return end_idx
+        semicolon = body.find(";", end_idx)
+        return semicolon if semicolon != -1 else len(body)
 
     @staticmethod
     def parse_type(text, start):
@@ -614,6 +624,7 @@ class Generator:
         self.init_from_ts()
 
     def is_enum_type(self, name):
+        name = next((ts for ts, java in self.type_mappings.items() if java == name), name)
         exp = self.all_type_aliases.get(name)
         if not exp:
             return False
@@ -826,16 +837,16 @@ class Generator:
                 arr_match.group(1), owning_type, field_name, type_mappings
             )
             return "java.util.List<" + inner + ">"
+        arr_gen = re.fullmatch(r"Array<(.+)>", type_str, re.DOTALL)
+        if arr_gen and arr_gen.group(1).count("<") == arr_gen.group(1).count(">"):
+            inner = arr_gen.group(1).strip()
+            if inner.startswith("{"):
+                return "java.util.List<tools.jackson.databind.JsonNode>"
+            return "java.util.List<" + self.resolve_type(inner, owning_type, field_name, type_mappings) + ">"
         if "|" in type_str:
             return self.resolve_union_type(
                 type_str, owning_type, field_name, type_mappings
             )
-        arr_gen = re.match(r"Array<(.+)>", type_str, re.DOTALL)
-        if arr_gen:
-            inner = arr_gen.group(1).strip()
-            if inner.startswith("{"):
-                return "java.util.List<tools.jackson.databind.JsonNode>"
-            return "java.util.List<" + inner + ">"
         if type_str in STRING_NUMBER_UNIONS:
             return "Object"
         if type_str in self.known_type_names:
@@ -896,7 +907,8 @@ class Generator:
             elif isinstance(val, str) and val == body:
                 return key[1] if isinstance(key, tuple) else key
         if field_name:
-            name = field_name[0].upper() + field_name[1:] if field_name else "Anon"
+            stem = field_name.lstrip("_") or field_name
+            name = stem[0].upper() + stem[1:]
         else:
             name = "Anon_" + str(len(self.anon_registry) + 1)
         base_name = name
@@ -983,18 +995,6 @@ class Generator:
         if name in JAVA_KEYWORDS:
             return name + "_"
         return name
-
-    @staticmethod
-    def resolve_array_ts(type_str):
-        """Handle Array<T> syntax in addition to T[]."""
-        m = re.match(r"Array<(.+)>", type_str)
-        if m:
-            inner = m.group(1).strip()
-            # If inner type is an inline object, fall back to JsonNode
-            if inner.startswith("{"):
-                return "java.util.List<tools.jackson.databind.JsonNode>"
-            return "java.util.List<" + inner + ">"
-        return None
 
     @staticmethod
     def prune_stale(directory, names):

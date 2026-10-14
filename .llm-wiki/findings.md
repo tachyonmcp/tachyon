@@ -1,8 +1,8 @@
 ---
 title: Findings
 tags: [meta, findings]
-sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/, extensions/tachyon-extensions-tasks/src/main/java/dev/tachyonmcp/extensions/tasks/]
-updated: 2026-10-12
+sources: [tachyon-core/ts2java.py, tachyon-core/src/main/java/dev/tachyonmcp/core/, extensions/tachyon-extensions-tasks/src/main/java/dev/tachyonmcp/extensions/tasks/]
+updated: 2026-10-14
 commit: f3359ece
 ---
 
@@ -10,6 +10,7 @@ commit: f3359ece
 
 Spotted while reading code. Runtime verification noted per finding. Fixed in code ⇒ 🗑️ remove row.
 
+- 🐛 ts2java nested arrays: `Array<Array<string>>` / `string[][]` model is `List<List<String>>` but the codec decodes elements via a bogus `Lis` codec. No current schema uses it. Probe-verified. [Generator#add_codec](../tachyon-core/ts2java.py)
 - 🪶 Extension close hook is unused: `Extension#onConnectionClose` has no server call site. Cleanup currently relies on `ServerExtension#shutdown` during terminal close. Static source search. [Extension#onConnectionClose](../tachyon-api/src/main/java/dev/tachyonmcp/api/runtime/Extension.java), [DefaultTachyonServer#close](../tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java).
 - ⚠️ `UnsupportedProtocolVersionHandler` encodes the rejection with `ProtocolVersionHandler#LATEST_PROTOCOL` (not `Protocols#baseline`) + HTTP 400, even for legacy-looking clients. Intentional per SEP-2575? `UnsupportedProtocolVersionHandler#channelRead`
 - ⚠️ POST-SSE budget per stream only; no global cap or connection limit. `PostSseStream#reserve`

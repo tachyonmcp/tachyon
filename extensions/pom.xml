@@ -22,6 +22,7 @@
     <modules>
         <module>tachyon-extensions</module>
         <module>tachyon-extensions-skills</module>
+        <module>tachyon-extensions-apps</module>
         <module>tachyon-extensions-tasks</module>
     </modules>
 </project>

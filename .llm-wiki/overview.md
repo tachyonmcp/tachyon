@@ -2,8 +2,8 @@
 title: Overview
 tags: [concept, architecture]
 sources: [pom.xml, Makefile, renovate.json5, .mvn/wrapper/maven-wrapper.properties, .github/workflows/release.yml, tachyon-core/pom.xml, integrations/pom.xml, extensions/pom.xml, tachyon-core/src/main/java/dev/tachyonmcp/core/server/TachyonServer.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/ServerBuilder.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultServerBuilder.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java]
-updated: 2026-10-09
-commit: 8b2fb730
+updated: 2026-10-13
+commit: d8dc6214
 ---
 
 # 🛰️ Overview
@@ -35,6 +35,7 @@ graph TD
 | `tachyon-kotlin-kt-schema` | Reflection JSON-schema factory for Kotlin classes | [[tachyon-kotlin]] |
 | `extensions/tachyon-extensions` | Sample tools; depends on skills for compat | [[tachyon-extensions]] |
 | `extensions/tachyon-extensions-skills` | Skills extension (`skill://`) | [[tachyon-extensions-skills]] |
+| `extensions/tachyon-extensions-apps` | MCP Apps extension (`ui://`) | [[tachyon-extensions-apps]] |
 | `tachyon-testkit` | HTTP test clients/asserts | [[tachyon-testkit]] |
 | `integrations/*` | 6 modules (`pom.xml`) | [[integrations]] |
 | `tachyon-bom` | `dependencyManagement` only, **no `<parent>`** so importing it never leaks the build's own third-party versions | — |

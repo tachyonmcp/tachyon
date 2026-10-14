@@ -18,6 +18,8 @@ the Maven wrapper built in, so you can run it without installing anything else �
   `@ResourceTemplate`, and `@Prompt` annotations, scanned by `McpJavaAnnotationProvider`.
 - [**mcp-skills**](mcp-skills) — Java. Serves a bundled Elvish-magic Agent Skill through the MCP
   skills extension.
+- [**mcp-apps**](mcp-apps) — Java. Renders dice rolls in an interactive MCP App view (`ui://` resource +
+  tool `_meta.ui`) with `tachyon-extensions-apps`. Needs a `1.1.0-SNAPSHOT` build until the release.
 - [**temporal**](temporal) — Java. MCP tasks backed by Temporal workflows through
   `tachyon-tasks-temporal`. Library plus tests; Docker is needed for the Testcontainers test.
 
