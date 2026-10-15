@@ -22,6 +22,10 @@
         <maven.deploy.skip>true</maven.deploy.skip>
         <maven.install.skip>true</maven.install.skip>
         <spotbugs.skip>true</spotbugs.skip>
+
+
+        <!-- See https://github.com/maven-turbo-reactor/maven-turbo-builder/issues/27 -->
+        <turboWaitFullUpstream>true</turboWaitFullUpstream>
     </properties>
 
     <dependencies>
