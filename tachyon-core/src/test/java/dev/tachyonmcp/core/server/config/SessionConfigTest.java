@@ -225,14 +225,15 @@ class SessionConfigTest {
         var key = new SessionKey("sess_1", "gen_1");
         var expiresAt = Instant.now().plusSeconds(30);
 
-        var snapshot = store.create(key, expiresAt);
+        var snapshot = store.create(key, null, expiresAt);
 
         assertThat(snapshot.key()).isEqualTo(key);
         assertThat(snapshot.state()).isEqualTo(SessionState.INITIALIZING);
         assertThat(store.find("sess_1")).isEmpty();
         assertThat(store.touch(key, expiresAt)).isTrue();
         assertThat(store.compareAndSet(
-                        snapshot, new SessionSnapshot(key, SessionState.ACTIVE, null, Set.of(), null, expiresAt, 1)))
+                        snapshot,
+                        new SessionSnapshot(key, null, SessionState.ACTIVE, null, Set.of(), null, expiresAt, 1)))
                 .isTrue();
         assertThat(store.terminate(key)).isTrue();
     }

@@ -205,7 +205,7 @@ public final class ToolMethodHandlers {
                     return missingCapability;
                 }
                 var snapshot = taskRuntime.publish(
-                        task.snapshot(), context.sessionId(), mapped.request().progressToken());
+                        context, task.snapshot(), mapped.request().progressToken());
                 context.observation().markTaskHandoff(snapshot.taskId());
                 return context.responseMapper().createTaskResult(snapshot);
             }

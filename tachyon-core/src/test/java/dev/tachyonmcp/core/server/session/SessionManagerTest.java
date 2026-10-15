@@ -5,15 +5,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.tachyonmcp.api.server.domain.LoggingLevel;
+import dev.tachyonmcp.api.server.security.SecurityContext;
 import dev.tachyonmcp.core.protocol.Protocols;
 import dev.tachyonmcp.core.runtime.SessionState;
 import dev.tachyonmcp.core.runtime.SseConnection;
 import dev.tachyonmcp.core.runtime.SseEvent;
+import dev.tachyonmcp.core.server.security.Owner;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Optional;
 import java.util.Queue;
 import java.util.Set;
@@ -25,6 +28,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 
 class SessionManagerTest {
@@ -60,9 +64,10 @@ class SessionManagerTest {
         var store = new InMemorySessionStore();
         var protocol = Protocols.list().getFirst();
         var key = new SessionKey("s1", "generation");
-        var created = store.create(key, NOW.plusSeconds(30));
+        var created = store.create(key, null, NOW.plusSeconds(30));
         var persisted = new SessionSnapshot(
                 key,
+                null,
                 SessionState.ACTIVE,
                 protocol.versionString(),
                 Set.of("io.tachyon/test"),
@@ -80,10 +85,46 @@ class SessionManagerTest {
     }
 
     @Test
+    void ownerIsPersistedFromCreationAndSurvivesEveryRevisionAndRestore() {
+        final var store = new InMemorySessionStore();
+        final var clock = new MutableClock(NOW);
+        final var manager = new SessionManager(store, clock, Duration.ofSeconds(30));
+        final var alice = SecurityContext.authenticated(() -> "alice", List.of());
+        final var session = manager.createSession("s1", SseConnection.noop(), alice);
+        final var anonymous = manager.createSession("s2");
+
+        assertThat(store.find("s1")).hasValueSatisfying(created -> {
+            assertThat(created.ownerKey()).isEqualTo("alice");
+            assertThat(created.revision()).isZero();
+        });
+        session.activate();
+        clock.advance(Duration.ofSeconds(15));
+        session.touch();
+        session.loggingLevel(LoggingLevel.WARNING);
+
+        assertThat(manager.getLocalSession("s1"))
+                .as("no revision lost ownership")
+                .containsSame(session);
+        assertThat(store.find("s1")).hasValueSatisfying(current -> {
+            assertThat(current.ownerKey()).isEqualTo("alice");
+            assertThat(current.revision()).isGreaterThan(2);
+        });
+        assertThat(store.find("s2"))
+                .hasValueSatisfying(current -> assertThat(current.ownerKey()).isNull());
+        assertThat(anonymous.owner()).isEqualTo(Owner.anonymous());
+
+        final var restored = new SessionManager(store, clock, Duration.ofSeconds(30));
+        assertThat(restored.getSession("s1"))
+                .hasValueSatisfying(node -> assertThat(node.owner()).isEqualTo(Owner.of(alice)));
+        assertThat(restored.getSession("s2"))
+                .hasValueSatisfying(node -> assertThat(node.owner()).isEqualTo(Owner.anonymous()));
+    }
+
+    @Test
     void expiredSnapshotDoesNotHydrate() {
         var store = new InMemorySessionStore();
         var key = new SessionKey("s1", "generation");
-        store.create(key, NOW.minusSeconds(1));
+        store.create(key, null, NOW.minusSeconds(1));
 
         assertThat(manager(store).getSession("s1")).isEmpty();
         assertThat(store.find("s1")).isEmpty();
@@ -93,9 +134,10 @@ class SessionManagerTest {
     void snapshotWithUnsupportedProtocolDoesNotHydrate() {
         final var store = new InMemorySessionStore();
         final var key = new SessionKey("s1", "generation");
-        final var created = store.create(key, NOW.plusSeconds(30));
+        final var created = store.create(key, null, NOW.plusSeconds(30));
         final var incompatible = new SessionSnapshot(
                 key,
+                null,
                 SessionState.ACTIVE,
                 "unsupported-version",
                 Set.of(),
@@ -159,7 +201,7 @@ class SessionManagerTest {
         final var manager = new SessionManager(store, clock, Duration.ofSeconds(30));
         final var session = manager.createSession("s1");
         final var replacementKey = new SessionKey("s1", "replacement");
-        final var replacement = store.create(replacementKey, NOW.plusSeconds(60));
+        final var replacement = store.create(replacementKey, null, NOW.plusSeconds(60));
         clock.advance(Duration.ofSeconds(15));
 
         session.touch();
@@ -207,7 +249,7 @@ class SessionManagerTest {
         final var store = new TrackingSessionStore();
         final var manager = manager(store);
         final var session = manager.createSession("s1");
-        final var replacement = store.create(new SessionKey("s1", "replacement"), NOW.plusSeconds(60));
+        final var replacement = store.create(new SessionKey("s1", "replacement"), null, NOW.plusSeconds(60));
 
         session.activate();
 
@@ -273,7 +315,7 @@ class SessionManagerTest {
     @Test
     void concurrentHydrationReadsStoreOnce() throws Exception {
         final var store = new TrackingSessionStore();
-        store.create(new SessionKey("s1", "generation"), NOW.plusSeconds(30));
+        store.create(new SessionKey("s1", "generation"), null, NOW.plusSeconds(30));
         store.armFindTracking();
         final var manager = manager(store);
 
@@ -562,9 +604,9 @@ class SessionManagerTest {
         private final CountDownLatch findDuringTerminate = new CountDownLatch(1);
 
         @Override
-        public SessionSnapshot create(SessionKey key, Instant expiresAt) {
+        public SessionSnapshot create(SessionKey key, @Nullable String ownerKey, Instant expiresAt) {
             if (!trackCreates) {
-                return delegate.create(key, expiresAt);
+                return delegate.create(key, ownerKey, expiresAt);
             }
             final var concurrent = concurrentCreates.incrementAndGet();
             maxConcurrentCreates.accumulateAndGet(concurrent, Math::max);
@@ -576,7 +618,7 @@ class SessionManagerTest {
                 } else {
                     overlappingCreateEntered.countDown();
                 }
-                return delegate.create(key, expiresAt);
+                return delegate.create(key, ownerKey, expiresAt);
             } finally {
                 concurrentCreates.decrementAndGet();
             }

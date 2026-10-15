@@ -9,9 +9,12 @@ import dev.tachyonmcp.core.server.features.subscriptions.SubscriptionTopic;
 import dev.tachyonmcp.core.server.features.tasks.TaskRuntime;
 import dev.tachyonmcp.core.server.features.tasks.TasksExtensionSupport;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
+import dev.tachyonmcp.core.server.security.Owner;
+import dev.tachyonmcp.core.server.session.DispatchContext;
 import dev.tachyonmcp.extensions.tasks.engine.TaskEngine;
 import dev.tachyonmcp.extensions.tasks.engine.TaskEvents;
 import dev.tachyonmcp.extensions.tasks.engine.TaskRoute;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
@@ -28,7 +31,10 @@ final class McpTaskBinding implements TaskRuntime, TaskEvents {
 
     private final ServerEngine server;
     private final TaskEngine engine;
-    private final SubscriptionTopic<Set<String>> subscriptionTopic;
+    private final SubscriptionTopic<TaskListen> subscriptionTopic;
+
+    /** What one {@code subscriptions/listen} stream follows, and who listens. */
+    private record TaskListen(Owner listener, Set<String> taskIds) {}
 
     McpTaskBinding(ServerEngine server, TaskEngine engine) {
         this.server = Objects.requireNonNull(server, "server");
@@ -38,29 +44,35 @@ final class McpTaskBinding implements TaskRuntime, TaskEvents {
 
     /**
      * Makes {@code taskIds} a {@code subscriptions/listen} filter key and routes task status to it.
-     * Every listed id is authorized once, when the stream opens, by the connector's {@code get}: it
-     * fails closed, and a listener left with no readable id drops the topic.
+     * Every listed id is authorized when the stream opens, by the connector's {@code get}: it fails
+     * closed, and a listener left with no readable id drops the topic. Every status pushed to the
+     * stream is checked again against the task's owner at that moment, in memory, so a stream that
+     * named a task before it existed never follows it once someone else owns it.
      */
     void registerSubscriptionTopic() {
         server.subscriptions().register(subscriptionTopic);
     }
 
-    private static SubscriptionTopic<Set<String>> taskIdsTopic(TaskEngine engine) {
+    private static SubscriptionTopic<TaskListen> taskIdsTopic(TaskEngine engine) {
         var taskIds = SubscriptionTopic.strings("taskIds");
-        return taskIds.withDecoder((context, filter) -> {
+        return new SubscriptionTopic<>(
+                taskIds.filterKey(),
+                (context, filter) -> {
                     var requested = taskIds.decoder().decode(context, filter);
-                    if (requested != null) {
-                        var missingExtension = TasksExtensionSupport.requireDeclared(context);
-                        if (missingExtension != null) {
-                            throw new RequestMappingException(missingExtension);
-                        }
+                    if (requested == null) {
+                        return null;
                     }
-                    return requested;
-                })
-                .withAuthorizer((context, requested) -> {
-                    var readable = engine.readableTaskIds(context, requested);
-                    return readable.isEmpty() ? null : readable;
-                });
+                    var missingExtension = TasksExtensionSupport.requireDeclared(context);
+                    if (missingExtension != null) {
+                        throw new RequestMappingException(missingExtension);
+                    }
+                    return new TaskListen(Owner.of(context.securityContext()), requested);
+                },
+                (context, requested) -> {
+                    var readable = engine.readableTaskIds(context, requested.taskIds());
+                    return readable.isEmpty() ? null : new TaskListen(requested.listener(), readable);
+                },
+                listen -> List.copyOf(listen.taskIds()));
     }
 
     @Override
@@ -69,9 +81,8 @@ final class McpTaskBinding implements TaskRuntime, TaskEvents {
     }
 
     @Override
-    public TaskSnapshot publish(
-            TaskSnapshot snapshot, @Nullable String sessionId, @Nullable ProgressToken progressToken) {
-        return engine.publish(snapshot, McpTaskRoute.of(sessionId, progressToken));
+    public TaskSnapshot publish(DispatchContext context, TaskSnapshot snapshot, @Nullable ProgressToken progressToken) {
+        return engine.publishAs(context, snapshot, McpTaskRoute.of(context.sessionId(), progressToken));
     }
 
     @Override
@@ -82,10 +93,11 @@ final class McpTaskBinding implements TaskRuntime, TaskEvents {
     @Override
     public void onStatus(TaskSnapshot snapshot, TaskRoute route) {
         server.notifyTaskStatus(snapshot, route instanceof McpTaskRoute mcp ? mcp.sessionId() : null);
+        var taskId = snapshot.taskId();
         server.subscriptions()
                 .publish(
                         subscriptionTopic,
-                        taskIds -> taskIds.contains(snapshot.taskId()),
+                        listen -> listen.taskIds().contains(taskId) && engine.admits(listen.listener(), taskId),
                         "notifications/tasks",
                         mapper -> mapper.taskStatusNotificationParams(snapshot));
     }

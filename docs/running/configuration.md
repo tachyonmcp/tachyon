@@ -429,15 +429,21 @@ experimental stores enable restart recovery, but do not distribute live sessions
 connections between nodes.
 
 A persistent implementation can use the session ID as its key and encode the complete snapshot
-as its value. `create` is an atomic put, `find` decodes the value, `compareAndSet` is a conditional
+as its value. `create` is an atomic put of the snapshot with the `ownerKey` it is given, `find` decodes the value, `compareAndSet` is a conditional
 replace, `touch` conditionally extends the matching generation's expiry, `terminate(SessionKey)` removes
 only the matching generation, and `terminate(SessionKey, long)` is a conditional delete that removes
 the snapshot only while its generation and revision still match, for example
 `DELETE … WHERE session_id = ? AND generation = ? AND revision = ?`. Every write within a generation
 must increment the revision, so a key and a revision identify one snapshot version.
 The default `terminate(SessionKey, long)` checks with `find` and then calls `terminate(SessionKey)`,
-so a write between the two calls is lost. Stores written for 1.0 keep working; override it with one
-atomic conditional delete to close that window.
+so a write between the two calls is lost. Override it with one atomic conditional delete to close
+that window.
+`SessionSnapshot#ownerKey()` identifies the caller that created the session, or is `null` for an
+anonymous one (see [authentication](authentication.md#how-it-runs)). `create(SessionKey, String, Instant)`
+receives it, and every later snapshot of the generation carries it unchanged. Persist and return it as
+part of the snapshot: a store that drops it restores the session as anonymous, and the session then
+refuses its own authenticated creator. A store written before 1.1 must add the `ownerKey` parameter
+to `create`.
 Store implementations must make these operations thread-safe.
 Operations execute synchronously and may perform I/O. Tachyon invokes them outside transport
 event-loop threads. Implementations must be thread-safe.

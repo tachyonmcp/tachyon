@@ -33,6 +33,9 @@ import org.slf4j.LoggerFactory;
  * context copies. The provider runs on the handler executor, never on the event loop; the request
  * continues down the pipeline on the event loop once it returns.
  *
+ * <p>A principal without a name is a provider failure: sessions are bound to the name, and a
+ * nameless principal could not be told apart from an anonymous caller.
+ *
  * <p>A rejected request is answered per RFC 6750 §3.1 and never reaches dispatch:
  * {@link AuthenticationException.Reason#MISSING_CREDENTIALS} ⇒ {@code 401} with a bare
  * {@code Bearer} challenge, {@code INVALID_TOKEN} ⇒ {@code 401 error="invalid_token"},
@@ -78,7 +81,14 @@ public final class AuthenticationHandler extends ChannelInboundHandlerAdapter {
 
     private void authenticate(HttpRequest request, CompletableFuture<SecurityContext> outcome) {
         try {
-            outcome.complete(Objects.requireNonNull(provider.authenticate(request), "provider returned null"));
+            final var securityContext =
+                    Objects.requireNonNull(provider.authenticate(request), "provider returned null");
+            final var principal = securityContext.principal();
+            if (principal != null
+                    && (principal.getName() == null || principal.getName().isBlank())) {
+                throw new IllegalStateException("provider returned a principal without a name");
+            }
+            outcome.complete(securityContext);
         } catch (Throwable t) {
             outcome.completeExceptionally(t);
         }

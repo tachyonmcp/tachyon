@@ -1603,6 +1603,26 @@
           "attachments": {
             "since": "1.1.0-SNAPSHOT"
           }
+        },
+        {
+          "ignore": true,
+          "code": "java.method.numberOfParametersChanged",
+          "old": "method void dev.tachyonmcp.core.server.session.SessionSnapshot::<init>(dev.tachyonmcp.core.server.session.SessionKey, dev.tachyonmcp.core.runtime.SessionState, java.lang.String, java.util.Set<java.lang.String>, dev.tachyonmcp.api.server.domain.LoggingLevel, java.time.Instant, long)",
+          "new": "method void dev.tachyonmcp.core.server.session.SessionSnapshot::<init>(dev.tachyonmcp.core.server.session.SessionKey, java.lang.String, dev.tachyonmcp.core.runtime.SessionState, java.lang.String, java.util.Set<java.lang.String>, dev.tachyonmcp.api.server.domain.LoggingLevel, java.time.Instant, long)",
+          "justification": "A session is bound to the caller that created it, so the snapshot carries that owner key and a restored session keeps its owner. @ExperimentalApi persistence SPI; stores must persist the new component",
+          "attachments": {
+            "since": "1.1.0-SNAPSHOT"
+          }
+        },
+        {
+          "ignore": true,
+          "code": "java.method.numberOfParametersChanged",
+          "old": "method dev.tachyonmcp.core.server.session.SessionSnapshot dev.tachyonmcp.core.server.session.SessionStore::create(dev.tachyonmcp.core.server.session.SessionKey, java.time.Instant)",
+          "new": "method dev.tachyonmcp.core.server.session.SessionSnapshot dev.tachyonmcp.core.server.session.SessionStore::create(dev.tachyonmcp.core.server.session.SessionKey, java.lang.String, java.time.Instant)",
+          "justification": "The owner key is part of the first persisted snapshot, so a session is never visible to another node without its owner. A two-argument overload would silently create anonymous sessions in a store that does not persist the owner. @ExperimentalApi persistence SPI",
+          "attachments": {
+            "since": "1.1.0-SNAPSHOT"
+          }
         }
       ]
     }

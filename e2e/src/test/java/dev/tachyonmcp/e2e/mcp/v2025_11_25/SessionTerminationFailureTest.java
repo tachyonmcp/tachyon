@@ -24,6 +24,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -150,8 +151,8 @@ class SessionTerminationFailureTest {
         }
 
         @Override
-        public SessionSnapshot create(SessionKey key, Instant expiresAt) {
-            return delegate.create(key, expiresAt);
+        public SessionSnapshot create(SessionKey key, @Nullable String ownerKey, Instant expiresAt) {
+            return delegate.create(key, ownerKey, expiresAt);
         }
 
         @Override

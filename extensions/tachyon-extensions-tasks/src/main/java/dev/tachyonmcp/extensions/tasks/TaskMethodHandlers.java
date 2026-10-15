@@ -122,7 +122,7 @@ final class TaskMethodHandlers {
             } catch (TaskNotFoundException e) {
                 return taskNotFound("retrieve");
             }
-            return context.responseMapper().getTaskResult(registry.publish(snapshot));
+            return context.responseMapper().getTaskResult(registry.refresh(snapshot));
         }
     }
 

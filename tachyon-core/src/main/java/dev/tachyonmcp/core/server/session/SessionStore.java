@@ -6,6 +6,7 @@ import dev.tachyonmcp.core.runtime.SessionState;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Persistence boundary for immutable, transport-free MCP session snapshots.
@@ -27,8 +28,18 @@ import java.util.Set;
 @ExperimentalApi(since = "1.0.0-beta.26")
 public interface SessionStore extends AutoCloseable {
 
-    /** Creates a new generation, atomically replacing the current generation for its session ID. */
-    SessionSnapshot create(SessionKey key, Instant expiresAt);
+    /**
+     * Creates a new generation, atomically replacing the current generation for its session ID.
+     *
+     * <p>The returned snapshot carries {@code ownerKey} from its first revision, so a node that
+     * restores it never sees the session without its owner. Every later snapshot of the generation
+     * keeps the same {@link SessionSnapshot#ownerKey()}.
+     *
+     * @param key the new generation
+     * @param ownerKey the creating caller's identity, or {@code null} for an anonymous creator
+     * @param expiresAt the initial expiry
+     */
+    SessionSnapshot create(SessionKey key, @Nullable String ownerKey, Instant expiresAt);
 
     /** Finds the current snapshot for a session ID. */
     Optional<SessionSnapshot> find(String sessionId);
@@ -92,8 +103,8 @@ final class NoopSessionStore implements SessionStore {
     private NoopSessionStore() {}
 
     @Override
-    public SessionSnapshot create(SessionKey key, Instant expiresAt) {
-        return new SessionSnapshot(key, SessionState.INITIALIZING, null, Set.of(), null, expiresAt, 0);
+    public SessionSnapshot create(SessionKey key, @Nullable String ownerKey, Instant expiresAt) {
+        return new SessionSnapshot(key, ownerKey, SessionState.INITIALIZING, null, Set.of(), null, expiresAt, 0);
     }
 
     @Override

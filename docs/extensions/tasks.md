@@ -163,7 +163,10 @@ Every `subscriptions/listen` stream that names a task id also receives that task
 `notifications/tasks`, routed or not, as long as the connector let the stream read it. When the
 stream opens, Tachyon calls the connector's `get` with the listener's `InteractionContext` for each
 id it names. An id the connector refuses or fails on is left out, and the acknowledgment lists only
-the ids that stay. The check runs once per stream, not per notification. Status is never broadcast
+the ids that stay. The connector check runs once per stream, not per notification. A task that
+belongs to another caller (see [Who can reach a task](#who-can-reach-a-task)) is checked for every
+notification: a stream that named an id before the task existed stops receiving it once someone else
+owns it. Status is never broadcast
 to other sessions. The tasks extension owns the `taskIds` filter topic. Without that extension,
 `taskIds` is ignored and omitted from the acknowledgment. With the extension installed, the client
 must declare it before requesting task ids.
@@ -180,16 +183,36 @@ reconnects reads the result with `tasks/get`, as long as the connector still kno
 
 ## Who can reach a task
 
-Tachyon does not decide access. `tasks/get`, `tasks/cancel`, `tasks/result`, `tasks/update` and
-`tasks/list` always call the connector, which receives the caller's `InteractionContext` and
-must authorize the call. So does every task id a `subscriptions/listen` stream names, through
-`get`. Tachyon has no authentication, so the MCP spec's rule for servers without
-an authorization context applies: the task id is a bearer capability. Generate it unguessable, e.g.
-a random UUID. Tachyon never generates task ids: the tool or the task execution engine owns their
-uniqueness and unpredictability.
+With [authentication](../running/authentication.md) configured, **a task belongs to the caller whose
+task-producing tool call created it**, from any of that caller's sessions. Another caller gets
+`Task not found`, the same answer as for an unknown id, from `tasks/get`, `tasks/cancel`,
+`tasks/result` and `tasks/update`, before your connector runs. `tasks/list` leaves the task out, and a
+`subscriptions/listen` stream does not follow it. This is the MCP rule that receivers bind tasks to
+the authorization context.
 
-To keep a task private to the session that started it, record the session with the job and check
-it in the connector. Answer a task the caller may not see like an unknown id:
+- **Anonymous and server-published tasks are unowned.** A task an unauthenticated caller creates, or
+  that you publish through `TachyonServer#tasks().publish(...)`, has no owner. Every task call on it
+  goes to the connector, which receives the caller's `InteractionContext` and must authorize the call.
+  `tasks/list` shows these tasks to every caller that your connector lists them to, so scope the
+  listing by caller in the connector (the MCP spec wants only the requestor's own tasks listed).
+  Without authentication the MCP spec's rule applies: the task id is a bearer capability. Generate it
+  unguessable, e.g. a random UUID. Tachyon never generates task ids: the tool or the task execution
+  engine owns their uniqueness and unpredictability.
+- **The owner never changes.** `publish` on a task an owner already has keeps working: it updates the
+  status and never changes the owner. But a tool call that returns a task owned by someone else, or a
+  task you already published unowned, fails with `Internal error` and is logged. Return the task from
+  the tool call first, and publish status updates afterwards.
+- **The binding lasts as long as the task can be reached.** It is kept in memory for the task's
+  `ttl`, even after the janitor evicts its snapshot. A task without a `ttl` is bound only while its
+  snapshot is cached, which ends five minutes after it turns terminal by default (`keepAlive`).
+  Set a `ttl` on tasks that must stay private for longer.
+- **The binding is process-local.** After a restart, or on another node that shares your connector,
+  Tachyon sees the task as unowned and your connector is the only check left. So keep authorizing in
+  the connector, as below, whenever tasks outlive one process.
+
+To keep a task private to the session that started it, or to its owner across nodes, record the
+caller with the job and check it in the connector. Answer a task the caller may not see like an
+unknown id:
 
 <!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/extensions/tasks/SessionScopedConnector.java#tasks_session_scoped_get -->
 ```java
@@ -203,8 +226,9 @@ it in the connector. Answer a task the caller may not see like an unknown id:
 ```
 
 Apply the same check in `cancel`, `update` and `awaitResult`, and filter `list`. The `get` check also
-keeps other clients' `subscriptions/listen` streams away from the task. A client that reconnects with
-a new session then loses access to its earlier tasks.
+keeps other clients' `subscriptions/listen` streams away from the task. A check on the session means
+a client that reconnects with a new session loses access to its earlier tasks; a check on
+`ctx.securityContext().principal().getName()` does not.
 
 ## Retention
 

@@ -267,8 +267,8 @@ class McpOperationHandlerTest {
         }
 
         @Override
-        public SessionSnapshot create(SessionKey key, Instant expiresAt) {
-            return delegate.create(key, expiresAt);
+        public SessionSnapshot create(SessionKey key, @Nullable String ownerKey, Instant expiresAt) {
+            return delegate.create(key, ownerKey, expiresAt);
         }
 
         @Override

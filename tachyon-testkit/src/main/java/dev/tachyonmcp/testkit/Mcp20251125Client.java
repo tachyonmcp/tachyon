@@ -25,6 +25,16 @@ public final class Mcp20251125Client extends McpClient {
     }
 
     /**
+     * Creates a client for the given server port that acts as the caller {@code bearerToken} names.
+     *
+     * @param port the port of the running Tachyon server
+     * @param bearerToken the access token sent as {@code Authorization: Bearer} on every request
+     */
+    public Mcp20251125Client(int port, String bearerToken) {
+        super(port, bearerToken);
+    }
+
+    /**
      * Creates a client against an arbitrary MCP endpoint (local or remote, http or https).
      *
      * @param mcpEndpoint the MCP endpoint URI, e.g. {@code https://staging.example.com/mcp}

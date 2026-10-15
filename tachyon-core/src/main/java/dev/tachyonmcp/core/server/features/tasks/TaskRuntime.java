@@ -5,6 +5,7 @@ import dev.tachyonmcp.api.annotations.InternalApi;
 import dev.tachyonmcp.api.server.domain.ProgressToken;
 import dev.tachyonmcp.api.server.domain.ServerCapabilities;
 import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
+import dev.tachyonmcp.core.server.session.DispatchContext;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -24,7 +25,7 @@ public interface TaskRuntime {
 
         @Override
         public TaskSnapshot publish(
-                TaskSnapshot snapshot, @Nullable String sessionId, @Nullable ProgressToken progressToken) {
+                DispatchContext context, TaskSnapshot snapshot, @Nullable ProgressToken progressToken) {
             return snapshot;
         }
 
@@ -39,16 +40,22 @@ public interface TaskRuntime {
 
     /**
      * Caches {@code snapshot} for the task a task-augmented tool call returned, routing its push
-     * traffic to that call; the route is explicit since an async tool completes off the dispatch
-     * thread. An entry published before the tool returned takes the route; one already routed keeps
-     * its own. Never refuses: access is the connector's decision, not the cache's.
+     * traffic to that call's session and binding the task to that call's caller; the context is the
+     * request's own copy, so it is safe to use after an async tool left the dispatch thread. A task
+     * the same caller published before the tool returned takes the route; one already routed keeps
+     * its own.
      *
+     * <p>The owner never changes. A task nobody owns, for example one a worker published through
+     * {@code TachyonServer#tasks()} before the tool returned, cannot be claimed afterwards, and a task
+     * owned by someone else cannot be taken over. Both are refused and nothing about them changes.
+     *
+     * @param context the context of the tool call, which fixes the session and the caller
      * @param snapshot the task the tool returned
-     * @param sessionId the calling session, or {@code null} on a stateless server
      * @param progressToken the tool call's progress token, or {@code null} when it sent none
      * @return the effective snapshot
+     * @throws IllegalStateException if the task already has a different owner
      */
-    TaskSnapshot publish(TaskSnapshot snapshot, @Nullable String sessionId, @Nullable ProgressToken progressToken);
+    TaskSnapshot publish(DispatchContext context, TaskSnapshot snapshot, @Nullable ProgressToken progressToken);
 
     /**
      * Returns the {@code tasks} capability to advertise, or {@code null} to advertise none.

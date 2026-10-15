@@ -7,6 +7,7 @@ import dev.tachyonmcp.api.server.domain.ProgressToken;
 import dev.tachyonmcp.api.server.domain.RequestId;
 import dev.tachyonmcp.api.server.domain.ServerCapabilities;
 import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
+import dev.tachyonmcp.api.server.security.SecurityContext;
 import dev.tachyonmcp.api.server.session.SessionIdGenerator;
 import dev.tachyonmcp.core.protocol.ProtocolResponseMapper;
 import dev.tachyonmcp.core.runtime.Session;
@@ -76,8 +77,18 @@ public interface ServerEngine extends TachyonServer {
     /** Returns {@code true} if the given extension's methods may be dispatched without client declaration. */
     boolean extensionNegotiationOptional(String extensionId);
 
-    /** Creates and registers a new session with the given ID. */
-    Session createSession(String sessionId);
+    /**
+     * Creates and registers a new session with the given ID, owned from its first persisted snapshot
+     * by the caller that made the creating request.
+     *
+     * @param creator the security context of the creating request
+     */
+    Session createSession(String sessionId, SecurityContext creator);
+
+    /** Creates and registers a new anonymous session with the given ID. */
+    default Session createSession(String sessionId) {
+        return createSession(sessionId, SecurityContext.anonymous());
+    }
 
     /** Returns the session with the given ID, if present. */
     Optional<Session> getSession(String sessionId);

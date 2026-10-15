@@ -27,6 +27,8 @@ public final class TestBearerTokens implements BearerTokenVerifier {
     public static final String BOB = "bob-token";
     /** Makes the verifier fail as if its introspection endpoint were down. */
     public static final String UNVERIFIABLE = "unverifiable-token";
+    /** Verifies to an authenticated principal whose name is {@code null}, which a provider must never return. */
+    public static final String NAMELESS = "nameless-token";
 
     public static final String WHOAMI = "whoami";
 
@@ -46,6 +48,7 @@ public final class TestBearerTokens implements BearerTokenVerifier {
         return switch (token) {
             case ALICE -> SecurityContext.authenticated(new User("alice"), List.of("tools:read", "tools:call"));
             case BOB -> SecurityContext.authenticated(new User("bob"), List.of("tools:read"));
+            case NAMELESS -> SecurityContext.authenticated(new User(null), List.of());
             case UNVERIFIABLE -> throw new IllegalStateException("Introspection endpoint unavailable");
             default -> throw new AuthenticationException(INVALID_TOKEN, "Unknown token");
         };

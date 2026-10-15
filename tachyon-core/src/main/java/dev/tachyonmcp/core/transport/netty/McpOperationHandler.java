@@ -20,6 +20,7 @@ import dev.tachyonmcp.core.runtime.Session;
 import dev.tachyonmcp.core.runtime.SseEvent;
 import dev.tachyonmcp.core.server.McpDispatcher;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
+import dev.tachyonmcp.core.server.security.Owner;
 import dev.tachyonmcp.core.server.session.SessionEvent;
 import dev.tachyonmcp.core.transport.jsonrpc.JsonRpcCodec;
 import dev.tachyonmcp.core.transport.jsonrpc.JsonRpcMessage;
@@ -129,12 +130,16 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
         // null (e.g. no InteractionHandler configured); enforced non-null only where the
         // original code enforced it, in handlePostRequest.
         final var ic = ChannelHandlerUtils.getInteractionContext(ctx);
+        // The caller of this request, fixed here on the event loop: the channel's security context moves
+        // on to the next request on this connection, so it is never read again after the hop.
+        final var caller = callerOf(ic);
         // Read for the same reason and in the same place: the entry belongs to this request, and a
         // pipelined next request must not be able to overwrite it between the hop and the read.
         final PeekedBody.@Nullable Parsed peeked = PeekedBody.cached(ctx, req);
         var body = req.content().retain();
         try {
-            CompletableFuture.runAsync(() -> parseAndDispatchPost(ctx, sessionId, body, cors, ic, peeked), executor)
+            CompletableFuture.runAsync(
+                            () -> parseAndDispatchPost(ctx, sessionId, body, cors, ic, caller, peeked), executor)
                     .exceptionally(ex -> {
                         logger.debug("Failed to parse POST body", ex);
                         ctx.executor()
@@ -163,13 +168,14 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
             ByteBuf body,
             CorsDecision cors,
             @Nullable ChannelContext ic,
+            Owner caller,
             PeekedBody.@Nullable Parsed peeked) {
         final JsonRpcCodec.Parse parse;
         try {
             if (sessionId != null) {
                 final Optional<Session> session;
                 try {
-                    session = server.getSession(sessionId);
+                    session = ownedBy(server.getSession(sessionId), caller);
                 } catch (RuntimeException e) {
                     logger.warn("Failed to resolve session: {}", sessionId, e);
                     ctx.executor()
@@ -178,9 +184,7 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
                     return;
                 }
                 if (session.isEmpty()) {
-                    ctx.executor()
-                            .execute(() ->
-                                    sendPlainTextAndClose(ctx, HttpResponseStatus.NOT_FOUND, "Unknown session", cors));
+                    ctx.executor().execute(() -> sendUnknownSession(ctx, cors));
                     return;
                 }
                 bindSession(ctx.channel(), session.orElseThrow());
@@ -478,13 +482,17 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
             return;
         }
         final var lastEventId = req.headers().get(McpHeaderNames.LAST_EVENT_ID);
+        final var caller = callerOf(ChannelHandlerUtils.getInteractionContext(ctx));
         final var local = server.getLocalSession(sessionId);
         if (local.isPresent()) {
-            sseManager.openStream(ctx, local.orElseThrow(), lastEventId, cors);
+            ownedBy(local, caller)
+                    .ifPresentOrElse(
+                            found -> sseManager.openStream(ctx, found, lastEventId, cors),
+                            () -> sendUnknownSession(ctx, cors));
             return;
         }
         try {
-            CompletableFuture.supplyAsync(() -> server.getSession(sessionId), executor)
+            CompletableFuture.supplyAsync(() -> ownedBy(server.getSession(sessionId), caller), executor)
                     .whenComplete((session, failure) -> marshalSessionLookup(
                             ctx,
                             sessionId,
@@ -503,10 +511,12 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
             sendPlainTextAndClose(ctx, HttpResponseStatus.BAD_REQUEST, "Missing MCP-Session-Id header", cors);
             return;
         }
+        final var caller = callerOf(ChannelHandlerUtils.getInteractionContext(ctx));
         try {
             CompletableFuture.supplyAsync(
                             () -> {
-                                if (server.getSession(sessionId).isEmpty()) {
+                                if (ownedBy(server.getSession(sessionId), caller)
+                                        .isEmpty()) {
                                     return false;
                                 }
                                 server.removeSession(sessionId);
@@ -519,7 +529,7 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
                             sendPlainTextAndClose(
                                     ctx, HttpResponseStatus.INTERNAL_SERVER_ERROR, "Session termination failed", cors);
                         } else if (!removed) {
-                            sendPlainTextAndClose(ctx, HttpResponseStatus.NOT_FOUND, "Unknown session", cors);
+                            sendUnknownSession(ctx, cors);
                         } else {
                             sendPlainTextAndClose(ctx, HttpResponseStatus.OK, "", cors);
                             logger.info("Session terminated via DELETE: {}", sessionId);
@@ -543,7 +553,7 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
                     logger.error("Failed to resolve session: {}", sessionId, failure);
                     sendPlainTextAndClose(ctx, HttpResponseStatus.INTERNAL_SERVER_ERROR, "Session lookup failed", cors);
                 } else if (session == null || session.isEmpty()) {
-                    sendPlainTextAndClose(ctx, HttpResponseStatus.NOT_FOUND, "Unknown session", cors);
+                    sendUnknownSession(ctx, cors);
                 } else {
                     onFound.accept(session.orElseThrow());
                 }
@@ -551,6 +561,33 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
         } catch (RejectedExecutionException e) {
             logger.debug("Event loop rejected session lookup result during shutdown: {}", sessionId);
         }
+    }
+
+    /**
+     * The only way a request reaches a session: its caller must be the owner, otherwise the session
+     * is as good as unknown. A mismatch leaves the session untouched and answers like an unknown id,
+     * so a probing caller learns nothing about which ids exist.
+     */
+    private static Optional<Session> ownedBy(Optional<Session> found, Owner caller) {
+        return found.filter(session -> {
+            if (session.isOwnedBy(caller)) {
+                return true;
+            }
+            logger.warn("Session owner mismatch, answering as unknown session: sessionId={}", truncated(session.id()));
+            return false;
+        });
+    }
+
+    private static Owner callerOf(@Nullable ChannelContext ic) {
+        return ic != null ? Owner.of(ic.securityContext()) : Owner.anonymous();
+    }
+
+    private static String truncated(String sessionId) {
+        return sessionId.substring(0, Math.min(8, sessionId.length() / 2)) + "…";
+    }
+
+    private static void sendUnknownSession(ChannelHandlerContext ctx, CorsDecision cors) {
+        sendPlainTextAndClose(ctx, HttpResponseStatus.NOT_FOUND, "Unknown session", cors);
     }
 
     @Override

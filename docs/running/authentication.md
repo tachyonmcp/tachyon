@@ -95,8 +95,29 @@ server.tools().register(d -> d.name("whoami"), (ctx, request) -> {
   it may block on introspection or key lookup. Bound those calls: the request waits for them.
 - **No thread-local holder.** The context is passed along with the request. Work a handler hands to
   another thread keeps its own request's caller.
-- **Sessions.** A stateful session records the security context of the request that created it.
-  Handlers still see the caller of the current request.
+- **Sessions belong to their creator.** A stateful (2025-11-25) session is bound to the caller of the
+  `initialize` request that created it, identified by the principal's `getName()`, or by nothing for
+  an anonymous caller. Every later request carrying that `MCP-Session-Id` (a POST of any kind,
+  the `GET` stream, a `Last-Event-ID` resume and `DELETE`) must come from the same caller, and an
+  anonymous session serves only anonymous callers. Any other caller gets `404 Unknown session`, the
+  same answer as an unknown id, so a probe learns nothing about which ids exist. The session is left
+  untouched and the attempt is logged at `WARN` with a truncated id. Knowing a session id is
+  therefore not enough to use, listen to or end the session of someone else. Handlers still see the
+  caller of the current request, not the creator.
+- **Restored sessions keep their owner.** The owner is stored in `SessionSnapshot`, so a session
+  restored from a `SessionStore` on another node or after a restart still serves its creator. A custom
+  `SessionStore` must save and return the owner key unchanged.
+- **Tasks belong to their creator.** A task created by a task-producing tool call is bound to the
+  caller of that call the same way, but from any of its sessions, and on 2025-11-25 and 2026-07-28
+  alike. Another caller gets `Task not found` from `tasks/get`, `tasks/result`, `tasks/cancel` and
+  `tasks/update`, exactly as for an unknown id and before your task connector runs; `tasks/list`
+  leaves it out, and a `subscriptions/listen` stream does not follow it. Tasks an anonymous caller
+  creates, or that you publish yourself, have no owner and stay with the connector. The binding is
+  kept in memory for the task's `ttl`, so it does not survive a restart: see
+  [Who can reach a task](../extensions/tasks.md#who-can-reach-a-task).
+- **Names identify callers.** The principal's name must be unique and stable for a caller. A provider
+  returning a principal with no name, or a blank one, is a provider failure (`500`), because the
+  session or task could not be told apart from an anonymous one.
 
 Authentication runs after the transport checks (Origin, protocol version, `Accept`,
 `Content-Type`, body size), so those errors can answer before a `401`.
@@ -105,7 +126,6 @@ Authentication runs after the transport checks (Origin, protocol version, `Accep
 
 - Protected Resource Metadata (RFC 9728) and `resource_metadata` in challenges, for OAuth discovery.
 - `403 insufficient_scope` challenges from a scope policy.
-- Binding a session to its creator, so another caller cannot use its id.
 - Exposing `WWW-Authenticate` to browser scripts through CORS.
 
 See [`specs/server-authorization.md`](https://github.com/tachyonmcp/tachyon/blob/main/specs/server-authorization.md)

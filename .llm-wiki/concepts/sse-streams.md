@@ -2,8 +2,8 @@
 title: SSE streams
 tags: [concept, transport, sse]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpInitializationHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/sse/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/OutboundSseStream.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/OutboundSseStreamMessageRouter.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpOperationHandler.java]
-updated: 2026-09-29
-commit: 4b4b6f7e
+updated: 2026-10-15
+commit: 1f2c7fa8
 ---
 
 # 📡 SSE streams
@@ -52,7 +52,7 @@ Initial headers and every queued event are aggregated with Netty `PromiseCombine
 ## 👂 GET-SSE flow
 
 - Stateless server: `openStatelessStream` — headers, `retry: 3000`, heartbeat, priming, nothing else `SseManager#openStatelessStream`.
-- Stateful: requires `MCP-Session-Id` (400) and local or hydrated session (404) `McpOperationHandler#handleGet`.
+- Stateful: requires `MCP-Session-Id` (400) and a local or hydrated session owned by the caller (404, same as an unknown id; a `Last-Event-ID` resume by another caller replays nothing) `McpOperationHandler#handleGet`, `McpOperationHandler#ownedBy`.
 - `openStream`: new `NettySseConnection` replaces session connection (previous one **closed**); close listener detaches only if still current `SseManager#openStream`, `Session#connection`.
 - `Last-Event-ID` parsed once into `ResumeCursor` (`<n>[#<key>]`, both numeric; malformed ⇒ fresh stream) `SseManager.ResumeCursor#parse`. Valid ⇒ remember `resumingStreamKey`, priming event **echoes the cursor** (not a fresh id), replay on executor. A fresh id would outrank the backlog and drop `#key`: drop after priming, resume from it ⇒ backlog skipped `SseManager#openStream`.
 - 2026-07-28 has no GET (protocol `matches` POST only); uses `subscriptions/listen` POST stream instead → [[feature-registries]].

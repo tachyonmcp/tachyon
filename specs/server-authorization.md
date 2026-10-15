@@ -61,11 +61,11 @@ Authorization "**MUST** be included in every HTTP request from client to server"
 |---|---|---|---|---|
 | X1 | Session id: globally unique, cryptographically secure, visible ASCII | H25 §Session Management | T / A | ✅ `SessionIdGenerator.DEFAULT` (`UUID.randomUUID`). Custom generators: documented. |
 | X2 | **MUST NOT** use sessions for authentication; verify all inbound requests | SBP §Session Hijacking | T | §2 runs on every request. |
-| X3 | **SHOULD** bind session ids to user-specific information | SBP §Session Hijacking | T | See Session binding. |
-| X4 | Session data in stores and queues keyed `<user_id>:<session_id>` | SBP §Session Hijack Prompt Injection | T | `SessionEventStore` keys include the owner key. |
-| X5 | Terminated or unknown session ⇒ `404`; missing id ⇒ `400` | H25 §Session Management | T | ✅ Today. A principal mismatch reuses the `404`. |
-| X6 | GET stream: server-initiated messages to *this* client | H25 §Listening | T | The GET carries a token; it must match the session owner (X3). |
-| X7 | Replay via `Last-Event-ID` **MUST NOT** cross streams | H25 §Resumability | T | ✅ Per-stream today; now also only for the session owner. |
+| X3 | **SHOULD** bind session ids to user-specific information | SBP §Session Hijacking | T | ✅ `Session#owner` is fixed at creation and kept in `SessionSnapshot#ownerKey`; `McpOperationHandler#ownedBy` is the one gate for POST, GET, `Last-Event-ID` and DELETE. Proof: `BearerAuthenticationSessionTest`, `MixedAuthenticationSessionTest`, `SessionOwnerRestoreTest`, `SessionManagerTest#ownerIsPersistedFromCreationAndSurvivesEveryRevisionAndRestore`. |
+| X4 | Session data in stores and queues keyed `<user_id>:<session_id>` | SBP §Session Hijack Prompt Injection | T | 🟡 Partial. The owner gate is in place, so only the owner can enqueue, listen or replay over HTTP. `SessionEventStore` is still keyed by session id alone, not `<owner>:<session>`. |
+| X5 | Terminated or unknown session ⇒ `404`; missing id ⇒ `400` | H25 §Session Management | T | ✅ A principal mismatch reuses the `404 Unknown session` (`McpOperationHandler#sendUnknownSession`). Proof: `BearerAuthenticationSessionTest#anotherCallerCannotUseTheSessionOfItsCreator` (same status, body and `Content-Type` as an unknown id). |
+| X6 | GET stream: server-initiated messages to *this* client | H25 §Listening | T | ✅ The GET carries a token and must match the session owner (X3). Proof: `BearerAuthenticationSessionTest#anotherCallerCannotListenToOrResumeTheSessionOfItsCreator`, `#streamOfTheCreatorSurvivesAnotherCallersAttempt`. |
+| X7 | Replay via `Last-Event-ID` **MUST NOT** cross streams | H25 §Resumability | T | ✅ Per-stream, and now only for the session owner: `Last-Event-ID` from another caller ⇒ `404`, nothing replayed (`McpOperationHandler#handleGet`). Proof: `BearerAuthenticationSessionTest#anotherCallerCannotListenToOrResumeTheSessionOfItsCreator`. |
 | X8 | **MUST NOT** broadcast one message across streams | H25 §Multiple Connections | T | ✅ Unchanged. |
 
 ### Session binding
@@ -81,9 +81,9 @@ No protocol sessions, no GET stream, no replay [H26 §Backward Compatibility]. E
 
 | # | Requirement | Src | Owner | Tachyon |
 |---|---|---|---|---|
-| L1 | GET/DELETE ⇒ `405`; ignore `Mcp-Session-Id` and `Last-Event-ID` | H26 §Earlier Streamable HTTP Revisions | T | ✅ `StatelessValidatorHandler`. Auth adds no state here. |
+| L1 | A server without protocol sessions **SHOULD** answer GET/DELETE with `405` and ignore `Mcp-Session-Id` and `Last-Event-ID` | H26 §Earlier Streamable HTTP Revisions | T | 🟡 Partial. `DELETE` ⇒ `405` (`StatelessValidatorHandler`). A stateless `GET` without session headers opens an SSE stream (`SseManager#openStatelessStream`), and a request carrying `Mcp-Session-Id` or `Last-Event-ID` gets `404` instead of being ignored. Auth adds no state here and the owner gate never runs: `BearerAuthenticationTest#thereAreNoSessionsToOwnSoGetAndDeleteNeverReachAnOwnerCheck`. See `.llm-wiki/findings.md`. |
 | L2 | Header values **MUST** match the body; mismatch ⇒ `400` `-32020 HeaderMismatch` | H26 §Server Validation | T | ✅ `McpHeaderMatchHandler`. The policy (S1) reads **validated** values only, never raw `Mcp-Name` / `Mcp-Param-*`. |
-| L3 | `subscriptions/listen` stream carries only notifications the client opted in to | H26 §Receiving Messages | T | Notifications are filtered by the listen request's principal. A task-scoped subscription is refused (not an error: the task is simply never delivered) when the task's owner key differs. |
+| L3 | `subscriptions/listen` stream carries only notifications the client opted in to | H26 §Receiving Messages | T | ✅ for `taskIds`, the one principal-scoped topic. An id owned by someone else is dropped from the stream and its ack when the stream opens, and every `notifications/tasks` is checked again against the task's owner at push time (`McpTaskBinding#onStatus` → `TaskEngine#admits`, in memory, no connector call). A stream that named an id before the task existed stops following it once someone else owns it. Proof: 2026 `TaskOwnerBindingTest#aStreamOpenedBeforeTheTaskWasOwnedNeverFollowsItAfterwards`, `#aListenStreamAcknowledgesOnlyTheTasksItsCallerMayRead`. The `*ListChanged` topics are broadcast (see ❓ Open). |
 | L4 | Long-lived stream vs token expiry | — (spec silent) | T | Tachyon decision: close the listen stream at `expiresAt`; the client re-listens with a fresh token. |
 
 ## 5. Tasks
@@ -91,18 +91,19 @@ No protocol sessions, no GET stream, no replay [H26 §Backward Compatibility]. E
 - **2025-11-25:** "When an authorization context is provided, receivers **MUST** bind tasks to said context" [T25]. Without one, tasks **may be anonymous**: the receiver documents the limitation and uses high-entropy ids. Tachyon does both and keeps declaring `tasks.list` (no breaking change).
 - **2026-07-28:** authn + authz on each task-related request; ids may be bearer tokens and **MUST** be unguessable [T26].
 
-| Entry point | Owner key | Notify target | Progress token |
-|---|---|---|---|
-| Task-augmented `tools/call` returns `ToolResult.task(...)` | caller's, or `null` | calling session (2025) | request's token |
-| `InteractionContext#tasks().publish(s)` (new) | caller's, or `null` | calling session (2025) | none |
-| `TachyonServer#tasks().publish(s)` | `null` | none | none |
+| Entry point | Owner | Notify target | Progress token | Status |
+|---|---|---|---|---|
+| Task-augmented `tools/call` returns `ToolResult.task(...)` | the caller of that request (`Owner.of(context.securityContext())`), anonymous when unauthenticated | calling session (2025) | request's token | ✅ `TaskRuntime#publish(context, …)` → `TaskEngine#publishAs` |
+| `InteractionContext#tasks().publish(s)` (new) | caller's | calling session (2025) | none | 🔴 Not built. A worker publishing before its tool returns must use `TachyonServer#tasks()`, which is unowned, so the tool's later owned create is refused (below). |
+| `TachyonServer#tasks().publish(s)` | unowned (no caller): updates any task, claims none | none | none | ✅ `TaskEngine#publish` |
 
-- `publish` caches unknown ids again. The owner comes from the call site, never from the thread.
-- **Owned task** (non-null key): reachable only with an equal key, from any session. Others get `Task not found` before the connector runs.
-- **Anonymous task** (null key): keeps #393's session isolation on stateful 2025 servers (the creating session only). Stateless servers and server-published tasks go to the connector, which authorizes via `InteractionContext`.
-- An owner never changes: a different owner, or anonymous → owned, is refused and logged; the tool path answers the generic `Internal error`. Same owner, newer revision ⇒ update.
-- `tasks/get|cancel|result|update` refresh only existing entries; a connector snapshot for an unknown id is never cached.
-- Push (`notifications/tasks/status`, `notifications/progress`): 2025 ⇒ the notify session only; 2026 ⇒ `subscriptions/listen` subscribers that pass L3. Never broadcast.
+- ✅ **Owned task** (a named owner): reachable only by the same caller, from any session. Every other caller gets `Task not found`, the same answer as for an unknown id, before the connector runs. One gate covers all caller-facing paths: `TaskEngine#connector` returns the connector already guarded, so the real connector is unreachable from `tasks/get|cancel|result|update`, the `subscriptions/listen` `taskIds` authorizer and the legacy waits; `tasks/list` leaves foreign tasks out. Proof: `TaskOwnershipTest`, 2025 and 2026 `TaskOwnerBindingTest`.
+- 🟡 **`tasks/list`.** T25 § Security Considerations: "If context-binding is available, receivers **MUST** ensure the returned task list includes only tasks associated with the requestor's authorization context." Tachyon drops the tasks it knows are owned by someone else. A task nobody owns is not associated with any context, yet it is still passed through from the connector to every caller, so a connector that lists everything leaks unowned tasks to an authenticated caller. The same section says receivers that cannot identify requestors **SHOULD NOT** declare `tasks.list`; Tachyon keeps declaring it.
+- ✅ **Unowned task** (anonymous creator, or server-published): left to the connector, which authorizes via `InteractionContext` (the recipe in `docs/extensions/tasks.md`, proof `TaskConnectorAccessTest`). Tachyon does not isolate it by session: that was #393, replaced by connector access, so "keeps #393's session isolation" is the connector's job, not the engine's.
+- ✅ An owner never changes: a different owner is refused, and so is an anonymous caller on an owned task and a named caller on an unowned one. A refusal is decided before anything is touched (no snapshot update, no route attach, no push) and answers the generic `Internal error` on the tool path; it is logged with a truncated id. Same owner, newer revision ⇒ update. A publish without a caller never claims, so it updates an owned task.
+- 🟡 **How long the binding lasts.** For the task's own `ttl`, even after the janitor evicts its snapshot; a task with no `ttl` is bound only while its snapshot is cached (terminal + `keepAlive`). In memory only: another node, or a restart, sees the task unowned and only the connector can still refuse. A shared binding store is not built.
+- ✅ **A read never caches an unknown id.** `tasks/get`, `tasks/result`, `tasks/cancel` and the legacy waits update the cache through `TaskEngine#refresh`, which touches only a task the engine already holds and hands back an uncached connector snapshot with the engine defaults. A foreign or early read cannot leave an id unowned, so its creator's own `publishAs` still succeeds. Proof: `TaskEngineTest#refreshUpdatesACachedTaskAndNeverCachesAnUnknownOne`, `TaskOwnershipTest#noReadCachesATaskTheEngineDoesNotKnowSoItsCreatorCanStillOwnIt`, 2025 and 2026 `TaskOwnerBindingTest#aReadBeforeTheCreatorsToolReturnsDoesNotMakeTheTaskUnowned`. `TachyonServer#tasks().publish` is the only publish that creates an entry without a caller.
+- Push (`notifications/tasks/status`, `notifications/progress`): ✅ 2025 ⇒ the route's session only, which is the creating caller's own session. ✅ 2026 ⇒ `subscriptions/listen` streams: an id owned by someone else is dropped when the stream opens and rechecked on every status pushed (L3). An id nobody owns stays the connector's call, made once at open. Never broadcast.
 
 ## API
 
@@ -123,6 +124,7 @@ A 401/403 answers before any session lookup, SSE upgrade, replay or listen.
 - 2025: fan push out to every live session of the owner, instead of only the originating one?
 - `notifications/*/list_changed` is broadcast to every session / listener: scope it per principal when per-principal lists differ?
 - Cache `VerifiedToken` per token hash, bounded by `expiresAt`?
+- Configurable owner key: today it is `Principal#getName()` (`Owner#of`). Multiple issuers need `ServerBuilder#authorization(...).ownerKey(Function<Principal,String>)`, for example `(client_id, iss, sub)`. Sessions and tasks both read it, so it must be one function.
 - Kotlin DSL `authorization { }`; Spring Boot bridge from Spring Security's `Authentication` (already a `Principal`).
 
 ## Prior art

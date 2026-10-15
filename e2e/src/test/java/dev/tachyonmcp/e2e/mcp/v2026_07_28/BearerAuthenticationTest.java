@@ -3,6 +3,7 @@ package dev.tachyonmcp.e2e.mcp.v2026_07_28;
 
 import static dev.tachyonmcp.e2e.mcp.TestBearerTokens.ALICE;
 import static dev.tachyonmcp.e2e.mcp.TestBearerTokens.BOB;
+import static dev.tachyonmcp.e2e.mcp.TestBearerTokens.NAMELESS;
 import static dev.tachyonmcp.e2e.mcp.TestBearerTokens.UNVERIFIABLE;
 import static dev.tachyonmcp.e2e.mcp.TestBearerTokens.WHOAMI;
 import static dev.tachyonmcp.testkit.JsonRpcResponseAssert.assertThat;
@@ -18,6 +19,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.List;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -172,6 +174,45 @@ class BearerAuthenticationTest extends AbstractStatelessMcpE2eTest<Mcp20260728Cl
         // MCP authorization § Token Requirements: access tokens MUST NOT be in the query string.
         assertRejected(
                 callWhoAmIAt("/mcp?access_token=" + ALICE, "Bearer " + ALICE), 400, "Bearer error=\"invalid_request\"");
+    }
+
+    @Test
+    void principalWithoutNameIsAProviderFailure() throws Exception {
+        // A session binds to the principal's name; a nameless principal could not be told from anonymous.
+        final var response = callWhoAmI("Bearer " + NAMELESS);
+
+        assertThat(response.statusCode()).isEqualTo(500);
+        assertThat(response.headers().allValues("WWW-Authenticate")).isEqualTo(List.of());
+        assertThat(tokens.toolCallers()).isEmpty();
+    }
+
+    @Test
+    void thereAreNoSessionsToOwnSoGetAndDeleteNeverReachAnOwnerCheck() throws Exception {
+        // 2026-07-28 Streamable HTTP § Earlier Streamable HTTP Revisions: a server without protocol
+        // sessions SHOULD answer DELETE with 405. The 2025-11-25 session binding (404 "Unknown
+        // session" for another caller) never applies, whatever session id a caller sends.
+        final var delete = send("DELETE", null);
+        final var deleteWithSessionId = send("DELETE", "sess_of_someone_else");
+        final var getWithSessionId = send("GET", "sess_of_someone_else");
+
+        assertThat(delete.statusCode()).isEqualTo(405);
+        assertThat(deleteWithSessionId.body()).isNotEqualTo("Unknown session");
+        assertThat(getWithSessionId.body()).isNotEqualTo("Unknown session");
+    }
+
+    private HttpResponse<String> send(String method, @Nullable String sessionId) throws Exception {
+        final var builder = HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:" + port + "/mcp"))
+                .header("Accept", "application/json, text/event-stream")
+                .header("MCP-Protocol-Version", "2026-07-28")
+                .header("Authorization", "Bearer " + BOB)
+                .method(method, HttpRequest.BodyPublishers.noBody());
+        if (sessionId != null) {
+            builder.header("MCP-Session-Id", sessionId);
+        }
+        try (var http = HttpClient.newHttpClient()) {
+            return http.send(builder.build(), HttpResponse.BodyHandlers.ofString());
+        }
     }
 
     @Test

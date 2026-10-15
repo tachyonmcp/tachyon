@@ -7,6 +7,7 @@ import dev.tachyonmcp.core.server.session.SessionStore;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.jspecify.annotations.Nullable;
 
 public final class RedisSessionStore implements SessionStore {
 
@@ -18,9 +19,9 @@ public final class RedisSessionStore implements SessionStore {
     }
 
     @Override
-    public SessionSnapshot create(SessionKey key, Instant expiresAt) {
+    public SessionSnapshot create(SessionKey key, @Nullable String ownerKey, Instant expiresAt) {
         created.incrementAndGet();
-        return delegate.create(key, expiresAt);
+        return delegate.create(key, ownerKey, expiresAt);
     }
 
     @Override

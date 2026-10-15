@@ -2,8 +2,8 @@
 title: Security guards
 tags: [concept, security, transport]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/http/, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpChannelInitializer.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/NettyServerConfig.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/NetworkConfig.java]
-updated: 2026-09-27
-commit: a3cf5df7
+updated: 2026-10-15
+commit: 1f2c7fa8
 ---
 
 # 🛡️ Security guards
@@ -28,7 +28,7 @@ Verdict: fail-closed HTTP guards, most of them before body aggregation. Loopback
 | Pipelining | `HttpPipeliningGate` right after the codec admits one request per connection; pipelined requests queue until the previous final response is written, so responses keep request order (RFC 9112 §9.3.2) and one connection can't fan out N concurrent handlers. Non-keep-alive final response ⇒ queued and later requests dropped, never dispatched. Queue bounded twice: `autoRead` off while anything is queued, and at most `NetworkConfig#maxPipelinedRequests` (16) queued requests; over the cap ⇒ in-order `429` + close, excess never runs | `HttpPipeliningGate#channelRead`, `HttpPipeliningGate#write` |
 | Body/header agreement (**all** versions) | SEP-2243 mirror present ⇒ must match body, whichever version negotiated — a gateway must not route on a header the server never executes | `McpHeaderMatchHandler`, [[protocol-versions]] |
 | Mirror **required** (2026-07-28 only) | the revision that adopted SEP-2243 also demands the mirrors be present; runs after agreement | `RequiredHeadersHandler#requireMirrors` |
-| Authentication | opt-in provider, per request, after aggregation; 401/400/500 per RFC 6750 → [[authentication]] | `AuthenticationHandler#reject` |
+| Authentication | opt-in provider, per request, after aggregation; 401/400/500 per RFC 6750; a principal with no name or a blank one is a provider failure (500), because sessions and tasks bind to the name → [[authentication]] | `AuthenticationHandler#reject`, `AuthenticationHandler#authenticate` |
 | Pending-request ownership | client response must come from owning session (stateful) / channel (stateless) | `DefaultTachyonServer#failPendingRequest` |
 | Error message hygiene | bare IAE message hidden; client-controlled values not echoed in header errors | [[errors]] |
 | SSE comment injection | CR/LF flattened | `PostSseStream#doWriteComment` |
