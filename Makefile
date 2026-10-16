@@ -25,7 +25,7 @@ SKIP_REPORT_ARGS := -Dmaven.javadoc.skip=true -Dmaven.source.skip=true -Djacoco.
 help: ## List available targets
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-22s %s\n", $$1, $$2}'
 
-all: clean format lint docs-check revapi examples-snapshot examples ## Full build: clean, format, lint, doc-snippet check, live examples, build+install, SNAPSHOT examples
+all: clean format lint revapi examples-snapshot examples docs-check
 
 ci: ## CI pipeline: one reactor for clean + lint + build + revapi
 	@echo " 🏗️ 🔍  Building with lint + API compatibility..."
