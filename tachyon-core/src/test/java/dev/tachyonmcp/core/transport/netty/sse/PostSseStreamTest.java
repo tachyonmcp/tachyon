@@ -23,6 +23,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
@@ -93,7 +94,8 @@ class PostSseStreamTest {
     @Test
     void closesGracefullyWhenTheTokenOfTheRequestThatOpenedItExpiresAndNotBefore() {
         channel.freezeTime();
-        var stream = newStream(Duration.ZERO, ONE_MIB, CLOCK.instant().plusSeconds(5));
+        var stream =
+                newStream(Duration.ZERO, ONE_MIB, tickerClock(), CLOCK.instant().plusSeconds(5));
 
         stream.start();
         channel.advanceTimeBy(4_999, TimeUnit.MILLISECONDS);
@@ -438,18 +440,41 @@ class PostSseStreamTest {
     }
 
     private PostSseStream newStream(Duration heartbeatInterval, int maxPendingBytes) {
-        return newStream(heartbeatInterval, maxPendingBytes, null);
+        return newStream(heartbeatInterval, maxPendingBytes, CLOCK, null);
     }
 
-    private PostSseStream newStream(Duration heartbeatInterval, int maxPendingBytes, @Nullable Instant expiresAt) {
+    private PostSseStream newStream(
+            Duration heartbeatInterval, int maxPendingBytes, Clock clock, @Nullable Instant expiresAt) {
         return new PostSseStream(
                 channel,
                 CorsDecision.NONE,
                 eventIds::incrementAndGet,
                 heartbeatInterval,
                 maxPendingBytes,
-                CLOCK,
+                clock,
                 expiresAt);
+    }
+
+    /** The server's clock, moved by the channel's own time, so one {@code advanceTimeBy} drives both. */
+    private Clock tickerClock() {
+        var ticker = channel.eventLoop().ticker();
+        var origin = ticker.nanoTime();
+        return new Clock() {
+            @Override
+            public ZoneOffset getZone() {
+                return ZoneOffset.UTC;
+            }
+
+            @Override
+            public Clock withZone(ZoneId zone) {
+                return this;
+            }
+
+            @Override
+            public Instant instant() {
+                return CLOCK.instant().plusNanos(ticker.nanoTime() - origin);
+            }
+        };
     }
 
     /** Hands out unpooled heap buffers and remembers them, so a test can spot one never released. */

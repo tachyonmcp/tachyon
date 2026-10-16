@@ -52,7 +52,7 @@ public class DefaultResourceRegistry implements Resources {
     private static final Pattern URI_TEMPLATE_EXPRESSION = Pattern.compile("\\{([^}]+)\\}");
     private static final Logger logger = LoggerFactory.getLogger(DefaultResourceRegistry.class);
 
-    /** Name-sorted per {@code docs/architecture/guidance.md}; URI breaks ties between same-named resources. */
+    /** Name-sorted; URI breaks ties between same-named resources. */
     private static final Comparator<ResourceDescriptor> RESOURCE_ORDER =
             Comparator.comparing(ResourceDescriptor::name).thenComparing(ResourceDescriptor::uri);
 
