@@ -13,6 +13,9 @@ import org.jspecify.annotations.Nullable;
  * Immutable, transport-free state that can reconstruct one MCP session generation.
  *
  * @param key session generation key
+ * @param ownerKey identity of the caller that created the session, or {@code null} for an anonymous
+ *     creator. Fixed for the generation: a store must persist and return it unchanged, or a restored
+ *     session no longer serves its creator
  * @param state lifecycle state
  * @param protocolVersion negotiated MCP protocol version, or {@code null} before negotiation
  * @param enabledExtensionIds negotiated extension identifiers
@@ -23,6 +26,7 @@ import org.jspecify.annotations.Nullable;
 @ExperimentalApi(since = "1.0.0-beta.26")
 public record SessionSnapshot(
         SessionKey key,
+        @Nullable String ownerKey,
         SessionState state,
         @Nullable String protocolVersion,
         Set<String> enabledExtensionIds,

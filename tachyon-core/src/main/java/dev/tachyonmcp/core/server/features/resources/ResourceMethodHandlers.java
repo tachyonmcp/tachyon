@@ -1,12 +1,14 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
 package dev.tachyonmcp.core.server.features.resources;
 
+import dev.tachyonmcp.api.server.ServerFeature;
 import dev.tachyonmcp.api.server.domain.ResourceContents;
 import dev.tachyonmcp.api.server.domain.ServerError;
 import dev.tachyonmcp.api.server.features.resources.ResourceRequest;
 import dev.tachyonmcp.core.protocol.ProtocolRequestMapper;
 import dev.tachyonmcp.core.server.RpcMethodHandler;
 import dev.tachyonmcp.core.server.domain.ServerErrors;
+import dev.tachyonmcp.core.server.features.Visibility;
 import dev.tachyonmcp.core.server.features.subscriptions.SubscriptionRegistry;
 import dev.tachyonmcp.core.server.features.subscriptions.SubscriptionTopic;
 import dev.tachyonmcp.core.server.internal.HandlerFutures;
@@ -17,6 +19,7 @@ import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,22 +30,53 @@ public final class ResourceMethodHandlers {
     /** {@code subscriptions/listen} opt-in to {@code notifications/resources/list_changed}. */
     public static final SubscriptionTopic<Boolean> LIST_CHANGED = SubscriptionTopic.flag("resourcesListChanged");
 
-    /** {@code subscriptions/listen} opt-in to {@code notifications/resources/updated}, per resource URI. */
-    public static final SubscriptionTopic<Set<String>> UPDATED = SubscriptionTopic.strings("resourceSubscriptions");
+    private static final SubscriptionTopic<Set<String>> REQUESTED_URIS =
+            SubscriptionTopic.strings("resourceSubscriptions");
+
+    /**
+     * The resource URIs a {@code subscriptions/listen} stream asked for, and who is listening. The
+     * acknowledgment echoes every requested URI, so a URI the caller may not see is acknowledged exactly
+     * like one that does not exist. Visibility is decided when an update is delivered, not when the
+     * stream opened: a URI that named nothing then and names a hidden resource now is not reported.
+     *
+     * @param requested what the listener asked for, echoed in the acknowledgment
+     * @param visible whether the listener may see a resource, as decided for its own request
+     */
+    public record ResourceUris(Set<String> requested, Predicate<ServerFeature.Descriptor> visible) {}
 
     private ResourceMethodHandlers() {}
 
-    public static void register(
+    /**
+     * Installs the resource methods and their {@code subscriptions/listen} topics.
+     *
+     * @return the {@code resourceSubscriptions} topic, which {@code notifications/resources/updated} is
+     *     published to
+     */
+    public static SubscriptionTopic<ResourceUris> register(
             Map<String, RpcMethodHandler<?, ?>> handlers,
             DefaultResourceRegistry registry,
             SubscriptionRegistry subscriptions) {
+        final var updated = new SubscriptionTopic<ResourceUris>(
+                REQUESTED_URIS.filterKey(),
+                (context, filter) -> {
+                    var requested = REQUESTED_URIS.decoder().decode(context, filter);
+                    return requested == null ? null : new ResourceUris(requested, Visibility.to(context));
+                },
+                (context, uris) -> uris,
+                uris -> List.copyOf(uris.requested()));
         subscriptions.register(LIST_CHANGED);
-        subscriptions.register(UPDATED);
+        subscriptions.register(updated);
         handlers.put("resources/list", new ResourcesListHandler(registry));
         handlers.put("resources/templates/list", new ResourcesTemplatesListHandler(registry));
         handlers.put("resources/read", new ResourcesReadHandler(registry));
         handlers.put("resources/subscribe", new ResourcesSubscribeHandler(registry));
         handlers.put("resources/unsubscribe", new ResourcesUnsubscribeHandler(registry));
+        return updated;
+    }
+
+    /** The answer for a resource the caller cannot read: the same whether it is unknown or hidden. */
+    private static ServerError notFound(String uri) {
+        return ServerErrors.resourceNotFound("Resource not found", Map.of("uri", uri));
     }
 
     private record ResourcesListHandler(DefaultResourceRegistry registry)
@@ -60,10 +94,7 @@ public final class ResourceMethodHandlers {
 
         @Override
         public Object handle(DispatchContext context, ProtocolRequestMapper.PageRequest page) {
-            var paginated = registry.list(page.limit(), page.cursor(), descriptor -> {
-                var extensionId = descriptor.extensionId();
-                return extensionId == null || context.isExtensionEnabled(extensionId);
-            });
+            var paginated = registry.list(page.limit(), page.cursor(), Visibility.to(context));
             if (!paginated.cursorValid()) return ServerErrors.invalidParams("Invalid cursor");
             return context.responseMapper().listResourcesResult(paginated.items(), paginated.nextCursor());
         }
@@ -88,10 +119,7 @@ public final class ResourceMethodHandlers {
                 return ServerErrors.invalidParams("Invalid cursor");
             }
             final var visible = registry.templateDescriptors().stream()
-                    .filter(descriptor -> {
-                        var extensionId = descriptor.extensionId();
-                        return extensionId == null || context.isExtensionEnabled(extensionId);
-                    })
+                    .filter(Visibility.to(context))
                     .toList();
             return context.responseMapper().listResourceTemplatesResult(visible, null);
         }
@@ -122,22 +150,18 @@ public final class ResourceMethodHandlers {
             if (!DefaultResourceRegistry.isValidResourceUri(mapped.uri())) {
                 return CompletableFuture.completedFuture(ServerErrors.invalidParams("Invalid resource URI"));
             }
+            // A resource or template the caller may not see is not there: the answer is the unknown one.
             var entry = registry.getByUri(mapped.uri());
-            if (entry != null) {
-                var extensionId = entry.descriptor().extensionId();
-                if (extensionId != null && !context.isExtensionEnabled(extensionId)) {
-                    return CompletableFuture.completedFuture(ServerErrors.resourceNotFound("Resource not found"));
-                }
+            if (entry != null && Visibility.of(context, entry.descriptor())) {
                 return readResult(
                         context,
                         mapped.uri(),
                         entry.privateCaching(),
                         () -> entry.fn().apply(context, mapped));
             }
-            var match = registry.matchTemplate(mapped.uri());
+            var match = registry.matchTemplate(mapped.uri(), Visibility.to(context));
             if (match == null) {
-                return CompletableFuture.completedFuture(
-                        ServerErrors.resourceNotFound("Resource not found", Map.of("uri", mapped.uri())));
+                return CompletableFuture.completedFuture(notFound(mapped.uri()));
             }
             var request = ResourceRequest.builder()
                     .uri(mapped.uri())
@@ -201,7 +225,9 @@ public final class ResourceMethodHandlers {
             if (session == null) {
                 return ServerErrors.invalidRequest("resources/subscribe requires a session");
             }
-            registry.subscribe(uri, session.id());
+            // Accepted alike for a URI nothing names and one the caller may not see. Visibility is
+            // decided again at every delivery, so a URI that names a hidden resource later is not reported.
+            registry.subscribe(uri, session.id(), Visibility.to(context));
             return context.responseMapper().emptyResult();
         }
     }

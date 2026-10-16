@@ -4,6 +4,13 @@ package dev.tachyonmcp.core.runtime;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import dev.tachyonmcp.api.server.security.SecurityContext;
+import dev.tachyonmcp.core.server.security.Owner;
+import dev.tachyonmcp.core.server.session.SessionKey;
+import dev.tachyonmcp.core.server.session.SessionSnapshot;
+import java.time.Instant;
+import java.util.List;
+import java.util.Set;
 import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,6 +32,39 @@ class SessionTest {
         assertThat(session.state()).isEqualTo(SessionState.INITIALIZING);
         assertThat(session.backpressure()).isEqualTo(Backpressure.HOT);
         assertThat(session.cursor()).isEqualTo(-1L);
+    }
+
+    @Test
+    void aSessionServesOnlyTheCallerThatCreatedIt() {
+        final var alice = Owner.of(SecurityContext.authenticated(() -> "alice", List.of("tools:call")));
+        final var bob = Owner.of(SecurityContext.authenticated(() -> "bob", List.of()));
+        final var anonymous = Owner.anonymous();
+
+        assertThat(session.isOwnedBy(anonymous)).isTrue();
+        assertThat(session.isOwnedBy(alice)).isFalse();
+        assertThat(ownedBy("alice").owner()).isEqualTo(alice);
+        assertThat(ownedBy("alice").isOwnedBy(alice)).isTrue();
+        assertThat(ownedBy("alice").isOwnedBy(bob)).isFalse();
+        assertThat(ownedBy("alice").isOwnedBy(anonymous)).isFalse();
+        assertThat(ownedBy("alice").isOwnedBy(Owner.of(SecurityContext.authenticated(() -> "alice", List.of()))))
+                .as("scopes are not part of the owner")
+                .isTrue();
+    }
+
+    private static Session ownedBy(String ownerKey) {
+        return Session.fromSnapshot(
+                new SessionSnapshot(
+                        new SessionKey("sess_owned", "g1"),
+                        ownerKey,
+                        SessionState.INITIALIZING,
+                        null,
+                        Set.of(),
+                        null,
+                        Instant.MAX,
+                        0),
+                SseConnection.noop(),
+                ignored -> {},
+                ignored -> {});
     }
 
     @Test

@@ -10,6 +10,7 @@ import dev.tachyonmcp.api.server.features.tasks.TaskSupport;
 import dev.tachyonmcp.api.server.features.tools.AsyncToolFn;
 import dev.tachyonmcp.api.server.features.tools.ToolDescriptor;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
+import dev.tachyonmcp.api.server.security.SecurityContext;
 import dev.tachyonmcp.core.server.extensions.FakeTasksExtension;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
 import dev.tachyonmcp.core.server.observability.CapturedPayload;
@@ -153,7 +154,8 @@ class ObservationDispatchTest {
             session.activate();
             var dispatcher = new McpDispatcher(server, server.executor());
             var params = Map.of("name", "gated-tool", "arguments", Map.of());
-            var future = dispatcher.dispatchRequestAsync(RequestId.of(1), "tools/call", params, "sess-gate");
+            var future = dispatcher.dispatchRequestAsync(
+                    RequestId.of(1), "tools/call", params, "sess-gate", SecurityContext.anonymous());
 
             // The scope wrapping decode + handler kickoff must close promptly, proving the
             // dispatcher never joined the still-pending handler stage to get there.
@@ -176,7 +178,7 @@ class ObservationDispatchTest {
             var dispatcher = new McpDispatcher(server, server.executor());
 
             dispatcher
-                    .dispatchRequestAsync(RequestId.of(1), "ping", null, "sess-obs")
+                    .dispatchRequestAsync(RequestId.of(1), "ping", null, "sess-obs", SecurityContext.anonymous())
                     .join();
 
             assertThat(listener.starts).hasSize(1);
@@ -197,7 +199,8 @@ class ObservationDispatchTest {
             var dispatcher = new McpDispatcher(server, server.executor());
 
             var result = asResponse(dispatcher
-                    .dispatchRequestAsync(RequestId.of(1), "definitely/unknown", null, "sess-reject")
+                    .dispatchRequestAsync(
+                            RequestId.of(1), "definitely/unknown", null, "sess-reject", SecurityContext.anonymous())
                     .join());
             assertThat(result.responseBodyString()).contains("-32601");
 
@@ -216,7 +219,8 @@ class ObservationDispatchTest {
             var dispatcher = new McpDispatcher(server, server.executor());
 
             // Not "ping" -- ping bypasses the session-header check even without a session.
-            var result = dispatcher.dispatchRequestAsync(RequestId.of(1), "tools/list", null, null);
+            var result = dispatcher.dispatchRequestAsync(
+                    RequestId.of(1), "tools/list", null, null, SecurityContext.anonymous());
             assertThat(result.join()).isInstanceOf(McpDispatcher.DispatchResult.Status.class);
 
             assertThat(listener.completions).hasSize(1);
@@ -237,8 +241,10 @@ class ObservationDispatchTest {
             server.createSession("sess-notif");
             var dispatcher = new McpDispatcher(server, server.executor());
 
-            dispatcher.dispatchNotification("notifications/initialized", null, "sess-notif");
-            dispatcher.dispatchNotification("notifications/unknown-thing", null, "sess-notif");
+            dispatcher.dispatchNotification(
+                    "notifications/initialized", null, "sess-notif", null, SecurityContext.anonymous());
+            dispatcher.dispatchNotification(
+                    "notifications/unknown-thing", null, "sess-notif", null, SecurityContext.anonymous());
 
             assertThat(listener.completions).hasSize(2);
             assertThat(listener.completions.get(0).outcome()).isInstanceOf(OperationOutcome.NotificationAccepted.class);
@@ -258,7 +264,8 @@ class ObservationDispatchTest {
 
             var traceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
             var params = Map.of("_meta", Map.of("traceparent", traceparent));
-            dispatcher.dispatchNotification("notifications/initialized", params, "sess-notif-trace");
+            dispatcher.dispatchNotification(
+                    "notifications/initialized", params, "sess-notif-trace", null, SecurityContext.anonymous());
 
             assertThat(listener.starts).hasSize(1);
             assertThat(listener.starts.getFirst().info().traceparent()).isEqualTo(traceparent);
@@ -271,7 +278,7 @@ class ObservationDispatchTest {
         try (ServerEngine server = newEngine(b -> b.observability(o -> o.listener(listener)))) {
             var dispatcher = new McpDispatcher(server, server.executor());
 
-            dispatcher.dispatchNotification("notifications/initialized", null, null);
+            dispatcher.dispatchNotification("notifications/initialized", null, null, null, SecurityContext.anonymous());
 
             assertThat(listener.starts).hasSize(1);
             assertThat(listener.completions).hasSize(1);
@@ -294,7 +301,7 @@ class ObservationDispatchTest {
             var dispatcher = new McpDispatcher(server, server.executor());
 
             var result = asResponse(dispatcher
-                    .dispatchRequestAsync(RequestId.of(1), "ping", null, "sess-fault")
+                    .dispatchRequestAsync(RequestId.of(1), "ping", null, "sess-fault", SecurityContext.anonymous())
                     .join());
 
             assertThat(result.responseBodyString()).contains("result");
@@ -332,7 +339,8 @@ class ObservationDispatchTest {
             final var params = Map.of("name", "nested", "arguments", Map.of());
 
             final var result = asResponse(dispatcher
-                    .dispatchRequestAsync(RequestId.of(1), "tools/call", params, "sess-nested")
+                    .dispatchRequestAsync(
+                            RequestId.of(1), "tools/call", params, "sess-nested", SecurityContext.anonymous())
                     .join());
             assertThat(result.responseBodyString()).contains("ok");
 
@@ -364,10 +372,10 @@ class ObservationDispatchTest {
             var observedDispatcher = new McpDispatcher(observed, observed.executor());
 
             var plainResult = asResponse(plainDispatcher
-                    .dispatchRequestAsync(RequestId.of(1), "ping", null, "sess-parity")
+                    .dispatchRequestAsync(RequestId.of(1), "ping", null, "sess-parity", SecurityContext.anonymous())
                     .join());
             var observedResult = asResponse(observedDispatcher
-                    .dispatchRequestAsync(RequestId.of(1), "ping", null, "sess-parity")
+                    .dispatchRequestAsync(RequestId.of(1), "ping", null, "sess-parity", SecurityContext.anonymous())
                     .join());
 
             assertThat(observedResult.responseBodyString()).isEqualTo(plainResult.responseBodyString());
@@ -395,7 +403,8 @@ class ObservationDispatchTest {
             var params = Map.of("name", "book", "arguments", Map.of(), "task", Map.of());
 
             var result = asResponse(dispatcher
-                    .dispatchRequestAsync(RequestId.of(1), "tools/call", params, "sess-task")
+                    .dispatchRequestAsync(
+                            RequestId.of(1), "tools/call", params, "sess-task", SecurityContext.anonymous())
                     .join());
             assertThat(result.responseBodyString()).doesNotContain("error");
 
@@ -429,7 +438,8 @@ class ObservationDispatchTest {
             captured.createSession("sess-capture").activate();
             var capturingDispatcher = new McpDispatcher(captured, captured.executor());
             capturingDispatcher
-                    .dispatchRequestAsync(RequestId.of(1), "tools/call", params, "sess-capture")
+                    .dispatchRequestAsync(
+                            RequestId.of(1), "tools/call", params, "sess-capture", SecurityContext.anonymous())
                     .join();
             var capturedInfo = listener.completions.getFirst().info();
             assertThat(capturedInfo.requestPayload()).isInstanceOf(CapturedPayload.Value.class);
@@ -439,7 +449,8 @@ class ObservationDispatchTest {
             notCaptured.createSession("sess-no-capture").activate();
             var plainDispatcher = new McpDispatcher(notCaptured, notCaptured.executor());
             plainDispatcher
-                    .dispatchRequestAsync(RequestId.of(1), "tools/call", params, "sess-no-capture")
+                    .dispatchRequestAsync(
+                            RequestId.of(1), "tools/call", params, "sess-no-capture", SecurityContext.anonymous())
                     .join();
             assertThat(noCaptureListener.completions.getFirst().info().requestPayload())
                     .isNull();
@@ -465,7 +476,8 @@ class ObservationDispatchTest {
             captured.createSession("sess-response-capture").activate();
             var capturingDispatcher = new McpDispatcher(captured, captured.executor());
             capturingDispatcher
-                    .dispatchRequestAsync(RequestId.of(1), "tools/call", params, "sess-response-capture")
+                    .dispatchRequestAsync(
+                            RequestId.of(1), "tools/call", params, "sess-response-capture", SecurityContext.anonymous())
                     .join();
             var capturedInfo = listener.completions.getFirst().info();
             assertThat(capturedInfo.responsePayload()).isInstanceOf(CapturedPayload.Value.class);
@@ -475,7 +487,12 @@ class ObservationDispatchTest {
             notCaptured.createSession("sess-response-no-capture").activate();
             var plainDispatcher = new McpDispatcher(notCaptured, notCaptured.executor());
             plainDispatcher
-                    .dispatchRequestAsync(RequestId.of(1), "tools/call", params, "sess-response-no-capture")
+                    .dispatchRequestAsync(
+                            RequestId.of(1),
+                            "tools/call",
+                            params,
+                            "sess-response-no-capture",
+                            SecurityContext.anonymous())
                     .join();
             assertThat(noCaptureListener.completions.getFirst().info().responsePayload())
                     .isNull();
@@ -497,7 +514,12 @@ class ObservationDispatchTest {
             var params = Map.of("name", "failing", "arguments", Map.of());
 
             dispatcher
-                    .dispatchRequestAsync(RequestId.of(1), "tools/call", params, "sess-response-error-capture")
+                    .dispatchRequestAsync(
+                            RequestId.of(1),
+                            "tools/call",
+                            params,
+                            "sess-response-error-capture",
+                            SecurityContext.anonymous())
                     .join();
 
             var info = listener.completions.getFirst().info();

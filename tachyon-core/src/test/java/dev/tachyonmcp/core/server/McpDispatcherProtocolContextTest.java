@@ -5,6 +5,7 @@ import static dev.tachyonmcp.core.test.TestUtils.newEngine;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.tachyonmcp.api.server.domain.RequestId;
+import dev.tachyonmcp.api.server.security.SecurityContext;
 import dev.tachyonmcp.core.protocol.Protocol;
 import dev.tachyonmcp.core.protocol.ProtocolRequestMapper;
 import dev.tachyonmcp.core.protocol.ProtocolResponseMapper;
@@ -98,7 +99,14 @@ class McpDispatcherProtocolContextTest {
             var dispatcher = new McpDispatcher(server, Runnable::run);
             var channelContext = protocol.createInteractionContext();
             var result = dispatcher
-                    .dispatchRequestAsync(RequestId.of(1), "test/capture", Map.of(), "sess_p1", null, channelContext)
+                    .dispatchRequestAsync(
+                            RequestId.of(1),
+                            "test/capture",
+                            Map.of(),
+                            "sess_p1",
+                            null,
+                            channelContext,
+                            SecurityContext.anonymous())
                     .get(5, TimeUnit.SECONDS);
 
             assertThat(result).isInstanceOf(McpDispatcher.DispatchResult.Response.class);
@@ -125,7 +133,14 @@ class McpDispatcherProtocolContextTest {
             var channelContext = protocol.createInteractionContext();
 
             var result = dispatcher
-                    .dispatchRequestAsync(RequestId.of(1), "ping", Map.of(), "sess_p2", null, channelContext)
+                    .dispatchRequestAsync(
+                            RequestId.of(1),
+                            "ping",
+                            Map.of(),
+                            "sess_p2",
+                            null,
+                            channelContext,
+                            SecurityContext.anonymous())
                     .get(5, TimeUnit.SECONDS);
 
             assertThat(result).isInstanceOf(McpDispatcher.DispatchResult.Response.class);
@@ -156,7 +171,7 @@ class McpDispatcherProtocolContextTest {
 
             var dispatcher = new McpDispatcher(server, Runnable::run);
             var result = dispatcher
-                    .dispatchRequestAsync(RequestId.of(1), "test/capture", Map.of(), null)
+                    .dispatchRequestAsync(RequestId.of(1), "test/capture", Map.of(), null, SecurityContext.anonymous())
                     .get(5, TimeUnit.SECONDS);
 
             assertThat(result).isInstanceOf(McpDispatcher.DispatchResult.Response.class);

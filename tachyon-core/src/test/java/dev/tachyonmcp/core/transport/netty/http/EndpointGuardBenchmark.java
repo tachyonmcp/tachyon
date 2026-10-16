@@ -20,6 +20,7 @@ import org.openjdk.jmh.annotations.Level;
 import org.openjdk.jmh.annotations.Measurement;
 import org.openjdk.jmh.annotations.Mode;
 import org.openjdk.jmh.annotations.OutputTimeUnit;
+import org.openjdk.jmh.annotations.Param;
 import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
@@ -39,6 +40,9 @@ import org.openjdk.jmh.annotations.Warmup;
 @Measurement(iterations = 5, time = 1)
 public class EndpointGuardBenchmark {
 
+    @Param({"localhost:8080", "127.0.0.1:8080"})
+    public String host;
+
     private EmbeddedChannel channel;
     private ChannelPipeline pipeline;
     private HttpHeaders headers;
@@ -51,7 +55,7 @@ public class EndpointGuardBenchmark {
                 new EndpointValidatorHandler("/mcp"),
                 sink);
         pipeline = channel.pipeline();
-        headers = new DefaultHttpHeaders().set(HttpHeaderNames.HOST, "localhost:8080");
+        headers = new DefaultHttpHeaders().set(HttpHeaderNames.HOST, host);
         if (originForm() == null || absoluteForm() == null || !channel.isOpen()) {
             throw new IllegalStateException("benchmark request was rejected");
         }
@@ -69,7 +73,7 @@ public class EndpointGuardBenchmark {
 
     @Benchmark
     public Object absoluteForm() {
-        return pass("http://localhost:8080/mcp?client=bench");
+        return pass("http://" + host + "/mcp?client=bench");
     }
 
     private Object pass(String uri) {

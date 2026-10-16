@@ -11,7 +11,7 @@
 
 ## Project
 
-Java 21+/Kotlin 2.2 MCP server. Java first, Kotlin adapts.
+Java 21+/Kotlin 2.2 MCP server. Java first, Kotlin adapts. Stack and its rules: [`specs/tech-stack.md`](specs/tech-stack.md).
 
 ## Fast Commands
 
@@ -50,13 +50,13 @@ Use [tachyon-wiki](.agents/skills/tachyon-wiki/SKILL.md) when creating, updating
 - **Unattended `git commit/push` is prohibited.** Always confirm with user.
 - TDD + SOLID. TachyonServer is SUT in unit tests.
 - **Tests**: JUnit 6 + Kotest (Kotlin) / AssertJ (Java) + Awaitility. `@TempDir` for unit, port 0 for E2E. Prefer E2E, esp. long scenarios; unit only when E2E can't cover, drop unit if E2E already does. No tautologies. Many asserts per test.
-- **Nullability**: JSpecify `@Nullable`/`@NonNull`. `@NullMarked` at package level.
+- **Nullability**: JSpecify `@Nullable`/`@NonNull`. `@NullMarked` at package level. `Optional<T>` vs `@Nullable`: [`specs/tech-stack.md`](specs/tech-stack.md).
 - **No comments in code** unless needs to explain.
 - **Javadocs for public API required** - this OSS library for users
 - `git mv` for files.
 - Use MCP tools.
 - **Format**: Check on `make lint`, fix with `make format`.
-- **API/Registry design**: see [`docs/architecture/guidance.md`](docs/architecture/guidance.md) before adding/changing a handler SAM (sync/async shape, checked exceptions, descriptor bundling, `_meta`) or naming registry APIs (`ServerBuilder` nouns, `register`/`registerAsync`/`unregister`, `find`, `descriptors()`).
+- **API/Registry design**: see [`specs/guidance.md`](specs/guidance.md) before adding/changing a handler SAM (sync/async shape, checked exceptions, descriptor bundling, `_meta`) or naming registry APIs (`ServerBuilder` nouns, `register`/`registerAsync`/`unregister`, `find`, `descriptors()`).
 - **Kotlin DSL** (`tachyon-kotlin`):
   - Each scope class gets its own `*Scope.kt` file.
   - `TachyonServerBuilder` wraps `ServerBuilder` as the DSL receiver. Scope methods on `TachyonServerBuilder` use clean names (`info`, `capabilities`, `network`, `session`) with zero Java member conflicts.

@@ -36,6 +36,6 @@ build so `make build`/`make test` stay fast; `make ci`/`make all` wire them back
 in explicitly. Prefer the IDE MCP for building/running tests when available.
 
 Coding conventions (TDD, SOLID, nullability, module layout, Kotlin DSL
-patterns) live in [AGENTS.md](AGENTS.md), [tachyon-development](.agents/skills/tachyon-development), [guidance.md](docs/architecture/guidance.md) -- read it before opening a PR.
+patterns) live in [AGENTS.md](AGENTS.md), [tachyon-development](.agents/skills/tachyon-development), [guidance.md](specs/guidance.md), [tech-stack.md](specs/tech-stack.md) -- read them before opening a PR.
 
 Security issues: see [SECURITY.md](SECURITY.md), not a public issue.

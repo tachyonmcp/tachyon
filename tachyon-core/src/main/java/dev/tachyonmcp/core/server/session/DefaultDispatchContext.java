@@ -8,6 +8,7 @@ import dev.tachyonmcp.api.runtime.ContextNotifications;
 import dev.tachyonmcp.api.server.domain.LoggingLevel;
 import dev.tachyonmcp.api.server.domain.ProgressToken;
 import dev.tachyonmcp.api.server.domain.RequestId;
+import dev.tachyonmcp.api.server.security.SecurityContext;
 import dev.tachyonmcp.core.protocol.Protocol;
 import dev.tachyonmcp.core.protocol.ProtocolRequestMapper;
 import dev.tachyonmcp.core.protocol.ProtocolResponseMapper;
@@ -20,6 +21,7 @@ import dev.tachyonmcp.core.server.internal.NotificationLogSupport;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
 import dev.tachyonmcp.core.server.observability.Observation;
 import dev.tachyonmcp.core.transport.jsonrpc.JsonRpcCodec;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -37,6 +39,7 @@ public class DefaultDispatchContext implements DispatchContext {
     private final ChannelContext channel;
     private final ServerEngine server;
     private final @Nullable RequestId requestId;
+    private final SecurityContext securityContext;
     private final ContextNotifications notifications = new NotificationsImpl();
     private volatile @Nullable OutboundSseStream outboundStream;
     private volatile @Nullable LoggingLevel permittedLogLevel;
@@ -49,9 +52,27 @@ public class DefaultDispatchContext implements DispatchContext {
     }
 
     public DefaultDispatchContext(ChannelContext channel, ServerEngine server, @Nullable RequestId requestId) {
+        this(channel, server, requestId, SecurityContext.anonymous());
+    }
+
+    /**
+     * Creates the context of one request. The caller is fixed here and never changes: the channel is
+     * connection-scoped and carries none.
+     *
+     * @param channel the connection's context
+     * @param server the server
+     * @param requestId the JSON-RPC id of the request, or {@code null} for a notification
+     * @param securityContext the caller of this request
+     */
+    public DefaultDispatchContext(
+            ChannelContext channel,
+            ServerEngine server,
+            @Nullable RequestId requestId,
+            SecurityContext securityContext) {
         this.channel = channel;
         this.server = server;
         this.requestId = requestId;
+        this.securityContext = Objects.requireNonNull(securityContext, "securityContext");
     }
 
     public static DispatchContext create(Protocol protocol, ServerEngine server) {
@@ -104,6 +125,11 @@ public class DefaultDispatchContext implements DispatchContext {
     @Override
     public <T> void set(AttributeKey<T> key, T value) {
         channel.set(key, value);
+    }
+
+    @Override
+    public SecurityContext securityContext() {
+        return securityContext;
     }
 
     @Override

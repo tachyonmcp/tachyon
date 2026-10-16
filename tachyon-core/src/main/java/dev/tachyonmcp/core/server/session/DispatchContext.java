@@ -11,6 +11,7 @@ import dev.tachyonmcp.core.runtime.ChannelContext;
 import dev.tachyonmcp.core.server.OutboundSseStream;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
 import dev.tachyonmcp.core.server.observability.Observation;
+import dev.tachyonmcp.core.server.security.AccessPolicy;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 
@@ -19,6 +20,11 @@ public interface DispatchContext extends ChannelContext {
 
     /** Returns the owning {@link ServerEngine}. */
     ServerEngine engine();
+
+    /** Which features this request's caller may see: the server's configured policy. */
+    default AccessPolicy accessPolicy() {
+        return engine().config().security().accessPolicy();
+    }
 
     @Override
     default <E extends ServerExtension> Optional<E> extension(Class<E> type) {

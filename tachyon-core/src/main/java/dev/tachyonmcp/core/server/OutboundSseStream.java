@@ -108,4 +108,15 @@ public interface OutboundSseStream {
      *                 the close was abnormal, or {@code null} for an ordinary close
      */
     default void onClose(Consumer<@Nullable Throwable> callback) {}
+
+    /**
+     * Registers how a long-lived stream ends when the credentials of the request that opened it expire,
+     * in place of closing it at once: {@code subscriptions/listen} answers its request with the graceful
+     * result first, as the spec has a server do when it ends a subscription (Subscriptions § Graceful
+     * Closure). The callback must complete the request; the stream then ends with its response. Default
+     * is a no-op for transports that close nothing at expiry.
+     *
+     * @param gracefulEnd runs once, at the expiry, on an unspecified thread
+     */
+    default void onExpiry(Runnable gracefulEnd) {}
 }

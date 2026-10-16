@@ -262,8 +262,8 @@ class TaskRoutingTest extends AbstractStatefulMcpE2eTest {
                     {"jsonrpc":"2.0","id":2,"method":"%s","params":{"taskId":"%s"}}
                     """.formatted(method, taskId));
             assertThat(tasks(server).get(taskId))
-                    .as("a read caches the connector's snapshot")
-                    .isNotNull();
+                    .as("a read never caches the connector's snapshot of an unknown task")
+                    .isNull();
 
             book(booker, taskId, false, "tok-booker");
 

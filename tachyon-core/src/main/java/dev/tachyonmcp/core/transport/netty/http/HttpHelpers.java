@@ -24,6 +24,30 @@ public final class HttpHelpers {
     private HttpHelpers() {}
 
     /**
+     * Returns whether {@code text} is an RFC 9110 §5.6.2 {@code token}: one or more {@code tchar}.
+     * The empty string is not a token.
+     *
+     * @param text the candidate
+     * @return whether it is a token
+     */
+    public static boolean isToken(String text) {
+        if (text.isEmpty()) {
+            return false;
+        }
+        for (int i = 0; i < text.length(); i++) {
+            final char c = text.charAt(i);
+            final boolean tchar = (c >= 'a' && c <= 'z')
+                    || (c >= 'A' && c <= 'Z')
+                    || (c >= '0' && c <= '9')
+                    || "!#$%&'*+-.^_`|~".indexOf(c) >= 0;
+            if (!tchar) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
      * Set required HTTP headers for SSE stream response.
      *
      * <p>{@code Connection: close} because the server hard-closes the channel when the stream

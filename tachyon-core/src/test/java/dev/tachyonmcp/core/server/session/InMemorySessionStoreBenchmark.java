@@ -54,7 +54,7 @@ public class InMemorySessionStoreBenchmark {
             keys[i] = new SessionKey(
                     SessionIdGenerator.DEFAULT.generate(null, null),
                     UUID.randomUUID().toString());
-            store.create(keys[i], EXPIRES_AT);
+            store.create(keys[i], null, EXPIRES_AT);
         }
     }
 
@@ -103,6 +103,7 @@ public class InMemorySessionStoreBenchmark {
         final var expected = session.current;
         final var updated = new SessionSnapshot(
                 expected.key(),
+                expected.ownerKey(),
                 SessionState.ACTIVE,
                 "2025-11-25",
                 expected.enabledExtensionIds(),

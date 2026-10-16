@@ -22,13 +22,16 @@ import dev.tachyonmcp.api.server.features.resources.Resources;
 import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
 import dev.tachyonmcp.api.server.features.tasks.TaskSupport;
 import dev.tachyonmcp.api.server.features.tools.Tools;
+import dev.tachyonmcp.api.server.security.SecurityContext;
 import dev.tachyonmcp.api.server.session.SessionIdGenerator;
 import dev.tachyonmcp.core.protocol.ProtocolResponseMapper;
 import dev.tachyonmcp.core.protocol.Protocols;
 import dev.tachyonmcp.core.runtime.Backpressure;
 import dev.tachyonmcp.core.runtime.Session;
 import dev.tachyonmcp.core.runtime.SessionState;
+import dev.tachyonmcp.core.runtime.SseConnection;
 import dev.tachyonmcp.core.runtime.SseEvent;
+import dev.tachyonmcp.core.server.config.SecurityConfig;
 import dev.tachyonmcp.core.server.config.ServerConfig;
 import dev.tachyonmcp.core.server.config.SessionConfig;
 import dev.tachyonmcp.core.server.extensions.EngineBinding;
@@ -110,6 +113,9 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
     private final DefaultPromptRegistry promptRegistry;
     private final DefaultCompletionRegistry completionRegistry;
     private final SubscriptionRegistry subscriptionRegistry;
+    /** Where {@code notifications/resources/updated} goes on 2026-07-28; set once, when the handlers install. */
+    private @Nullable SubscriptionTopic<ResourceMethodHandlers.ResourceUris> resourcesUpdated;
+
     private final JsonSchemaValidator inputValidator;
     private final JsonSchemaValidator outputValidator;
     private final PayloadSerializer payloadSerializer;
@@ -296,8 +302,11 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
         this.payloadSerializer = payloadSerializer1;
         this.payloadDeserializer = payloadDeserializer1;
         var caps = config.capabilities();
-        this.toolRegistry =
-                new DefaultToolRegistry(schemaFactory1, caps.tools(), () -> taskRuntime.executionConfigured());
+        this.toolRegistry = new DefaultToolRegistry(
+                schemaFactory1,
+                caps.tools(),
+                () -> taskRuntime.executionConfigured(),
+                !(config.security().authentication() instanceof SecurityConfig.Authentication.Disabled));
         this.resourceRegistry = new DefaultResourceRegistry(this, caps.resources());
         this.promptRegistry = new DefaultPromptRegistry(caps.prompts());
         this.completionRegistry = new DefaultCompletionRegistry(caps.completions());
@@ -449,8 +458,8 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
     @Override
     public void notifyResourceSubscriptions(String uri) {
         subscriptionRegistry.publish(
-                ResourceMethodHandlers.UPDATED,
-                uris -> uris.contains(uri),
+                Objects.requireNonNull(resourcesUpdated, "resource topics not registered"),
+                uris -> uris.requested().contains(uri) && !resourceRegistry.isHidden(uri, uris.visible()),
                 "notifications/resources/updated",
                 mapper -> Map.of("uri", uri));
     }
@@ -491,9 +500,9 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
                 outputValidator,
                 payloadSerializer,
                 payloadDeserializer);
-        ResourceMethodHandlers.register(methodHandlers, resourceRegistry, subscriptionRegistry);
+        resourcesUpdated = ResourceMethodHandlers.register(methodHandlers, resourceRegistry, subscriptionRegistry);
         PromptMethodHandlers.register(methodHandlers, promptRegistry, subscriptionRegistry, inputValidator);
-        CompletionMethodHandlers.register(methodHandlers, completionRegistry);
+        CompletionMethodHandlers.register(methodHandlers, completionRegistry, promptRegistry, resourceRegistry);
         if (config.capabilities().logging()) {
             LoggingHandlers.register(methodHandlers);
         }
@@ -763,8 +772,8 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
     }
 
     @Override
-    public Session createSession(String sessionId) {
-        return sessionManager.createSession(sessionId);
+    public Session createSession(String sessionId, SecurityContext creator) {
+        return sessionManager.createSession(sessionId, SseConnection.noop(), creator);
     }
 
     @Override

@@ -9,6 +9,7 @@ import dev.tachyonmcp.api.server.extensions.AdvertiseMode;
 import dev.tachyonmcp.api.server.extensions.ExtensionContext;
 import dev.tachyonmcp.api.server.extensions.ExtensionNegotiation;
 import dev.tachyonmcp.api.server.extensions.ServerExtension;
+import dev.tachyonmcp.api.server.security.SecurityContext;
 import dev.tachyonmcp.core.protocol.Protocols;
 import dev.tachyonmcp.core.protocol.mcp.v2025_11_25.models.ClientCapabilities;
 import dev.tachyonmcp.core.protocol.mcp.v2025_11_25.models.InitializeRequestParams;
@@ -46,7 +47,14 @@ class ExtensionMethodRoutingTest {
         var ctx = DefaultDispatchContext.create(Protocols.list().getFirst(), server);
         ctx.setSession(session);
         var result = (McpDispatcher.DispatchResult.Response) dispatcher
-                .dispatchRequestAsync(RequestId.of(1), "test/ext-method", null, "sess_routing", null, ctx)
+                .dispatchRequestAsync(
+                        RequestId.of(1),
+                        "test/ext-method",
+                        null,
+                        "sess_routing",
+                        null,
+                        ctx,
+                        SecurityContext.anonymous())
                 .join();
         var body = result.responseBodyString();
         assertThat(body).contains("error");
@@ -59,7 +67,14 @@ class ExtensionMethodRoutingTest {
         session.activate();
         var params = Map.<String, Object>of();
         var result = (McpDispatcher.DispatchResult.Response) dispatcher
-                .dispatchRequestAsync(RequestId.of(1), "test/ext-method", params, "sess_routing", null, context)
+                .dispatchRequestAsync(
+                        RequestId.of(1),
+                        "test/ext-method",
+                        params,
+                        "sess_routing",
+                        null,
+                        context,
+                        SecurityContext.anonymous())
                 .join();
         var body = result.responseBodyString();
         assertThat(body).contains("result");

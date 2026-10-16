@@ -5,6 +5,7 @@ import static dev.tachyonmcp.core.test.TestUtils.newEngine;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.tachyonmcp.api.server.domain.RequestId;
+import dev.tachyonmcp.api.server.security.SecurityContext;
 import dev.tachyonmcp.core.protocol.Protocols;
 import dev.tachyonmcp.core.runtime.SseEvent;
 import dev.tachyonmcp.core.server.McpDispatcher;
@@ -101,7 +102,13 @@ class SubscriptionsListenObservationTest {
         var ctx = DefaultDispatchContext.create(protocol, server);
         var stream = new FakeStream();
         var future = dispatcher.dispatchRequestAsync(
-                RequestId.of(1), "subscriptions/listen", Map.of(), session.id(), stream, ctx);
+                RequestId.of(1),
+                "subscriptions/listen",
+                Map.of(),
+                session.id(),
+                stream,
+                ctx,
+                SecurityContext.anonymous());
         return new Fixture(stream, future);
     }
 

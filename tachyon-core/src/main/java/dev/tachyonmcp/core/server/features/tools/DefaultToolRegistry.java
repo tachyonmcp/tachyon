@@ -19,6 +19,7 @@ import dev.tachyonmcp.core.server.config.FeatureConfig;
 import dev.tachyonmcp.core.server.features.AbstractRegistry;
 import dev.tachyonmcp.core.server.internal.HandlerFutures;
 import dev.tachyonmcp.core.server.json.JsonSchemaUtils;
+import dev.tachyonmcp.core.server.security.ScopeTokens;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
@@ -39,6 +40,7 @@ public class DefaultToolRegistry extends AbstractRegistry<ToolDescriptor, ToolHa
 
     private final JsonSchemaFactory<?> schemaFactory;
     private final BooleanSupplier tasksAvailable;
+    private final boolean authenticated;
     private final FeatureConfig config;
 
     /**
@@ -54,13 +56,19 @@ public class DefaultToolRegistry extends AbstractRegistry<ToolDescriptor, ToolHa
      * @param config        feature configuration, e.g. page size and mode
      * @param tasksAvailable whether a tasks runtime is installed; a tool declaring task support is
      *                      refused without one
+     * @param authenticated whether the server authenticates requests; a tool declaring required scopes
+     *                      is refused without it, because nobody could ever hold them
      */
     public DefaultToolRegistry(
-            JsonSchemaFactory<?> schemaFactory, FeatureConfig config, BooleanSupplier tasksAvailable) {
+            JsonSchemaFactory<?> schemaFactory,
+            FeatureConfig config,
+            BooleanSupplier tasksAvailable,
+            boolean authenticated) {
         super(config.pageSize());
         this.schemaFactory = schemaFactory;
         this.config = config;
         this.tasksAvailable = tasksAvailable;
+        this.authenticated = authenticated;
     }
 
     @Override
@@ -95,6 +103,12 @@ public class DefaultToolRegistry extends AbstractRegistry<ToolDescriptor, ToolHa
         var taskSupport = descriptor.taskSupport();
         if (taskSupport != null && taskSupport != TaskSupport.FORBIDDEN && !tasksAvailable.getAsBoolean()) {
             throw new IllegalStateException("Tool '" + name + "' declares task support, which requires TasksExtension");
+        }
+        descriptor.requiredScopes().forEach(ScopeTokens::require);
+        if (!descriptor.requiredScopes().isEmpty() && !authenticated) {
+            throw new IllegalStateException(
+                    "Tool '" + name + "' declares required scopes " + descriptor.requiredScopes()
+                            + ", which requires the server to authenticate requests: configure security(...)");
         }
         JsonSchemaUtils.validateInputSchemaRoot(schemaFactory, name, descriptor.inputSchema());
         JsonSchemaUtils.validateHeaderAnnotations(schemaFactory, name, descriptor.inputSchema());

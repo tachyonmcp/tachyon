@@ -60,4 +60,13 @@ public @interface McpTool {
      * @return the description, or empty for none
      */
     String description() default "";
+
+    /**
+     * OAuth scopes a caller must hold, all of them, to call this tool. A caller without them is
+     * answered {@code 403 Forbidden} before the method runs. See {@code
+     * ToolDescriptor#requiredScopes()}; the server must authenticate, or registering the tool fails.
+     *
+     * @return the required scopes, or none
+     */
+    String[] requiredScopes() default {};
 }

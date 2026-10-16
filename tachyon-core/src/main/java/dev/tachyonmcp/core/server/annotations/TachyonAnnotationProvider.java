@@ -196,6 +196,7 @@ public final class TachyonAnnotationProvider implements AnnotationProvider {
                 .register(
                         builder -> builder.name(name)
                                 .description(emptyToNull(tool.description()))
+                                .requiredScopes(tool.requiredScopes())
                                 .inputSchema(invoker.inputSchema())
                                 .outputSchema(
                                         JavaTypeSchemas.isObjectType(returnType)

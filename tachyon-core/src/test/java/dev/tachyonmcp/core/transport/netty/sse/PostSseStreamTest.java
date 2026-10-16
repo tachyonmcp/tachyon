@@ -20,13 +20,18 @@ import io.netty.util.ReferenceCountUtil;
 import java.io.IOException;
 import java.nio.channels.ClosedChannelException;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Pattern;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -41,6 +46,7 @@ import org.junit.jupiter.params.provider.ValueSource;
  */
 class PostSseStreamTest {
 
+    private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-10-15T12:00:00Z"), ZoneOffset.UTC);
     private static final int ONE_MIB = 1024 * 1024;
     private static final Pattern SSE_ID = Pattern.compile("id: (\\d+)#(\\S+)");
 
@@ -83,6 +89,36 @@ class PostSseStreamTest {
                 .as("the priming event reuses the stream key's draw as its baseline id")
                 .isEqualTo(Long.parseLong(stream.streamKey()));
         assertThat(sink.streamKeys()).containsOnly(stream.streamKey());
+    }
+
+    @Test
+    void closesGracefullyWhenTheTokenOfTheRequestThatOpenedItExpiresAndNotBefore() {
+        channel.freezeTime();
+        var stream =
+                newStream(Duration.ZERO, ONE_MIB, tickerClock(), CLOCK.instant().plusSeconds(5));
+
+        stream.start();
+        channel.advanceTimeBy(4_999, TimeUnit.MILLISECONDS);
+        channel.runScheduledPendingTasks();
+        assertThat(sink.writes).as("still open a moment before the expiry").doesNotContain("LAST");
+
+        channel.advanceTimeBy(1, TimeUnit.MILLISECONDS);
+        channel.runScheduledPendingTasks();
+        assertThat(sink.writes)
+                .as("a retry hint, then the final chunk: the client reconnects with a fresh token")
+                .endsWith("retry: 3000\n", "LAST");
+    }
+
+    @Test
+    void staysOpenForACallerWhoseCredentialsDoNotExpire() {
+        channel.freezeTime();
+        var stream = newStream(Duration.ZERO);
+
+        stream.start();
+        channel.advanceTimeBy(365, TimeUnit.DAYS);
+        channel.runScheduledPendingTasks();
+
+        assertThat(sink.writes).doesNotContain("LAST");
     }
 
     @Test
@@ -404,8 +440,41 @@ class PostSseStreamTest {
     }
 
     private PostSseStream newStream(Duration heartbeatInterval, int maxPendingBytes) {
+        return newStream(heartbeatInterval, maxPendingBytes, CLOCK, null);
+    }
+
+    private PostSseStream newStream(
+            Duration heartbeatInterval, int maxPendingBytes, Clock clock, @Nullable Instant expiresAt) {
         return new PostSseStream(
-                channel, CorsDecision.NONE, eventIds::incrementAndGet, heartbeatInterval, maxPendingBytes);
+                channel,
+                CorsDecision.NONE,
+                eventIds::incrementAndGet,
+                heartbeatInterval,
+                maxPendingBytes,
+                clock,
+                expiresAt);
+    }
+
+    /** The server's clock, moved by the channel's own time, so one {@code advanceTimeBy} drives both. */
+    private Clock tickerClock() {
+        var ticker = channel.eventLoop().ticker();
+        var origin = ticker.nanoTime();
+        return new Clock() {
+            @Override
+            public ZoneOffset getZone() {
+                return ZoneOffset.UTC;
+            }
+
+            @Override
+            public Clock withZone(ZoneId zone) {
+                return this;
+            }
+
+            @Override
+            public Instant instant() {
+                return CLOCK.instant().plusNanos(ticker.nanoTime() - origin);
+            }
+        };
     }
 
     /** Hands out unpooled heap buffers and remembers them, so a test can spot one never released. */

@@ -1,6 +1,7 @@
 package dev.tachyonmcp.docs.springboot.reference;
 
 import dev.tachyonmcp.core.server.TachyonServer;
+import dev.tachyonmcp.core.server.session.InMemorySessionStore;
 import dev.tachyonmcp.spring.boot.TachyonAutoConfiguration;
 import dev.tachyonmcp.testkit.McpTestClients;
 import org.junit.jupiter.api.Test;
@@ -24,8 +25,8 @@ class SpringBootReferenceTest {
     @Configuration(proxyBeanMethods = false)
     static class Stores {
         @Bean
-        RedisSessionStore redisSessionStore() {
-            return new RedisSessionStore();
+        InMemorySessionStore sessionStore() {
+            return new InMemorySessionStore();
         }
     }
 
@@ -36,13 +37,16 @@ class SpringBootReferenceTest {
                 .withUserConfiguration(Stores.class, McpConfiguration.class)
                 .withPropertyValues("tachyon.port=0", "tachyon.session.session-ttl=45s")
                 .run(context -> {
-                    var store = context.getBean(RedisSessionStore.class);
+                    var store = context.getBean(InMemorySessionStore.class);
                     var server = context.getBean(TachyonServer.class);
 
                     try (var client = McpTestClients.forVersion(server.port(), "2025-11-25")) {
-                        assertThat(client.initialize()).isNotNull();
+                        var sessionId = client.initialize();
+                        assertThat(sessionId).isNotNull();
+                        assertThat(store.find(sessionId))
+                                .as("the customizer's store backs the session")
+                                .isPresent();
                     }
-                    assertThat(store.created()).as("the customizer's store backs the session").isEqualTo(1);
                 });
     }
 
@@ -58,6 +62,7 @@ class SpringBootReferenceTest {
         RuntimeHints hints = generationContext.getRuntimeHints();
         assertThat(RuntimeHintsPredicates.reflection().onType(GreetingRequest.class)).accepts(hints);
         assertThat(RuntimeHintsPredicates.reflection().onType(GreetingResponse.class)).accepts(hints);
-        assertThat(RuntimeHintsPredicates.reflection().onType(RedisSessionStore.class)).rejects(hints);
+        assertThat(RuntimeHintsPredicates.reflection().onType(InMemorySessionStore.class))
+                .rejects(hints);
     }
 }

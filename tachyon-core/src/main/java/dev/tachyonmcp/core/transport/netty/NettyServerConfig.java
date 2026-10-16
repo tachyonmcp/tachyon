@@ -65,8 +65,13 @@ public record NettyServerConfig(
         McpHeaderNames.MCP_NAME
     };
 
-    /** Response headers a browser MCP client must read from script. */
-    private static final String[] EXPOSED_HEADERS = {McpHeaderNames.MCP_SESSION_ID, McpHeaderNames.MCP_PROTOCOL_VERSION
+    /**
+     * Response headers a browser MCP client must read from script. {@code WWW-Authenticate} carries the
+     * challenge of a {@code 401}, with the {@code resource_metadata} URL a client starts OAuth discovery
+     * from; it is harmless on the responses that have none.
+     */
+    private static final String[] EXPOSED_HEADERS = {
+        McpHeaderNames.MCP_SESSION_ID, McpHeaderNames.MCP_PROTOCOL_VERSION, HttpHeaderNames.WWW_AUTHENTICATE.toString()
     };
 
     /** Seconds a browser may cache a preflight; browsers cap it lower (Chromium: 2h). */
@@ -105,8 +110,8 @@ public record NettyServerConfig(
      * origins, on any port, so a browser page on a dev server such as {@code localhost:5173} works.
      * Credentials are never allowed. The preflight grants the methods and MCP request headers a
      * browser client sends, plus {@code allowedHeaders}; the transport additionally
-     * grants each {@code Mcp-Param-*} header a preflight requests. Responses expose {@code MCP-Session-Id}
-     * and {@code MCP-Protocol-Version} to script.
+     * grants each {@code Mcp-Param-*} header a preflight requests. Responses expose {@code
+     * WWW-Authenticate}, {@code MCP-Session-Id} and {@code MCP-Protocol-Version} to script.
      *
      * @param allowedOrigins       origins to grant, or {@code null} for any origin the guard admits;
      *                             each a serialized origin, stored canonical

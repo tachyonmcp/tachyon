@@ -2,10 +2,12 @@
 package dev.tachyonmcp.core.server.session;
 
 import dev.tachyonmcp.api.annotations.InternalApi;
+import dev.tachyonmcp.api.server.security.SecurityContext;
 import dev.tachyonmcp.core.runtime.Session;
 import dev.tachyonmcp.core.runtime.SessionState;
 import dev.tachyonmcp.core.runtime.SseConnection;
 import dev.tachyonmcp.core.server.internal.AbstractJanitor;
+import dev.tachyonmcp.core.server.security.Owner;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -65,17 +67,28 @@ public final class SessionManager implements AutoCloseable {
     }
 
     /**
-     * Creates a session with no initial connection.
+     * Creates an anonymous session with no initial connection.
      */
     public Session createSession(String sessionId) {
-        return createSession(sessionId, SseConnection.noop());
+        return createSession(sessionId, SseConnection.noop(), SecurityContext.anonymous());
     }
 
     /**
-     * Creates a new persisted generation with the given process-local SSE connection.
+     * Creates an anonymous persisted generation with the given process-local SSE connection.
      */
     public Session createSession(String sessionId, SseConnection connection) {
-        final var creation = createAndInstall(sessionId, connection);
+        return createSession(sessionId, connection, SecurityContext.anonymous());
+    }
+
+    /**
+     * Creates a new persisted generation owned by the caller that made the creating request, with
+     * the given process-local SSE connection. The owner is part of the first persisted snapshot, so
+     * the session is never visible without it.
+     *
+     * @param creator the security context of the creating request
+     */
+    public Session createSession(String sessionId, SseConnection connection, SecurityContext creator) {
+        final var creation = createAndInstall(sessionId, connection, Owner.of(creator));
         final var previous = creation.replaced();
         if (previous != null) {
             previous.close();
@@ -264,10 +277,10 @@ public final class SessionManager implements AutoCloseable {
         return Session.fromSnapshot(snapshot, connection, this::persist, this::touch);
     }
 
-    private Creation createAndInstall(String sessionId, SseConnection connection) {
+    private Creation createAndInstall(String sessionId, SseConnection connection, Owner owner) {
         return withLifecycleLock(sessionId, () -> {
             final var key = new SessionKey(sessionId, UUID.randomUUID().toString());
-            final var snapshot = store.create(key, expiresAt());
+            final var snapshot = store.create(key, owner.key(), expiresAt());
             final var created = runtime(snapshot, connection);
             return new Creation(created, sessions.put(sessionId, created));
         });
@@ -394,6 +407,7 @@ public final class SessionManager implements AutoCloseable {
     private static SessionSnapshot refreshed(SessionSnapshot expected, Instant expiresAt) {
         return new SessionSnapshot(
                 expected.key(),
+                expected.ownerKey(),
                 expected.state(),
                 expected.protocolVersion(),
                 expected.enabledExtensionIds(),

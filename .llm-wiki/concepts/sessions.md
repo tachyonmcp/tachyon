@@ -1,9 +1,9 @@
 ---
 title: Sessions
 tags: [concept, session, state]
-sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/runtime/Session.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/session/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/SessionConfig.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultServerBuilder.java, tachyon-api/src/main/java/dev/tachyonmcp/api/server/session/SessionIdGenerator.java]
-updated: 2026-10-08
-commit: f34c36fc
+sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/runtime/Session.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/session/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/SessionConfig.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultServerBuilder.java, tachyon-api/src/main/java/dev/tachyonmcp/api/server/session/SessionIdGenerator.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpOperationHandler.java]
+updated: 2026-10-16
+commit: 747359f0
 ---
 
 # 🪪 Sessions
@@ -14,22 +14,23 @@ Verdict: **stateless by default** (`SessionConfig.enabled=false`) — a stateles
 
 | Type | Role | Proof |
 |---|---|---|
-| `Session` | Runtime: id, `SessionKey`, `SessionState`, SSE connection, backpressure, cursor, extensions, protocol, log level, resuming stream key. `send` hands every event to the connection (`false` only when none attached); slow-client hold/close is the connection's job → [[sse-streams]] | `Session`, `Session#send` |
+| `Session` | Runtime: id, `SessionKey`, `SessionState`, SSE connection, backpressure, cursor, extensions, protocol, log level, resuming stream key, **`Owner`** (final, restored from the snapshot's key; the `initialize` caller, anonymous or `Owner.Named`) → [[authentication]]. `send` hands every event to the connection (`false` only when none attached); slow-client hold/close is the connection's job → [[sse-streams]] | `Session`, `Session#send`, `Session#owner`, `Session#isOwnedBy` |
 | `SessionState` | `INITIALIZING → ACTIVE → (DRAINING) → CLOSED` | `SessionState` |
 | `SessionKey(sessionId, generationId)` | generation fences stale work; UUID generation per create | `SessionKey`, `SessionManager#withLifecycleLock` |
-| `SessionSnapshot` | transport-free state + `expiresAt` + `revision` | `SessionSnapshot` |
-| `SessionStore` | `create/find/compareAndSet/touch/terminate` (by key, or conditional on an expected snapshot), sync, may do I/O, never on event loop; `noop()` when sessions off | `SessionStore`, `NoopSessionStore` |
+| `SessionSnapshot` | transport-free state + `ownerKey` + `expiresAt` + `revision`. The owner is fixed for the generation: every copy (`Session#snapshot`, `SessionManager#refreshed`, `InMemorySessionStore#touched`) passes it through, or a CAS would fail and evict the local session | `SessionSnapshot` |
+| `SessionStore` | `create(key, ownerKey, expiresAt)/find/compareAndSet/touch/terminate` (by key, or conditional on an expected snapshot), sync, may do I/O, never on event loop; `noop()` when sessions off. `create` takes the owner so no node sees the session without it; a store that drops `ownerKey` restores sessions as anonymous and locks out their creator | `SessionStore`, `NoopSessionStore` |
 | `SessionEventStore` | `append/drain/replay` event log for SSE resume; `noop()` when sessions off | `SessionEventStore`, `NoopSessionEventStore` |
 | `SessionManager` | glue: local map + store + per-id lifecycle lock + janitor | `SessionManager` |
 | `SessionIdGenerator<T>` | `DEFAULT` = `sess_<uuid-no-dashes>`, `readsRequest()=false` | `SessionIdGenerator` |
 
 ## 🔁 Lifecycle
 
-1. `initialize` (no header) → `server.createSession(generateSessionId(ctx))` on VT `McpDispatcher#dispatchInitializeAsync`. Generator gets detached HTTP request copy if `readsRequest()` (`ATTR_INIT_REQUEST`) `McpDispatcher`. Blank id ⇒ `IllegalStateException`.
+1. `initialize` (no header) → `server.createSession(generateSessionId(ic), ic.securityContext())` on VT `McpDispatcher#dispatchInitializeAsync`; the `Owner` is derived inside `SessionManager#createSession` and its key goes into the first stored snapshot. Generator gets detached HTTP request copy if `readsRequest()` (`ATTR_INIT_REQUEST`) `McpDispatcher`. Blank id ⇒ `IllegalStateException`.
 2. `DefaultDispatchContext.setSession` records negotiated protocol on session `DefaultDispatchContext#setSession`.
 3. Response carries `MCP-Session-Id`; init handler fires `OperationStarted(session)` → bound into channel ctx.
 4. `notifications/initialized` → `Session.activate()` CAS `INITIALIZING→ACTIVE` `Session#activate`. Before that only `ping` allowed `McpDispatcher#dispatchTrackedRequestAsync`.
 5. `DELETE` with header → `removeSession` → 200 / 404 `McpOperationHandler#handleDelete`.
+5a. **Owner binding.** Every request naming a session (POST of any kind, GET stream, `Last-Event-ID` resume, DELETE) first passes `McpOperationHandler#ownedBy`: the caller's `Owner` must equal `Session#owner`: an anonymous session serves only anonymous callers. Otherwise the lookup is empty and the answer is the unknown-session `404`, with a WARN and a truncated id; the session is not terminated. Restored sessions (`SessionManager#hydrateAbsent`) carry the owner from the snapshot. Internal lookups by id (task notifications, logging level) are not request lookups and skip the check → [[authentication]].
 6. Channel close in init phase → `ShutdownStarted` → removal.
 7. Janitor evicts `CLOSED` or idle > TTL locally; terminates the snapshot only if this node wrote last or it expired [SessionManager#sweep](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/session/SessionManager.java), [SessionManager#terminateIfLastWriterOrExpired](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/session/SessionManager.java).
 

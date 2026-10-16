@@ -31,6 +31,7 @@ class EngineBoundaryTest {
             "dev.tachyonmcp.api.server.domain.TaskResult",
             "dev.tachyonmcp.core.server.features.Pagination",
             "dev.tachyonmcp.core.server.internal.AbstractJanitor",
+            "dev.tachyonmcp.core.server.security.Owner",
             "dev.tachyonmcp.extensions.tasks.engine.");
 
     @Test

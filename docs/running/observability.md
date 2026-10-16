@@ -293,6 +293,13 @@ the dispatch lifecycle:
 - `start(OperationInfo)` — fires once, before any handler runs
 - `complete(OperationInfo, OperationOutcome)` — fires once, at the terminal boundary
 
+A request that [authentication](authentication.md) refuses on its HTTP head never reaches dispatch,
+yet listeners hear of it: one operation of kind `OperationKind.AUTHENTICATION`, method
+`authentication`, completed at once with `OperationOutcome.Rejected` and the status (`401`, `400`, `500`
+for a provider failure, `503` for a timeout). It carries no header, URI or payload, so no token reaches
+a listener. A refusal raised later, during dispatch (`403` for a missing scope, `401` thrown by a policy
+or a handler), completes the request's own operation as `Rejected` with its status.
+
 `OperationInfo` exposes trace context and server address/port through getters. When constructing one programmatically, supply these values through `OperationInfo.builder(...)`.
 
 Register a listener the same way as the OpenTelemetry one ([source](https://github.com/tachyonmcp/tachyon/blob/main/examples/doc-examples/src/main/java/dev/tachyonmcp/docs/running/observability/CustomListenerServer.java)):
@@ -317,6 +324,23 @@ TachyonServer(port = 8080) {
 Listeners cannot short-circuit, reject, or substitute results. Tachyon catches an `Exception` thrown by a listener, logs it at `WARN` without payloads, and carries on, so the fault does not affect handler execution, responses, or other listeners. Two cases are not isolated: an `Error` propagates, and an exception raised while the calling thread is interrupted, for example during a shutdown that interrupts handlers, is rethrown as a `RuntimeException`.
 
 Listeners nest in registration order: the scope a listener returns from `start` is opened inside the scope of every listener registered before it, so a later-registered listener's context is the active one while dispatch work runs. Scopes close innermost-first, which means each `close()` runs while its own context is current and restores whatever it displaced.
+
+## Wire log
+
+Tachyon can log what crosses each connection through the SLF4J logger
+`dev.tachyonmcp.transport.netty.channel`. It is off by default. The server reads the logger's level
+once, when it starts, so restart it after changing the level.
+
+| Level | What it logs |
+|---|---|
+| `INFO` or higher | Nothing |
+| `DEBUG` | Connection events and the size of each read and write, such as `READ: 345B`. No payload bytes. |
+| `TRACE` | The same events, plus a hex dump of every byte on the wire. |
+
+> [!WARNING]
+> The `TRACE` dump holds `Authorization: Bearer …` headers, tool arguments, and tool results.
+> Never enable it in production: a token in a log is a leaked token. Tachyon logs no token at any
+> other level.
 
 ## Examples
 

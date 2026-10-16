@@ -8,6 +8,8 @@ import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
 import dev.tachyonmcp.core.server.features.tasks.TaskRuntime;
 import dev.tachyonmcp.core.server.features.tasks.TasksExtensionSupport;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
+import dev.tachyonmcp.core.server.security.Owner;
+import dev.tachyonmcp.core.server.session.DispatchContext;
 import java.util.ArrayList;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
@@ -21,7 +23,8 @@ public final class FakeTasksExtension implements EngineExtension {
     public record Published(
             TaskSnapshot snapshot,
             @Nullable String sessionId,
-            @Nullable ProgressToken token) {}
+            @Nullable ProgressToken token,
+            Owner owner) {}
 
     public final List<Published> published = new ArrayList<>();
 
@@ -45,8 +48,9 @@ public final class FakeTasksExtension implements EngineExtension {
 
             @Override
             public TaskSnapshot publish(
-                    TaskSnapshot snapshot, @Nullable String sessionId, @Nullable ProgressToken progressToken) {
-                published.add(new Published(snapshot, sessionId, progressToken));
+                    DispatchContext context, TaskSnapshot snapshot, @Nullable ProgressToken progressToken) {
+                published.add(new Published(
+                        snapshot, context.sessionId(), progressToken, Owner.of(context.securityContext())));
                 return snapshot;
             }
 

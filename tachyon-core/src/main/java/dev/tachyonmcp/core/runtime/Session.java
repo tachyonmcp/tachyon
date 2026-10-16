@@ -5,6 +5,7 @@ import dev.tachyonmcp.api.annotations.InternalApi;
 import dev.tachyonmcp.api.server.domain.LoggingLevel;
 import dev.tachyonmcp.core.protocol.Protocol;
 import dev.tachyonmcp.core.protocol.Protocols;
+import dev.tachyonmcp.core.server.security.Owner;
 import dev.tachyonmcp.core.server.session.SessionKey;
 import dev.tachyonmcp.core.server.session.SessionSnapshot;
 import java.time.Instant;
@@ -40,6 +41,7 @@ public class Session {
     private final Set<String> enabledExtensions = ConcurrentHashMap.newKeySet();
     private final AtomicReference<@Nullable Protocol> protocol = new AtomicReference<>();
     private final AtomicReference<@Nullable LoggingLevel> loggingLevel = new AtomicReference<>();
+    private final Owner owner;
     private final AtomicReference<SessionSnapshot> persistedSnapshot;
     private volatile @Nullable String resumingStreamKey;
     private final Set<InFlightRequest> inFlightRequests = ConcurrentHashMap.newKeySet();
@@ -47,7 +49,14 @@ public class Session {
     public Session(String id, SseConnection connection) {
         this(
                 new SessionSnapshot(
-                        new SessionKey(id, "local"), SessionState.INITIALIZING, null, Set.of(), null, Instant.MAX, 0),
+                        new SessionKey(id, "local"),
+                        null,
+                        SessionState.INITIALIZING,
+                        null,
+                        Set.of(),
+                        null,
+                        Instant.MAX,
+                        0),
                 connection,
                 ignored -> {},
                 ignored -> {});
@@ -57,6 +66,7 @@ public class Session {
             SessionSnapshot snapshot, SseConnection connection, Consumer<Session> onChange, Consumer<Session> onTouch) {
         this.id = snapshot.key().sessionId();
         this.key = snapshot.key();
+        this.owner = Owner.fromKey(snapshot.ownerKey());
         this.onChange = Objects.requireNonNull(onChange, "onChange");
         this.onTouch = Objects.requireNonNull(onTouch, "onTouch");
         this.state = new AtomicReference<>(snapshot.state());
@@ -223,6 +233,26 @@ public class Session {
         }
     }
 
+    /**
+     * Returns the owner of this session: whoever made the request that created it, or anonymous.
+     * Fixed at creation and kept in every {@link SessionSnapshot}, so a restored session has the
+     * same owner. It says who may use the session, never who the current caller is: each request is
+     * authenticated on its own, and the caller's context is {@link
+     * dev.tachyonmcp.api.runtime.InteractionContext#securityContext()}.
+     */
+    public Owner owner() {
+        return owner;
+    }
+
+    /**
+     * Whether {@code caller} is the same caller that created this session: an anonymous session
+     * serves only anonymous callers. The session id alone never grants access, as it is not a
+     * credential.
+     */
+    public boolean isOwnedBy(Owner caller) {
+        return owner.equals(caller);
+    }
+
     /** Enables an extension for this session. */
     public void enableExtension(String extensionId) {
         if (enabledExtensions.add(extensionId)) {
@@ -258,6 +288,7 @@ public class Session {
         var negotiatedProtocol = protocol.get();
         return new SessionSnapshot(
                 key,
+                owner.key(),
                 state(),
                 negotiatedProtocol != null ? negotiatedProtocol.versionString() : null,
                 enabledExtensionIds(),

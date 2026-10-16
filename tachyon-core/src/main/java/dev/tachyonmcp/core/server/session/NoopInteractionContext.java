@@ -17,6 +17,7 @@ import dev.tachyonmcp.core.runtime.Session;
 import dev.tachyonmcp.core.server.OutboundSseStream;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
 import dev.tachyonmcp.core.server.observability.Observation;
+import dev.tachyonmcp.core.server.security.AccessPolicy;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -92,6 +93,12 @@ public class NoopInteractionContext implements DispatchContext {
     @Override
     public <E extends ServerExtension> Optional<E> extension(Class<E> type) {
         return Optional.empty();
+    }
+
+    /** Programmatic dispatch has no server and no caller but anonymous: nothing is hidden. */
+    @Override
+    public AccessPolicy accessPolicy() {
+        return AccessPolicy.permitAll();
     }
 
     @Override

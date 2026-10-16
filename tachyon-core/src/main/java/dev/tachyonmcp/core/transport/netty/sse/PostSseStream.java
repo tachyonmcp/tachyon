@@ -25,7 +25,9 @@ import io.netty.util.concurrent.FastThreadLocalThread;
 import io.netty.util.concurrent.PromiseCombiner;
 import java.io.IOException;
 import java.nio.channels.ClosedChannelException;
+import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -88,6 +90,10 @@ public final class PostSseStream implements OutboundSseStream {
     private final long streamKeyId;
     private final String streamKey;
     private final Duration heartbeatInterval;
+    private final Clock clock;
+    private final @Nullable Instant expiresAt;
+    private volatile @Nullable Runnable gracefulExpiry;
+    private @Nullable SseExpiry expiry;
 
     private static final int TASK_OVERHEAD_BYTES = 128;
 
@@ -121,16 +127,25 @@ public final class PostSseStream implements OutboundSseStream {
     private @Nullable ChannelFuture closeWrite;
     private final ChannelFutureListener writeFailureListener = this::closeOnWriteFailure;
 
+    /**
+     * @param expiresAt when the credentials of the request this stream answers expire, after which the
+     *     stream is closed; {@code null} if they do not. Passed by the transport that took the caller,
+     *     since a connection-scoped context cannot say whose request this is.
+     */
     public PostSseStream(
             Channel channel,
             CorsDecision cors,
             LongSupplier eventIdSupplier,
             Duration heartbeatInterval,
-            int maxPendingBytes) {
+            int maxPendingBytes,
+            Clock clock,
+            @Nullable Instant expiresAt) {
         this.channel = channel;
         this.cors = cors;
         this.heartbeatInterval = heartbeatInterval;
         this.maxPendingBytes = maxPendingBytes;
+        this.clock = clock;
+        this.expiresAt = expiresAt;
         // Offers never wait, so with buffering off they fall back to the channel's own writability
         // limit: a burst of notifications to a healthy subscriber must not disconnect it.
         this.maxOfferedBytes =
@@ -231,6 +246,21 @@ public final class PostSseStream implements OutboundSseStream {
     @Override
     public void close() {
         runOnEventLoopQuietly(() -> doClose(true), "close");
+    }
+
+    @Override
+    public void onExpiry(Runnable gracefulEnd) {
+        this.gracefulExpiry = gracefulEnd;
+    }
+
+    /** At the caller's expiry: the graceful end registered by the handler, else an immediate close. */
+    private void expire() {
+        final var graceful = gracefulExpiry;
+        if (graceful == null) {
+            close();
+        } else {
+            graceful.run();
+        }
     }
 
     public void terminate() {
@@ -492,6 +522,7 @@ public final class PostSseStream implements OutboundSseStream {
         HttpHelpers.setSseStreamHeaders(response, cors);
         writes.add(channel.write(response).addListener(writeFailureListener));
         SseHeartbeat.enable(channel, heartbeatInterval);
+        expiry = SseExpiry.arm(channel, clock, expiresAt, this::expire);
         if (queued.isEmpty()) {
             // Priming event: gives the client a Last-Event-ID baseline for reconnection (SEP-1699).
             // Carries this stream's key so a resume from the priming id replays only this stream.
@@ -528,6 +559,7 @@ public final class PostSseStream implements OutboundSseStream {
 
     private ChannelFuture doClose(boolean reconnect) {
         if (state.closed) return closeWrite != null ? closeWrite : channel.newSucceededFuture();
+        if (expiry != null) expiry.cancel();
         var wasOpen = state.opened;
         state = wasOpen ? State.CLOSED_OPENED : State.CLOSED_UNOPENED;
         discardQueued();

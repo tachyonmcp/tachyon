@@ -8,6 +8,9 @@ import dev.tachyonmcp.core.protocol.ProtocolRequestMapper;
 import dev.tachyonmcp.core.protocol.ProtocolRequestMapper.CompletionReference;
 import dev.tachyonmcp.core.server.RpcMethodHandler;
 import dev.tachyonmcp.core.server.domain.ServerErrors;
+import dev.tachyonmcp.core.server.features.Visibility;
+import dev.tachyonmcp.core.server.features.prompts.DefaultPromptRegistry;
+import dev.tachyonmcp.core.server.features.resources.DefaultResourceRegistry;
 import dev.tachyonmcp.core.server.internal.HandlerFutures;
 import dev.tachyonmcp.core.server.session.DispatchContext;
 import java.util.Map;
@@ -23,11 +26,21 @@ public final class CompletionMethodHandlers {
 
     private CompletionMethodHandlers() {}
 
-    public static void register(Map<String, RpcMethodHandler<?, ?>> handlers, DefaultCompletionRegistry registry) {
-        handlers.put("completion/complete", new CompletionCompleteHandler(registry));
+    /**
+     * Installs {@code completion/complete}. The prompt and resource registries tell whether the caller
+     * may see what a completion refers to: completing the arguments of a hidden prompt or template would
+     * reveal that it exists.
+     */
+    public static void register(
+            Map<String, RpcMethodHandler<?, ?>> handlers,
+            DefaultCompletionRegistry registry,
+            DefaultPromptRegistry prompts,
+            DefaultResourceRegistry resources) {
+        handlers.put("completion/complete", new CompletionCompleteHandler(registry, prompts, resources));
     }
 
-    private record CompletionCompleteHandler(DefaultCompletionRegistry registry)
+    private record CompletionCompleteHandler(
+            DefaultCompletionRegistry registry, DefaultPromptRegistry prompts, DefaultResourceRegistry resources)
             implements RpcMethodHandler<ProtocolRequestMapper.CompletionCallRequest, Object> {
 
         private static final Logger logger = LoggerFactory.getLogger(CompletionCompleteHandler.class);
@@ -52,8 +65,19 @@ public final class CompletionMethodHandlers {
         @Override
         public CompletionStage<Object> handleAsync(
                 DispatchContext context, ProtocolRequestMapper.CompletionCallRequest request) {
-            Optional<AsyncCompletionFn> fn =
+            // What the caller may not see completes like what does not exist: with nothing.
+            var hidden =
                     switch (request.reference()) {
+                        case CompletionReference.Prompt prompt ->
+                            prompts.find(prompt.name())
+                                    .filter(descriptor -> !Visibility.of(context, descriptor))
+                                    .isPresent();
+                        case CompletionReference.Resource resource ->
+                            resources.isHidden(resource.uri(), Visibility.to(context));
+                    };
+            Optional<AsyncCompletionFn> fn = hidden
+                    ? Optional.empty()
+                    : switch (request.reference()) {
                         case CompletionReference.Prompt prompt -> registry.findForPrompt(prompt.name());
                         case CompletionReference.Resource resource -> registry.findForResource(resource.uri());
                     };

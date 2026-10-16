@@ -2,8 +2,8 @@
 title: tachyon-api
 tags: [module, api]
 sources: [tachyon-api/src/main/java/dev/tachyonmcp/api/]
-updated: 2026-10-01
-commit: cf8f85f7
+updated: 2026-10-16
+commit: 747359f0
 ---
 
 # 📜 tachyon-api
@@ -29,10 +29,11 @@ Verdict: contract module. User-facing SAMs, descriptors, requests, results, doma
 | `server.features.tasks` | [Tasks](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/tasks/Tasks.java), [TaskConnector](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/tasks/TaskConnector.java), [TaskSnapshot](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/tasks/TaskSnapshot.java), [TaskState](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/tasks/TaskState.java), [TaskSupport](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/tasks/TaskSupport.java), `Task*Fn`, `Task*Request`, [TaskNotFoundException](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/tasks/TaskNotFoundException.java) | [[tasks]] |
 | `server.features.annotations` | [AnnotationProvider](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/annotations/AnnotationProvider.java), [AnnotationRegistrationContext](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/annotations/AnnotationRegistrationContext.java), [AnnotationInvocationSupport](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/annotations/AnnotationInvocationSupport.java), [ReflectionUtils](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/annotations/ReflectionUtils.java) (`@InternalApi`), [ResolvedParameter](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/annotations/ResolvedParameter.java) | [[declarative-configuration]] |
 | `server.session` | `SessionIdGenerator<T>` | [[sessions]] |
+| `server.security` | [SecurityContext](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/security/SecurityContext.java) only (`@ExperimentalApi`, sealed over the package-private `AnonymousSecurityContext` and `AuthenticatedSecurityContext`): what a handler reads via `InteractionContext#securityContext()`. The authentication SPI (`AuthenticationProvider`, `AuthenticationRequest`, `AuthenticationException`, `AuthenticationChallenge`, `BearerTokenVerifier`, `VerifiedToken`, `ScopeTokens`) is configured through `SecurityConfig`, so it lives in [[tachyon-core]]. `ToolDescriptor#requiredScopes` and `@McpTool(requiredScopes)` declare the scopes a tool needs; core's `DefaultToolRegistry#register` validates them | [[authentication]] |
 
 ## 🎭 InteractionContext (what handlers get)
 
-`InteractionContext`: `protocolVersion()`, `lifecycle()` (`INITIALIZATION|OPERATION|SHUTDOWN`), `sessionId()` (null stateless), `isExtensionEnabled(id)`, `extension(Class)` (`@ExperimentalApi`, `Optional`; default empty for server-less contexts, server-scoped so background work may keep the result), `notifications()` (`log`, `progress(token,…)`, `comment`), `client()` (`elicitation().create(...)`), `sendRequest(method, params)` (`@ExperimentalApi`, raw JSON string future), typed attributes `get/set(AttributeKey)`.
+`InteractionContext`: `protocolVersion()`, `lifecycle()` (`INITIALIZATION|OPERATION|SHUTDOWN`), `sessionId()` (null stateless), `isExtensionEnabled(id)`, `extension(Class)` (`@ExperimentalApi`, `Optional`; default empty for server-less contexts, server-scoped so background work may keep the result), `notifications()` (`log`, `progress(token,…)`, `comment`), `client()` (`elicitation().create(...)`), `sendRequest(method, params)` (`@ExperimentalApi`, raw JSON string future), `securityContext()` (`@ExperimentalApi` default method, anonymous unless a provider runs → [[authentication]]), typed attributes `get/set(AttributeKey)`.
 
 Runtime impl in core: `DefaultDispatchContext` (per request, wraps channel ctx) → [[tachyon-core]].
 

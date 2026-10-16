@@ -5,6 +5,7 @@ import dev.tachyonmcp.api.annotations.InternalApi;
 import dev.tachyonmcp.api.runtime.AttributeKey;
 import dev.tachyonmcp.api.runtime.ClientContext;
 import dev.tachyonmcp.api.runtime.ContextNotifications;
+import dev.tachyonmcp.api.server.security.SecurityContext;
 import dev.tachyonmcp.core.protocol.Protocol;
 import dev.tachyonmcp.core.server.session.WireClientContext;
 import java.util.Map;
@@ -55,6 +56,16 @@ public class DefaultChannelContext implements ChannelContext {
     @Override
     public void setSession(@Nullable Session session) {
         this.sessionHolder.set(session);
+    }
+
+    /**
+     * A connection serves many callers, so it holds none.
+     *
+     * @throws IllegalStateException always: ask the request's dispatch context
+     */
+    @Override
+    public SecurityContext securityContext() {
+        throw new IllegalStateException("the channel context holds no caller; use the request's dispatch context");
     }
 
     @Override

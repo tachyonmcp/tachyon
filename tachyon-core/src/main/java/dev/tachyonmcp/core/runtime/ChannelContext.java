@@ -7,7 +7,10 @@ import dev.tachyonmcp.core.protocol.Protocol;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Context for an MCP channel, providing access to the protocol, session, and lifecycle.
+ * Context for an MCP channel, providing access to the protocol, session, and lifecycle. It is
+ * connection-scoped state (on a stateful 2025-11-25 connection one instance serves every request), so
+ * it never holds a caller: {@link #securityContext()} throws rather than answer anonymous. The caller
+ * of a request is fixed, immutably, in the request's {@code DispatchContext}.
  */
 @InternalApi
 public interface ChannelContext extends InteractionContext {

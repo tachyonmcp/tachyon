@@ -9,6 +9,7 @@ import dev.tachyonmcp.api.json.JsonSchema;
 import dev.tachyonmcp.api.json.JsonSchemaValidator;
 import dev.tachyonmcp.api.json.SchemaValidationError;
 import dev.tachyonmcp.api.json.spi.JsonSchemaFactory;
+import dev.tachyonmcp.core.transport.netty.http.HttpHelpers;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -130,7 +131,7 @@ public class JsonSchemaUtils {
 
     private static void validateAnnotation(
             String toolName, String property, String headerName, JsonNode propertySchema, Map<String, String> claimed) {
-        if (!isToken(headerName)) {
+        if (!HttpHelpers.isToken(headerName)) {
             throw new IllegalArgumentException("Tool '" + toolName + "' property '" + property + "' has an "
                     + X_MCP_HEADER + " that is not a non-empty HTTP token: '" + headerName + "'");
         }
@@ -170,19 +171,6 @@ public class JsonSchemaUtils {
             count += countAnnotations(child.getValue(), "properties".equals(child.getKey()));
         }
         return count;
-    }
-
-    /** RFC 9110 section 5.6.2 {@code 1*tchar} — note the {@code 1*}: empty is not a token. */
-    private static boolean isToken(String value) {
-        if (value.isEmpty()) return false;
-        for (var i = 0; i < value.length(); i++) {
-            var c = value.charAt(i);
-            var alphanumeric = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9');
-            if (!alphanumeric && "!#$%&'*+-.^_`|~".indexOf(c) < 0) {
-                return false;
-            }
-        }
-        return true;
     }
 
     private static JsonNode parseSchemaRoot(

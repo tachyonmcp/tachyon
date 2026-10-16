@@ -15,11 +15,14 @@ import dev.tachyonmcp.core.runtime.SseConnection;
 import dev.tachyonmcp.core.runtime.SseEvent;
 import dev.tachyonmcp.core.server.TachyonServer;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
+import dev.tachyonmcp.core.server.session.DispatchContext;
+import dev.tachyonmcp.core.server.session.NoopInteractionContext;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.regex.Pattern;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 
 /** Push traffic of a task reaches only the session that owns it, in revision order. */
@@ -44,6 +47,16 @@ class TaskPushRoutingTest {
         return server.extension(TasksExtension.class).orElseThrow().tasks();
     }
 
+    /** The context of an anonymous request on {@code sessionId}, or on a stateless server when {@code null}. */
+    private static DispatchContext callerIn(@Nullable String sessionId) {
+        return new NoopInteractionContext() {
+            @Override
+            public @Nullable String sessionId() {
+                return sessionId;
+            }
+        };
+    }
+
     @Test
     void notifiesTaskStatusOnlyToOwningSessionWithItsProtocol() {
         try (var server = server()) {
@@ -65,8 +78,8 @@ class TaskPushRoutingTest {
             modern.connection(modernConnection);
             modern.activate();
 
-            server.taskRuntime().publish(submitted("legacy-task"), "legacy", null);
-            server.taskRuntime().publish(submitted("modern-task"), "modern", null);
+            server.taskRuntime().publish(callerIn("legacy"), submitted("legacy-task"), null);
+            server.taskRuntime().publish(callerIn("modern"), submitted("modern-task"), null);
             tasks(server).publish(submitted("orphan-task"));
 
             // SUBMITTED isn't a real wire value in either protocol version's status enum -- both
@@ -102,7 +115,7 @@ class TaskPushRoutingTest {
             bystander.connection(bystanderConnection);
             bystander.activate();
 
-            server.taskRuntime().publish(submitted("owned-task"), "owner", null);
+            server.taskRuntime().publish(callerIn("owner"), submitted("owned-task"), null);
             tasks(server).publish(revision(2, "owned-task"));
             tasks(server).publish(submitted("orphan-task"));
             assertThat(tasks(server).remove("owned-task")).isTrue();
@@ -133,8 +146,8 @@ class TaskPushRoutingTest {
             owner.connection(connection);
             owner.activate();
             var token = ProgressToken.of("tok");
-            server.taskRuntime().publish(submitted("owned-task"), "owner", token);
-            server.taskRuntime().publish(submitted("orphan-task"), null, token);
+            server.taskRuntime().publish(callerIn("owner"), submitted("owned-task"), token);
+            server.taskRuntime().publish(callerIn(null), submitted("orphan-task"), token);
             connection.sent.clear();
 
             // Same token, no session: must not fall back to any active session.
@@ -162,7 +175,7 @@ class TaskPushRoutingTest {
                     .orElseThrow());
             owner.connection(connection);
             owner.activate();
-            server.taskRuntime().publish(revision(0), "owner", null);
+            server.taskRuntime().publish(callerIn("owner"), revision(0), null);
 
             var publishers = 8;
             var revisions = 400;

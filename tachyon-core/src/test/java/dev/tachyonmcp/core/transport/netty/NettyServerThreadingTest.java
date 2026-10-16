@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.tachyonmcp.api.server.domain.RequestId;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
+import dev.tachyonmcp.api.server.security.SecurityContext;
 import dev.tachyonmcp.core.server.McpDispatcher;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
 import java.util.concurrent.Callable;
@@ -45,7 +46,8 @@ class NettyServerThreadingTest {
             var dispatcher = new McpDispatcher(server, server.executor());
             var params = java.util.Map.of("name", "thread_probe", "arguments", java.util.Map.of());
             dispatcher
-                    .dispatchRequestAsync(RequestId.of(1), "tools/call", params, "sess_thread-probe")
+                    .dispatchRequestAsync(
+                            RequestId.of(1), "tools/call", params, "sess_thread-probe", SecurityContext.anonymous())
                     .join();
 
             String toolThread = handlerThread.get(10, TimeUnit.SECONDS);
@@ -72,7 +74,8 @@ class NettyServerThreadingTest {
                             RequestId.of(1),
                             "tools/call",
                             java.util.Map.of("name", "name_probe", "arguments", java.util.Map.of()),
-                            "sess-name")
+                            "sess-name",
+                            SecurityContext.anonymous())
                     .join();
 
             String name = handlerThreadName.get(10, TimeUnit.SECONDS);

@@ -20,9 +20,10 @@ class InMemorySessionStoreTest {
     void replacementGenerationRejectsStaleWritesAndTermination() {
         try (var store = new InMemorySessionStore()) {
             var firstKey = new SessionKey("s1", "g1");
-            var first = store.create(firstKey, CREATED_AT);
+            var first = store.create(firstKey, null, CREATED_AT);
             var active = new SessionSnapshot(
                     first.key(),
+                    first.ownerKey(),
                     SessionState.ACTIVE,
                     "2025-11-25",
                     first.enabledExtensionIds(),
@@ -33,7 +34,7 @@ class InMemorySessionStoreTest {
             assertThat(store.compareAndSet(first, active)).isTrue();
             assertThat(store.find("s1")).contains(active);
 
-            var replacement = store.create(new SessionKey("s1", "g2"), Instant.parse("2026-09-09T13:00:00Z"));
+            var replacement = store.create(new SessionKey("s1", "g2"), null, Instant.parse("2026-09-09T13:00:00Z"));
 
             assertThat(store.compareAndSet(active, active)).isFalse();
             assertThat(store.touch(firstKey, Instant.parse("2026-09-09T14:00:00Z")))
@@ -55,7 +56,7 @@ class InMemorySessionStoreTest {
     void revisionTerminateRemovesOnlyTheRevisionThatWasRead() {
         try (var store = new InMemorySessionStore()) {
             var key = new SessionKey("s1", "g1");
-            var read = store.create(key, CREATED_AT);
+            var read = store.create(key, null, CREATED_AT);
             assertThat(store.touch(key, CREATED_AT.plusSeconds(30))).isTrue();
 
             assertThat(store.terminate(key, read.revision()))
@@ -80,7 +81,7 @@ class InMemorySessionStoreTest {
         final int touchesPerWriter = 5_000;
         try (var store = new InMemorySessionStore()) {
             var key = new SessionKey("s1", "g1");
-            var created = store.create(key, CREATED_AT);
+            var created = store.create(key, null, CREATED_AT);
             var start = new CountDownLatch(1);
             var rejected = new AtomicInteger();
 
@@ -125,7 +126,7 @@ class InMemorySessionStoreTest {
                 var executor = Executors.newVirtualThreadPerTaskExecutor()) {
             for (int round = 0; round < rounds; round++) {
                 var key = new SessionKey("s1", "g" + round);
-                var created = store.create(key, CREATED_AT);
+                var created = store.create(key, null, CREATED_AT);
                 var start = new CountDownLatch(1);
                 var landedTouches = new AtomicInteger();
 

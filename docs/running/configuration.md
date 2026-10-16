@@ -201,7 +201,9 @@ than one instance, see [deployment](deployment.md#more-than-one-instance).
 The [DNS-rebinding guard](#dns-rebinding-protection) runs first and admits loopback origins,
 on any port, plus any listed in `allowedOrigins`. CORS then answers the browser, so a page
 served from a dev server such as `http://localhost:5173` can call a local server. Only the
-MCP endpoint answers: a preflight to any other path gets `404` and no CORS grant.
+MCP endpoint answers: a preflight to any other path gets `404` and no CORS grant. The one exception
+is the OAuth [Protected Resource Metadata](authentication.md#discovery) of a bearer-token server, whose
+preflight and `GET` are answered by this same CORS policy.
 
 | Option | Default | Description |
 |---|---|---|
@@ -232,7 +234,7 @@ Built in, with no configuration:
 - Preflights grant `Content-Type`, `Authorization`, `MCP-Protocol-Version`, `MCP-Session-Id`,
   `Last-Event-ID`, `Mcp-Method` and `Mcp-Name`, plus each per-tool `Mcp-Param-*` header the
   preflight asks for, by name. There is no wildcard: any other header needs `allowedHeaders`.
-- Responses expose `MCP-Session-Id` and `MCP-Protocol-Version` to script.
+- Responses expose `WWW-Authenticate`, `MCP-Session-Id` and `MCP-Protocol-Version` to script.
 - Browsers may cache a preflight for up to a day.
 - Credentials are never allowed.
 
@@ -429,15 +431,21 @@ experimental stores enable restart recovery, but do not distribute live sessions
 connections between nodes.
 
 A persistent implementation can use the session ID as its key and encode the complete snapshot
-as its value. `create` is an atomic put, `find` decodes the value, `compareAndSet` is a conditional
+as its value. `create` is an atomic put of the snapshot with the `ownerKey` it is given, `find` decodes the value, `compareAndSet` is a conditional
 replace, `touch` conditionally extends the matching generation's expiry, `terminate(SessionKey)` removes
 only the matching generation, and `terminate(SessionKey, long)` is a conditional delete that removes
 the snapshot only while its generation and revision still match, for example
 `DELETE … WHERE session_id = ? AND generation = ? AND revision = ?`. Every write within a generation
 must increment the revision, so a key and a revision identify one snapshot version.
 The default `terminate(SessionKey, long)` checks with `find` and then calls `terminate(SessionKey)`,
-so a write between the two calls is lost. Stores written for 1.0 keep working; override it with one
-atomic conditional delete to close that window.
+so a write between the two calls is lost. Override it with one atomic conditional delete to close
+that window.
+`SessionSnapshot#ownerKey()` identifies the caller that created the session, or is `null` for an
+anonymous one (see [authentication](authentication.md#how-it-runs)). `create(SessionKey, String, Instant)`
+receives it, and every later snapshot of the generation carries it unchanged. Persist and return it as
+part of the snapshot: a store that drops it restores the session as anonymous, and the session then
+refuses its own authenticated creator. A store written before 1.1 must add the `ownerKey` parameter
+to `create`.
 Store implementations must make these operations thread-safe.
 Operations execute synchronously and may perform I/O. Tachyon invokes them outside transport
 event-loop threads. Implementations must be thread-safe.
@@ -510,6 +518,18 @@ TachyonServer(port = 8080) {
 
 Use `observability(...)` in Java and `observability { }` in Kotlin. The older `monitoring`
 aliases are deprecated for removal — migrate any code still calling them.
+
+## Security
+
+`security(...)` in Java configures per-request [authentication](authentication.md). Without a
+provider no authentication handler is installed and the request path is unchanged.
+
+| Option | Default | Description |
+|---|---|---|
+| `bearerToken(configurer)` | — | Requires an OAuth 2.1 bearer token on every HTTP request and publishes the [OAuth metadata](authentication.md#discovery) clients use to get one. `configurer` sets `resource`, `authorizationServers`, `scopesSupported` and `verifier`. `resource` is the server's canonical URI, the audience a token must name: absolute `https` (`http` only for loopback), no fragment, no query, no trailing slash, never taken from request headers. `authorizationServers` (at least one) are the issuers clients may use: `https`, no query, no fragment. `scopesSupported` (optional) are plain scope tokens, never `offline_access`. `verifier` returns a `VerifiedToken` with the token's expiry and audience, which Tachyon enforces. Streams close at the token's expiry. Anything missing or invalid throws `IllegalArgumentException` when you configure it |
+| `authenticationProvider(provider)` | — | Authenticates every HTTP request head with your own provider |
+| `accessPolicy(policy)` | `permitAll()` without authentication; **required** with it | Which tools, resources, resource templates and prompts a caller may see. A refused feature is not listed and answers like an unknown one on every path. Building a server that authenticates without one throws `IllegalStateException`; choose `AccessPolicy.permitAll()` on purpose. See [access policy](authentication.md#access-policy) |
+| `authenticationTimeout` | `10s` | Longest a request waits for the provider; then `503` with `Retry-After`, no challenge, and the connection closes. Must be positive. Keep `readerIdleTimeout` above it |
 
 ## Identity
 

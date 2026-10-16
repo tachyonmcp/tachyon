@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Instant;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 
 /** The {@link SessionStore} default methods a store written against 1.0 inherits. */
@@ -16,7 +17,7 @@ class SessionStoreTest {
     void defaultRevisionTerminateRemovesOnlyTheRevisionThatWasRead() throws Exception {
         try (var store = legacyStore()) {
             var key = new SessionKey("s1", "g1");
-            var read = store.create(key, CREATED_AT);
+            var read = store.create(key, null, CREATED_AT);
             assertThat(store.touch(key, CREATED_AT.plusSeconds(30))).isTrue();
 
             assertThat(store.terminate(key, read.revision()))
@@ -40,8 +41,8 @@ class SessionStoreTest {
         final var delegate = new InMemorySessionStore();
         return new SessionStore() {
             @Override
-            public SessionSnapshot create(SessionKey key, Instant expiresAt) {
-                return delegate.create(key, expiresAt);
+            public SessionSnapshot create(SessionKey key, @Nullable String ownerKey, Instant expiresAt) {
+                return delegate.create(key, ownerKey, expiresAt);
             }
 
             @Override

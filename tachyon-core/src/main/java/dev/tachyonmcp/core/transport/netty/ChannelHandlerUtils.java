@@ -6,6 +6,7 @@ import static dev.tachyonmcp.core.transport.netty.InteractionHandler.INTERACTION
 import dev.tachyonmcp.api.annotations.InternalApi;
 import dev.tachyonmcp.api.server.domain.RequestId;
 import dev.tachyonmcp.api.server.domain.ServerError;
+import dev.tachyonmcp.api.server.security.SecurityContext;
 import dev.tachyonmcp.api.server.session.SessionIdGenerator;
 import dev.tachyonmcp.core.runtime.ChannelContext;
 import dev.tachyonmcp.core.runtime.Session;
@@ -45,6 +46,42 @@ public final class ChannelHandlerUtils {
     private ChannelHandlerUtils() {}
 
     private static final AttributeKey<Boolean> REJECTED = AttributeKey.valueOf("tachyonRequestRejected");
+
+    private static final AttributeKey<SecurityContext> CALLER = AttributeKey.valueOf("authenticatedCaller");
+
+    /**
+     * Hands the caller {@code authentication} accepted on to the handler that will process the request.
+     * The attribute holds it only from here until that handler {@linkplain #takeCaller takes} it, once:
+     * it is how a result computed on the request head reaches the end of a pipeline that has not yet
+     * created, or must not mutate, any per-request object.
+     *
+     * @param channel the request's channel
+     * @param caller the authenticated caller
+     */
+    public static void recordCaller(Channel channel, SecurityContext caller) {
+        channel.attr(CALLER).set(caller);
+    }
+
+    /**
+     * Takes the caller of the request now being handled, leaving nothing behind for the next request on
+     * the connection. Every handler that processes a request calls this exactly once, at its entry,
+     * and passes the result down explicitly: no per-connection object ever holds identity.
+     *
+     * <p>Fails closed: with authentication configured and no caller recorded (the pipeline had
+     * {@code authentication} removed by a customizer) it returns {@code null} and the request must be
+     * answered {@code 500} without being processed. Without authentication the caller is anonymous.
+     *
+     * @param ctx the handler context of the request's channel
+     * @param server the server, which says whether requests are authenticated
+     * @return the caller, or {@code null} if one was required and none was recorded
+     */
+    public static @Nullable SecurityContext takeCaller(ChannelHandlerContext ctx, ServerEngine server) {
+        final var caller = ctx.channel().attr(CALLER).getAndSet(null);
+        if (caller != null) {
+            return caller;
+        }
+        return server.config().security().authenticationProvider() == null ? SecurityContext.anonymous() : null;
+    }
 
     /**
      * Rejects the request with {@code status} and closes the connection, marking the channel so
@@ -251,6 +288,37 @@ public final class ChannelHandlerUtils {
     public static ChannelFuture sendAcceptedAsync(ChannelHandlerContext ctx, CorsDecision cors) {
         var response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.ACCEPTED);
         response.headers().set(HttpHeaderNames.CONTENT_LENGTH, 0);
+        cors.applyTo(response);
+        return ctx.writeAndFlush(response);
+    }
+
+    /**
+     * Answers a request whose caller was refused after the request was read: {@code status} ({@code
+     * 401}, {@code 403}, {@code 400} or {@code 503}) with no body, the request's CORS headers, the
+     * {@code WWW-Authenticate} challenge and the {@code Retry-After}, if any. What they are comes from
+     * {@code SecurityRejection}. The connection stays open: unlike a refusal on the request head, the request
+     * was read whole. Returns the write completion.
+     *
+     * @param ctx the channel handler context
+     * @param status the HTTP status
+     * @param challenge the {@code WWW-Authenticate} value, or {@code null}
+     * @param retryAfter the {@code Retry-After} value, or {@code null}
+     * @param cors the request's CORS decision
+     */
+    public static ChannelFuture sendDeniedAsync(
+            ChannelHandlerContext ctx,
+            int status,
+            @Nullable String challenge,
+            @Nullable String retryAfter,
+            CorsDecision cors) {
+        var response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.valueOf(status));
+        response.headers().set(HttpHeaderNames.CONTENT_LENGTH, 0);
+        if (challenge != null) {
+            response.headers().set(HttpHeaderNames.WWW_AUTHENTICATE, challenge);
+        }
+        if (retryAfter != null) {
+            response.headers().set(HttpHeaderNames.RETRY_AFTER, retryAfter);
+        }
         cors.applyTo(response);
         return ctx.writeAndFlush(response);
     }

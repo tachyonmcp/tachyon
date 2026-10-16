@@ -2,8 +2,8 @@
 title: Errors
 tags: [concept, errors, protocol]
 sources: [tachyon-api/src/main/java/dev/tachyonmcp/api/server/domain/ServerError.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/domain/ServerErrors.java, tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/mcp/v2025_11_25/codecs/McpResponseMapper.java, tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/mcp/v2026_07_28/codecs/McpResponseMapper.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/PeekedBody.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/JsonRpcCodec.java]
-updated: 2026-10-06
-commit: ab5bb3df
+updated: 2026-10-15
+commit: 1f2c7fa8
 ---
 
 # 🚨 Errors
@@ -55,7 +55,7 @@ Subscription transport failures produce `StreamFailed(causeType, cause?)`, with 
 
 ⚠️ A SEP-2243 mirror disagreeing with the body is **not** here — it is a JSON-RPC error, coded per negotiated version (400/-32020 on 2026-07-28, 200/-32001 on 2025-11-25) via `ChannelHandlerUtils#rejectWithServerError` — [[protocol-versions]].
 | 403 | DNS-rebinding guard | `DnsRebindingProtectionHandler#reject` |
-| 404 | wrong path; unknown session; stateless + session headers | `EndpointValidatorHandler`, `McpOperationHandler#session`, `StatelessValidatorHandler#channelRead` |
+| 404 | wrong path; unknown session, or a session owned by another caller (same body); stateless + session headers | `EndpointValidatorHandler`, `McpOperationHandler#ownedBy`, `McpOperationHandler#sendUnknownSession`, `StatelessValidatorHandler#channelRead` |
 | 405 | DELETE on stateless; unknown HTTP method | same |
 | 406 | Accept missing `application/json`+`text/event-stream` (POST) / `text/event-stream` (GET) | `AcceptValidationHandler#POST_ACCEPT_TYPES` |
 | 415 | POST `Content-Type` not `application/json` (or missing); JSON-RPC `-32600`, `id: null` (body unread) | `ContentTypeValidationHandler#reject` |

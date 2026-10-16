@@ -19,6 +19,9 @@ import org.jspecify.annotations.Nullable;
 @InternalApi
 public final class OperationInfo {
 
+    /** The {@link #method()} of an {@link OperationKind#AUTHENTICATION} operation: a fixed, low-cardinality label. */
+    public static final String AUTHENTICATION_METHOD = "authentication";
+
     private final OperationKind kind;
     private final String method;
     private final @Nullable RequestId requestId;

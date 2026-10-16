@@ -8,6 +8,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.LongPredicate;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Default process-local session snapshot store.
@@ -22,8 +23,9 @@ public final class InMemorySessionStore implements SessionStore {
     private final ConcurrentHashMap<String, SessionSnapshot> snapshots = new ConcurrentHashMap<>();
 
     @Override
-    public SessionSnapshot create(SessionKey key, Instant expiresAt) {
-        final var snapshot = new SessionSnapshot(key, SessionState.INITIALIZING, null, Set.of(), null, expiresAt, 0);
+    public SessionSnapshot create(SessionKey key, @Nullable String ownerKey, Instant expiresAt) {
+        final var snapshot =
+                new SessionSnapshot(key, ownerKey, SessionState.INITIALIZING, null, Set.of(), null, expiresAt, 0);
         snapshots.put(key.sessionId(), snapshot);
         return snapshot;
     }
@@ -86,6 +88,7 @@ public final class InMemorySessionStore implements SessionStore {
     private static SessionSnapshot touched(SessionSnapshot current, Instant expiresAt) {
         return new SessionSnapshot(
                 current.key(),
+                current.ownerKey(),
                 current.state(),
                 current.protocolVersion(),
                 current.enabledExtensionIds(),

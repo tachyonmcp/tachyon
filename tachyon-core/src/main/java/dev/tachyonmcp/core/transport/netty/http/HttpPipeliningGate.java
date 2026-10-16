@@ -3,6 +3,7 @@ package dev.tachyonmcp.core.transport.netty.http;
 
 import dev.tachyonmcp.api.annotations.InternalApi;
 import io.netty.buffer.ByteBufUtil;
+import io.netty.channel.Channel;
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
@@ -39,8 +40,10 @@ import org.slf4j.LoggerFactory;
  * so the client may retry them.
  *
  * <p>Owns the channel's {@code autoRead}: reads stop while a request is queued, bounding the queue to
- * what one read decoded, and while the channel is not writable. Clients that do not pipeline never
- * queue, so their reads, and disconnect detection, are unaffected.
+ * what one read decoded, while the channel is not writable, and while a handler {@linkplain
+ * #holdReads holds} them. Clients that do not pipeline never queue, so their reads, and disconnect
+ * detection, are unaffected. A handler never toggles {@code autoRead} itself: it asks the gate, and
+ * every path that would turn reads back on honours the hold.
  *
  * <p>Install directly after the HTTP codec. One instance per channel; event-loop confined.
  */
@@ -56,6 +59,7 @@ public final class HttpPipeliningGate extends ChannelDuplexHandler {
     private boolean awaitingResponse;
     private boolean closeAfterResponse;
     private boolean closing;
+    private boolean readsHeld;
 
     /**
      * @param maxQueuedRequests pipelined requests allowed to wait behind the one in flight; {@code 0}
@@ -140,8 +144,35 @@ public final class HttpPipeliningGate extends ChannelDuplexHandler {
         }
         ctx.fireChannelReadComplete();
         if (queued.isEmpty() && !closing) {
-            ctx.channel().config().setAutoRead(ctx.channel().isWritable());
+            updateAutoRead(ctx.channel());
         }
+    }
+
+    /**
+     * Stops reading from the socket until {@link #releaseReads}, so a handler can decide about the
+     * request in flight before more of it arrives. Whatever the current read already decoded still
+     * reaches the pipeline; nothing further is read. Call on the event loop.
+     *
+     * @param channel the gate's channel
+     */
+    public void holdReads(Channel channel) {
+        readsHeld = true;
+        channel.config().setAutoRead(false);
+    }
+
+    /**
+     * Ends {@link #holdReads}. Reads resume unless a queued request, a channel that is not writable or
+     * a closing connection still stops them. Call on the event loop.
+     *
+     * @param channel the gate's channel
+     */
+    public void releaseReads(Channel channel) {
+        readsHeld = false;
+        updateAutoRead(channel);
+    }
+
+    private void updateAutoRead(Channel channel) {
+        channel.config().setAutoRead(channel.isWritable() && queued.isEmpty() && !closing && !readsHeld);
     }
 
     private static boolean isRequestSlot(Object queuedObject) {
@@ -161,7 +192,7 @@ public final class HttpPipeliningGate extends ChannelDuplexHandler {
 
     @Override
     public void channelWritabilityChanged(ChannelHandlerContext ctx) {
-        ctx.channel().config().setAutoRead(ctx.channel().isWritable() && queued.isEmpty() && !closing);
+        updateAutoRead(ctx.channel());
         ctx.fireChannelWritabilityChanged();
     }
 

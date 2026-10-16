@@ -12,6 +12,7 @@ import dev.tachyonmcp.api.server.domain.RequestId;
 import dev.tachyonmcp.api.server.extensions.AdvertiseMode;
 import dev.tachyonmcp.api.server.extensions.ServerExtension;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
+import dev.tachyonmcp.api.server.security.SecurityContext;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
 import java.time.Duration;
 import java.util.Collection;
@@ -129,13 +130,18 @@ class ServerShutdownGraceTest {
         server.createSession("sess-async").activate();
         final var dispatcher = new McpDispatcher(server, server.executor());
         final var response = dispatcher.dispatchRequestAsync(
-                RequestId.of(1), "tools/call", Map.of("name", "async_probe", "arguments", Map.of()), "sess-async");
+                RequestId.of(1),
+                "tools/call",
+                Map.of("name", "async_probe", "arguments", Map.of()),
+                "sess-async",
+                SecurityContext.anonymous());
         assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
         final var closing = CompletableFuture.runAsync(server::close, Thread::startVirtualThread);
         try {
             await().atMost(Duration.ofSeconds(1))
                     .until(() -> dispatcher
-                            .dispatchRequestAsync(RequestId.of(2), "ping", Map.of(), "sess-async")
+                            .dispatchRequestAsync(
+                                    RequestId.of(2), "ping", Map.of(), "sess-async", SecurityContext.anonymous())
                             .isCompletedExceptionally());
             assertThat(closing).isNotDone();
             assertThat(extensionClosed.getCount()).isEqualTo(1);
@@ -165,13 +171,18 @@ class ServerShutdownGraceTest {
         server.createSession("sess-async").activate();
         final var dispatcher = new McpDispatcher(server, server.executor());
         dispatcher.dispatchRequestAsync(
-                RequestId.of(1), "tools/call", Map.of("name", "async_probe", "arguments", Map.of()), "sess-async");
+                RequestId.of(1),
+                "tools/call",
+                Map.of("name", "async_probe", "arguments", Map.of()),
+                "sess-async",
+                SecurityContext.anonymous());
         assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
         final var start = System.nanoTime();
         try {
             server.close();
             assertThat(Duration.ofNanos(System.nanoTime() - start).toMillis()).isBetween(200L, 2000L);
-            assertThat(dispatcher.dispatchRequestAsync(RequestId.of(2), "ping", Map.of(), "sess-async"))
+            assertThat(dispatcher.dispatchRequestAsync(
+                            RequestId.of(2), "ping", Map.of(), "sess-async", SecurityContext.anonymous()))
                     .isCompletedExceptionally();
         } finally {
             result.complete(ToolResult.empty());
@@ -199,7 +210,11 @@ class ServerShutdownGraceTest {
         server.createSession("sess-slow").activate();
         var dispatcher = new McpDispatcher(server, server.executor());
         dispatcher.dispatchRequestAsync(
-                RequestId.of(1), "tools/call", Map.of("name", "slow_probe", "arguments", Map.of()), "sess-slow");
+                RequestId.of(1),
+                "tools/call",
+                Map.of("name", "slow_probe", "arguments", Map.of()),
+                "sess-slow",
+                SecurityContext.anonymous());
 
         assertThat(started.await(5, TimeUnit.SECONDS))
                 .as("handler must be running before close")

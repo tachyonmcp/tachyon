@@ -87,6 +87,27 @@ public final class Origins {
     }
 
     /**
+     * Returns whether {@code host} names the local machine: {@code localhost} (with or without the
+     * trailing dot, any case) or an IP literal that is a loopback address, IPv6 in brackets. A
+     * literal is parsed, never resolved: no DNS lookup happens.
+     *
+     * @param host a URI host or an authority without its port
+     * @return whether {@code host} is a loopback host
+     */
+    public static boolean isLoopbackHost(String host) {
+        // Runs on every request's Host: the usual four spellings compare without allocating, only
+        // other literals are parsed.
+        if (host.equalsIgnoreCase("localhost")
+                || host.equalsIgnoreCase("localhost.")
+                || host.equals("127.0.0.1")
+                || host.equals("[::1]")) {
+            return true;
+        }
+        final var address = NetUtil.createInetAddressFromIpAddressString(host);
+        return address != null && address.isLoopbackAddress();
+    }
+
+    /**
      * Returns the canonical form of a configured {@code allowedOrigins} entry.
      *
      * @param entry the configured origin

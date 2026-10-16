@@ -42,6 +42,7 @@ public abstract class McpClient implements Closeable {
     protected static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final URI mcpEndpoint;
+    private final @Nullable String bearerToken;
     private final HttpClient httpClient;
     private final MessageAggregator<JsonNode> notifications = new MessageAggregator<>();
     private final List<SseStream> openStreams = new CopyOnWriteArrayList<>();
@@ -53,7 +54,16 @@ public abstract class McpClient implements Closeable {
      * @param port the server's bound port
      */
     protected McpClient(int port) {
-        this(localEndpoint(port));
+        this(localEndpoint(port), null);
+    }
+
+    /** Creates a client against a local, port-0-style Tachyon server that sends {@code token} as its bearer token.
+     *
+     * @param port the server's bound port
+     * @param bearerToken the access token sent as {@code Authorization: Bearer} on every request
+     */
+    protected McpClient(int port, String bearerToken) {
+        this(localEndpoint(port), bearerToken);
     }
 
     /** Creates a client against an arbitrary MCP endpoint (local or remote, http or https).
@@ -61,7 +71,12 @@ public abstract class McpClient implements Closeable {
      * @param mcpEndpoint the MCP endpoint URI
      */
     protected McpClient(URI mcpEndpoint) {
+        this(mcpEndpoint, null);
+    }
+
+    private McpClient(URI mcpEndpoint, @Nullable String bearerToken) {
         this.mcpEndpoint = mcpEndpoint;
+        this.bearerToken = bearerToken;
         this.httpClient = HttpClient.newHttpClient();
     }
 
@@ -607,11 +622,15 @@ public abstract class McpClient implements Closeable {
     }
 
     private HttpRequest.Builder baseRequest() {
-        return HttpRequest.newBuilder()
+        var builder = HttpRequest.newBuilder()
                 .uri(mcpEndpoint)
                 .header("Content-Type", "application/json")
                 .header("Accept", "application/json, text/event-stream")
                 .header("MCP-Protocol-Version", protocolVersion());
+        if (bearerToken != null) {
+            builder.header("Authorization", "Bearer " + bearerToken);
+        }
+        return builder;
     }
 
     private HttpRequest.Builder requestBuilder(String body) throws Exception {

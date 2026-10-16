@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.tachyonmcp.api.server.domain.RequestId;
 import dev.tachyonmcp.api.server.features.resources.ResourceDescriptor;
+import dev.tachyonmcp.api.server.security.SecurityContext;
 import dev.tachyonmcp.core.protocol.Protocols;
 import dev.tachyonmcp.core.protocol.mcp.v2025_11_25.models.ClientCapabilities;
 import dev.tachyonmcp.core.protocol.mcp.v2025_11_25.models.InitializeRequestParams;
@@ -161,7 +162,8 @@ class SkillsExtensionTest {
         }
         session.activate();
         var result = (McpDispatcher.DispatchResult.Response) dispatcher
-                .dispatchRequestAsync(RequestId.of(1), method, rawParams, session.id(), null, context)
+                .dispatchRequestAsync(
+                        RequestId.of(1), method, rawParams, session.id(), null, context, SecurityContext.anonymous())
                 .join();
         return result.responseBodyString();
     }

@@ -11,5 +11,12 @@ public enum OperationKind {
     /** A JSON-RPC notification (no response expected). */
     NOTIFICATION,
     /** The {@code initialize} handshake request. */
-    INITIALIZE
+    INITIALIZE,
+    /**
+     * The authentication of a request's HTTP head, observed only when it rejects the caller. It happens
+     * before any JSON-RPC message is read, so there is no MCP method: {@link OperationInfo#method()} is
+     * {@link OperationInfo#AUTHENTICATION_METHOD} and the outcome is always {@link
+     * OperationOutcome.Rejected} with the HTTP status.
+     */
+    AUTHENTICATION
 }

@@ -43,7 +43,7 @@ class TaskEngineTest {
         var revisionOne = snapshot("task-1", TaskState.WORKING, 1);
         var revisionTwo = snapshot("task-1", TaskState.COMPLETED, 2);
 
-        assertThat(registry.publish(revisionOne, new TestRoute("caller")).revision())
+        assertThat(publishRouted(revisionOne, new TestRoute("caller")).revision())
                 .isEqualTo(1);
         var storedRevisionTwo = registry.publish(revisionTwo);
         assertThat(storedRevisionTwo.revision()).isEqualTo(2);
@@ -58,10 +58,10 @@ class TaskEngineTest {
         var published = registry.publish(snapshot("task-1", TaskState.WORKING, 2));
         assertThat(registry.get("task-1")).as("publish caches an unknown task").isEqualTo(published);
 
-        assertThat(registry.publish(snapshot("task-1", TaskState.WORKING, 1), route))
+        assertThat(publishRouted(snapshot("task-1", TaskState.WORKING, 1), route))
                 .as("an older revision from the tool call keeps the cached one")
                 .isEqualTo(published);
-        assertThat(registry.publish(snapshot("task-1", TaskState.COMPLETED, 3), new TestRoute("other"))
+        assertThat(publishRouted(snapshot("task-1", TaskState.COMPLETED, 3), new TestRoute("other"))
                         .revision())
                 .as("a colliding tool call is never refused; access is the connector's decision")
                 .isEqualTo(3);
@@ -142,11 +142,30 @@ class TaskEngineTest {
     }
 
     @Test
+    void refreshUpdatesACachedTaskAndNeverCachesAnUnknownOne() {
+        var cached = registry.publish(snapshot("known", TaskState.WORKING, 2));
+
+        var refreshed = registry.refresh(snapshot("known", TaskState.COMPLETED, 3));
+        var stale = registry.refresh(snapshot("known", TaskState.WORKING, 1));
+        var unknown = registry.refresh(snapshot("unknown", TaskState.WORKING, 1));
+
+        assertThat(refreshed.revision()).isEqualTo(3);
+        assertThat(registry.get("known")).isEqualTo(refreshed).isNotEqualTo(cached);
+        assertThat(stale).as("an older revision keeps the cached one").isEqualTo(refreshed);
+        assertThat(unknown.pollInterval())
+                .as("the caller still gets the engine defaults")
+                .isEqualTo(Duration.ofSeconds(2));
+        assertThat(registry.get("unknown"))
+                .as("a read never caches an unknown task")
+                .isNull();
+    }
+
+    @Test
     void janitorEvictsTerminalProjectionButNeverTransitionsActiveWork() {
-        registry.publish(snapshot("active", TaskState.WORKING, 1), TaskRoute.NONE);
-        registry.publish(snapshot("terminal", TaskState.COMPLETED, 1), TaskRoute.NONE);
-        registry.publish(withTtl(snapshot("abandoned", TaskState.WORKING, 1), Duration.ofMinutes(6)), TaskRoute.NONE);
-        registry.publish(withTtl(snapshot("long-lived", TaskState.WORKING, 1), Duration.ofHours(1)), TaskRoute.NONE);
+        registry.publish(snapshot("active", TaskState.WORKING, 1));
+        registry.publish(snapshot("terminal", TaskState.COMPLETED, 1));
+        registry.publish(withTtl(snapshot("abandoned", TaskState.WORKING, 1), Duration.ofMinutes(6)));
+        registry.publish(withTtl(snapshot("long-lived", TaskState.WORKING, 1), Duration.ofHours(1)));
 
         clock.advance(Duration.ofMinutes(6));
         registry.runJanitorSweep();
@@ -190,9 +209,9 @@ class TaskEngineTest {
         var owner = new TestRoute("owner");
 
         registry.publish(snapshot("task-1", TaskState.WORKING, 1));
-        registry.publish(snapshot("task-1", TaskState.WORKING, 2), owner);
-        registry.publish(snapshot("task-1", TaskState.WORKING, 2), new TestRoute("intruder"));
-        registry.publish(snapshot("task-1", TaskState.COMPLETED, 3), new TestRoute("intruder"));
+        publishRouted(snapshot("task-1", TaskState.WORKING, 2), owner);
+        publishRouted(snapshot("task-1", TaskState.WORKING, 2), new TestRoute("intruder"));
+        publishRouted(snapshot("task-1", TaskState.COMPLETED, 3), new TestRoute("intruder"));
         registry.reportProgress("task-1", 0.5, 1.0, "halfway");
         registry.reportProgress("unknown", 0.5, null, null);
 
@@ -206,7 +225,7 @@ class TaskEngineTest {
 
     @Test
     void removeOnlyDropsProjection() {
-        registry.publish(snapshot("task-1", TaskState.WORKING, 1), TaskRoute.NONE);
+        registry.publish(snapshot("task-1", TaskState.WORKING, 1));
 
         assertThat(registry.remove("task-1")).isTrue();
         assertThat(registry.remove("task-1")).isFalse();
@@ -215,6 +234,10 @@ class TaskEngineTest {
 
     private static TaskSnapshot withTtl(TaskSnapshot snapshot, Duration ttl) {
         return TaskSnapshot.builder().from(snapshot).ttl(ttl).build();
+    }
+
+    private TaskSnapshot publishRouted(TaskSnapshot snapshot, TaskRoute route) {
+        return registry.publishAs(NoopInteractionContext.INSTANCE, snapshot, route);
     }
 
     private TaskSnapshot snapshot(String taskId, TaskState status, long revision) {

@@ -5,6 +5,7 @@ import dev.tachyonmcp.api.annotations.InternalApi;
 import dev.tachyonmcp.api.runtime.AttributeKey;
 import dev.tachyonmcp.api.server.domain.RequestId;
 import dev.tachyonmcp.api.server.domain.ServerError;
+import dev.tachyonmcp.api.server.security.SecurityContext;
 import dev.tachyonmcp.api.server.session.SessionIdGenerator;
 import dev.tachyonmcp.core.protocol.ProtocolResponseMapper;
 import dev.tachyonmcp.core.protocol.Protocols;
@@ -20,6 +21,7 @@ import dev.tachyonmcp.core.server.observability.ObservationListener;
 import dev.tachyonmcp.core.server.observability.OperationInfo;
 import dev.tachyonmcp.core.server.observability.OperationKind;
 import dev.tachyonmcp.core.server.observability.OperationOutcome;
+import dev.tachyonmcp.core.server.security.SecurityRejection;
 import dev.tachyonmcp.core.server.session.DefaultDispatchContext;
 import dev.tachyonmcp.core.server.session.DispatchContext;
 import dev.tachyonmcp.core.server.session.SessionEvent;
@@ -97,17 +99,15 @@ public class McpDispatcher {
     }
 
     /**
-     * Decorates the per-channel context with the per-request MCP dispatch surface. Without a channel
-     * context (direct invocation, tests), fresh channel state is created for the default protocol.
+     * Decorates the per-channel context with the per-request MCP dispatch surface and the request's
+     * own caller. Without a channel context (direct invocation, tests), fresh channel state is created
+     * for the default protocol.
      */
-    private DefaultDispatchContext dispatchContext(@Nullable ChannelContext channelContext) {
-        return dispatchContext(channelContext, null);
-    }
-
-    private DefaultDispatchContext dispatchContext(@Nullable ChannelContext channelContext, @Nullable RequestId id) {
+    private DefaultDispatchContext dispatchContext(
+            @Nullable ChannelContext channelContext, @Nullable RequestId id, SecurityContext caller) {
         var channel =
                 channelContext != null ? channelContext : Protocols.baseline().createInteractionContext();
-        return new DefaultDispatchContext(channel, server, id);
+        return new DefaultDispatchContext(channel, server, id, caller);
     }
 
     private List<ObservationListener> observationListeners() {
@@ -157,7 +157,7 @@ public class McpDispatcher {
     }
 
     public sealed interface DispatchResult
-            permits DispatchResult.Accepted, DispatchResult.Response, DispatchResult.Status {
+            permits DispatchResult.Accepted, DispatchResult.Response, DispatchResult.Status, DispatchResult.Denied {
 
         record Accepted() implements DispatchResult {
             static final Accepted INSTANCE = new Accepted();
@@ -189,6 +189,22 @@ public class McpDispatcher {
          * @param message the HTTP status message
          */
         record Status(int code, String message) implements DispatchResult {}
+
+        /**
+         * Transport-level signal: the caller is refused, so the transport answers {@code status} with an
+         * empty body and the {@code WWW-Authenticate} challenge, if any. MCP authorization § Error
+         * Handling and § Runtime Insufficient Scope tie {@code 401}, {@code 403} and {@code 400} to HTTP
+         * statuses, not to JSON-RPC errors. Only for a response that has not started streaming: once the
+         * {@code 200} and the event-stream head are out, the refusal is a JSON-RPC error on the stream.
+         *
+         * @param status the HTTP status: {@code 401}, {@code 403}, {@code 400} or {@code 503}
+         * @param wwwAuthenticate the challenge to send, or {@code null}
+         * @param retryAfter the {@code Retry-After} of a {@code 503}, or {@code null}
+         */
+        record Denied(
+                int status,
+                @Nullable String wwwAuthenticate,
+                @Nullable String retryAfter) implements DispatchResult {}
     }
 
     /**
@@ -207,9 +223,7 @@ public class McpDispatcher {
     }
 
     public byte[] parseError(@Nullable ChannelContext channelContext) {
-        var mapper = channelContext != null
-                ? channelContext.protocol().responseMapper()
-                : dispatchContext(null).responseMapper();
+        var mapper = (channelContext != null ? channelContext.protocol() : Protocols.baseline()).responseMapper();
         return encodeError(null, ServerErrors.parseError(), mapper);
     }
 
@@ -218,9 +232,7 @@ public class McpDispatcher {
      * envelope — {@code -32600} rather than {@code -32700}.
      */
     public byte[] invalidRequestError(@Nullable ChannelContext channelContext) {
-        var mapper = channelContext != null
-                ? channelContext.protocol().responseMapper()
-                : dispatchContext(null).responseMapper();
+        var mapper = (channelContext != null ? channelContext.protocol() : Protocols.baseline()).responseMapper();
         return encodeError(null, ServerErrors.invalidRequest("Invalid Request"), mapper);
     }
 
@@ -236,29 +248,16 @@ public class McpDispatcher {
         return invalidRequest ? invalidRequestError(channelContext) : parseError(channelContext);
     }
 
+    /**
+     * Dispatches a request that has no transport behind it, for direct invocation. The caller is
+     * always stated: a request that forgot it would quietly be anonymous.
+     */
     public CompletableFuture<DispatchResult> dispatchRequestAsync(
-            RequestId id, String method, Object params, @Nullable String sessionId) {
-        return dispatchRequestAsync(id, method, params, sessionId, null, null);
+            RequestId id, String method, Object params, @Nullable String sessionId, SecurityContext caller) {
+        return dispatchRequestAsync(id, method, params, sessionId, null, null, caller);
     }
 
-    public CompletableFuture<DispatchResult> dispatchRequestAsync(
-            RequestId id,
-            String method,
-            Object params,
-            @Nullable String sessionId,
-            @Nullable OutboundSseStream outboundSseStream,
-            @Nullable ChannelContext channelContext) {
-        return dispatchRequestAsync(
-                id,
-                method,
-                params,
-                sessionId,
-                outboundSseStream,
-                channelContext,
-                CompletableFuture.completedFuture(null));
-    }
-
-    /** Dispatches a request and retains its shutdown admission until the transport finishes writing. */
+    /** As above, on a channel and an outbound stream of the caller's own. */
     public CompletableFuture<DispatchResult> dispatchRequestAsync(
             RequestId id,
             String method,
@@ -266,11 +265,37 @@ public class McpDispatcher {
             @Nullable String sessionId,
             @Nullable OutboundSseStream outboundSseStream,
             @Nullable ChannelContext channelContext,
+            SecurityContext caller) {
+        return dispatchRequestAsync(
+                id,
+                method,
+                params,
+                sessionId,
+                outboundSseStream,
+                channelContext,
+                caller,
+                CompletableFuture.completedFuture(null));
+    }
+
+    /**
+     * Dispatches a request and retains its shutdown admission until the transport finishes writing.
+     *
+     * @param caller who made this request. It is fixed in the request's dispatch context for good: the
+     *     channel context is connection-scoped and holds no identity.
+     */
+    public CompletableFuture<DispatchResult> dispatchRequestAsync(
+            RequestId id,
+            String method,
+            Object params,
+            @Nullable String sessionId,
+            @Nullable OutboundSseStream outboundSseStream,
+            @Nullable ChannelContext channelContext,
+            SecurityContext caller,
             CompletableFuture<Void> transportCompletion) {
         return server.operations()
                 .execute(
                         () -> dispatchTrackedRequestAsync(
-                                id, method, params, sessionId, outboundSseStream, channelContext),
+                                id, method, params, sessionId, outboundSseStream, channelContext, caller),
                         transportCompletion);
     }
 
@@ -280,7 +305,8 @@ public class McpDispatcher {
             Object params,
             @Nullable String sessionId,
             @Nullable OutboundSseStream outboundSseStream,
-            @Nullable ChannelContext channelContext) {
+            @Nullable ChannelContext channelContext,
+            SecurityContext caller) {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(method, "method");
 
@@ -290,7 +316,7 @@ public class McpDispatcher {
         var info = newOperationInfo(kind, method, id, sessionId, params, channelContext);
         var observation = Observation.start(observationListeners(), info);
 
-        var requestCtx = dispatchContext(channelContext, id);
+        var requestCtx = dispatchContext(channelContext, id, caller);
         requestCtx.setObservation(observation);
         try {
             requestCtx.setPermittedLogLevel(requestCtx.requestMapper().permittedLogLevel(params));
@@ -299,7 +325,7 @@ public class McpDispatcher {
         }
         if (METHOD_INITIALIZE.equals(method)) {
             if (sessionId == null) {
-                return dispatchInitializeAsync(id, params, requestCtx, channelContext);
+                return dispatchInitializeAsync(id, params, requestCtx);
             }
             return CompletableFuture.completedFuture(
                     rejected(id, ServerErrors.invalidRequest("Session already initialized"), requestCtx));
@@ -498,6 +524,12 @@ public class McpDispatcher {
                 logger.debug("Handler cancelled: method={}, id={}", method, id);
                 dispatchResult = errorResult(id, ServerErrors.internalError("Internal error"), context);
                 outcome = new OperationOutcome.Cancelled();
+            } else if (SecurityRejection.of(
+                            unwrapped, context.engine().config().security().authentication())
+                    instanceof SecurityRejection rejection) {
+                logger.debug("Rejected: method={}, id={}, status={}", method, id, rejection.status());
+                dispatchResult = denied(id, rejection, context);
+                outcome = rejection.outcome();
             } else if (unwrapped instanceof SubscriptionStreamFailedException sfe) {
                 logger.debug("Subscription stream failed: method={}, id={}", method, id, sfe.getCause());
                 dispatchResult = errorResult(id, ServerErrors.internalError("Internal error"), context);
@@ -521,6 +553,26 @@ public class McpDispatcher {
         }
         observation.complete(outcome);
         return dispatchResult;
+    }
+
+    /**
+     * Refuses the caller with an HTTP status while the response is still ours to start. Once the stream
+     * has opened, {@code 200} and its head are on the wire and a status is gone: the refusal is then a
+     * JSON-RPC error on the stream, the one place left to say it.
+     */
+    private DispatchResult denied(RequestId id, SecurityRejection rejection, DispatchContext context) {
+        var stream = context.outboundStream();
+        if (stream == null || !stream.started()) {
+            return new DispatchResult.Denied(rejection.status(), rejection.wwwAuthenticate(), rejection.retryAfter());
+        }
+        var detail =
+                switch (rejection.status()) {
+                    case 401 -> "Unauthorized";
+                    case 403 -> "Forbidden";
+                    case 503 -> "Service unavailable";
+                    default -> "Bad request";
+                };
+        return errorResult(id, ServerErrors.invalidRequest(detail), context);
     }
 
     private <O> DispatchResult handleSuccessOrError(
@@ -554,15 +606,18 @@ public class McpDispatcher {
         return dispatchResult;
     }
 
-    public DispatchResult dispatchNotification(String method, @Nullable Object params, @Nullable String sessionId) {
-        return dispatchNotification(method, params, sessionId, null);
-    }
-
+    /**
+     * Dispatches a notification.
+     *
+     * @param caller who sent it, so a handler or extension that reads {@code ctx.securityContext()}
+     *     while handling it sees the real caller
+     */
     public DispatchResult dispatchNotification(
             String method,
             @Nullable Object params,
             @Nullable String sessionId,
-            @Nullable ChannelContext channelContext) {
+            @Nullable ChannelContext channelContext,
+            SecurityContext caller) {
         var info = newOperationInfo(OperationKind.NOTIFICATION, method, null, sessionId, params, channelContext);
         var observation = Observation.start(observationListeners(), info);
         observation.closeStart();
@@ -572,7 +627,7 @@ public class McpDispatcher {
             observation.complete(new OperationOutcome.NotificationIgnored());
             return DispatchResult.Accepted.INSTANCE;
         }
-        var context = dispatchContext(channelContext);
+        var context = dispatchContext(channelContext, null, caller);
         context.setObservation(observation);
 
         final Optional<Session> sessionOpt;
@@ -637,7 +692,7 @@ public class McpDispatcher {
     }
 
     private CompletableFuture<DispatchResult> dispatchInitializeAsync(
-            RequestId id, Object rawParams, DispatchContext ic, @Nullable ChannelContext channelContext) {
+            RequestId id, Object rawParams, DispatchContext ic) {
         logger.debug("Client initialize: id={} stateless={}", id, server.isStateless());
         var handler = server.getHandler("initialize");
         if (handler == null) {
@@ -655,7 +710,9 @@ public class McpDispatcher {
                             var reattached = ic.observation().reattach();
                             try {
                                 if (!server.isStateless()) {
-                                    ic.setSession(server.createSession(generateSessionId(channelContext)));
+                                    final var session =
+                                            server.createSession(generateSessionId(ic), ic.securityContext());
+                                    ic.setSession(session);
                                 }
                                 return (CompletionStage<Object>) decodeAndHandleAsync(handler, ic, rawParams);
                             } catch (Exception e) {
@@ -718,11 +775,14 @@ public class McpDispatcher {
         return JsonRpcCodec.serializeError(id, wireError.code(), wireError.message(), wireError.data());
     }
 
-    private String generateSessionId(@Nullable ChannelContext channelContext) {
-        final var request =
-                channelContext != null ? channelContext.get(ATTR_INIT_REQUEST).orElse(null) : null;
+    /**
+     * Hands a custom {@link SessionIdGenerator} the request's own context, not the connection's, so
+     * that {@code securityContext()} answers with the caller that is initializing.
+     */
+    private String generateSessionId(DispatchContext ic) {
+        final var request = ic.get(ATTR_INIT_REQUEST).orElse(null);
         final var generator = server.sessionIdGenerator();
-        final var id = generator.generate(channelContext, request != null ? request : EMPTY_INIT_REQUEST);
+        final var id = generator.generate(ic, request != null ? request : EMPTY_INIT_REQUEST);
         if (id == null || id.isBlank()) {
             throw new IllegalStateException("SessionIdGenerator produced a blank session id");
         }
