@@ -8,7 +8,7 @@ commit: d8dc6214
 
 # 🧩 Extensions
 
-Negotiation requirements: [extension-negotiation.md](../../specs/extension-negotiation.md)
+Negotiation requirements: [extension-negotiation.md](../../specs/features/extension-negotiation.md)
 
 Verdict: `ServerExtension` = bootstrap hook (register features + custom JSON-RPC methods through `ExtensionContext`) + negotiation hook. Methods an extension registers are **owned** by it. `negotiation()` policy: `OPTIONAL` (default, SEP-2133 graceful degradation) ⇒ dispatched regardless, nothing synthesized; `REQUIRED` (opt-in, mandatory ext) ⇒ client must declare ext on current context, else -32021 (2026) / -32003 (2025).
 

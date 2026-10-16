@@ -14,7 +14,7 @@ Verdict: each MCP feature = public façade in `tachyon-api` (`Tools`, `Resources
 
 `TachyonServer.annotations(...)` (see [[declarative-configuration]]) feeds annotated objects into these same registries with configured codecs, after construction ([DefaultTachyonServer#annotations](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java)). Used by Spring after singleton initialization; [[spring-boot]].
 
-Rule set lives in `docs/architecture/guidance.md` (AGENTS.md mandates reading it before changing SAMs/registry names). Observed in code:
+Rule set lives in `../../specs/guidance.md` (AGENTS.md mandates reading it before changing SAMs/registry names). Observed in code:
 
 | Façade | Sync SAM | Async SAM | Extras | Proof |
 |---|---|---|---|---|

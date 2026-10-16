@@ -18,9 +18,10 @@ description: >-
 - Prefer `final` fields/locals and `final var` when the right-hand side makes the type obvious;
   use an explicit type when clearer.
 - Avoid `synchronized` on Java 21 virtual-thread paths. Prefer `ReentrantLock`; offload unavoidable
-  pinning or native calls to a suitable executor.
+  pinning or native calls to a suitable executor. Virtual-thread contract and nullability:
+  [`../../../specs/tech-stack.md`](../../../specs/tech-stack.md).
 - Kotlin API refactors follow the adapter shapes in
-  [`docs/architecture/guidance.md`](../../../docs/architecture/guidance.md#kotlin-adapter-shape).
+  [`../../../specs/guidance.md`](../../../specs/guidance.md#kotlin-adapter-shape).
 - Java `ServerBuilder` is the implementation source of truth. Kotlin adds only thin adaptation for
   suspend lambdas and Kotlin-specific types; never duplicate validation or registration logic.
 - Keep [`weather-mcp`](../../../examples/weather-mcp) and
@@ -29,7 +30,7 @@ description: >-
 - Write self-documenting code. Do not add docs or comments that repeat the code.
 - A public API change (new/changed method, param, wire field, or behaviour contract like TTL/null
   semantics) is not done until its docs are done: update the relevant file under `docs/`, this
-  skill, and/or `docs/architecture/guidance.md` in the same change. Don't defer it to a follow-up.
+  skill, and/or `../../../specs/guidance.md` / `../../../specs/tech-stack.md` in the same change. Don't defer it to a follow-up.
 
 # Performance 🏎️
 

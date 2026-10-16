@@ -43,7 +43,7 @@ Descriptors/requests/config in api use `@Value.Immutable` + style `typeImmutable
 
 Native MCP annotation contracts: [[declarative-configuration]].
 
-AGENTS.md: public API needs Javadoc; no code comments unless explaining why. API/registry naming rules: `docs/architecture/guidance.md`.
+AGENTS.md: public API needs Javadoc; no code comments unless explaining why. API/registry naming rules: `../../specs/guidance.md`.
 
 Related: [[tachyon-api]], [[tachyon-core]].
 

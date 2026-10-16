@@ -140,7 +140,7 @@ The explicit-path constructors let you namespace skills instead of using the bar
 
 This serves `skill://team/git-workflow/SKILL.md` and `skill://acme/pdf-processing/SKILL.md`; `resources/directory/read` on `skill://` then lists `team` and `acme` as namespace directories.
 
-Registries are merged by `CompositeSkillsRegistry`, which rejects a duplicate skill path across two registries with `IllegalArgumentException` at startup — a config bug fails fast instead of one registry silently shadowing another. A duplicate skill path is a URI collision: silently picking one risks serving the wrong skill's content, so it's never tolerated. Two skills sharing the same frontmatter `name` under different namespace prefixes is not a collision — `name` is a display label, not identity — and both remain fully served (see `docs/architecture/guidance.md` on resource identity).
+Registries are merged by `CompositeSkillsRegistry`, which rejects a duplicate skill path across two registries with `IllegalArgumentException` at startup — a config bug fails fast instead of one registry silently shadowing another. A duplicate skill path is a URI collision: silently picking one risks serving the wrong skill's content, so it's never tolerated. Two skills sharing the same frontmatter `name` under different namespace prefixes is not a collision — `name` is a display label, not identity — and both remain fully served (see `../../specs/guidance.md` on resource identity).
 
 ### Custom registries
 
