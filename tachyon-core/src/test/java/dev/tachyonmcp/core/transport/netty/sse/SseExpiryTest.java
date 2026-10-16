@@ -52,8 +52,8 @@ class SseExpiryTest {
         channel.finishAndReleaseAll();
     }
 
-    private void arm(@Nullable Instant expiresAt) {
-        SseExpiry.arm(channel, clock, expiresAt, closed::incrementAndGet);
+    private @Nullable SseExpiry arm(@Nullable Instant expiresAt) {
+        return SseExpiry.arm(channel, clock, expiresAt, closed::incrementAndGet);
     }
 
     /** Advances the timer's time and, by {@code clockMillis}, the server's clock. */
@@ -105,16 +105,42 @@ class SseExpiryTest {
         assertThat(closed).hasValue(1);
     }
 
+    /** A keep-alive connection serves many streamed responses: a stream that ended leaves no timer. */
     @Test
-    void theTimerDiesWithTheChannel() {
+    void aStreamThatEndedCancelsItsTimerAndLeavesNothingScheduled() {
         channel.freezeTime();
-        arm(NOW.plusSeconds(10));
+        final var expiry = arm(NOW.plusSeconds(10));
 
-        channel.close();
+        assertThat(expiry).isNotNull();
+        expiry.cancel();
+
+        assertThat(channel.runScheduledPendingTasks())
+                .as("nothing left on the loop")
+                .isEqualTo(-1);
         channel.advanceTimeBy(1, TimeUnit.DAYS);
         channel.runScheduledPendingTasks();
-
         assertThat(closed).as("a stream that ended has nothing left to close").hasValue(0);
+        expiry.cancel();
+    }
+
+    @Test
+    void aCancelWhileWaitingOutTheServersClockDropsTheRearmedTimer() {
+        channel.freezeTime();
+        final var expiry = arm(NOW.plusSeconds(10));
+
+        advance(10_000, 9_998);
+        assertThat(closed).hasValue(0);
+        assertThat(expiry).isNotNull();
+        expiry.cancel();
+
+        advance(2, 2);
+        assertThat(closed).hasValue(0);
+    }
+
+    @Test
+    void nothingIsArmedForACallerWhoseCredentialsDoNotExpire() {
+        assertThat(arm(null)).isNull();
+        assertThat(arm(Instant.MAX)).isNull();
     }
 
     @Test

@@ -8,6 +8,7 @@ import dev.tachyonmcp.core.server.config.BearerConfig;
 import java.net.URI;
 import java.security.Principal;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.LinkedHashSet;
@@ -57,7 +58,11 @@ class BearerTokenAuthenticationProviderTest {
     }
 
     private static AuthenticationRequest bearer() {
-        return new AuthenticationRequest("POST", "/mcp", name -> List.of("Bearer abc"));
+        return bearer("abc");
+    }
+
+    private static AuthenticationRequest bearer(String token) {
+        return new AuthenticationRequest("POST", "/mcp", name -> List.of("Bearer " + token));
     }
 
     private static void assertRejectedAsInvalidToken(Throwable thrown) {
@@ -89,25 +94,34 @@ class BearerTokenAuthenticationProviderTest {
     /**
      * RFC 6750 §3.1: {@code insufficient_scope} answers {@code 403}. MCP authorization § Runtime
      * Insufficient Scope, § Server Scope Management: every required scope, in one challenge, with the
-     * metadata URL.
+     * metadata URL. Whatever a {@code 401} carried, the server answers with its own; a {@code 400} and a
+     * {@code 503} pass as thrown.
      */
     @Test
-    void anInsufficientScopeChallengeNamesEveryRequiredScopeInOrderAndIsBuiltOnce() {
+    void theChallengeForARejectionIsTheServersOwnForA401AndA403() {
         final var provider = provider(RESOURCE, NOW.plusSeconds(60), RESOURCE);
-        final var both = new LinkedHashSet<>(List.of("tools:call", "admin:audit"));
+        final var metadata = "https://mcp.example.com/.well-known/oauth-protected-resource/mcp";
 
-        final var challenge = provider.insufficientScope(both);
-
-        assertThat(challenge.headerValue())
+        assertThat(provider.challengeFor(AuthenticationException.insufficientScope(
+                        new LinkedHashSet<>(List.of("tools:call", "admin:audit")))))
                 .isEqualTo("Bearer error=\"insufficient_scope\", scope=\"tools:call admin:audit\", "
-                        + "resource_metadata=\"https://mcp.example.com/.well-known/oauth-protected-resource/mcp\"");
-        assertThat(provider.insufficientScope(new LinkedHashSet<>(both)))
-                .as("one challenge per set of scopes")
-                .isSameAs(challenge);
-        assertThat(provider.insufficientScope(new LinkedHashSet<>(List.of("admin:audit", "tools:call")))
-                        .headerValue())
+                        + "resource_metadata=\"" + metadata + "\"");
+        assertThat(provider.challengeFor(AuthenticationException.insufficientScope(
+                        new LinkedHashSet<>(List.of("admin:audit", "tools:call")))))
                 .as("the order a tool declared is the order reported")
                 .contains("scope=\"admin:audit tools:call\"");
+        final var invalidToken = "Bearer error=\"invalid_token\", resource_metadata=\"" + metadata
+                + "\", scope=\"tools:call tools:read\"";
+        assertThat(provider.challengeFor(AuthenticationException.bearerInvalidToken("revoked")))
+                .isEqualTo(invalidToken);
+        assertThat(provider.challengeFor(AuthenticationException.unauthorized(
+                        "elsewhere", AuthenticationChallenge.of("Bearer").withParam("realm", "x"))))
+                .as("whatever challenge the thrower chose")
+                .isEqualTo(invalidToken);
+        assertThat(provider.challengeFor(AuthenticationException.bearerInvalidRequest("two")))
+                .isEqualTo("Bearer error=\"invalid_request\"");
+        assertThat(provider.challengeFor(AuthenticationException.unavailable("down", Duration.ofSeconds(1))))
+                .isNull();
     }
 
     @Test
@@ -188,6 +202,7 @@ class BearerTokenAuthenticationProviderTest {
                 "https://mcp.example.com/mcp?x=1",
                 "https://mcp.example.com/mcp#section",
                 "https://mcp.example.com",
+                "https://alice@mcp.example.com/mcp",
                 "mcp",
                 "urn:example:mcp"
             })
@@ -196,6 +211,57 @@ class BearerTokenAuthenticationProviderTest {
 
         assertThatThrownBy(() -> provider.authenticate(bearer()))
                 .satisfies(BearerTokenAuthenticationProviderTest::assertRejectedAsInvalidToken);
+    }
+
+    /** K13: the owner key is {@code issuer|name}, so one subject from two issuers is two owners. */
+    @Test
+    void theSameSubjectFromTwoIssuersIsTwoOwners() throws Exception {
+        final var issuerA = URI.create("https://a.example.com");
+        final var issuerB = URI.create("https://b.example.com");
+        final var config = BearerConfig.builder()
+                .resource(RESOURCE)
+                .authorizationServers(issuerA, issuerB)
+                .verifier(token -> new VerifiedToken(
+                        ALICE,
+                        Set.of(),
+                        NOW.plusSeconds(60),
+                        Set.of(RESOURCE),
+                        token.equals("from-a") ? issuerA : issuerB))
+                .build();
+        final var provider = new BearerTokenAuthenticationProvider(config, CLOCK);
+
+        final var fromA = provider.authenticate(bearer("from-a"));
+        final var fromB = provider.authenticate(bearer("from-b"));
+
+        assertThat(fromA.principal().getName())
+                .isEqualTo(fromB.principal().getName())
+                .isEqualTo("alice");
+        assertThat(fromA.ownerKey()).isEqualTo("https://a.example.com|alice");
+        assertThat(fromB.ownerKey()).isEqualTo("https://b.example.com|alice");
+        assertThat(Owner.of(fromA)).isNotEqualTo(Owner.of(fromB));
+    }
+
+    @Test
+    void aTokenWithoutAnIssuerTakesTheOneAuthorizationServer() throws Exception {
+        final var context = provider(RESOURCE, NOW.plusSeconds(60), RESOURCE).authenticate(bearer());
+
+        assertThat(context.ownerKey()).isEqualTo(AUTHORIZATION_SERVER + "|alice");
+    }
+
+    /** With several issuers, a verifier that names none would let two subjects collide: that is a bug, not a token. */
+    @Test
+    void aTokenWithoutAnIssuerOnAServerWithSeveralAuthorizationServersIsAProviderFailure() {
+        final var config = BearerConfig.builder()
+                .resource(RESOURCE)
+                .authorizationServers(URI.create("https://a.example.com"), URI.create("https://b.example.com"))
+                .verifier(token -> new VerifiedToken(ALICE, Set.of(), NOW.plusSeconds(60), Set.of(RESOURCE)))
+                .build();
+        final var provider = new BearerTokenAuthenticationProvider(config, CLOCK);
+
+        assertThatThrownBy(() -> provider.authenticate(bearer()))
+                .isInstanceOf(IllegalStateException.class)
+                .isNotInstanceOf(AuthenticationException.class)
+                .hasMessageContaining("issuer");
     }
 
     @Test

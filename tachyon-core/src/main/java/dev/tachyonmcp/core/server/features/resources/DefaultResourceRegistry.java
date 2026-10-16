@@ -31,10 +31,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
@@ -69,7 +67,10 @@ public class DefaultResourceRegistry implements Resources {
     private final ReentrantLock writeLock = new ReentrantLock();
 
     private final ConcurrentHashMap<String, ResourceTemplateEntry> templates = new ConcurrentHashMap<>();
-    final ConcurrentHashMap<String, Set<String>> subscriptions = new ConcurrentHashMap<>();
+    /** URI → session id → whether that session's subscriber may see a resource, decided at delivery. */
+    final ConcurrentHashMap<String, ConcurrentHashMap<String, Predicate<ServerFeature.Descriptor>>> subscriptions =
+            new ConcurrentHashMap<>();
+
     private final ServerEngine server;
     private final ResourcesConfig config;
 
@@ -447,7 +448,7 @@ public class DefaultResourceRegistry implements Resources {
      */
     public boolean isSubscribed(String uri, String sessionId) {
         var subs = subscriptions.get(uri);
-        return subs != null && subs.contains(sessionId);
+        return subs != null && subs.containsKey(sessionId);
     }
 
     /**
@@ -455,13 +456,13 @@ public class DefaultResourceRegistry implements Resources {
      * per-key operation ({@code compute}/{@code computeIfPresent}), so a subscribe can never land
      * in a set that a concurrent unsubscribe has already unlinked from the map.
      */
-    void subscribe(String uri, String sessionId) {
-        subscriptions.compute(uri, (k, set) -> {
-            if (set == null) {
-                set = new CopyOnWriteArraySet<>();
+    void subscribe(String uri, String sessionId, Predicate<ServerFeature.Descriptor> visible) {
+        subscriptions.compute(uri, (k, sessions) -> {
+            if (sessions == null) {
+                sessions = new ConcurrentHashMap<>();
             }
-            set.add(sessionId);
-            return set;
+            sessions.put(sessionId, visible);
+            return sessions;
         });
     }
 
@@ -469,9 +470,9 @@ public class DefaultResourceRegistry implements Resources {
      * Removes the session's subscription to the URI, pruning the map entry when it empties.
      */
     void unsubscribe(String uri, String sessionId) {
-        subscriptions.computeIfPresent(uri, (k, set) -> {
-            set.remove(sessionId);
-            return set.isEmpty() ? null : set;
+        subscriptions.computeIfPresent(uri, (k, sessions) -> {
+            sessions.remove(sessionId);
+            return sessions.isEmpty() ? null : sessions;
         });
     }
 
@@ -490,19 +491,25 @@ public class DefaultResourceRegistry implements Resources {
     @Override
     public void notifyResourceUpdated(String uri) {
         server.notifyResourceSubscriptions(uri);
-        var subscribedSessionIds = subscriptions.get(uri);
-        if (subscribedSessionIds == null || subscribedSessionIds.isEmpty()) {
+        var subscribers = subscriptions.get(uri);
+        if (subscribers == null || subscribers.isEmpty()) {
             return;
         }
         var paramsMap = new LinkedHashMap<String, Object>();
         paramsMap.put("uri", uri);
-        for (var sessionId : subscribedSessionIds) {
+        for (var subscriber : subscribers.entrySet()) {
+            // Decided now, not when the subscription was made: the URI may name a resource the caller may
+            // not see that did not exist then, and an update would reveal it.
+            if (isHidden(uri, subscriber.getValue())) {
+                continue;
+            }
+            var sessionId = subscriber.getKey();
             server.getSession(sessionId)
                     .ifPresentOrElse(
                             session -> server.sendNotification(session, "notifications/resources/updated", paramsMap),
                             // Session is gone (closed/expired) — nothing ever sweeps its
                             // subscriptions, so drop it lazily here to stop the set growing
-                            // with dead ids. Safe while iterating: COW set snapshot.
+                            // with dead ids. Safe while iterating: ConcurrentHashMap tolerates removal.
                             () -> unsubscribe(uri, sessionId));
         }
     }

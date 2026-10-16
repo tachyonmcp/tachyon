@@ -28,15 +28,14 @@ public sealed interface Owner {
     }
 
     /**
-     * Derives the owner from the security context of one request. Request authentication rejects a
-     * principal without a name, so a named owner always has one.
+     * Derives the owner from the security context of one request: its {@link
+     * SecurityContext#ownerKey() owner key}, which the context cannot hold blank.
      *
      * @param caller the security context fixed for the request
      * @return the caller's owner
      */
     static Owner of(SecurityContext caller) {
-        var principal = caller.principal();
-        return principal == null ? anonymous() : new Named(principal.getName());
+        return fromKey(caller.ownerKey());
     }
 
     /**

@@ -117,7 +117,11 @@ public class SseManager {
         ctx.writeAndFlush(
                 new DefaultHttpContent(ByteBufUtil.writeUtf8(ctx.alloc(), "retry: " + SSE_RETRY_DELAY_MS + "\n")));
         SseHeartbeat.enable(ctx.channel(), server.config().network().heartbeatInterval());
-        SseExpiry.arm(ctx.channel(), server.config().runtime().clock(), expiresAt, connection::close);
+        final var expiry =
+                SseExpiry.arm(ctx.channel(), server.config().runtime().clock(), expiresAt, connection::close);
+        if (expiry != null) {
+            ctx.channel().closeFuture().addListener(closed -> expiry.cancel());
+        }
         connection.prime(new SseEvent(primingId, "message", ""));
     }
 

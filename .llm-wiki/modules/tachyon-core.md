@@ -3,7 +3,7 @@ title: tachyon-core
 tags: [module, core]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/, tachyon-core/src/main/resources/, tachyon-core/pom.xml]
 updated: 2026-10-16
-commit: 747359f0
+commit: bb3f717c
 ---
 
 # ⚙️ tachyon-core
@@ -18,7 +18,7 @@ Verdict: the runtime. ~190 main files. Deps: `slf4j-api`, `netty-codec-http`, `n
 | `server.annotations` | `TachyonAnnotationProvider`, `MethodInvoker`, `ResultMappers` | [[declarative-configuration]] |
 | `server.internal` | `ServerEngine` SPI, `OperationTracker`, `AbstractJanitor`, `NotificationLogSupport` | [[concurrency]] |
 | `server.config` | config records + builders; `SecurityConfig` (sealed `Authentication`: `Disabled` / `Bearer` / `Custom`) and `BearerConfig` | [[configuration]], [[authentication]] |
-| `server.security` | the authentication SPI configured through `SecurityConfig`: `AuthenticationProvider`, `AuthenticationRequest`, `AuthenticationException` (unchecked), `AuthenticationChallenge`, `BearerTokenVerifier`, `VerifiedToken`, `AccessPolicy`; `ScopeTokens`, `SecurityRejection` (`@InternalApi`); `BearerTokenAuthenticationProvider`, `ProtectedResourceMetadata`, `Owner`, `InsufficientScopeException` | [[authentication]] |
+| `server.security` | the authentication SPI configured through `SecurityConfig`: `AuthenticationProvider`, `AuthenticationRequest`, `AuthenticationException` (unchecked), `AuthenticationChallenge`, `BearerTokenVerifier`, `VerifiedToken`, `AccessPolicy`; `ScopeTokens`, `SecurityRejection` (`@InternalApi`); `BearerTokenAuthenticationProvider`, `ProtectedResourceMetadata`, `Owner` | [[authentication]] |
 | `server.domain` | `ServerErrors`, `InitializeResponse`, `MissingRequiredClientCapabilityException` | [[errors]] |
 | `server.handlers` | `InitializeHandler`, `DiscoverHandler`, `PingHandler`, `EmptyResultHandler`, `LoggingHandlers`, `SubscriptionsListenHandler`, `ExtensionNegotiator` | [[feature-registries]], [[extensions]] |
 | `server.features.*` | registries + `*MethodHandlers` for tools/resources/prompts/completions/tasks/subscriptions; `AbstractRegistry`, `Pagination`, `ChangeSupport`, `ListRequests` | [[feature-registries]], [[tasks]] |

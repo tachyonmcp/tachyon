@@ -2,8 +2,13 @@
 package dev.tachyonmcp.core.server.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 
+import java.time.Duration;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -49,5 +54,32 @@ class AuthenticationExceptionTest {
         assertThat(plain.wwwAuthenticate()).isNull();
         assertThat(challenged.status()).isEqualTo(400);
         assertThat(challenged.wwwAuthenticate()).isEqualTo("ApiKey");
+    }
+
+    /** RFC 6750 §3.1: {@code insufficient_scope} is a {@code 403}; the challenge is the server's, in its scheme. */
+    @Test
+    void aForbiddenCarriesEveryRequiredScopeInOrderAndNoChallengeOfItsOwn() {
+        final var forbidden = AuthenticationException.insufficientScope(new LinkedHashSet<>(List.of("b", "a")));
+
+        assertThat(forbidden.status()).isEqualTo(403);
+        assertThat(forbidden.wwwAuthenticate()).isNull();
+        assertThat(forbidden.requiredScopes()).containsExactly("b", "a");
+        assertThat(forbidden.retryAfterSeconds()).isZero();
+        assertThatIllegalArgumentException().isThrownBy(() -> AuthenticationException.insufficientScope(Set.of()));
+    }
+
+    @Test
+    void aCheckThatCannotBeMadeIsA503WithAtLeastOneSecondToWait() {
+        assertThat(AuthenticationException.unavailable("down", Duration.ofMillis(1_500))
+                        .retryAfterSeconds())
+                .isEqualTo(2);
+        assertThat(AuthenticationException.unavailable("down", Duration.ZERO).retryAfterSeconds())
+                .isEqualTo(1);
+        final var down = AuthenticationException.unavailable("down", Duration.ofSeconds(30));
+        assertThat(down.status()).isEqualTo(503);
+        assertThat(down.wwwAuthenticate()).isNull();
+        assertThat(down.requiredScopes()).isEmpty();
+        assertThat(AuthenticationException.bearerInvalidToken("x").retryAfterSeconds())
+                .isZero();
     }
 }

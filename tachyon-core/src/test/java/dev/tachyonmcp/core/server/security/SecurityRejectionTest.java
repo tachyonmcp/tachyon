@@ -9,6 +9,7 @@ import dev.tachyonmcp.core.server.config.SecurityConfig.Authentication;
 import dev.tachyonmcp.core.server.observability.OperationOutcome;
 import java.net.URI;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -46,17 +47,28 @@ class SecurityRejectionTest {
 
         assertThat(SecurityRejection.of(noToken, bearer))
                 .as("the provider's own no-token challenge passes unchanged")
-                .isEqualTo(new SecurityRejection(401, "Bearer resource_metadata=\"" + METADATA + "\""));
+                .isEqualTo(new SecurityRejection(401, "Bearer resource_metadata=\"" + METADATA + "\"", null));
         assertThat(SecurityRejection.of(AuthenticationException.bearerInvalidToken("revoked"), bearer))
                 .as("any other 401 gets the invalid_token challenge that names the metadata")
                 .isEqualTo(new SecurityRejection(
-                        401, "Bearer error=\"invalid_token\", resource_metadata=\"" + METADATA + "\""));
+                        401, "Bearer error=\"invalid_token\", resource_metadata=\"" + METADATA + "\"", null));
         assertThat(SecurityRejection.of(AuthenticationException.bearerInvalidRequest("two tokens"), bearer))
-                .isEqualTo(new SecurityRejection(400, "Bearer error=\"invalid_request\""));
-        assertThat(SecurityRejection.of(new InsufficientScopeException(new LinkedHashSet<>(List.of("b", "a"))), bearer))
+                .isEqualTo(new SecurityRejection(400, "Bearer error=\"invalid_request\"", null));
+        assertThat(SecurityRejection.of(
+                        AuthenticationException.insufficientScope(new LinkedHashSet<>(List.of("b", "a"))), bearer))
                 .isEqualTo(new SecurityRejection(
                         403,
-                        "Bearer error=\"insufficient_scope\", scope=\"b a\", resource_metadata=\"" + METADATA + "\""));
+                        "Bearer error=\"insufficient_scope\", scope=\"b a\", resource_metadata=\"" + METADATA + "\"",
+                        null));
+    }
+
+    /** A verifier that cannot reach its authorization server says so: the client keeps its token and waits. */
+    @Test
+    void aCheckThatCannotBeMadeRightNowIsAServiceUnavailableWithRetryAfterAndNoChallenge() {
+        final var down = AuthenticationException.unavailable("introspection is down", Duration.ofMillis(2_500));
+
+        assertThat(SecurityRejection.of(down, bearer)).isEqualTo(new SecurityRejection(503, null, "3"));
+        assertThat(SecurityRejection.of(down, custom)).isEqualTo(new SecurityRejection(503, null, "3"));
     }
 
     @Test
@@ -64,15 +76,17 @@ class SecurityRejectionTest {
         final var apiKey = AuthenticationException.unauthorized(
                 "no key", AuthenticationChallenge.of("ApiKey").withParam("realm", "mcp"));
 
-        assertThat(SecurityRejection.of(apiKey, custom)).isEqualTo(new SecurityRejection(401, "ApiKey realm=\"mcp\""));
-        assertThat(SecurityRejection.of(new InsufficientScopeException(Set.of("a")), custom))
-                .isEqualTo(new SecurityRejection(403, null));
+        assertThat(SecurityRejection.of(apiKey, custom))
+                .isEqualTo(new SecurityRejection(401, "ApiKey realm=\"mcp\"", null));
+        assertThat(SecurityRejection.of(AuthenticationException.insufficientScope(Set.of("a")), custom))
+                .isEqualTo(new SecurityRejection(403, null, null));
     }
 
     @Test
     void anythingElseIsNotARefusalOfTheCaller() {
         assertThat(SecurityRejection.of(new IllegalStateException("bug"), bearer))
                 .isNull();
-        assertThat(new SecurityRejection(401, null).outcome()).isEqualTo(new OperationOutcome.Rejected(null, 401, 0));
+        assertThat(new SecurityRejection(401, null, null).outcome())
+                .isEqualTo(new OperationOutcome.Rejected(null, 401, 0));
     }
 }

@@ -37,6 +37,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Queue;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
@@ -56,9 +57,11 @@ class AuthenticationHandlerTest {
     private final List<AuthenticationRequest> seenByProvider = new ArrayList<>();
     private @Nullable SecurityContext accepted;
     private @Nullable AuthenticationException refused;
+    private @Nullable RuntimeException providerBug;
     private @Nullable Consumer<AuthenticationRequest> tampering;
 
     private final HttpPipeliningGate gate = new HttpPipeliningGate(16);
+    private final Semaphore permits = new Semaphore(1);
     private final Sink sink = new Sink();
     private final ReadCounter reads = new ReadCounter();
     private final EmbeddedChannel channel = new EmbeddedChannel(
@@ -74,13 +77,18 @@ class AuthenticationHandlerTest {
                                 if (refused != null) {
                                     throw refused;
                                 }
+                                if (providerBug != null) {
+                                    throw providerBug;
+                                }
                                 return accepted;
                             }),
                             AccessPolicy.permitAll(),
-                            TIMEOUT),
+                            TIMEOUT,
+                            SecurityConfig.DEFAULT_MAX_PENDING_AUTHENTICATIONS),
                     handlerExecutor::add,
                     gate,
-                    List.of()),
+                    List.of(),
+                    permits),
             sink);
     private final int readsAtStart = reads.count;
 
@@ -210,6 +218,126 @@ class AuthenticationHandlerTest {
         assertThat(response.status()).isEqualTo(HttpResponseStatus.UNAUTHORIZED);
         assertThat(response.headers().getAll(HttpHeaderNames.WWW_AUTHENTICATE))
                 .containsExactly("ApiKey realm=\"orders\"");
+        response.release();
+    }
+
+    /**
+     * K7: a verifier or an HTTP client can put the token in an exception, two causes deep. The WARN names
+     * the class; the message and the causes are at DEBUG, off in production. slf4j-simple writes to
+     * {@code System.err} at the time of the call, so the line is captured here.
+     */
+    @Test
+    void aProviderFailureNeverLogsWhatTheExceptionSays() {
+        final var token = "eyJ-super-secret-token";
+        final var saved = System.err;
+        final var captured = new java.io.ByteArrayOutputStream();
+        System.setErr(new java.io.PrintStream(captured, true, StandardCharsets.UTF_8));
+        try {
+            channel.writeInbound(head(), last(""));
+            providerBug = new IllegalStateException(
+                    "introspection failed", new IllegalArgumentException("Invalid token: " + token));
+            runProvider();
+        } finally {
+            System.setErr(saved);
+        }
+
+        final FullHttpResponse response = channel.readOutbound();
+        assertThat(response.status()).isEqualTo(HttpResponseStatus.INTERNAL_SERVER_ERROR);
+        response.release();
+        final var log = captured.toString(StandardCharsets.UTF_8);
+        assertThat(log).contains("WARN", "Authentication provider failed", "java.lang.IllegalStateException");
+        assertThat(log)
+                .as("neither the message nor any cause reaches the log")
+                .doesNotContain(token, "introspection failed");
+    }
+
+    /** The server's pool of pending authentications is drawn from before the provider runs and refilled after. */
+    @Test
+    void aRequestOverThePendingCapacityIs503BeforeTheProviderRunsAndThePermitComesBack() {
+        permits.drainPermits();
+        channel.writeInbound(head(), last(""));
+
+        final FullHttpResponse refused = channel.readOutbound();
+        assertThat(refused.status()).isEqualTo(HttpResponseStatus.SERVICE_UNAVAILABLE);
+        assertThat(refused.headers().get(HttpHeaderNames.RETRY_AFTER)).isEqualTo("5");
+        assertThat(refused.headers().contains(HttpHeaderNames.WWW_AUTHENTICATE)).isFalse();
+        assertThat(HttpUtil.isKeepAlive(refused)).isFalse();
+        assertThat(seenByProvider).as("the provider is never asked").isEmpty();
+        assertThat(handlerExecutor).isEmpty();
+        assertThat(permits.availablePermits()).as("nothing was taken").isZero();
+        refused.release();
+    }
+
+    @Test
+    void aPermitIsHeldWhileTheProviderRunsAndGivenBackWhenTheRequestMovesOn() {
+        channel.writeInbound(head(), last(""));
+        assertThat(permits.availablePermits())
+                .as("held while the provider runs")
+                .isZero();
+
+        accepted = SecurityContext.anonymous();
+        runProvider();
+
+        assertThat(sink.messages).hasSize(2);
+        assertThat(permits.availablePermits())
+                .as("given back once the request moved on")
+                .isEqualTo(1);
+    }
+
+    @Test
+    void aPermitIsGivenBackOnARefusalATimeoutAndAClosedChannel() {
+        channel.writeInbound(head(), last(""));
+        refused = AuthenticationException.bearerInvalidToken("bad token");
+        runProvider();
+        assertThat(permits.availablePermits()).as("after a refusal").isEqualTo(1);
+        ReferenceCountUtil.release(channel.readOutbound());
+
+        final var second = new EmbeddedChannel(new AuthenticationHandler(
+                channelSecurity(), handlerExecutor::add, new HttpPipeliningGate(16), List.of(), permits));
+        second.freezeTime();
+        second.writeInbound(head(), last(""));
+        assertThat(permits.availablePermits()).isZero();
+        second.advanceTimeBy(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
+        second.runScheduledPendingTasks();
+        assertThat(permits.availablePermits()).as("after a timeout").isEqualTo(1);
+        second.finishAndReleaseAll();
+
+        final var third = new EmbeddedChannel(new AuthenticationHandler(
+                channelSecurity(), handlerExecutor::add, new HttpPipeliningGate(16), List.of(), permits));
+        third.writeInbound(head(), last(""));
+        assertThat(permits.availablePermits()).isZero();
+        third.close();
+        assertThat(permits.availablePermits())
+                .as("after the channel closed mid-authentication")
+                .isEqualTo(1);
+        third.finishAndReleaseAll();
+    }
+
+    private SecurityConfig channelSecurity() {
+        return new SecurityConfig(
+                new SecurityConfig.Authentication.Custom(request -> {
+                    throw new IllegalStateException("never answers");
+                }),
+                AccessPolicy.permitAll(),
+                TIMEOUT,
+                SecurityConfig.DEFAULT_MAX_PENDING_AUTHENTICATIONS);
+    }
+
+    /** A verifier whose authorization server is down answers like a timeout: keep the token, wait, retry. */
+    @Test
+    void aProviderThatCannotCheckRightNowAnswers503WithRetryAfterAndNoChallenge() {
+        channel.writeInbound(head(), last(""));
+
+        refused = AuthenticationException.unavailable("introspection is down", Duration.ofSeconds(7));
+        runProvider();
+
+        final FullHttpResponse response = channel.readOutbound();
+        assertThat(response.status()).isEqualTo(HttpResponseStatus.SERVICE_UNAVAILABLE);
+        assertThat(response.headers().get(HttpHeaderNames.RETRY_AFTER)).isEqualTo("7");
+        assertThat(response.headers().contains(HttpHeaderNames.WWW_AUTHENTICATE))
+                .isFalse();
+        assertThat(HttpUtil.isKeepAlive(response)).isFalse();
+        assertThat(sink.messages).isEmpty();
         response.release();
     }
 

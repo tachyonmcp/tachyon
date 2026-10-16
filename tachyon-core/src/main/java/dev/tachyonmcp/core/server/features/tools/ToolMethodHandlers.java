@@ -27,7 +27,7 @@ import dev.tachyonmcp.core.server.features.tasks.TasksExtensionSupport;
 import dev.tachyonmcp.core.server.internal.HandlerFutures;
 import dev.tachyonmcp.core.server.json.JsonUtils;
 import dev.tachyonmcp.core.server.observability.CapturedPayload;
-import dev.tachyonmcp.core.server.security.InsufficientScopeException;
+import dev.tachyonmcp.core.server.security.AuthenticationException;
 import dev.tachyonmcp.core.server.session.DispatchContext;
 import java.util.Map;
 import java.util.concurrent.CancellationException;
@@ -144,7 +144,7 @@ public final class ToolMethodHandlers {
             // mirror header is never consulted.
             var requiredScopes = handler.descriptor().requiredScopes();
             if (!requiredScopes.isEmpty() && !context.securityContext().scopes().containsAll(requiredScopes)) {
-                return CompletableFuture.failedFuture(new InsufficientScopeException(requiredScopes));
+                return CompletableFuture.failedFuture(AuthenticationException.insufficientScope(requiredScopes));
             }
 
             var validationError = validateInput(handler.descriptor().inputSchema(), request);

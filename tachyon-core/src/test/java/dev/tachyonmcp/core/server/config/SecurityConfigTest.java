@@ -173,6 +173,18 @@ class SecurityConfigTest {
         assertThatIllegalArgumentException().isThrownBy(() -> bearer().authenticationTimeout(Duration.ZERO));
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> new SecurityConfig(
-                        new Authentication.Disabled(), AccessPolicy.permitAll(), Duration.ofSeconds(-1)));
+                        new Authentication.Disabled(), AccessPolicy.permitAll(), Duration.ofSeconds(-1), 1));
+    }
+
+    @Test
+    void thePendingAuthenticationsAreBoundedAndTheBoundIsPositive() {
+        assertThat(bearer().build(CLOCK).maxPendingAuthentications())
+                .isEqualTo(SecurityConfig.DEFAULT_MAX_PENDING_AUTHENTICATIONS);
+        assertThat(bearer().maxPendingAuthentications(7).build(CLOCK).maxPendingAuthentications())
+                .isEqualTo(7);
+        assertThatIllegalArgumentException().isThrownBy(() -> bearer().maxPendingAuthentications(0));
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> new SecurityConfig(
+                        new Authentication.Disabled(), AccessPolicy.permitAll(), Duration.ofSeconds(1), 0));
     }
 }

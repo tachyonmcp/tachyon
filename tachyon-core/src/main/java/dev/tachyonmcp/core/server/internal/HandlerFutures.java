@@ -3,7 +3,6 @@ package dev.tachyonmcp.core.server.internal;
 
 import dev.tachyonmcp.api.annotations.InternalApi;
 import dev.tachyonmcp.core.server.security.AuthenticationException;
-import dev.tachyonmcp.core.server.security.InsufficientScopeException;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -137,7 +136,7 @@ public final class HandlerFutures {
             final var cause = ex == null ? null : unwrap(ex);
             // A refusal of the caller is not the handler's failure to report: it fails the dispatch,
             // which answers it with its status and challenge (SecurityRejection).
-            if (cause instanceof AuthenticationException || cause instanceof InsufficientScopeException) {
+            if (cause instanceof AuthenticationException) {
                 throw new CompletionException(cause);
             }
             return resultMapper.apply(result, cause);

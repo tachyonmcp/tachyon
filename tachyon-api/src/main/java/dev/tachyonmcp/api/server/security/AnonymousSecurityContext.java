@@ -14,6 +14,11 @@ enum AnonymousSecurityContext implements SecurityContext {
     }
 
     @Override
+    public @Nullable String ownerKey() {
+        return null;
+    }
+
+    @Override
     public Set<String> scopes() {
         return Set.of();
     }

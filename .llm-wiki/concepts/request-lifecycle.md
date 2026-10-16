@@ -3,7 +3,7 @@ title: Request lifecycle
 tags: [concept, dispatch]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/http/HttpPipeliningGate.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/ProtocolVersionHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/RpcMethodHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpInitializationHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpOperationHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tools/ToolMethodHandlers.java, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/HandlerFutures.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/PeekedBody.java]
 updated: 2026-10-16
-commit: 747359f0
+commit: bb3f717c
 ---
 
 # 🔄 Request lifecycle
@@ -56,7 +56,7 @@ Sessionless responses complete through [McpInitializationHandler#completeDispatc
 | `Status(code, msg)` | raw HTTP, not JSON-RPC (missing/unknown session) |
 | `Denied(status, wwwAuthenticate)` | the caller is refused after the request was read: `401`/`403`/`400`, empty body, the challenge, not JSON-RPC. Written by `ChannelHandlerUtils#sendDeniedAsync` from **both** consumers (`McpOperationHandler#completePostRequest`, `McpInitializationHandler#completeDispatch`, which serves every stateless request); only for an unstarted stream (`McpDispatcher#denied` answers a JSON-RPC error `-32600` once the stream started) → [[authentication]] |
 
-Handler return value `ServerError` ⇒ error envelope (not exception) `ServerError`. Exceptions ⇒ `handleHandlerError`: `CancellationException` → internal error + `Cancelled` outcome; a security rejection (`AuthenticationException`, `InsufficientScopeException`, mapped by `SecurityRejection#of`) → `Denied` + `Rejected(status)` outcome, debug log; `HandlerFutures#invokeAndMap` lets those through from feature handlers instead of mapping them to feature errors; `RequestMappingException` → its error; else `ServerErrors#fromUnhandledException(cause, "Internal error")` `RequestMappingException`. Mapping table [[errors]].
+Handler return value `ServerError` ⇒ error envelope (not exception) `ServerError`. Exceptions ⇒ `handleHandlerError`: `CancellationException` → internal error + `Cancelled` outcome; a security rejection (`AuthenticationException`, mapped by `SecurityRejection#of`) → `Denied` + `Rejected(status)` outcome, debug log; `HandlerFutures#invokeAndMap` lets those through from feature handlers instead of mapping them to feature errors; `RequestMappingException` → its error; else `ServerErrors#fromUnhandledException(cause, "Internal error")` `RequestMappingException`. Mapping table [[errors]].
 
 ## 🔔 Notifications & client responses
 

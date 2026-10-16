@@ -59,6 +59,27 @@ class AccessPolicySessionTest extends AbstractStatefulMcpE2eTest {
         }
     }
 
+    /** V1: visibility is decided when an update is delivered, so an early subscription reveals nothing. */
+    @Test
+    void aSubscriptionMadeBeforeAHiddenResourceExistedIsNotDeliveredOnceItDoes() throws Exception {
+        try (var user = new Mcp20251125Client(port, USER)) {
+            user.initialize();
+            assertThat(user.sendRpc(subscribe(2, "notes://later-secret")).statusCode())
+                    .isEqualTo(200);
+            assertThat(user.sendRpc(subscribe(3, "notes://later-public")).statusCode())
+                    .isEqualTo(200);
+            GuardedFeatures.registerLater(server);
+
+            final var notified = user.post(user.sessionId(), """
+                    {"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"%s","arguments":{}}}
+                    """.formatted(GuardedFeatures.NOTIFY_LATER));
+
+            assertThat(notified.body())
+                    .contains("notifications/resources/updated", "notes://later-public")
+                    .doesNotContain("notes://later-secret");
+        }
+    }
+
     @Test
     void aHiddenToolAnswersLikeAnUnknownOne() throws Exception {
         try (var user = new Mcp20251125Client(port, USER)) {

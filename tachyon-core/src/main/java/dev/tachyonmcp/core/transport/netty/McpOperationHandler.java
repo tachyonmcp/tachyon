@@ -390,14 +390,14 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
                             sendPlainTextAndClose(ctx, HttpResponseStatus.valueOf(code), message, cors),
                             transportCompletion);
                 }
-                case McpDispatcher.DispatchResult.Denied(int status, var challenge) -> {
+                case McpDispatcher.DispatchResult.Denied(int status, var challenge, var retryAfter) -> {
                     // The dispatcher answers a refusal after the stream opened as a JSON-RPC error, so this
                     // arrives only for an unstarted stream; one that started in the meantime is just closed.
                     if (postStream.started()) {
                         completeOn(postStream.terminateAsync(), transportCompletion);
                     } else {
                         postStream.terminate();
-                        completeOn(sendDeniedAsync(ctx, status, challenge, cors), transportCompletion);
+                        completeOn(sendDeniedAsync(ctx, status, challenge, retryAfter, cors), transportCompletion);
                     }
                 }
                 case McpDispatcher.DispatchResult.Accepted accepted -> {

@@ -3,7 +3,7 @@ title: SSE streams
 tags: [concept, transport, sse]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpInitializationHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/sse/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/OutboundSseStream.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/OutboundSseStreamMessageRouter.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpOperationHandler.java]
 updated: 2026-10-16
-commit: 747359f0
+commit: bb3f717c
 ---
 
 # 📡 SSE streams
@@ -75,14 +75,14 @@ Stalled peer: the channel stays non-writable, [SseHeartbeat#send](../../tachyon-
 
 A stream must not outlive the token that opened it. [SseExpiry#arm](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/sse/SseExpiry.java) is called where a stream starts, next to `SseHeartbeat#enable`, from the only two places that turn a channel into an SSE channel: `SseManager#writeOpeningFrames` (the 2025 GET stream, stateful and stateless) and `PostSseStream#doStart` (a streamed POST response and the 2026 `subscriptions/listen` stream, which is a `PostSseStream`). It reads no channel state: the opener passes the `expiresAt` of its own caller (`SecurityContext#expiresAt` of the caller the handler took at its entry) to `SseManager#openStream` / `SseManager#openStatelessStream` and to the `PostSseStream` constructor, `null` for a caller whose credentials do not expire.
 
-- One timer per stream: `eventLoop().schedule` for `expiresAt - clock.instant()` (never negative, never early), cancelled by `closeFuture`. Nothing per event, no allocation on the write path. `expiresAt == null` (anonymous, an API key) or a gap too large for a timer to count: no timer.
+- One timer per stream: `eventLoop().schedule` for `expiresAt - clock.instant()` (never negative, never early). `SseExpiry#arm` returns the timer; `PostSseStream#doClose` cancels it (`SseExpiry#cancel`), so a keep-alive connection serving many streamed responses keeps no timer for a stream that is over, and the GET stream cancels it from the channel's `closeFuture` (`SseManager#writeOpeningFrames`). Nothing per event, no allocation on the write path. `expiresAt == null` (anonymous, an API key) or a gap too large for a timer to count: no timer.
 - The timer calls the stream's own graceful close: `retry:` hint, `LastHttpContent`, connection close (`NettySseConnection#close`, `PostSseStream#close`). The same close a server-initiated disconnect uses, so a 2025 client resumes from `Last-Event-ID` and loses no event, and a 2026 client listens again.
 - A `subscriptions/listen` stream ends better than that: its handler registers `OutboundSseStream#onExpiry`, so `PostSseStream#expire` completes the listen request with the graceful `resultType: "complete"` result (Subscriptions § Graceful Closure, as `SubscriptionRegistry#closeAll` does on shutdown) and the stream ends with that response (`SubscriptionsListenHandler#handleAsync`).
 - The timer runs on monotonic time; the expiry is judged by the server's clock. A timer that fires while that clock is still short re-arms for the rest, so a stream never ends before `expiresAt` (`SseExpiry#arm`).
 - `PostSseStream` takes the server `Clock` for this, from `RuntimeConfig#clock`, the clock that judged the token.
 - An in-flight tool call is not cancelled: closing a stream is a disconnect, and a disconnect never cancels (`DisconnectIsNotCancellationTest`). Stateful: its result is logged and replayable. Stateless: `responseUndeliverable()` completes when the connection closes.
 - `subscriptions/listen`: the close runs `SubscriptionsListenHandler`'s `onClose` settle, which removes the registry entry and cancels the pending result, the same path as a client disconnect.
-- L4 in `specs/server-authorization.md` is a Tachyon decision; MCP is silent.
+- L4 in `../../specs/features/auth` is a Tachyon decision; MCP is silent.
 
 ## 🧯 Close semantics
 

@@ -163,6 +163,9 @@ public record BearerConfig(
         if (!uri.isAbsolute() || uri.getHost() == null) {
             throw new IllegalArgumentException(what + " must be an absolute URI with a host: " + uri);
         }
+        if (uri.getRawUserInfo() != null) {
+            throw new IllegalArgumentException(what + " must have no user info: " + uri);
+        }
         final var scheme = uri.getScheme().toLowerCase(Locale.ROOT);
         if (!scheme.equals("https") && !(scheme.equals("http") && Origins.isLoopbackHost(uri.getHost()))) {
             throw new IllegalArgumentException(

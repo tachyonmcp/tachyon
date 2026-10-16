@@ -35,7 +35,9 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -65,10 +67,16 @@ import org.slf4j.LoggerFactory;
  * dispatcher uses for a refusal raised later, and the connection closes, since the body was never
  * read. This handler holds no scheme of its own. Every refusal here, timeouts and provider failures
  * included, is reported to the server's observers as one {@link OperationKind#AUTHENTICATION}
- * operation: no dispatch exists yet to report it. Any other failure means credentials
- * could not be checked and answers {@code 500}, so clients keep a token that may be valid. A provider
- * still silent after the configured timeout is answered {@code 503} with {@code Retry-After} and no
- * challenge, for the same reason; it is not interrupted, and its late result is ignored. A principal
+ * operation: no dispatch exists yet to report it. A provider that cannot check credentials right now
+ * says so with {@link AuthenticationException#unavailable}, a {@code 503} with {@code Retry-After}
+ * and no challenge, so clients keep a token that may be valid; any other failure is a bug and answers
+ * {@code 500}. A provider still silent after the configured timeout is answered the same {@code 503};
+ * it is not interrupted, and its late result is ignored. At most {@link
+ * SecurityConfig#maxPendingAuthentications()} requests wait for the provider at once, across every
+ * connection of the server; one more is answered the same {@code 503} before the provider is called,
+ * so a slow provider cannot pile up threads and held heads without limit. Timeouts and refusals at
+ * capacity are counted, and one in {@link #WARN_SAMPLE} is logged at {@code WARN}, the rest at
+ * {@code DEBUG}: a slow provider under load must not flood the log; the observers see every one. A principal
  * without a name is a provider failure: sessions are bound to the name, and a nameless principal could
  * not be told apart from an anonymous caller.
  *
@@ -86,7 +94,12 @@ public final class AuthenticationHandler extends ChannelInboundHandlerAdapter {
     /** Body bytes held for one request before reads pause even mid-read; see the class comment. */
     static final int HOLD_LIMIT = 64 * 1024;
 
+    /** One timeout or capacity refusal in this many is logged at {@code WARN}. */
+    static final int WARN_SAMPLE = 100;
+
     private static final Logger logger = LoggerFactory.getLogger(AuthenticationHandler.class);
+    private static final AtomicLong timeouts = new AtomicLong();
+    private static final AtomicLong atCapacity = new AtomicLong();
 
     private final AuthenticationProvider provider;
     private final SecurityConfig.Authentication authentication;
@@ -94,6 +107,7 @@ public final class AuthenticationHandler extends ChannelInboundHandlerAdapter {
     private final Duration timeout;
     private final HttpPipeliningGate gate;
     private final List<ObservationListener> listeners;
+    private final Semaphore permits;
 
     private @Nullable Attempt attempt;
 
@@ -106,6 +120,8 @@ public final class AuthenticationHandler extends ChannelInboundHandlerAdapter {
         boolean complete;
         /** Reads are paused through the gate on its behalf, so it must release them. */
         boolean holding;
+        /** It holds one of the server's permits until it is settled. */
+        boolean admitted;
 
         @Nullable
         ScheduledFuture<?> deadline;
@@ -122,16 +138,23 @@ public final class AuthenticationHandler extends ChannelInboundHandlerAdapter {
      * @param gate this channel's pipelining gate, which owns {@code autoRead}
      * @param listeners told of every request this handler rejects, as an {@link
      *     OperationKind#AUTHENTICATION} operation; none for a server without observers
+     * @param permits the server's one pool of {@link SecurityConfig#maxPendingAuthentications}
+     *     permits, shared by every channel
      * @throws IllegalArgumentException if {@code security} authenticates nobody
      */
     public AuthenticationHandler(
-            SecurityConfig security, Executor executor, HttpPipeliningGate gate, List<ObservationListener> listeners) {
+            SecurityConfig security,
+            Executor executor,
+            HttpPipeliningGate gate,
+            List<ObservationListener> listeners,
+            Semaphore permits) {
         this.provider = Objects.requireNonNull(security.authenticationProvider(), "the server authenticates nobody");
         this.authentication = security.authentication();
         this.timeout = security.authenticationTimeout();
         this.executor = Objects.requireNonNull(executor, "executor");
         this.gate = Objects.requireNonNull(gate, "gate");
         this.listeners = Objects.requireNonNull(listeners, "listeners");
+        this.permits = Objects.requireNonNull(permits, "permits");
     }
 
     @Override
@@ -193,6 +216,14 @@ public final class AuthenticationHandler extends ChannelInboundHandlerAdapter {
     private void begin(ChannelHandlerContext ctx, HttpRequest head) {
         final var current = new Attempt(head);
         attempt = current;
+        if (!permits.tryAcquire()) {
+            attempt = null;
+            sampled(atCapacity, "Authentication refused at capacity for {} {}", head);
+            observe(new OperationOutcome.Rejected(null, 503, 0));
+            respond(ctx, current, HttpResponseStatus.SERVICE_UNAVAILABLE, null, retryAfterSeconds());
+            return;
+        }
+        current.admitted = true;
         final var outcome = new CompletableFuture<SecurityContext>();
         try {
             current.deadline =
@@ -264,7 +295,7 @@ public final class AuthenticationHandler extends ChannelInboundHandlerAdapter {
             return;
         }
         attempt = null;
-        logger.warn("Authentication of {} {} timed out after {}", expired.head.method(), path(expired.head), timeout);
+        sampled(timeouts, "Authentication of {} {} timed out", expired.head);
         observe(new OperationOutcome.Rejected(null, 503, 0));
         respond(ctx, expired, HttpResponseStatus.SERVICE_UNAVAILABLE, null, retryAfterSeconds());
     }
@@ -272,17 +303,26 @@ public final class AuthenticationHandler extends ChannelInboundHandlerAdapter {
     private void reject(ChannelHandlerContext ctx, Attempt rejected, @Nullable Throwable failure) {
         final var head = rejected.head;
         final var rejection = failure == null ? null : SecurityRejection.of(failure, authentication);
-        if (rejection != null) {
-            logger.debug(
-                    "Rejected {} {}: {} ({})",
+        if (rejection != null && failure != null) {
+            logger.debug("Rejected {} {}: {}", head.method(), path(head), rejection.status());
+            // The message is the provider's own: at TRACE only, where raw request data belongs.
+            logger.trace("Rejected {} {}: {}", head.method(), path(head), failure.getMessage());
+            observe(rejection.outcome());
+            respond(
+                    ctx,
+                    rejected,
+                    HttpResponseStatus.valueOf(rejection.status()),
+                    rejection.wwwAuthenticate(),
+                    rejection.retryAfter());
+        } else {
+            // A verifier or an HTTP client can put the token in an exception message or a cause; at WARN
+            // only the class is named. The whole exception is for DEBUG, which stays off in production.
+            logger.warn(
+                    "Authentication provider failed for {} {}: {}",
                     head.method(),
                     path(head),
-                    rejection.status(),
-                    Objects.requireNonNull(failure).getMessage());
-            observe(rejection.outcome());
-            respond(ctx, rejected, HttpResponseStatus.valueOf(rejection.status()), rejection.wwwAuthenticate(), null);
-        } else {
-            logger.warn("Authentication provider failed for {} {}", head.method(), path(head), failure);
+                    failure == null ? "null" : failure.getClass().getName());
+            logger.debug("Authentication provider failed for {} {}", head.method(), path(head), failure);
             observe(new OperationOutcome.Rejected(null, 500, 0));
             respond(ctx, rejected, HttpResponseStatus.INTERNAL_SERVER_ERROR, null, null);
         }
@@ -329,6 +369,16 @@ public final class AuthenticationHandler extends ChannelInboundHandlerAdapter {
         ctx.writeAndFlush(response);
     }
 
+    /** One line in {@link #WARN_SAMPLE} at WARN, with the running count; the rest at DEBUG. */
+    private static void sampled(AtomicLong counter, String event, HttpRequest head) {
+        final var count = counter.incrementAndGet();
+        if (count % WARN_SAMPLE == 1) {
+            logger.warn(event + " ({} so far)", head.method(), path(head), count);
+        } else {
+            logger.debug(event, head.method(), path(head));
+        }
+    }
+
     private String retryAfterSeconds() {
         return Long.toString(Math.max(1, Math.ceilDiv(timeout.toMillis(), 1000)));
     }
@@ -341,16 +391,21 @@ public final class AuthenticationHandler extends ChannelInboundHandlerAdapter {
         }
     }
 
-    private static void discard(Attempt dropped) {
+    private void discard(Attempt dropped) {
         cancel(dropped);
         release(dropped);
         ReferenceCountUtil.release(dropped.head);
     }
 
-    private static void cancel(Attempt finished) {
+    /** Settles the attempt: drops its deadline and gives its permit back, once. */
+    private void cancel(Attempt finished) {
         final var deadline = finished.deadline;
         if (deadline != null) {
             deadline.cancel(false);
+        }
+        if (finished.admitted) {
+            finished.admitted = false;
+            permits.release();
         }
     }
 

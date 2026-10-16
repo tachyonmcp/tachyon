@@ -197,10 +197,14 @@ public class McpDispatcher {
          * statuses, not to JSON-RPC errors. Only for a response that has not started streaming: once the
          * {@code 200} and the event-stream head are out, the refusal is a JSON-RPC error on the stream.
          *
-         * @param status the HTTP status: {@code 401}, {@code 403} or {@code 400}
+         * @param status the HTTP status: {@code 401}, {@code 403}, {@code 400} or {@code 503}
          * @param wwwAuthenticate the challenge to send, or {@code null}
+         * @param retryAfter the {@code Retry-After} of a {@code 503}, or {@code null}
          */
-        record Denied(int status, @Nullable String wwwAuthenticate) implements DispatchResult {}
+        record Denied(
+                int status,
+                @Nullable String wwwAuthenticate,
+                @Nullable String retryAfter) implements DispatchResult {}
     }
 
     /**
@@ -559,12 +563,13 @@ public class McpDispatcher {
     private DispatchResult denied(RequestId id, SecurityRejection rejection, DispatchContext context) {
         var stream = context.outboundStream();
         if (stream == null || !stream.started()) {
-            return new DispatchResult.Denied(rejection.status(), rejection.wwwAuthenticate());
+            return new DispatchResult.Denied(rejection.status(), rejection.wwwAuthenticate(), rejection.retryAfter());
         }
         var detail =
                 switch (rejection.status()) {
                     case 401 -> "Unauthorized";
                     case 403 -> "Forbidden";
+                    case 503 -> "Service unavailable";
                     default -> "Bad request";
                 };
         return errorResult(id, ServerErrors.invalidRequest(detail), context);

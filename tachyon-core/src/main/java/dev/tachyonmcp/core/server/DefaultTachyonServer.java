@@ -459,7 +459,7 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
     public void notifyResourceSubscriptions(String uri) {
         subscriptionRegistry.publish(
                 Objects.requireNonNull(resourcesUpdated, "resource topics not registered"),
-                uris -> uris.followed().contains(uri),
+                uris -> uris.requested().contains(uri) && !resourceRegistry.isHidden(uri, uris.visible()),
                 "notifications/resources/updated",
                 mapper -> Map.of("uri", uri));
     }

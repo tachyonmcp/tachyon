@@ -191,6 +191,25 @@ class AccessPolicyTest extends AbstractStatelessMcpE2eTest<Mcp20260728Client> {
         }
     }
 
+    /** V1: the listener's visibility is asked again at every delivery, not once when the stream opened. */
+    @Test
+    void aListenerThatAskedBeforeAHiddenResourceExistedIsNotToldOnceItDoes() throws Exception {
+        try (var user = as(USER);
+                var stream = user.openPostStream(null, """
+                        {"jsonrpc":"2.0","id":4,"method":"subscriptions/listen",
+                         "params":{"notifications":{"resourceSubscriptions":["notes://later-secret","notes://later-public"]}}}
+                        """)) {
+            stream.await(frame -> frame.data().contains("acknowledged"), ofSeconds(5));
+            GuardedFeatures.registerLater(server);
+
+            server.resources().notifyResourceUpdated("notes://later-secret");
+            server.resources().notifyResourceUpdated("notes://later-public");
+
+            stream.await(frame -> isUpdateOf(frame, "notes://later-public"), ofSeconds(5));
+            stream.assertNoneArrived(frame -> isUpdateOf(frame, "notes://later-secret"), ofMillis(200));
+        }
+    }
+
     private static boolean isUpdateOf(SseFrame frame, String uri) {
         return frame.data().contains("notifications/resources/updated")
                 && frame.data().contains(uri);

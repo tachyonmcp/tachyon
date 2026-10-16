@@ -93,6 +93,7 @@ public final class PostSseStream implements OutboundSseStream {
     private final Clock clock;
     private final @Nullable Instant expiresAt;
     private volatile @Nullable Runnable gracefulExpiry;
+    private @Nullable SseExpiry expiry;
 
     private static final int TASK_OVERHEAD_BYTES = 128;
 
@@ -521,7 +522,7 @@ public final class PostSseStream implements OutboundSseStream {
         HttpHelpers.setSseStreamHeaders(response, cors);
         writes.add(channel.write(response).addListener(writeFailureListener));
         SseHeartbeat.enable(channel, heartbeatInterval);
-        SseExpiry.arm(channel, clock, expiresAt, this::expire);
+        expiry = SseExpiry.arm(channel, clock, expiresAt, this::expire);
         if (queued.isEmpty()) {
             // Priming event: gives the client a Last-Event-ID baseline for reconnection (SEP-1699).
             // Carries this stream's key so a resume from the priming id replays only this stream.
@@ -558,6 +559,7 @@ public final class PostSseStream implements OutboundSseStream {
 
     private ChannelFuture doClose(boolean reconnect) {
         if (state.closed) return closeWrite != null ? closeWrite : channel.newSucceededFuture();
+        if (expiry != null) expiry.cancel();
         var wasOpen = state.opened;
         state = wasOpen ? State.CLOSED_OPENED : State.CLOSED_UNOPENED;
         discardQueued();

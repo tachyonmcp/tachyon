@@ -5,7 +5,6 @@ import dev.tachyonmcp.api.annotations.ExperimentalApi;
 import java.security.Principal;
 import java.time.Instant;
 import java.util.Collection;
-import java.util.Objects;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
 
@@ -41,21 +40,38 @@ public sealed interface SecurityContext permits AnonymousSecurityContext, Authen
      * @return a new authenticated context
      */
     static SecurityContext authenticated(Principal principal, Collection<String> scopes) {
-        return new AuthenticatedSecurityContext(principal, Set.copyOf(scopes), null);
+        return authenticated(principal, scopes, null);
     }
 
     /**
-     * Returns the context of an authenticated caller whose credentials expire. Tachyon closes the SSE
-     * streams this caller's request opened at {@code expiresAt}.
+     * Returns the context of an authenticated caller. When the credentials expire, Tachyon closes the
+     * SSE streams this caller's request opened at {@code expiresAt}.
      *
      * @param principal the authenticated identity
      * @param scopes the scopes the caller was granted; copied
-     * @param expiresAt when the credentials stop being valid
+     * @param expiresAt when the credentials stop being valid, or {@code null} if they do not
      * @return a new authenticated context
      */
-    static SecurityContext authenticated(Principal principal, Collection<String> scopes, Instant expiresAt) {
-        return new AuthenticatedSecurityContext(
-                principal, Set.copyOf(scopes), Objects.requireNonNull(expiresAt, "expiresAt"));
+    static SecurityContext authenticated(Principal principal, Collection<String> scopes, @Nullable Instant expiresAt) {
+        return authenticated(principal, scopes, expiresAt, principal.getName());
+    }
+
+    /**
+     * Returns the context of an authenticated caller whose {@link #ownerKey() owner key} is not its
+     * principal's name. Use it when two different callers can share a name: the same subject issued by
+     * two issuers, or by two tenants. The key is what sessions and tasks are bound to.
+     *
+     * @param principal the authenticated identity
+     * @param scopes the scopes the caller was granted; copied
+     * @param expiresAt when the credentials stop being valid, or {@code null} if they do not
+     * @param ownerKey what identifies this caller for ownership, unique across every issuer and
+     *     tenant the server accepts; for example {@code issuer + "|" + subject}
+     * @return a new authenticated context
+     * @throws IllegalArgumentException if {@code ownerKey} is blank
+     */
+    static SecurityContext authenticated(
+            Principal principal, Collection<String> scopes, @Nullable Instant expiresAt, String ownerKey) {
+        return new AuthenticatedSecurityContext(principal, Set.copyOf(scopes), expiresAt, ownerKey);
     }
 
     /**
@@ -65,6 +81,17 @@ public sealed interface SecurityContext permits AnonymousSecurityContext, Authen
      */
     @Nullable
     Principal principal();
+
+    /**
+     * Returns what identifies this caller for ownership: a session or a task created by one request is
+     * reachable only by a caller with the same key. It is the principal's name unless the provider
+     * said otherwise; in bearer-token mode Tachyon makes it {@code issuer + "|" + name}, so the same
+     * subject from two issuers is two owners.
+     *
+     * @return the owner key, or {@code null} for an anonymous caller
+     */
+    @Nullable
+    String ownerKey();
 
     /**
      * Returns the scopes the caller was granted, as plain OAuth scope strings, expanded by whoever

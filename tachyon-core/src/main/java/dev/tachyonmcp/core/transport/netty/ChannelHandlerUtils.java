@@ -294,22 +294,30 @@ public final class ChannelHandlerUtils {
 
     /**
      * Answers a request whose caller was refused after the request was read: {@code status} ({@code
-     * 401}, {@code 403} or {@code 400}) with no body, the request's CORS headers and the {@code
-     * WWW-Authenticate} challenge, if any. What status and challenge are comes from {@code
-     * SecurityRejection}. The connection stays open: unlike a refusal on the request head, the request
+     * 401}, {@code 403}, {@code 400} or {@code 503}) with no body, the request's CORS headers, the
+     * {@code WWW-Authenticate} challenge and the {@code Retry-After}, if any. What they are comes from
+     * {@code SecurityRejection}. The connection stays open: unlike a refusal on the request head, the request
      * was read whole. Returns the write completion.
      *
      * @param ctx the channel handler context
      * @param status the HTTP status
      * @param challenge the {@code WWW-Authenticate} value, or {@code null}
+     * @param retryAfter the {@code Retry-After} value, or {@code null}
      * @param cors the request's CORS decision
      */
     public static ChannelFuture sendDeniedAsync(
-            ChannelHandlerContext ctx, int status, @Nullable String challenge, CorsDecision cors) {
+            ChannelHandlerContext ctx,
+            int status,
+            @Nullable String challenge,
+            @Nullable String retryAfter,
+            CorsDecision cors) {
         var response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.valueOf(status));
         response.headers().set(HttpHeaderNames.CONTENT_LENGTH, 0);
         if (challenge != null) {
             response.headers().set(HttpHeaderNames.WWW_AUTHENTICATE, challenge);
+        }
+        if (retryAfter != null) {
+            response.headers().set(HttpHeaderNames.RETRY_AFTER, retryAfter);
         }
         cors.applyTo(response);
         return ctx.writeAndFlush(response);

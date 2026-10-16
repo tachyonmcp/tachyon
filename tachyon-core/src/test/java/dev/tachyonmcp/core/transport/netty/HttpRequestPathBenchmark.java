@@ -44,6 +44,7 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -159,10 +160,12 @@ public class HttpRequestPathBenchmark {
                             new SecurityConfig.Authentication.Custom(
                                     request -> SecurityContext.authenticated(() -> "alice", List.of("tools:call"))),
                             AccessPolicy.permitAll(),
-                            SecurityConfig.DEFAULT_AUTHENTICATION_TIMEOUT),
+                            SecurityConfig.DEFAULT_AUTHENTICATION_TIMEOUT,
+                            SecurityConfig.DEFAULT_MAX_PENDING_AUTHENTICATIONS),
                     Runnable::run,
                     gate,
-                    List.of()));
+                    List.of(),
+                    new Semaphore(SecurityConfig.DEFAULT_MAX_PENDING_AUTHENTICATIONS)));
         }
         handlers.add(McpHeaderGuardHandler.INSTANCE);
         handlers.add(new ProtocolVersionHandler(false));

@@ -7,6 +7,7 @@ import java.security.Principal;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 
 /**
  * What a {@link BearerTokenVerifier} found out about a token it accepted: who it is for, what it may
@@ -27,9 +28,18 @@ import java.util.Set;
  * @param audience the resources the token was issued for ({@code aud}, RFC 8707). Tachyon accepts the
  *     token only if this includes the server's own resource URI. Leave out values that are not URIs:
  *     they cannot name this server. An empty set is allowed and is never accepted; copied
+ * @param issuer who issued the token ({@code iss}), one of the server's authorization servers. With
+ *     it, the caller's {@link dev.tachyonmcp.api.server.security.SecurityContext#ownerKey() owner key}
+ *     is {@code issuer + "|" + name}, so the same subject from two issuers is two owners. {@code null}
+ *     is allowed only on a server with one authorization server, which is then the issuer
  */
 @ExperimentalApi
-public record VerifiedToken(Principal principal, Set<String> scopes, Instant expiresAt, Set<URI> audience) {
+public record VerifiedToken(
+        Principal principal,
+        Set<String> scopes,
+        Instant expiresAt,
+        Set<URI> audience,
+        @Nullable URI issuer) {
 
     /** Rejects a missing part and copies the sets. */
     public VerifiedToken {
@@ -37,5 +47,10 @@ public record VerifiedToken(Principal principal, Set<String> scopes, Instant exp
         scopes = Set.copyOf(Objects.requireNonNull(scopes, "scopes"));
         Objects.requireNonNull(expiresAt, "expiresAt");
         audience = Set.copyOf(Objects.requireNonNull(audience, "audience"));
+    }
+
+    /** A token whose issuer is the server's one authorization server. */
+    public VerifiedToken(Principal principal, Set<String> scopes, Instant expiresAt, Set<URI> audience) {
+        this(principal, scopes, expiresAt, audience, null);
     }
 }

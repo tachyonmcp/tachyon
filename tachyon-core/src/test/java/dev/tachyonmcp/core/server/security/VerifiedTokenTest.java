@@ -31,6 +31,12 @@ class VerifiedTokenTest {
         assertThat(token.scopes()).containsExactly("tools:call");
         assertThat(token.expiresAt()).isEqualTo(EXPIRES);
         assertThat(token.audience()).containsExactly(RESOURCE);
+        assertThat(token.issuer())
+                .as("the server's one authorization server stands in")
+                .isNull();
+        assertThat(new VerifiedToken(ALICE, Set.of(), EXPIRES, Set.of(RESOURCE), URI.create("https://a.example.com"))
+                        .issuer())
+                .isEqualTo(URI.create("https://a.example.com"));
     }
 
     @Test
@@ -44,6 +50,12 @@ class VerifiedTokenTest {
 
         assertThat(token.scopes()).containsExactly("tools:call");
         assertThat(token.audience()).containsExactly(RESOURCE);
+        assertThat(token.issuer())
+                .as("the server's one authorization server stands in")
+                .isNull();
+        assertThat(new VerifiedToken(ALICE, Set.of(), EXPIRES, Set.of(RESOURCE), URI.create("https://a.example.com"))
+                        .issuer())
+                .isEqualTo(URI.create("https://a.example.com"));
     }
 
     @Test

@@ -252,12 +252,12 @@ public class McpInitializationHandler extends ChannelInboundHandlerAdapter {
                 postStream.terminate();
                 yield sendPlainTextAndClose(ctx, HttpResponseStatus.valueOf(code), statusMessage, cors);
             }
-            case McpDispatcher.DispatchResult.Denied(int status, var challenge) -> {
+            case McpDispatcher.DispatchResult.Denied(int status, var challenge, var retryAfter) -> {
                 if (postStream.started()) {
                     yield postStream.terminateAsync();
                 }
                 postStream.terminate();
-                yield sendDeniedAsync(ctx, status, challenge, cors);
+                yield sendDeniedAsync(ctx, status, challenge, retryAfter, cors);
             }
             case McpDispatcher.DispatchResult.Response response -> {
                 if (onResponseReady != null) {

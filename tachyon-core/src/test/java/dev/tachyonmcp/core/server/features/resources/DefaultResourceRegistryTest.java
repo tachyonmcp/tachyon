@@ -247,7 +247,7 @@ class DefaultResourceRegistryTest {
     @Test
     void unregisterRemovesSubscriptionsForResourceUri() {
         registry.register(resource("r1"), EMPTY_HANDLER);
-        registry.subscribe("test://r1", "s1");
+        registry.subscribe("test://r1", "s1", d -> true);
 
         assertThat(registry.unregister("r1")).isTrue();
 
@@ -257,7 +257,7 @@ class DefaultResourceRegistryTest {
     @Test
     void unregisterByUriRemovesSubscriptionsForUri() {
         registry.register(resource("r1"), EMPTY_HANDLER);
-        registry.subscribe("test://r1", "s1");
+        registry.subscribe("test://r1", "s1", d -> true);
 
         assertThat(registry.unregisterByUri("test://r1")).isTrue();
 
@@ -505,8 +505,8 @@ class DefaultResourceRegistryTest {
 
     @Test
     void shouldPruneMapEntryWhenLastSubscriberLeaves() {
-        registry.subscribe("test://resource/1", "s1");
-        registry.subscribe("test://resource/1", "s2");
+        registry.subscribe("test://resource/1", "s1", d -> true);
+        registry.subscribe("test://resource/1", "s2", d -> true);
 
         registry.unsubscribe("test://resource/1", "s1");
         assertThat(registry.subscriptions).containsKey("test://resource/1");
@@ -525,7 +525,7 @@ class DefaultResourceRegistryTest {
         int iterations = 1_000;
         try (var exec = java.util.concurrent.Executors.newFixedThreadPool(2)) {
             for (int i = 0; i < iterations; i++) {
-                registry.subscribe(uri, "leaver");
+                registry.subscribe(uri, "leaver", d -> true);
                 var start = new java.util.concurrent.CountDownLatch(1);
                 var unsub = exec.submit(() -> {
                     start.await();
@@ -534,7 +534,7 @@ class DefaultResourceRegistryTest {
                 });
                 var sub = exec.submit(() -> {
                     start.await();
-                    registry.subscribe(uri, "joiner");
+                    registry.subscribe(uri, "joiner", d -> true);
                     return null;
                 });
                 start.countDown();
@@ -555,8 +555,8 @@ class DefaultResourceRegistryTest {
         live.connection(new CollectingConnection());
         live.activate();
 
-        registry.subscribe("test://resource/1", "live-session");
-        registry.subscribe("test://resource/1", "dead-session"); // no such session on the server
+        registry.subscribe("test://resource/1", "live-session", d -> true);
+        registry.subscribe("test://resource/1", "dead-session", d -> true); // no such session on the server
 
         registry.notifyResourceUpdated("test://resource/1");
 
@@ -705,8 +705,8 @@ class DefaultResourceRegistryTest {
     @Test
     void registeringSameNameAtNewUriKeepsSubscriptionsForBothUris() {
         registry.register(ResourceDescriptor.of("doc", "resource://doc-v1", null, "text/plain"), EMPTY_HANDLER);
-        registry.subscribe("resource://doc-v1", "s1");
-        registry.subscribe("resource://doc-v2", "s2");
+        registry.subscribe("resource://doc-v1", "s1", d -> true);
+        registry.subscribe("resource://doc-v2", "s2", d -> true);
 
         registry.register(ResourceDescriptor.of("doc", "resource://doc-v2", null, "text/plain"), EMPTY_HANDLER);
 

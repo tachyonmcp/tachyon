@@ -48,7 +48,9 @@ class BearerAuthenticationSessionTest extends AbstractStatefulMcpE2eTest {
         try (var client = new RawSessionClient(port)) {
             final var sessionId = client.initialize(ALICE);
 
-            assertThat(engine().getSession(sessionId).orElseThrow().owner()).isEqualTo(new Owner.Named("alice"));
+            // K13: the owner is issuer|name, so "alice" from another issuer could not borrow this session.
+            assertThat(engine().getSession(sessionId).orElseThrow().owner())
+                    .isEqualTo(new Owner.Named(TestBearerTokens.AUTHORIZATION_SERVER + "|alice"));
         }
     }
 

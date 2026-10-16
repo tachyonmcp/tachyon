@@ -33,7 +33,8 @@ var server = TachyonServer.builder()
                             new UserPrincipal(jwt.subject()),
                             jwt.scopes(),
                             jwt.expiresAt(),
-                            jwt.audience().stream().map(URI::create).collect(toSet()));
+                            jwt.audience().stream().map(URI::create).collect(toSet()),
+                            URI.create(jwt.issuer()));
                 }))
                 .accessPolicy(AccessPolicy.permitAll()))
         .build();
@@ -63,13 +64,20 @@ requires and that verifiers most often forget, so you cannot forget them either:
 Either failure is `401` with `error="invalid_token"`, the same answer as a bad signature, and the
 verifier's output is otherwise used unchanged.
 
+- **Issuer.** `VerifiedToken` takes the token's issuer (`iss`) as its last part. It is what tells two
+  callers with the same subject apart: a session or a task is bound to `issuer|name`, never to the
+  name alone, so `alice` from one authorization server cannot reach what `alice` from another created.
+  A server with one authorization server may leave it out and that server is the issuer. A server with
+  several must report it: a token without one is a verifier failure and answers `500`.
+
 **The resource URI** is the name clients know your server by: the public gateway URL, not the address
 behind it. It is configured once, here, and is never derived from the `Host` or `X-Forwarded-*`
 headers, which a client can set. It must be an absolute `https` URI (`http` only for `localhost` and
 other loopback hosts), without a fragment, without a query and without a trailing slash. A token's
 audience matches it with the normalization RFC 3986 §6.2.3 allows: scheme and host in any case, a
 default port implied, and an empty path read as `/`. Everything else must be equal, so
-`https://mcp.example.com/mcp/` is another resource.
+`https://mcp.example.com/mcp/` is another resource, and so is `https://alice@mcp.example.com/mcp`; a
+resource or an authorization server written with user info is refused.
 
 **The authorization servers** are the issuers (RFC 8414 §2) a client may get a token from. Each is an
 absolute `https` URI (`http` for a loopback host only) with no query and no fragment. Tachyon publishes
@@ -79,9 +87,11 @@ them but does not call them: your verifier decides which tokens it accepts.
 has clients decide for themselves whether to ask for a refresh token, and a resource server does not
 advertise it.
 
-Throw `AuthenticationException.bearerInvalidToken("...")` for a bad token. Throw anything else
-when the token cannot be checked at all, for example when an introspection endpoint is down: that
-answers `500`, so the client keeps a token that may still be valid.
+Throw `AuthenticationException.bearerInvalidToken("...")` for a bad token. Throw
+`AuthenticationException.unavailable("...", Duration.ofSeconds(5))` when the token cannot be checked
+right now, for example when an introspection endpoint or a key set is unreachable: that answers `503`
+with `Retry-After`, so the client keeps a token that may still be valid and tries again. Anything else
+you throw is a bug in checking and answers `500`.
 
 | Request | Response |
 |---|---|
@@ -89,6 +99,7 @@ answers `500`, so the client keeps a token that may still be valid.
 | No `Authorization` header, or another scheme such as `Basic` | `401`, `WWW-Authenticate: Bearer resource_metadata="…", scope="…"` |
 | Malformed, unknown, expired, or issued for another server | `401`, `WWW-Authenticate: Bearer error="invalid_token", resource_metadata="…", scope="…"` |
 | Several `Authorization` headers, or `?access_token=` in the URL | `400`, `WWW-Authenticate: Bearer error="invalid_request"` |
+| Verifier throws `unavailable(...)` | `503`, `Retry-After`, no challenge |
 | Verifier throws anything else | `500`, no challenge |
 
 Rejected requests have an empty body, never reach a handler, and close the connection. Tachyon never
@@ -191,6 +202,11 @@ That request is answered `401` with `WWW-Authenticate: ApiKey realm="orders"`.
 - `unauthorized(message, challenge)` is a `401`. It takes a challenge because RFC 9110 §11.6.1 requires
   one on every `401`, so a `401` without a challenge cannot be built.
 - `badRequest(message)` is a `400` with no challenge; `badRequest(message, challenge)` adds one.
+- `unavailable(message, retryAfter)` is a `503` with `Retry-After` and no challenge: the credentials
+  could not be checked right now, so the client keeps them and tries again.
+- `insufficientScope(scopes)` is a `403`. Tachyon throws it for a tool's `requiredScopes`; a handler
+  may throw it too. With bearer tokens the server answers with its own `insufficient_scope` challenge
+  naming every scope; another scheme answers `403` without a challenge.
 - `bearerInvalidToken` (`401`) and `bearerInvalidRequest` (`400`) are the Bearer answers of
   [RFC 6750 §3.1](https://www.rfc-editor.org/rfc/rfc6750#section-3.1), with the status that goes with
   each. Use them only for bearer tokens; they always send a `Bearer` challenge with an `error`. There is
@@ -334,8 +350,8 @@ it when it finds out late that the credentials are no good, for example a token 
 request is answered like a refusal on the head: `401` with the challenge; with bearer tokens, the
 server's own `invalid_token` challenge, which names the OAuth metadata. Once a response has started
 streaming (`200` and `text/event-stream` are already out) a status can no longer be sent, so the client
-gets a JSON-RPC error with code `-32600` and message `Unauthorized` (or `Forbidden`) as the last event
-of the stream.
+gets a JSON-RPC error with code `-32600` and message `Unauthorized` (or `Forbidden`, or `Service
+unavailable`) as the last event of the stream.
 
 ## Reading the caller
 
@@ -350,6 +366,8 @@ server.tools().register(
 
 - `principal()` is `null` and `isAuthenticated()` is `false` for an anonymous caller.
 - `scopes()` holds plain OAuth scope strings, without a `SCOPE_` prefix.
+- `ownerKey()` is what a session or a task is bound to: `issuer|name` in bearer mode, the principal's
+  name for a custom provider unless it states a key of its own (below), `null` when anonymous.
 - The context never holds the token, so a handler cannot pass it on to other services by mistake.
   Call upstream APIs with their own tokens, as the MCP spec requires.
 - `SecurityContext` is sealed: a caller is anonymous or authenticated, never something in between.
@@ -366,8 +384,9 @@ record Tenant(String name, String tenantId) implements Principal {
     }
 }
 
-// in the BearerTokenVerifier: new VerifiedToken(new Tenant(jwt.subject(), jwt.claim("tid")), ...)
-// in a custom provider:       SecurityContext.authenticated(new Tenant(key.owner(), key.tenantId()), scopes)
+// in the BearerTokenVerifier: new VerifiedToken(new Tenant(jwt.subject(), jwt.claim("tid")), ..., issuer)
+// in a custom provider, the owner key tells two tenants' "alice" apart:
+//   SecurityContext.authenticated(new Tenant(key.owner(), key.tenantId()), scopes, null, key.tenantId() + "|" + key.owner())
 
 server.tools().register(
         d -> d.name("tenant-orders"),
@@ -403,7 +422,12 @@ server.tools().register(
   ```
 
   Past the limit the request is answered `503 Service Unavailable` with `Retry-After` and no
-  `WWW-Authenticate`, so the client keeps a token that may be valid, and the connection closes. The
+  `WWW-Authenticate`, so the client keeps a token that may be valid, and the connection closes. At most
+  `maxPendingAuthentications` requests wait for the provider at once across every connection, 1024 by
+  default; one more is answered the same `503` before the provider is called, so a slow introspection
+  endpoint cannot pile up provider threads and held request heads without limit. Timeouts and
+  refusals at capacity are counted and one in a hundred is logged at `WARN`, the rest at `DEBUG`;
+  every one reaches the observers. The
   provider is not interrupted and its late result is ignored, so give its own calls their own
   timeouts. The MCP spec does not define this status; it is a Tachyon decision.
 - **No thread-local holder.** The context is passed along with the request. Work a handler hands to
@@ -430,9 +454,13 @@ server.tools().register(
   nodes. **A clustered or restarted server needs a task connector that authorizes every call from
   `ctx.securityContext()`**; Tachyon hands it the caller's own context on every path. See
   [Who can reach a task](../extensions/tasks.md#who-can-reach-a-task).
-- **Names identify callers.** The principal's name must be unique and stable for a caller. A provider
-  returning a principal with no name, or a blank one, is a provider failure (`500`), because the
-  session or task could not be told apart from an anonymous one.
+- **Owner keys identify callers.** A session or a task is bound to `SecurityContext#ownerKey()`, which
+  must be unique and stable for a caller across every issuer and tenant the server accepts. In bearer
+  mode Tachyon makes it `issuer|name`. A custom provider whose names can repeat across tenants passes
+  its own key to `SecurityContext.authenticated(principal, scopes, expiresAt, ownerKey)`; the shorter
+  overloads use the principal's name. A provider returning a principal with no name, or a blank one,
+  is a provider failure (`500`), because the session or task could not be told apart from an
+  anonymous one.
 
 The metadata is served right after the Origin (DNS-rebinding) check and before everything else, so it
 needs no token. Authentication runs right after the Origin check, the endpoint check and CORS, and
@@ -451,5 +479,5 @@ whose request is still being authenticated. Keep it longer.
 - Configuring authentication from the Kotlin DSL or Spring Boot properties: only the Java `security(...)` exists.
 - Choosing what identifies a caller: sessions and tasks are bound to the principal's `getName()`.
 
-See [`specs/server-authorization.md`](https://github.com/tachyonmcp/tachyon/blob/main/specs/server-authorization.md)
+See [`../../specs/features/auth`](https://github.com/tachyonmcp/tachyon/blob/main/specs/auth/requirements.md)
 for the requirements, what each is proved by, and the open points.

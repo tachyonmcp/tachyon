@@ -65,6 +65,9 @@ public final class GuardedFeatures implements BearerTokenVerifier {
 
     public static final String PUBLIC_NOTES = "notes://public";
     public static final String ADMIN_NOTES = "notes://admin";
+    /** Reports an update of {@code notes://later-secret} and of {@code notes://later-public}, in that order. */
+    public static final String NOTIFY_LATER = "notify-later";
+
     public static final String ADMIN_TEMPLATE = "secret://{id}";
     public static final String ADMIN_PROMPT = "admin-prompt";
     public static final String PUBLIC_PROMPT = "public-prompt";
@@ -142,6 +145,20 @@ public final class GuardedFeatures implements BearerTokenVerifier {
                 caller, scopes, Instant.now().plus(Duration.ofHours(1)), Set.of(TestBearerTokens.RESOURCE));
     }
 
+    /**
+     * Registers, after a caller subscribed to their URIs, a resource only {@link #ADMIN} may see at
+     * {@code notes://later-secret} and one everyone may see at {@code notes://later-public}.
+     */
+    public static void registerLater(TachyonServer server) {
+        server.resources()
+                .register(
+                        d -> d.name("admin-later").uri("notes://later-secret"),
+                        (ctx, request) -> TextResourceContents.of("notes://later-secret", "secret", "text/plain"))
+                .register(
+                        d -> d.name("public-later").uri("notes://later-public"),
+                        (ctx, request) -> TextResourceContents.of("notes://later-public", "public", "text/plain"));
+    }
+
     /** Registers one feature of each kind, hidden and not. */
     public void register(TachyonServer server) {
         for (final var name : List.of(PUBLIC_TOOL, ADMIN_TOOL, PARTNER_TOOL)) {
@@ -153,6 +170,11 @@ public final class GuardedFeatures implements BearerTokenVerifier {
         server.tools().register(d -> d.name(READ_FILES).requiredScopes("files:read"), (ctx, request) -> {
             ran.add(READ_FILES);
             return ToolResult.text("read");
+        });
+        server.tools().register(d -> d.name(NOTIFY_LATER), (ctx, request) -> {
+            server.resources().notifyResourceUpdated("notes://later-secret");
+            server.resources().notifyResourceUpdated("notes://later-public");
+            return ToolResult.text("notified");
         });
         server.tools().register(d -> d.name(NOTIFY), (ctx, request) -> {
             server.resources().notifyResourceUpdated(ADMIN_NOTES);

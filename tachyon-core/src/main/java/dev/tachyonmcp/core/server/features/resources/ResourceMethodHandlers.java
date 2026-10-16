@@ -1,6 +1,7 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
 package dev.tachyonmcp.core.server.features.resources;
 
+import dev.tachyonmcp.api.server.ServerFeature;
 import dev.tachyonmcp.api.server.domain.ResourceContents;
 import dev.tachyonmcp.api.server.domain.ServerError;
 import dev.tachyonmcp.api.server.features.resources.ResourceRequest;
@@ -18,7 +19,7 @@ import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
-import java.util.stream.Collectors;
+import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,14 +34,15 @@ public final class ResourceMethodHandlers {
             SubscriptionTopic.strings("resourceSubscriptions");
 
     /**
-     * The resource URIs a {@code subscriptions/listen} stream asked for, and the ones it follows. The
+     * The resource URIs a {@code subscriptions/listen} stream asked for, and who is listening. The
      * acknowledgment echoes every requested URI, so a URI the caller may not see is acknowledged exactly
-     * like one that does not exist; only the followed ones are ever notified.
+     * like one that does not exist. Visibility is decided when an update is delivered, not when the
+     * stream opened: a URI that named nothing then and names a hidden resource now is not reported.
      *
      * @param requested what the listener asked for, echoed in the acknowledgment
-     * @param followed what it is notified about: {@code requested} without what it may not see
+     * @param visible whether the listener may see a resource, as decided for its own request
      */
-    public record ResourceUris(Set<String> requested, Set<String> followed) {}
+    public record ResourceUris(Set<String> requested, Predicate<ServerFeature.Descriptor> visible) {}
 
     private ResourceMethodHandlers() {}
 
@@ -58,13 +60,9 @@ public final class ResourceMethodHandlers {
                 REQUESTED_URIS.filterKey(),
                 (context, filter) -> {
                     var requested = REQUESTED_URIS.decoder().decode(context, filter);
-                    return requested == null ? null : new ResourceUris(requested, requested);
+                    return requested == null ? null : new ResourceUris(requested, Visibility.to(context));
                 },
-                (context, uris) -> new ResourceUris(
-                        uris.requested(),
-                        uris.requested().stream()
-                                .filter(uri -> !registry.isHidden(uri, Visibility.to(context)))
-                                .collect(Collectors.toUnmodifiableSet())),
+                (context, uris) -> uris,
                 uris -> List.copyOf(uris.requested()));
         subscriptions.register(LIST_CHANGED);
         subscriptions.register(updated);
@@ -227,11 +225,9 @@ public final class ResourceMethodHandlers {
             if (session == null) {
                 return ServerErrors.invalidRequest("resources/subscribe requires a session");
             }
-            // Accepted alike for a URI nothing names and one the caller may not see; only the second is
-            // never followed, so no update about it reaches the caller.
-            if (!registry.isHidden(uri, Visibility.to(context))) {
-                registry.subscribe(uri, session.id());
-            }
+            // Accepted alike for a URI nothing names and one the caller may not see. Visibility is
+            // decided again at every delivery, so a URI that names a hidden resource later is not reported.
+            registry.subscribe(uri, session.id(), Visibility.to(context));
             return context.responseMapper().emptyResult();
         }
     }

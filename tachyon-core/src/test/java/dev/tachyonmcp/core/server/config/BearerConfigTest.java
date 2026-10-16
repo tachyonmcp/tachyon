@@ -63,6 +63,8 @@ class BearerConfigTest {
                 "urn:example:mcp",
                 "https://mcp.example.com/mcp#section",
                 "https://mcp.example.com/mcp?tenant=1",
+                "https://alice@mcp.example.com/mcp",
+                "https://alice:secret@mcp.example.com/mcp",
                 "https://mcp.example.com/",
                 "https://mcp.example.com/mcp/",
                 "http://mcp.example.com/mcp",
@@ -100,6 +102,7 @@ class BearerConfigTest {
                 "http://10.0.0.5:9000",
                 "https://auth.example.com/?tenant=1",
                 "https://auth.example.com#section",
+                "https://alice@auth.example.com",
                 "urn:example:issuer"
             })
     void anAuthorizationServerThatIsNotAnIssuerIsRefused(String issuer) {

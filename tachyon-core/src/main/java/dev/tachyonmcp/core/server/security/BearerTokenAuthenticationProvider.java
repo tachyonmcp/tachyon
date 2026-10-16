@@ -7,12 +7,11 @@ import dev.tachyonmcp.core.server.config.BearerConfig;
 import io.netty.handler.codec.http.QueryStringDecoder;
 import java.net.URI;
 import java.time.Clock;
+import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import java.util.regex.Pattern;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Authenticates a request by its OAuth 2.1 bearer token (RFC 6750 §2.1), as the MCP authorization
@@ -32,6 +31,11 @@ import java.util.regex.Pattern;
  *       skew allowance: RFC 7519 §4.1.4 only permits some, and an expired token is expired. The
  *       audience is matched with the normalization RFC 3986 §6.2.3 allows: scheme and host in any case,
  *       a default port and an empty path implied; everything else exactly.
+ *   <li>The caller's owner key is {@code issuer + "|" + name}, so the same subject from two issuers is
+ *       two owners (sessions and tasks of one are closed to the other). The issuer is what the verifier
+ *       reports in {@link VerifiedToken#issuer()}; a server with exactly one authorization server
+ *       takes that one when the verifier reports none. On a server with several, a token without an
+ *       issuer is a verifier failure ({@code 500}): the collision it would allow is not representable.
  * </ul>
  *
  * <p>Every {@code 401} this provider answers carries the discovery parameters of MCP authorization §
@@ -52,12 +56,12 @@ public final class BearerTokenAuthenticationProvider implements AuthenticationPr
     private static final String ACCESS_TOKEN_PARAMETER = "access_token";
 
     private final String resource;
+    private final List<URI> authorizationServers;
     private final BearerTokenVerifier verifier;
     private final Clock clock;
     private final AuthenticationChallenge required;
     private final AuthenticationChallenge invalidToken;
     private final String metadata;
-    private final ConcurrentMap<String, AuthenticationChallenge> insufficientScope = new ConcurrentHashMap<>();
 
     /**
      * @param bearer the bearer-token configuration: the resource a token's audience must include, the
@@ -66,6 +70,7 @@ public final class BearerTokenAuthenticationProvider implements AuthenticationPr
      */
     public BearerTokenAuthenticationProvider(BearerConfig bearer, Clock clock) {
         this.resource = canonical(bearer.resource());
+        this.authorizationServers = bearer.authorizationServers();
         this.verifier = bearer.verifier();
         this.clock = Objects.requireNonNull(clock, "clock");
         this.metadata = ProtectedResourceMetadata.url(bearer.resource()).toString();
@@ -76,35 +81,34 @@ public final class BearerTokenAuthenticationProvider implements AuthenticationPr
     }
 
     /**
-     * Returns the challenge of a {@code 403} for a caller who lacks scopes the request requires (RFC
-     * 6750 §3.1; MCP authorization § Runtime Insufficient Scope): {@code error="insufficient_scope"},
-     * every required scope in one {@code scope} (§ Server Scope Management), and the {@code
-     * resource_metadata} URL. One challenge is built per distinct set of scopes and kept.
+     * Returns the challenge this server answers {@code rejection} with, whoever threw it: a verifier,
+     * an {@link AccessPolicy}, a handler. This provider owns the {@code Bearer} challenge.
      *
-     * @param requiredScopes every scope the request requires, not only the missing ones; at least one
-     * @return the challenge
+     * <ul>
+     *   <li>{@code 401}: one of its two, both carrying the discovery parameters. A rejection that
+     *       already carries {@code required} (no usable credentials) keeps it; any other, whatever
+     *       challenge its thrower chose, is answered with {@code invalid_token}.
+     *   <li>{@code 403}: {@code error="insufficient_scope"}, every required scope in one {@code scope}
+     *       (RFC 6750 §3.1; MCP authorization § Runtime Insufficient Scope, § Server Scope Management)
+     *       and the {@code resource_metadata} URL.
+     *   <li>Anything else: what the rejection carries.
+     * </ul>
+     *
+     * @param rejection the rejection
+     * @return the {@code WWW-Authenticate} value, or {@code null} for none
      */
-    public AuthenticationChallenge insufficientScope(Set<String> requiredScopes) {
-        return insufficientScope.computeIfAbsent(
-                String.join(" ", requiredScopes),
-                scope -> AuthenticationChallenge.of(SCHEME)
+    public @Nullable String challengeFor(AuthenticationException rejection) {
+        return switch (rejection.status()) {
+            case 401 ->
+                (required.headerValue().equals(rejection.wwwAuthenticate()) ? required : invalidToken).headerValue();
+            case 403 ->
+                AuthenticationChallenge.of(SCHEME)
                         .withParam("error", "insufficient_scope")
-                        .withParam("scope", scope)
-                        .withParam("resource_metadata", metadata));
-    }
-
-    /**
-     * Returns the challenge this server answers a {@code 401} with. It has two, {@code required} (no
-     * usable credentials) and {@code invalid_token}, both carrying the discovery parameters. A
-     * rejection that already carries {@code required} keeps it; any other {@code 401}, whatever
-     * challenge its thrower chose (a verifier, an {@link AccessPolicy}, a handler), is answered with
-     * {@code invalid_token}. Idempotent, so the provider's own rejections pass through unchanged.
-     *
-     * @param rejection a rejection with status {@code 401}
-     * @return the challenge to send
-     */
-    public AuthenticationChallenge unauthorized(AuthenticationException rejection) {
-        return required.headerValue().equals(rejection.wwwAuthenticate()) ? required : invalidToken;
+                        .withParam("scope", String.join(" ", rejection.requiredScopes()))
+                        .withParam("resource_metadata", metadata)
+                        .headerValue();
+            default -> rejection.wwwAuthenticate();
+        };
     }
 
     private static AuthenticationChallenge discovery(AuthenticationChallenge base, String metadata, String scopes) {
@@ -149,12 +153,27 @@ public final class BearerTokenAuthenticationProvider implements AuthenticationPr
         if (!verified.expiresAt().isAfter(clock.instant())) {
             throw AuthenticationException.unauthorized("Token has expired", invalidToken);
         }
-        return SecurityContext.authenticated(verified.principal(), verified.scopes(), verified.expiresAt());
+        return SecurityContext.authenticated(
+                verified.principal(), verified.scopes(), verified.expiresAt(), ownerKey(verified));
+    }
+
+    private String ownerKey(VerifiedToken verified) {
+        var issuer = verified.issuer();
+        if (issuer == null) {
+            if (authorizationServers.size() != 1) {
+                throw new IllegalStateException(
+                        "The verifier must report the issuer: this server has several authorization servers");
+            }
+            issuer = authorizationServers.getFirst();
+        }
+        return issuer + "|" + verified.principal().getName();
     }
 
     /**
      * RFC 3986 §6.2.3 scheme-based normalization of a URI's text: lower-case scheme and host, no
-     * default port, an empty path read as {@code /}. A URI with no scheme or host is compared as written.
+     * default port, an empty path read as {@code /}. User info is kept as written, so {@code
+     * https://alice@h/mcp} is another resource than {@code https://h/mcp}. A URI with no scheme or
+     * host is compared as written.
      */
     private static String canonical(URI uri) {
         final var scheme = uri.getScheme();
@@ -166,7 +185,11 @@ public final class BearerTokenAuthenticationProvider implements AuthenticationPr
         final var port = uri.getPort();
         final var defaultPort = lowerScheme.equals("https") ? 443 : lowerScheme.equals("http") ? 80 : -1;
         final var path = uri.getRawPath() == null || uri.getRawPath().isEmpty() ? "/" : uri.getRawPath();
-        final var text = new StringBuilder(lowerScheme).append("://").append(host.toLowerCase(Locale.ROOT));
+        final var text = new StringBuilder(lowerScheme).append("://");
+        if (uri.getRawUserInfo() != null) {
+            text.append(uri.getRawUserInfo()).append('@');
+        }
+        text.append(host.toLowerCase(Locale.ROOT));
         if (port != -1 && port != defaultPort) {
             text.append(':').append(port);
         }

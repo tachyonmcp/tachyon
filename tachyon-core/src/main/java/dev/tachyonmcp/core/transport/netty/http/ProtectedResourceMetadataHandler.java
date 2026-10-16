@@ -23,8 +23,8 @@ import java.util.Set;
 /**
  * Serves the RFC 9728 Protected Resource Metadata of a bearer-token server, so a client that was
  * refused can find the authorization server (MCP authorization § Authorization Server Discovery). The
- * document is rendered once, when the server is built, and every answer is a retained duplicate of the
- * same buffer.
+ * document is rendered once, when the server is built, into one direct, unreleasable buffer, and every
+ * answer is a duplicate of it: no copy into the outbound buffer and no reference count per response.
  *
  * <p>It answers {@code GET} and {@code HEAD} (RFC 9110 §9.1: a general-purpose server supports both) on
  * the paths of {@link ProtectedResourceMetadata#paths}, with no authentication, because a client needs
@@ -52,7 +52,9 @@ public final class ProtectedResourceMetadataHandler extends ChannelInboundHandle
 
     public ProtectedResourceMetadataHandler(BearerConfig bearer) {
         this.paths = ProtectedResourceMetadata.paths(bearer.resource());
-        this.document = Unpooled.wrappedBuffer(ProtectedResourceMetadata.json(bearer));
+        final var json = ProtectedResourceMetadata.json(bearer);
+        this.document =
+                Unpooled.unreleasableBuffer(Unpooled.directBuffer(json.length).writeBytes(json));
     }
 
     @Override
@@ -77,9 +79,7 @@ public final class ProtectedResourceMetadataHandler extends ChannelInboundHandle
             return;
         }
         final var response = new DefaultFullHttpResponse(
-                HttpVersion.HTTP_1_1,
-                HttpResponseStatus.OK,
-                head ? Unpooled.EMPTY_BUFFER : document.retainedDuplicate());
+                HttpVersion.HTTP_1_1, HttpResponseStatus.OK, head ? Unpooled.EMPTY_BUFFER : document.duplicate());
         response.headers()
                 .set(HttpHeaderNames.CONTENT_TYPE, "application/json")
                 .setInt(HttpHeaderNames.CONTENT_LENGTH, document.readableBytes());

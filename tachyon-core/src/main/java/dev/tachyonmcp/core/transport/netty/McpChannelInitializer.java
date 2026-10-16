@@ -37,6 +37,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
@@ -79,6 +80,8 @@ public class McpChannelInitializer extends ChannelInitializer<SocketChannel> {
     private final DnsRebindingProtectionHandler dnsRebindingHandler;
     // Only with bearer tokens: otherwise there is no metadata to serve and no handler in the pipeline.
     private final @Nullable ProtectedResourceMetadataHandler protectedResourceMetadataHandler;
+    // One pool per server: every channel's AuthenticationHandler draws from it.
+    private final Semaphore authenticationPermits;
 
     private final CorsConfig corsConfig;
 
@@ -146,6 +149,7 @@ public class McpChannelInitializer extends ChannelInitializer<SocketChannel> {
             endpointValidatorHandler = new EndpointValidatorHandler(endpointPath);
             protectedResourceMetadataHandler = null;
         }
+        authenticationPermits = new Semaphore(server.config().security().maxPendingAuthentications());
     }
 
     /**
@@ -208,7 +212,8 @@ public class McpChannelInitializer extends ChannelInitializer<SocketChannel> {
                             security,
                             server.executor(),
                             pipeliningGate,
-                            server.config().observability().listeners()));
+                            server.config().observability().listeners(),
+                            authenticationPermits));
         }
 
         // Must precede "protocol-version": a repeated version header would otherwise negotiate on its

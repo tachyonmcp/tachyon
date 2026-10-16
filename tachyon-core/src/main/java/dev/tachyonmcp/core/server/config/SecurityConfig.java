@@ -3,14 +3,12 @@ package dev.tachyonmcp.core.server.config;
 
 import dev.tachyonmcp.api.annotations.ExperimentalApi;
 import dev.tachyonmcp.core.server.security.AccessPolicy;
-import dev.tachyonmcp.core.server.security.AuthenticationChallenge;
 import dev.tachyonmcp.core.server.security.AuthenticationException;
 import dev.tachyonmcp.core.server.security.AuthenticationProvider;
 import dev.tachyonmcp.core.server.security.BearerTokenAuthenticationProvider;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.Objects;
-import java.util.Set;
 import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 
@@ -25,20 +23,34 @@ import org.jspecify.annotations.Nullable;
  *     policy its builder was told to use, since {@link Builder#build} refuses to choose for you
  * @param authenticationTimeout how long a request may wait for the authentication provider before it is
  *     answered {@code 503 Service Unavailable}; positive
+ * @param maxPendingAuthentications how many requests may wait for the provider at once, across every
+ *     connection; one more is answered {@code 503} at once. Bounds the provider threads and the held
+ *     request heads a slow provider can pile up; positive
  */
 @ExperimentalApi
-public record SecurityConfig(Authentication authentication, AccessPolicy accessPolicy, Duration authenticationTimeout) {
+public record SecurityConfig(
+        Authentication authentication,
+        AccessPolicy accessPolicy,
+        Duration authenticationTimeout,
+        int maxPendingAuthentications) {
 
     /** How long a request waits for its authentication unless configured otherwise. */
     public static final Duration DEFAULT_AUTHENTICATION_TIMEOUT = Duration.ofSeconds(10);
 
-    private static final SecurityConfig DISABLED =
-            new SecurityConfig(new Authentication.Disabled(), AccessPolicy.permitAll(), DEFAULT_AUTHENTICATION_TIMEOUT);
+    /** How many requests may wait for the provider at once unless configured otherwise. */
+    public static final int DEFAULT_MAX_PENDING_AUTHENTICATIONS = 1024;
+
+    private static final SecurityConfig DISABLED = new SecurityConfig(
+            new Authentication.Disabled(),
+            AccessPolicy.permitAll(),
+            DEFAULT_AUTHENTICATION_TIMEOUT,
+            DEFAULT_MAX_PENDING_AUTHENTICATIONS);
 
     /**
      * Validates the settings.
      *
-     * @throws IllegalArgumentException if {@code authenticationTimeout} is zero or negative
+     * @throws IllegalArgumentException if {@code authenticationTimeout} is zero or negative, or {@code
+     *     maxPendingAuthentications} is not positive
      */
     public SecurityConfig {
         Objects.requireNonNull(authentication, "authentication");
@@ -46,6 +58,9 @@ public record SecurityConfig(Authentication authentication, AccessPolicy accessP
         Objects.requireNonNull(authenticationTimeout, "authenticationTimeout");
         if (authenticationTimeout.isZero() || authenticationTimeout.isNegative()) {
             throw new IllegalArgumentException("authenticationTimeout must be positive");
+        }
+        if (maxPendingAuthentications <= 0) {
+            throw new IllegalArgumentException("maxPendingAuthentications must be positive");
         }
     }
 
@@ -61,7 +76,7 @@ public record SecurityConfig(Authentication authentication, AccessPolicy accessP
      */
     public @Nullable AuthenticationProvider authenticationProvider() {
         return switch (authentication) {
-            case Authentication.Disabled disabled -> null;
+            case Authentication.Disabled ignored -> null;
             case Authentication.Bearer bearer -> bearer.provider();
             case Authentication.Custom custom -> custom.provider();
         };
@@ -112,25 +127,14 @@ public record SecurityConfig(Authentication authentication, AccessPolicy accessP
             }
 
             /**
-             * Returns the challenge of the {@code 403} that answers a caller who lacks scopes a request
-             * requires; see {@link BearerTokenAuthenticationProvider#insufficientScope}.
+             * Returns the challenge this server answers {@code rejection} with, in its own {@code Bearer}
+             * scheme, whoever threw it. See {@link BearerTokenAuthenticationProvider#challengeFor}.
              *
-             * @param requiredScopes every scope the request requires, in the order to report them
-             * @return the challenge
+             * @param rejection the rejection
+             * @return the {@code WWW-Authenticate} value, or {@code null} for none
              */
-            public AuthenticationChallenge insufficientScope(Set<String> requiredScopes) {
-                return provider.insufficientScope(requiredScopes);
-            }
-
-            /**
-             * Returns the challenge of a {@code 401} thrown anywhere a request is served; see {@link
-             * BearerTokenAuthenticationProvider#unauthorized}.
-             *
-             * @param rejection a rejection with status {@code 401}
-             * @return the challenge to send
-             */
-            public AuthenticationChallenge unauthorized(AuthenticationException rejection) {
-                return provider.unauthorized(rejection);
+            public @Nullable String challengeFor(AuthenticationException rejection) {
+                return provider.challengeFor(rejection);
             }
         }
 
@@ -160,6 +164,7 @@ public record SecurityConfig(Authentication authentication, AccessPolicy accessP
         private @Nullable BearerConfig bearer;
         private @Nullable AccessPolicy accessPolicy;
         private Duration authenticationTimeout = DEFAULT_AUTHENTICATION_TIMEOUT;
+        private int maxPendingAuthentications = DEFAULT_MAX_PENDING_AUTHENTICATIONS;
 
         private Builder() {}
 
@@ -232,6 +237,25 @@ public record SecurityConfig(Authentication authentication, AccessPolicy accessP
         }
 
         /**
+         * Bounds how many requests, across every connection, may wait for the authentication provider
+         * at once; {@link SecurityConfig#DEFAULT_MAX_PENDING_AUTHENTICATIONS} (1024) unless set. One
+         * more is answered {@code 503 Service Unavailable} with {@code Retry-After} before the provider
+         * is called, so a slow introspection endpoint cannot pile up provider threads and held request
+         * heads without limit.
+         *
+         * @param max the most pending authentications, positive
+         * @return this builder
+         * @throws IllegalArgumentException if {@code max} is not positive
+         */
+        public Builder maxPendingAuthentications(int max) {
+            if (max <= 0) {
+                throw new IllegalArgumentException("maxPendingAuthentications must be positive");
+            }
+            this.maxPendingAuthentications = max;
+            return this;
+        }
+
+        /**
          * Decides which features a caller may see: tools, resources, resource templates and prompts the
          * policy refuses are neither listed nor reachable, and a request that names one is answered like
          * a request for a feature that does not exist. Required when requests are authenticated
@@ -267,14 +291,20 @@ public record SecurityConfig(Authentication authentication, AccessPolicy accessP
             }
             final var policy = accessPolicy != null ? accessPolicy : AccessPolicy.permitAll();
             if (bearer != null) {
-                return new SecurityConfig(new Authentication.Bearer(bearer, clock), policy, authenticationTimeout);
+                return new SecurityConfig(
+                        new Authentication.Bearer(bearer, clock),
+                        policy,
+                        authenticationTimeout,
+                        maxPendingAuthentications);
             }
             if (custom != null) {
-                return new SecurityConfig(new Authentication.Custom(custom), policy, authenticationTimeout);
+                return new SecurityConfig(
+                        new Authentication.Custom(custom), policy, authenticationTimeout, maxPendingAuthentications);
             }
             return accessPolicy == null
                     ? DISABLED
-                    : new SecurityConfig(new Authentication.Disabled(), policy, authenticationTimeout);
+                    : new SecurityConfig(
+                            new Authentication.Disabled(), policy, authenticationTimeout, maxPendingAuthentications);
         }
     }
 }
