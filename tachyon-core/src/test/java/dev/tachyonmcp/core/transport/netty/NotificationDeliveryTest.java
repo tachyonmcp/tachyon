@@ -10,6 +10,7 @@ import dev.tachyonmcp.api.server.domain.RequestId;
 import dev.tachyonmcp.api.server.features.tools.ToolDescriptor;
 import dev.tachyonmcp.api.server.features.tools.ToolFn;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
+import dev.tachyonmcp.api.server.security.SecurityContext;
 import dev.tachyonmcp.core.runtime.Session;
 import dev.tachyonmcp.core.runtime.SseConnection;
 import dev.tachyonmcp.core.runtime.SseEvent;
@@ -81,7 +82,7 @@ class NotificationDeliveryTest {
                 "arguments", java.util.Map.of(),
                 "_meta", java.util.Map.of("progressToken", 42));
         var result = dispatcher
-                .dispatchRequestAsync(RequestId.of(1), "tools/call", params, "sess_test")
+                .dispatchRequestAsync(RequestId.of(1), "tools/call", params, "sess_test", SecurityContext.anonymous())
                 .join();
 
         assertThat(result).isInstanceOf(McpDispatcher.DispatchResult.Response.class);
@@ -105,7 +106,7 @@ class NotificationDeliveryTest {
                 "arguments", java.util.Map.of(),
                 "_meta", java.util.Map.of("progressToken", "abc123"));
         var result = dispatcher
-                .dispatchRequestAsync(RequestId.of(1), "tools/call", params, "sess_test")
+                .dispatchRequestAsync(RequestId.of(1), "tools/call", params, "sess_test", SecurityContext.anonymous())
                 .join();
 
         assertThat(result).isInstanceOf(McpDispatcher.DispatchResult.Response.class);
@@ -127,7 +128,7 @@ class NotificationDeliveryTest {
                 "arguments", java.util.Map.of(),
                 "_meta", java.util.Map.of("progressToken", true));
         var result = dispatcher
-                .dispatchRequestAsync(RequestId.of(1), "tools/call", params, "sess_test")
+                .dispatchRequestAsync(RequestId.of(1), "tools/call", params, "sess_test", SecurityContext.anonymous())
                 .join();
 
         assertThat(result).isInstanceOf(McpDispatcher.DispatchResult.Response.class);
@@ -146,7 +147,8 @@ class NotificationDeliveryTest {
     void shouldSendLoggingNotificationWhenLevelIsSet() {
         var levelParams = java.util.Map.of("level", "info");
         dispatcher
-                .dispatchRequestAsync(RequestId.of(1), "logging/setLevel", levelParams, "sess_test")
+                .dispatchRequestAsync(
+                        RequestId.of(1), "logging/setLevel", levelParams, "sess_test", SecurityContext.anonymous())
                 .join();
 
         var toolParams = java.util.Map.of(
@@ -154,7 +156,8 @@ class NotificationDeliveryTest {
                 "arguments", java.util.Map.of(),
                 "_meta", java.util.Map.of("progressToken", 42));
         dispatcher
-                .dispatchRequestAsync(RequestId.of(2), "tools/call", toolParams, "sess_test")
+                .dispatchRequestAsync(
+                        RequestId.of(2), "tools/call", toolParams, "sess_test", SecurityContext.anonymous())
                 .join();
 
         var logEvents = testConn.sent.stream()
@@ -168,7 +171,12 @@ class NotificationDeliveryTest {
     @Test
     void shouldFilterHandlerLogsAtClientThresholdAndAllowMissingLogger() {
         dispatcher
-                .dispatchRequestAsync(RequestId.of(1), "logging/setLevel", Map.of("level", "warning"), "sess_test")
+                .dispatchRequestAsync(
+                        RequestId.of(1),
+                        "logging/setLevel",
+                        Map.of("level", "warning"),
+                        "sess_test",
+                        SecurityContext.anonymous())
                 .join();
 
         dispatcher
@@ -176,7 +184,8 @@ class NotificationDeliveryTest {
                         RequestId.of(2),
                         "tools/call",
                         Map.of("name", "filtered_log", "arguments", Map.of()),
-                        "sess_test")
+                        "sess_test",
+                        SecurityContext.anonymous())
                 .join();
 
         var logEvents = testConn.sent.stream()
@@ -201,7 +210,12 @@ class NotificationDeliveryTest {
             var disabledDispatcher = new McpDispatcher(disabledServer, disabledServer.executor());
 
             var result = disabledDispatcher
-                    .dispatchRequestAsync(RequestId.of(1), "logging/setLevel", Map.of("level", "info"), "sess_disabled")
+                    .dispatchRequestAsync(
+                            RequestId.of(1),
+                            "logging/setLevel",
+                            Map.of("level", "info"),
+                            "sess_disabled",
+                            SecurityContext.anonymous())
                     .join();
 
             assertThat(result).isInstanceOf(McpDispatcher.DispatchResult.Response.class);
@@ -213,7 +227,8 @@ class NotificationDeliveryTest {
                             RequestId.of(2),
                             "tools/call",
                             Map.of("name", "filtered_log", "arguments", Map.of()),
-                            "sess_disabled")
+                            "sess_disabled",
+                            SecurityContext.anonymous())
                     .join();
             assertThat(disabledConnection.sent).noneMatch(event -> event.data().contains("notifications/message"));
         }
@@ -222,7 +237,8 @@ class NotificationDeliveryTest {
     @Test
     void shouldRejectMissingLogLevelAsInvalidParams() {
         var result = dispatcher
-                .dispatchRequestAsync(RequestId.of(1), "logging/setLevel", Map.of(), "sess_test")
+                .dispatchRequestAsync(
+                        RequestId.of(1), "logging/setLevel", Map.of(), "sess_test", SecurityContext.anonymous())
                 .join();
 
         assertThat(result).isInstanceOf(McpDispatcher.DispatchResult.Response.class);
@@ -235,7 +251,7 @@ class NotificationDeliveryTest {
     void shouldNotSendProgressWithoutMeta() {
         var params = java.util.Map.of("name", "test_tool", "arguments", java.util.Map.of());
         dispatcher
-                .dispatchRequestAsync(RequestId.of(1), "tools/call", params, "sess_test")
+                .dispatchRequestAsync(RequestId.of(1), "tools/call", params, "sess_test", SecurityContext.anonymous())
                 .join();
 
         var progressEvents = testConn.sent.stream()
@@ -251,7 +267,7 @@ class NotificationDeliveryTest {
                 "arguments", java.util.Map.of(),
                 "_meta", java.util.Map.of("progressToken", 42));
         dispatcher
-                .dispatchRequestAsync(RequestId.of(1), "tools/call", params, "sess_test")
+                .dispatchRequestAsync(RequestId.of(1), "tools/call", params, "sess_test", SecurityContext.anonymous())
                 .join();
 
         var logEvents = testConn.sent.stream()
@@ -268,7 +284,11 @@ class NotificationDeliveryTest {
     void shouldHandleMultipleToolsSequentially() {
         dispatcher
                 .dispatchRequestAsync(
-                        RequestId.of(1), "logging/setLevel", java.util.Map.of("level", "debug"), "sess_test")
+                        RequestId.of(1),
+                        "logging/setLevel",
+                        java.util.Map.of("level", "debug"),
+                        "sess_test",
+                        SecurityContext.anonymous())
                 .join();
 
         for (int i = 0; i < 3; i++) {
@@ -277,7 +297,8 @@ class NotificationDeliveryTest {
                     "arguments", java.util.Map.of(),
                     "_meta", java.util.Map.of("progressToken", i));
             dispatcher
-                    .dispatchRequestAsync(RequestId.of(2 + i), "tools/call", params, "sess_test")
+                    .dispatchRequestAsync(
+                            RequestId.of(2 + i), "tools/call", params, "sess_test", SecurityContext.anonymous())
                     .join();
         }
 
@@ -313,11 +334,19 @@ class NotificationDeliveryTest {
 
         dispatcher
                 .dispatchRequestAsync(
-                        RequestId.of(1), "logging/setLevel", java.util.Map.of("level", "info"), "sess_test")
+                        RequestId.of(1),
+                        "logging/setLevel",
+                        java.util.Map.of("level", "info"),
+                        "sess_test",
+                        SecurityContext.anonymous())
                 .join();
         dispatcher
                 .dispatchRequestAsync(
-                        RequestId.of(2), "logging/setLevel", java.util.Map.of("level", "warning"), "sess_other")
+                        RequestId.of(2),
+                        "logging/setLevel",
+                        java.util.Map.of("level", "warning"),
+                        "sess_other",
+                        SecurityContext.anonymous())
                 .join();
 
         var params = java.util.Map.of(
@@ -325,7 +354,7 @@ class NotificationDeliveryTest {
                 "arguments", java.util.Map.of(),
                 "_meta", java.util.Map.of("progressToken", 1));
         dispatcher
-                .dispatchRequestAsync(RequestId.of(3), "tools/call", params, "sess_test")
+                .dispatchRequestAsync(RequestId.of(3), "tools/call", params, "sess_test", SecurityContext.anonymous())
                 .join();
 
         var testLogEvents = testConn.sent.stream()

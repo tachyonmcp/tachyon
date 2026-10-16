@@ -6,6 +6,7 @@ import static net.javacrumbs.jsonunit.assertj.JsonAssertions.assertThatJson;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.tachyonmcp.api.server.domain.RequestId;
+import dev.tachyonmcp.api.server.security.SecurityContext;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
 import dev.tachyonmcp.core.server.session.SessionEvent;
 import java.util.Map;
@@ -44,12 +45,12 @@ class McpDispatcherTest {
             var dispatcher = new McpDispatcher(server, server.executor());
 
             var first = asResponse(dispatcher
-                    .dispatchRequestAsync(RequestId.of(1), "ping", null, "sess_diff")
+                    .dispatchRequestAsync(RequestId.of(1), "ping", null, "sess_diff", SecurityContext.anonymous())
                     .join());
             assertThat(first.responseBodyString()).contains("result");
 
             var second = asResponse(dispatcher
-                    .dispatchRequestAsync(RequestId.of(2), "ping", null, "sess_diff")
+                    .dispatchRequestAsync(RequestId.of(2), "ping", null, "sess_diff", SecurityContext.anonymous())
                     .join());
             assertThat(second.responseBodyString()).contains("result");
         }
@@ -63,12 +64,12 @@ class McpDispatcherTest {
             var dispatcher = new McpDispatcher(server, server.executor());
 
             var first = asResponse(dispatcher
-                    .dispatchRequestAsync(RequestId.of(42), "ping", null, "sess_a")
+                    .dispatchRequestAsync(RequestId.of(42), "ping", null, "sess_a", SecurityContext.anonymous())
                     .join());
             assertThat(first.responseBodyString()).contains("result");
 
             var second = asResponse(dispatcher
-                    .dispatchRequestAsync(RequestId.of(42), "ping", null, "sess_b")
+                    .dispatchRequestAsync(RequestId.of(42), "ping", null, "sess_b", SecurityContext.anonymous())
                     .join());
             assertThat(second.responseBodyString()).contains("result");
         }
@@ -82,7 +83,7 @@ class McpDispatcherTest {
             var dispatcher = new McpDispatcher(server, server.executor());
 
             var result = asResponse(dispatcher
-                    .dispatchRequestAsync(RequestId.of(1), "tools/list", null, "sess_init")
+                    .dispatchRequestAsync(RequestId.of(1), "tools/list", null, "sess_init", SecurityContext.anonymous())
                     .join());
             var body = result.responseBodyString();
             assertThat(body).contains("error");
@@ -97,7 +98,7 @@ class McpDispatcherTest {
             var dispatcher = new McpDispatcher(server, server.executor());
 
             var result = asResponse(dispatcher
-                    .dispatchRequestAsync(RequestId.of(1), "ping", null, "sess_ping")
+                    .dispatchRequestAsync(RequestId.of(1), "ping", null, "sess_ping", SecurityContext.anonymous())
                     .join());
             var body = result.responseBodyString();
             assertThat(body).contains("result");
@@ -113,7 +114,7 @@ class McpDispatcherTest {
             var dispatcher = new McpDispatcher(server, server.executor());
 
             var result = asResponse(dispatcher
-                    .dispatchRequestAsync(RequestId.of(1), "ping", null, "sess_active")
+                    .dispatchRequestAsync(RequestId.of(1), "ping", null, "sess_active", SecurityContext.anonymous())
                     .join());
             var body = result.responseBodyString();
             assertThat(body).contains("result");
@@ -129,7 +130,8 @@ class McpDispatcherTest {
             var dispatcher = new McpDispatcher(server, server.executor());
 
             dispatcher
-                    .dispatchRequestAsync(RequestId.of(1), "ping", parseJson(paramsJson), session.id())
+                    .dispatchRequestAsync(
+                            RequestId.of(1), "ping", parseJson(paramsJson), session.id(), SecurityContext.anonymous())
                     .join();
 
             var requestEvent = server.replay(session.id(), -1).stream()
@@ -150,7 +152,12 @@ class McpDispatcherTest {
             var dispatcher = new McpDispatcher(server, server.executor());
 
             var body = asResponse(dispatcher
-                            .dispatchRequestAsync(RequestId.of(1), "ping", parseJson(paramsJson), session.id())
+                            .dispatchRequestAsync(
+                                    RequestId.of(1),
+                                    "ping",
+                                    parseJson(paramsJson),
+                                    session.id(),
+                                    SecurityContext.anonymous())
                             .join())
                     .responseBodyString();
 
@@ -178,7 +185,8 @@ class McpDispatcherTest {
                     .orElseThrow();
 
             var params = Map.of("requestId", requestId.toString(), "reason", "User cancelled");
-            var result = dispatcher.dispatchNotification("notifications/cancelled", params, other.id());
+            var result = dispatcher.dispatchNotification(
+                    "notifications/cancelled", params, other.id(), null, SecurityContext.anonymous());
             assertThat(result).isInstanceOf(McpDispatcher.DispatchResult.Accepted.class);
             assertThat(pending).isNotDone();
             assertThat(server.completePendingRequest(requestId, owner.id(), null, "{}"))
@@ -192,7 +200,8 @@ class McpDispatcherTest {
             var dispatcher = new McpDispatcher(server, server.executor());
 
             var params = Map.of("requestId", 1, "reason", "no-session");
-            var result = dispatcher.dispatchNotification("notifications/cancelled", params, null);
+            var result = dispatcher.dispatchNotification(
+                    "notifications/cancelled", params, null, null, SecurityContext.anonymous());
             assertThat(result).isInstanceOf(McpDispatcher.DispatchResult.Accepted.class);
         }
     }
@@ -205,7 +214,11 @@ class McpDispatcherTest {
             var dispatcher = new McpDispatcher(server, server.executor());
 
             var result = dispatcher.dispatchNotification(
-                    "notifications/cancelled", Map.of("requestId", "missing"), "sess_cancel-unknown");
+                    "notifications/cancelled",
+                    Map.of("requestId", "missing"),
+                    "sess_cancel-unknown",
+                    null,
+                    SecurityContext.anonymous());
             assertThat(result).isInstanceOf(McpDispatcher.DispatchResult.Accepted.class);
         }
     }
@@ -218,7 +231,11 @@ class McpDispatcherTest {
             var dispatcher = new McpDispatcher(server, server.executor());
 
             var result = dispatcher.dispatchNotification(
-                    "notifications/cancelled", Map.of("requestId", true), "sess_cancel-malformed");
+                    "notifications/cancelled",
+                    Map.of("requestId", true),
+                    "sess_cancel-malformed",
+                    null,
+                    SecurityContext.anonymous());
             assertThat(result).isInstanceOf(McpDispatcher.DispatchResult.Accepted.class);
         }
     }
@@ -229,7 +246,8 @@ class McpDispatcherTest {
             server.createSession("sess_cancel-empty");
             var dispatcher = new McpDispatcher(server, server.executor());
 
-            var result = dispatcher.dispatchNotification("notifications/cancelled", Map.of(), "sess_cancel-empty");
+            var result = dispatcher.dispatchNotification(
+                    "notifications/cancelled", Map.of(), "sess_cancel-empty", null, SecurityContext.anonymous());
             assertThat(result).isInstanceOf(McpDispatcher.DispatchResult.Accepted.class);
         }
     }
@@ -240,7 +258,8 @@ class McpDispatcherTest {
             server.createSession("sess_cancel-null");
             var dispatcher = new McpDispatcher(server, server.executor());
 
-            var result = dispatcher.dispatchNotification("notifications/cancelled", null, "sess_cancel-null");
+            var result = dispatcher.dispatchNotification(
+                    "notifications/cancelled", null, "sess_cancel-null", null, SecurityContext.anonymous());
             assertThat(result).isInstanceOf(McpDispatcher.DispatchResult.Accepted.class);
         }
     }
@@ -255,7 +274,7 @@ class McpDispatcherTest {
             var dispatcher = new McpDispatcher(server, server.executor());
 
             var result = asResponse(dispatcher
-                    .dispatchRequestAsync(RequestId.of(1), "ping", null, "sess_closed")
+                    .dispatchRequestAsync(RequestId.of(1), "ping", null, "sess_closed", SecurityContext.anonymous())
                     .join());
             var body = result.responseBodyString();
             assertThat(body).contains("error");

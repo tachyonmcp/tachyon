@@ -50,6 +50,17 @@ public sealed interface Owner {
         return key == null ? anonymous() : new Named(key);
     }
 
+    /**
+     * Shortens a session or task id for the log line about a caller it refused: a log that holds the
+     * whole id would hand it to whoever can read the log.
+     *
+     * @param id the id
+     * @return at most its first 8 characters, and never more than half of it, then an ellipsis
+     */
+    static String truncated(String id) {
+        return id.substring(0, Math.min(8, id.length() / 2)) + "…";
+    }
+
     /** Returns the persisted form: the principal's name, or {@code null} for an anonymous owner. */
     @Nullable
     String key();

@@ -14,6 +14,7 @@ import io.netty.handler.codec.http.DefaultHttpContent;
 import io.netty.handler.codec.http.DefaultHttpResponse;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpVersion;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -39,8 +40,18 @@ public class SseManager {
         this.server = server;
     }
 
+    /**
+     * Opens the 2025-11-25 {@code GET} stream of {@code session}.
+     *
+     * @param expiresAt when the credentials of this request expire, after which the stream is closed;
+     *     {@code null} if they do not
+     */
     public void openStream(
-            ChannelHandlerContext ctx, Session session, @Nullable String lastEventId, CorsDecision cors) {
+            ChannelHandlerContext ctx,
+            Session session,
+            @Nullable String lastEventId,
+            CorsDecision cors,
+            @Nullable Instant expiresAt) {
         var cursor = ResumeCursor.parse(lastEventId);
         var network = server.config().network();
         var holder = new NettySseConnection[1];
@@ -67,35 +78,46 @@ public class SseManager {
             session.resumingStreamKey(cursor.streamKey());
             // Prime with the client's own cursor: a fresh id would move its Last-Event-ID past the
             // not-yet-replayed backlog (and drop the stream key) if this connection drops early.
-            writeOpeningFrames(ctx, cors, connection, cursor.wireId());
+            writeOpeningFrames(ctx, cors, connection, cursor.wireId(), expiresAt);
             server.executor().execute(() -> replay(session.id(), cursor, connection));
         } else {
             session.resumingStreamKey(null);
-            writeOpeningFrames(ctx, cors, connection, String.valueOf(server.nextEventId()));
+            writeOpeningFrames(ctx, cors, connection, String.valueOf(server.nextEventId()), expiresAt);
         }
 
         logger.debug("SSE stream opened for session={}", session.id());
     }
 
-    public void openStatelessStream(ChannelHandlerContext ctx, CorsDecision cors) {
+    /**
+     * Opens the {@code GET} stream of a stateless server.
+     *
+     * @param expiresAt when the credentials of this request expire, after which the stream is closed;
+     *     {@code null} if they do not
+     */
+    public void openStatelessStream(ChannelHandlerContext ctx, CorsDecision cors, @Nullable Instant expiresAt) {
         var connection = new NettySseConnection(
                 ctx.channel(),
                 () -> logger.debug(
                         "Stateless SSE connection closed: {}", ctx.channel().remoteAddress()));
 
-        writeOpeningFrames(ctx, cors, connection, String.valueOf(server.nextEventId()));
+        writeOpeningFrames(ctx, cors, connection, String.valueOf(server.nextEventId()), expiresAt);
 
         logger.debug("Stateless SSE stream opened: {}", ctx.channel().remoteAddress());
     }
 
     private void writeOpeningFrames(
-            ChannelHandlerContext ctx, CorsDecision cors, NettySseConnection connection, String primingId) {
+            ChannelHandlerContext ctx,
+            CorsDecision cors,
+            NettySseConnection connection,
+            String primingId,
+            @Nullable Instant expiresAt) {
         var response = new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK);
         HttpHelpers.setSseStreamHeaders(response, cors);
         ctx.write(response);
         ctx.writeAndFlush(
                 new DefaultHttpContent(ByteBufUtil.writeUtf8(ctx.alloc(), "retry: " + SSE_RETRY_DELAY_MS + "\n")));
         SseHeartbeat.enable(ctx.channel(), server.config().network().heartbeatInterval());
+        SseExpiry.arm(ctx.channel(), server.config().runtime().clock(), expiresAt, connection::close);
         connection.prime(new SseEvent(primingId, "message", ""));
     }
 

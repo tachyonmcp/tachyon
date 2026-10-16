@@ -31,7 +31,7 @@ public final class OwnedTasksFixture {
     /** Secures the server with the fixture's tokens and wires the recording connector. */
     public void configure(ServerBuilder builder) {
         builder.capabilities(c -> c.tools())
-                .security(s -> s.bearerToken(tokens))
+                .security(TestBearerTokens.secured(tokens))
                 .withExtension(TasksExtension.class, t -> t.connector(recordingConnector()));
     }
 

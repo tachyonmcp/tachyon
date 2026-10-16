@@ -2,8 +2,8 @@
 title: Feature registries
 tags: [concept, tools, resources, prompts, completions, subscriptions]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/handlers/, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java, tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/mcp/v2026_07_28/codecs/McpResponseMapper.java, extensions/tachyon-extensions-tasks/src/main/java/dev/tachyonmcp/extensions/tasks/McpTaskBinding.java]
-updated: 2026-10-12
-commit: f3359ece
+updated: 2026-10-16
+commit: 747359f0
 ---
 
 # 🧰 Feature registries
@@ -39,6 +39,8 @@ Sync adapters assert VT: `HandlerFutures.assumeVirtualThread()` (Java `assert`) 
 
 Mode `OFF` ⇒ registration silently skipped (debug log) in every registry.
 
+Tool registration also refuses what could never work, with `IllegalStateException` (so a late `server.tools().register` fails the same way as a builder one): `taskSupport` without a tasks runtime, and `ToolDescriptor#requiredScopes` on a server whose `SecurityConfig.Authentication` is `Disabled` (`DefaultToolRegistry#register`; the constructor takes `authenticated`). `requiredScopes` is server-side policy: `McpToolMapper`s do not map it, so `tools/list` never shows it; `ToolsCallHandler` enforces it → [[authentication]].
+
 ## 🎚️ Capability resolution
 
 `DefaultTachyonServer.resolveCapabilities` `DefaultTachyonServer`:
@@ -46,6 +48,10 @@ Mode `OFF` ⇒ registration silently skipped (debug log) in every registry.
 - `tasks` advertised if enabled **or** any tool `taskSupport ∉ {null, FORBIDDEN}`.
 - `logging` plain boolean; `logging/setLevel` handler only registered when true `DefaultTachyonServer#registerDefaults`.
 - `listChanged` flags → `setupChangeListeners` broadcast `notifications/*/list_changed` to ACTIVE sessions **and** push to `subscriptions/listen` streams `DefaultTachyonServer#host`.
+
+## 👁️ Visibility
+
+One check, `Visibility#of(DispatchContext, ServerFeature.Descriptor)`: the feature's extension is negotiated AND `DispatchContext#accessPolicy` permits it to the caller. Lists pass `Visibility#to(context)` to `AbstractRegistry#list` / `DefaultResourceRegistry#list` (filtered before `Pagination#paginate`, so pages stay full and cursors stable). Named paths (`tools/call`, `prompts/get`, `resources/read` with `DefaultResourceRegistry#matchTemplate(uri, visible)`, `completion/complete`, `resources/subscribe`, the 2026 `resourceSubscriptions` topic via `DefaultResourceRegistry#isHidden`) answer a hidden feature exactly like an unknown one → [[authentication]].
 
 ## 📄 Pagination
 

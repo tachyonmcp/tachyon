@@ -2,8 +2,8 @@
 title: Sessions
 tags: [concept, session, state]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/runtime/Session.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/session/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/SessionConfig.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultServerBuilder.java, tachyon-api/src/main/java/dev/tachyonmcp/api/server/session/SessionIdGenerator.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpOperationHandler.java]
-updated: 2026-10-15
-commit: 1f2c7fa8
+updated: 2026-10-16
+commit: 747359f0
 ---
 
 # 🪪 Sessions
@@ -25,7 +25,7 @@ Verdict: **stateless by default** (`SessionConfig.enabled=false`) — a stateles
 
 ## 🔁 Lifecycle
 
-1. `initialize` (no header) → `server.createSession(generateSessionId(ctx), ic.securityContext())` on VT `McpDispatcher#dispatchInitializeAsync`; the `Owner` is derived inside `SessionManager#createSession` and its key goes into the first stored snapshot. Generator gets detached HTTP request copy if `readsRequest()` (`ATTR_INIT_REQUEST`) `McpDispatcher`. Blank id ⇒ `IllegalStateException`.
+1. `initialize` (no header) → `server.createSession(generateSessionId(ic), ic.securityContext())` on VT `McpDispatcher#dispatchInitializeAsync`; the `Owner` is derived inside `SessionManager#createSession` and its key goes into the first stored snapshot. Generator gets detached HTTP request copy if `readsRequest()` (`ATTR_INIT_REQUEST`) `McpDispatcher`. Blank id ⇒ `IllegalStateException`.
 2. `DefaultDispatchContext.setSession` records negotiated protocol on session `DefaultDispatchContext#setSession`.
 3. Response carries `MCP-Session-Id`; init handler fires `OperationStarted(session)` → bound into channel ctx.
 4. `notifications/initialized` → `Session.activate()` CAS `INITIALIZING→ACTIVE` `Session#activate`. Before that only `ping` allowed `McpDispatcher#dispatchTrackedRequestAsync`.

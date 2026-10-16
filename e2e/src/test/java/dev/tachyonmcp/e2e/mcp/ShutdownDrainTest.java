@@ -7,6 +7,7 @@ import static org.awaitility.Awaitility.await;
 
 import dev.tachyonmcp.api.server.domain.RequestId;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
+import dev.tachyonmcp.api.server.security.SecurityContext;
 import dev.tachyonmcp.core.server.McpDispatcher;
 import dev.tachyonmcp.core.server.TachyonServer;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
@@ -105,7 +106,8 @@ class ShutdownDrainTest {
                     final var dispatcher = new McpDispatcher(server, server.executor());
                     await().atMost(Duration.ofSeconds(2))
                             .until(() -> dispatcher
-                                    .dispatchRequestAsync(RequestId.of(99), "ping", Map.of(), session)
+                                    .dispatchRequestAsync(
+                                            RequestId.of(99), "ping", Map.of(), session, SecurityContext.anonymous())
                                     .isCompletedExceptionally());
                     result.complete(ToolResult.empty());
                     // The handler is done, but its response still needs the blocked event loop —

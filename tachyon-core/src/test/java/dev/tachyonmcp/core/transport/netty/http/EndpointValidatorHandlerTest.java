@@ -10,6 +10,7 @@ import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.util.ReferenceCountUtil;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -42,6 +43,19 @@ class EndpointValidatorHandlerTest {
 
         assertThat(channel.writeInbound(request)).isFalse();
         assertThat(request.refCnt()).isZero();
+        assertThat(rejectionStatus(channel)).isEqualTo(HttpResponseStatus.NOT_FOUND);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"/.well-known/oauth-protected-resource/mcp", "/.well-known/oauth-protected-resource/"})
+    void letsThroughThePathsAnotherHandlerAnswersAndNothingElse(String served) {
+        channel = new EmbeddedChannel(new EndpointValidatorHandler(
+                "/mcp", Set.of("/.well-known/oauth-protected-resource/mcp", "/.well-known/oauth-protected-resource")));
+        var other = request("/.well-known/oauth-protected-resource/other");
+
+        assertThat(channel.writeInbound(request(served))).isTrue();
+        ReferenceCountUtil.release(channel.readInbound());
+        assertThat(channel.writeInbound(other)).isFalse();
         assertThat(rejectionStatus(channel)).isEqualTo(HttpResponseStatus.NOT_FOUND);
     }
 

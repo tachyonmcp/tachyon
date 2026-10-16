@@ -20,12 +20,14 @@ import dev.tachyonmcp.api.server.features.tools.ToolRequest;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
 import dev.tachyonmcp.core.protocol.ProtocolRequestMapper;
 import dev.tachyonmcp.core.server.RpcMethodHandler;
+import dev.tachyonmcp.core.server.features.Visibility;
 import dev.tachyonmcp.core.server.features.subscriptions.SubscriptionRegistry;
 import dev.tachyonmcp.core.server.features.subscriptions.SubscriptionTopic;
 import dev.tachyonmcp.core.server.features.tasks.TasksExtensionSupport;
 import dev.tachyonmcp.core.server.internal.HandlerFutures;
 import dev.tachyonmcp.core.server.json.JsonUtils;
 import dev.tachyonmcp.core.server.observability.CapturedPayload;
+import dev.tachyonmcp.core.server.security.InsufficientScopeException;
 import dev.tachyonmcp.core.server.session.DispatchContext;
 import java.util.Map;
 import java.util.concurrent.CancellationException;
@@ -75,10 +77,7 @@ public final class ToolMethodHandlers {
 
         @Override
         public Object handle(DispatchContext context, ProtocolRequestMapper.PageRequest page) {
-            var paginated = registry.list(page.limit(), page.cursor(), descriptor -> {
-                var extensionId = descriptor.extensionId();
-                return extensionId == null || context.isExtensionEnabled(extensionId);
-            });
+            var paginated = registry.list(page.limit(), page.cursor(), Visibility.to(context));
             if (!paginated.cursorValid()) return invalidParams("Invalid cursor");
             return context.responseMapper().listToolsResult(paginated.items(), paginated.nextCursor());
         }
@@ -118,8 +117,9 @@ public final class ToolMethodHandlers {
                 return CompletableFuture.completedFuture(invalidParams("Tool name exceeds maximum length (SEP-986)"));
             }
 
+            // A tool the caller may not see is an unknown tool, to the caller and to observers alike.
             var handler = registry.get(request.name());
-            if (handler == null) {
+            if (handler == null || !Visibility.of(context, handler.descriptor())) {
                 return CompletableFuture.completedFuture(invalidParams("Unknown tool: " + request.name()));
             }
             var observation = context.observation();
@@ -140,9 +140,11 @@ public final class ToolMethodHandlers {
                         .requestPayload(
                                 CapturedPayload.capture(request.arguments().json(), maxBytes));
             }
-            var extensionId = handler.descriptor().extensionId();
-            if (extensionId != null && !context.isExtensionEnabled(extensionId)) {
-                return CompletableFuture.completedFuture(invalidParams("Unknown tool: " + request.name()));
+            // Authorization before the arguments are looked at, and from the tool the body names: a
+            // mirror header is never consulted.
+            var requiredScopes = handler.descriptor().requiredScopes();
+            if (!requiredScopes.isEmpty() && !context.securityContext().scopes().containsAll(requiredScopes)) {
+                return CompletableFuture.failedFuture(new InsufficientScopeException(requiredScopes));
             }
 
             var validationError = validateInput(handler.descriptor().inputSchema(), request);

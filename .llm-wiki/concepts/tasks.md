@@ -2,8 +2,8 @@
 title: Tasks
 tags: [concept, tasks, experimental]
 sources: [tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/tasks/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tasks/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tools/ToolMethodHandlers.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tools/DefaultToolRegistry.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java, extensions/tachyon-extensions-tasks/src/main/java/dev/tachyonmcp/extensions/tasks/, integrations/tachyon-tasks-temporal/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/security/Owner.java]
-updated: 2026-10-15
-commit: 1f2c7fa8
+updated: 2026-10-16
+commit: 747359f0
 ---
 
 # ⏳ Tasks
@@ -81,7 +81,7 @@ Route = server-local delivery state in `TaskEntry` (set once by `TaskEngine#publ
 
 Legacy sticky `cancelled` (2025-11-25 § Task Cancellation 2–3: status ≠ execution) also belongs to the connector: `get` should report `cancelled` once `cancel` is accepted; Tachyon never pins it in the cache (not durable, overwritten by higher revisions) and only waits `TaskEngine#cancelAndAwait`.
 
-Durable access control (restart, multi-node, a task with no `ttl` after its snapshot left the cache) belongs to the connector: every `Task*Fn` gets `InteractionContext`, and `ctx.securityContext().principal().getName()` is the owner a connector should store and check. The engine's own binding is the in-memory first line; unowned tasks are left to the connector entirely.
+Durable access control (restart, multi-node, a task with no `ttl` after its snapshot left the cache) belongs to the connector: every `Task*Fn` gets `InteractionContext`, and `ctx.securityContext().principal().getName()` is the owner a connector should store and check. The engine's own binding is the in-memory first line; unowned tasks are left to the connector entirely. This is a deployment requirement of the 2025-11-25 "bind tasks to said context" MUST, stated in `docs/extensions/tasks.md` and `docs/running/authentication.md`; every path hands the connector the request's own context (e2e `theConnectorReceivesTheCallerOfEachRequestOnEveryTaskPath`, both versions).
 
 ## 🌐 Method map
 

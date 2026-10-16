@@ -3,6 +3,7 @@ package dev.tachyonmcp.e2e.mcp.v2026_07_28;
 
 import static dev.tachyonmcp.e2e.mcp.TestBearerTokens.ALICE;
 import static dev.tachyonmcp.e2e.mcp.TestBearerTokens.BOB;
+import static dev.tachyonmcp.e2e.mcp.TestBearerTokens.CAROL;
 import static dev.tachyonmcp.e2e.mcp.TestBearerTokens.NAMELESS;
 import static dev.tachyonmcp.e2e.mcp.TestBearerTokens.UNVERIFIABLE;
 import static dev.tachyonmcp.e2e.mcp.TestBearerTokens.WHOAMI;
@@ -68,7 +69,8 @@ class BearerAuthenticationTest extends AbstractStatelessMcpE2eTest<Mcp20260728Cl
     @BeforeEach
     void startSecuredServer() {
         tokens = new TestBearerTokens();
-        startServer(b -> b.capabilities(c -> c.tools()).security(s -> s.bearerToken(tokens)), tokens::registerWhoAmI);
+        startServer(
+                b -> b.capabilities(c -> c.tools()).security(TestBearerTokens.secured(tokens)), tokens::registerWhoAmI);
     }
 
     private HttpResponse<String> callWhoAmI(String... authorizations) throws Exception {
@@ -105,6 +107,13 @@ class BearerAuthenticationTest extends AbstractStatelessMcpE2eTest<Mcp20260728Cl
         assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
         assertThat(response).isSuccess().hasId(1).hasTextContent("alice [tools:call, tools:read]");
         assertThat(response.headers().firstValue("WWW-Authenticate")).isEmpty();
+    }
+
+    @Test
+    void claimsTravelOnThePrincipalTheVerifierReturned() throws Exception {
+        final var response = callWhoAmI("Bearer " + CAROL);
+
+        assertThat(response).isSuccess().hasId(1).hasTextContent("carol [tools:read] tenant=acme");
     }
 
     @Test
@@ -149,19 +158,19 @@ class BearerAuthenticationTest extends AbstractStatelessMcpE2eTest<Mcp20260728Cl
     @Test
     void missingTokenGetsBareChallenge() throws Exception {
         // RFC 6750 §3.1: no error code when the request carries no authentication information.
-        assertRejected(callWhoAmI(), 401, "Bearer");
+        assertRejected(callWhoAmI(), 401, TestBearerTokens.CHALLENGE);
     }
 
     @ParameterizedTest
     @ValueSource(strings = {"Bearer unknown-token", "bearer unknown-token", "Bearer not a token", "Bearer"})
     void invalidTokenIsUnauthorized(String authorization) throws Exception {
-        assertRejected(callWhoAmI(authorization), 401, "Bearer error=\"invalid_token\"");
+        assertRejected(callWhoAmI(authorization), 401, TestBearerTokens.INVALID_TOKEN_CHALLENGE);
     }
 
     @Test
     void otherSchemeCarriesNoBearerCredentials() throws Exception {
         // A 401 challenge, not a 400, so the client can start the OAuth flow the challenge names.
-        assertRejected(callWhoAmI("Basic YWxpY2U6c2VjcmV0"), 401, "Bearer");
+        assertRejected(callWhoAmI("Basic YWxpY2U6c2VjcmV0"), 401, TestBearerTokens.CHALLENGE);
     }
 
     @Test

@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 import io.netty.buffer.Unpooled;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.DefaultHttpContent;
@@ -176,6 +178,60 @@ class HttpPipeliningGateTest {
         assertThat(channel.config().isAutoRead())
                 .as("a queued request keeps reads off")
                 .isFalse();
+    }
+
+    @Test
+    void aHeldReadSurvivesWritabilityChangesUntilReleased() {
+        var gate = useHoldingGate();
+
+        gate.holdReads(channel);
+        setWritable(false);
+        setWritable(true);
+        assertThat(channel.config().isAutoRead())
+                .as("a writable channel does not undo a hold")
+                .isFalse();
+
+        gate.releaseReads(channel);
+        assertThat(channel.config().isAutoRead()).isTrue();
+    }
+
+    @Test
+    void aQueuedRequestDrainedIntoAHoldKeepsReadsOff() {
+        var gate = useHoldingGate();
+        channel.writeInbound(request("/a"), request("/b"));
+        assertThat(channel.config().isAutoRead())
+                .as("/a took a hold and /b is queued")
+                .isFalse();
+
+        gate.releaseReads(channel);
+        assertThat(channel.config().isAutoRead())
+                .as("a queued request still stops reads")
+                .isFalse();
+
+        channel.writeOutbound(response(HttpResponseStatus.OK, true));
+        channel.runPendingTasks();
+        assertThat(channel.config().isAutoRead())
+                .as("draining /b into a new hold must not undo it")
+                .isFalse();
+
+        gate.releaseReads(channel);
+        assertThat(channel.config().isAutoRead()).isTrue();
+    }
+
+    /** A gate followed by a handler that holds reads for every request head and swallows it. */
+    private HttpPipeliningGate useHoldingGate() {
+        var gate = new HttpPipeliningGate(16);
+        channel.finishAndReleaseAll();
+        channel = new EmbeddedChannel(gate, new ChannelInboundHandlerAdapter() {
+            @Override
+            public void channelRead(ChannelHandlerContext ctx, Object msg) {
+                if (msg instanceof HttpRequest) {
+                    gate.holdReads(ctx.channel());
+                }
+                ReferenceCountUtil.release(msg);
+            }
+        });
+        return gate;
     }
 
     private void useGate(int maxQueuedRequests) {

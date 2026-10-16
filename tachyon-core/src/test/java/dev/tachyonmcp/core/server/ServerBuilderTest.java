@@ -17,14 +17,19 @@ import dev.tachyonmcp.api.server.features.completions.CompletionFn;
 import dev.tachyonmcp.api.server.features.completions.CompletionResult;
 import dev.tachyonmcp.api.server.features.prompts.PromptResult;
 import dev.tachyonmcp.api.server.features.tasks.TaskSupport;
+import dev.tachyonmcp.api.server.features.tools.ToolDescriptor;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
+import dev.tachyonmcp.api.server.security.SecurityContext;
 import dev.tachyonmcp.core.runtime.SessionState;
 import dev.tachyonmcp.core.server.config.SessionConfig;
 import dev.tachyonmcp.core.server.extensions.FakeTasksExtension;
+import dev.tachyonmcp.core.server.security.AccessPolicy;
+import dev.tachyonmcp.core.server.security.AuthenticationException;
 import dev.tachyonmcp.core.server.session.InMemorySessionStore;
 import dev.tachyonmcp.core.server.session.SessionEvent;
 import dev.tachyonmcp.core.server.session.SessionEventStore;
 import java.lang.reflect.Method;
+import java.net.URI;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -32,6 +37,7 @@ import java.util.function.Predicate;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 /**
  * Verifies {@link ServerBuilder} configures a server-owned virtual-thread-per-task executor for
@@ -245,6 +251,76 @@ class ServerBuilderTest {
                             (context, request) -> CompletableFuture.completedFuture(ToolResult.empty())))
                     .withMessage("Tool 'late-async' declares task support, which requires TasksExtension");
             assertThat(tools.descriptors()).as("nothing half-registered").isEmpty();
+        }
+    }
+
+    // A scope nobody can hold is a declaration that can never be satisfied: with no authentication
+    // every caller is anonymous, so every call would be refused. Fail where it is declared instead.
+    @Test
+    void requiredScopesNeedAnAuthenticatingServer() {
+        assertThatIllegalStateException()
+                .isThrownBy(() -> TachyonServer.builder()
+                        .withTools(tools -> tools.register(
+                                builder -> builder.name("scoped").requiredScopes("tools:call"),
+                                (context, request) -> ToolResult.empty()))
+                        .build())
+                .withMessageContaining("Tool 'scoped' declares required scopes [tools:call]")
+                .withMessageContaining("authenticate");
+
+        try (var server = TachyonServer.builder().build()) {
+            assertThatIllegalStateException()
+                    .isThrownBy(() -> server.tools()
+                            .registerAsync(
+                                    builder -> builder.name("late").requiredScopes("tools:call"),
+                                    (context, request) -> CompletableFuture.completedFuture(ToolResult.empty())))
+                    .withMessageContaining("Tool 'late' declares required scopes");
+            server.tools().register(builder -> builder.name("open"), (context, request) -> ToolResult.empty());
+            assertThat(server.tools().descriptors())
+                    .extracting(ToolDescriptor::name)
+                    .containsExactly("open");
+        }
+    }
+
+    @Test
+    void requiredScopesAreAcceptedWhenTheServerAuthenticatesEitherWay() {
+        try (var custom = TachyonServer.builder()
+                        .security(s -> s.accessPolicy(AccessPolicy.permitAll())
+                                .authenticationProvider(request -> SecurityContext.anonymous()))
+                        .build();
+                var bearer = TachyonServer.builder()
+                        .security(s -> s.accessPolicy(AccessPolicy.permitAll())
+                                .bearerToken(b -> b.resource(URI.create("https://mcp.example.com/mcp"))
+                                        .authorizationServers(URI.create("https://auth.example.com"))
+                                        .verifier(token -> {
+                                            throw AuthenticationException.bearerInvalidToken("unused");
+                                        })))
+                        .build()) {
+            for (var server : List.of(custom, bearer)) {
+                server.tools()
+                        .register(
+                                builder -> builder.name("scoped").requiredScopes("tools:call", "admin:audit"),
+                                (context, request) -> ToolResult.empty());
+
+                assertThat(server.tools().find("scoped").orElseThrow().requiredScopes())
+                        .containsExactly("tools:call", "admin:audit");
+            }
+        }
+    }
+
+    /** A scope travels in a space-separated, quoted {@code scope} parameter, so it must be one RFC 6749 §3.3 token. */
+    @ParameterizedTest
+    @ValueSource(strings = {"", "two words", "quote\"d", "back\\slash", "tab\tbed", "café", "line\nbreak"})
+    void aRequiredScopeThatIsNotAScopeTokenIsRefusedWhenTheToolIsRegistered(String scope) {
+        try (var server = TachyonServer.builder()
+                .security(s -> s.accessPolicy(AccessPolicy.permitAll())
+                        .authenticationProvider(request -> SecurityContext.anonymous()))
+                .build()) {
+            assertThatIllegalArgumentException()
+                    .isThrownBy(() -> server.tools()
+                            .register(
+                                    builder -> builder.name("scoped").requiredScopes("tools:call", scope),
+                                    (context, request) -> ToolResult.empty()));
+            assertThat(server.tools().descriptors()).isEmpty();
         }
     }
 

@@ -10,6 +10,7 @@ import dev.tachyonmcp.api.server.domain.ToolAnnotations;
 import dev.tachyonmcp.api.server.features.tasks.TaskSupport;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.immutables.value.Value;
 import org.jspecify.annotations.Nullable;
 
@@ -80,6 +81,20 @@ public interface ToolDescriptor extends ServerFeature.Descriptor, HasMeta {
     List<Icon> icons();
 
     /**
+     * The OAuth scopes a caller must hold, every one of them, to call this tool; empty when the tool
+     * needs none. A call by a caller without all of them is answered {@code 403 Forbidden} before the
+     * tool runs (see {@link dev.tachyonmcp.api.server.security.SecurityContext#scopes()}). This is
+     * server-side policy: it is neither listed in {@code tools/list} nor sent to clients in any other
+     * way. Names are compared exactly, and the declaration order is kept in the challenge. Each must be
+     * an RFC 6749 §3.3 scope-token (no space, quote or non-ASCII character), and the server must
+     * authenticate requests; registering the tool fails otherwise.
+     *
+     * @return the required scopes, in declaration order and without repeats
+     */
+    @ExperimentalApi
+    Set<String> requiredScopes();
+
+    /**
      * Optional identifier of the extension that owns this tool.
      *
      * @return the extension id
@@ -118,7 +133,7 @@ public interface ToolDescriptor extends ServerFeature.Descriptor, HasMeta {
      * @return the tool descriptor
      */
     static ToolDescriptor of(String name) {
-        return DefaultToolDescriptor.of(name, null, null, null, null, null, null, List.of(), null, null);
+        return DefaultToolDescriptor.of(name, null, null, null, null, null, null, List.of(), Set.of(), null, null);
     }
 
     /**
@@ -129,7 +144,8 @@ public interface ToolDescriptor extends ServerFeature.Descriptor, HasMeta {
      * @return the tool descriptor
      */
     static ToolDescriptor of(String name, @Nullable String description) {
-        return DefaultToolDescriptor.of(name, null, description, null, null, null, null, List.of(), null, null);
+        return DefaultToolDescriptor.of(
+                name, null, description, null, null, null, null, List.of(), Set.of(), null, null);
     }
 
     /** Builder for {@link ToolDescriptor}. */
@@ -236,6 +252,28 @@ public interface ToolDescriptor extends ServerFeature.Descriptor, HasMeta {
          */
         default Builder icons(Icon... icons) {
             return icons(List.of(icons));
+        }
+
+        /**
+         * Sets the scopes a caller must hold, all of them, to call this tool; see {@link
+         * ToolDescriptor#requiredScopes()}.
+         *
+         * @param requiredScopes the required scopes
+         * @return this builder
+         */
+        @ExperimentalApi
+        Builder requiredScopes(Iterable<String> requiredScopes);
+
+        /**
+         * Sets the scopes a caller must hold, all of them, to call this tool; see {@link
+         * ToolDescriptor#requiredScopes()}.
+         *
+         * @param requiredScopes the required scopes; none means the tool needs none
+         * @return this builder
+         */
+        @ExperimentalApi
+        default Builder requiredScopes(String... requiredScopes) {
+            return requiredScopes(List.of(requiredScopes));
         }
 
         /**

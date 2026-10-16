@@ -178,6 +178,9 @@ that your clients use.
 Use descriptors when you need explicit schemas or metadata beyond `@McpTool`'s name and description,
 or register handlers dynamically through `server.tools()`.
 
+A tool that only some callers may use declares the OAuth scopes it needs with `requiredScopes(...)` on
+its descriptor, or `@McpTool(requiredScopes = ...)`; see [required scopes](../running/authentication.md#required-scopes).
+
 ### Define a tool
 
 Add the `.withTools(...)` registration snippets to `TachyonServer.builder()`. For a complete project, start

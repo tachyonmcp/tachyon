@@ -1,0 +1,1 @@
+Restore `RedisSessionStore.java` to `src/main/java/dev/tachyonmcp/docs/springboot/reference/` after Tachyon 1.1 is published: it implements the 1.1 `SessionStore#create(key, ownerKey, expiresAt)`, which the pinned 1.0.1 does not have.

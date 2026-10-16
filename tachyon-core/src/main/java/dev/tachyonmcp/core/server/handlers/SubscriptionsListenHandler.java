@@ -73,6 +73,13 @@ public final class SubscriptionsListenHandler implements RpcMethodHandler<Subscr
 
         var pending = new CompletableFuture<>();
         var key = registry.activate(subscriptionId, stream, filter, context.responseMapper(), pending);
+        // The caller's credentials expiring is the server ending the subscription: answer the request
+        // with the graceful result, as on shutdown, and the stream ends with it (Subscriptions §
+        // Graceful Closure). The client listens again with fresh credentials.
+        stream.onExpiry(() -> executeCompletion(context, () -> {
+            registry.remove(key);
+            pending.complete(context.responseMapper().subscriptionsListenGracefulResult(subscriptionId));
+        }));
         // The returned future — and with it, the Observation the generic dispatch-completion path
         // drives — spans the SSE stream's whole lifetime, resolving only on disconnect, a genuine
         // transport failure, or server shutdown. establishmentNanos marks just the ack, so a

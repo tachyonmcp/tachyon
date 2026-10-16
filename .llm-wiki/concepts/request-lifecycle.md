@@ -2,8 +2,8 @@
 title: Request lifecycle
 tags: [concept, dispatch]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/http/HttpPipeliningGate.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/ProtocolVersionHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/RpcMethodHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpInitializationHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpOperationHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tools/ToolMethodHandlers.java, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/HandlerFutures.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/PeekedBody.java]
-updated: 2026-09-27
-commit: fae0c389
+updated: 2026-10-16
+commit: 747359f0
 ---
 
 # 🔄 Request lifecycle
@@ -19,10 +19,11 @@ Verdict: event loop parses nothing heavy. Body hop → worker executor (VT) → 
 | 3 | Every version: `McpHeaderMatchHandler` peeks body via `PeekedBody#peek` (first peek parses, the rest reuse it), compares SEP-2243 mirrors to it | event loop | [[protocol-versions]] |
 | 3b | 2026-07-28 only: `RequestValidationHandler` (`_meta`, removed methods) → `RequiredHeadersHandler` (mirror presence) → `ExtensionNegotiationHandler`, same cached peek | event loop | [[protocol-versions]] |
 | 4 | POST without session id stays in init and dispatches directly; session-header POST forwards to operations (steps 5–8 below) | event loop → VT | [McpInitializationHandler#handleRequest](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpInitializationHandler.java), [McpInitializationHandler#dispatchPreSessionRequest](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpInitializationHandler.java) |
+| 4b | The handler that processes the request takes its caller **once, at its entry, for every method** (`ChannelHandlerUtils#takeCaller`; 500 and nothing processed if authentication is on and none was recorded) and passes it down: session gate, `dispatchRequestAsync` / `dispatchNotification`, initialize, stream expiry → [[authentication]] | event loop | `McpOperationHandler#handleRequest`, `McpInitializationHandler#handleRequest` |
 | 5 | `handlePost`: capture interaction ctx **and** `PeekedBody#cached` **synchronously** (defensive: `HttpPipeliningGate` already holds a pipelined next request until this response is written), `body.retain()`, `runAsync(parseAndDispatchPost, executor)` | EL → VT | `McpOperationHandler#handlePost` |
 | 6 | Session header ⇒ `server.getSession` (may hydrate from store) → 404 plain text if unknown | VT | `McpOperationHandler#parseAndDispatchPost` |
 | 7 | Reuse the peeked parse if one was made, else parse here via `McpDispatcher#parseBody` → `Request` / `Response` / `Error` / `Notification`. Both routes yield a `JsonRpcCodec.Parse`, so a malformed body earns the same code either way — [[errors]] | VT | `McpOperationHandler#parseAndDispatchPost`, `McpOperationHandler#dispatchPostMessage` |
-| 8 | New `PostSseStream` per request, `dispatchRequestAsync(... transportCompletion)` | VT | `McpOperationHandler#handlePostRequest` |
+| 8 | New `PostSseStream` per request (given the caller's `expiresAt`), `dispatchRequestAsync(... caller, transportCompletion)` | VT | `McpOperationHandler#handlePostRequest` |
 | 9 | `OperationTracker.execute` admission (refuse when closing) | VT | `McpDispatcher#dispatchRequestAsync` |
 | 10 | Observation start; permitted log level from `_meta`; route | VT | `McpDispatcher` |
 | 11 | `invokeHandlerAsync`: dup in-flight id ⇒ reject; `FutureTask` on executor; ThreadLocal dispatch ctx; `decode` then `handleAsync` | VT | `McpDispatcher`, `McpDispatcher#decodeAndHandleAsync` |
@@ -53,8 +54,9 @@ Sessionless responses complete through [McpInitializationHandler#completeDispatc
 | `Accepted` | 202, no body (notifications, client responses) |
 | `Response(bytes, sessionId, httpStatus)` | JSON-RPC envelope; `httpStatus` from protocol mapper (2026-07-28 uses 400/404) |
 | `Status(code, msg)` | raw HTTP, not JSON-RPC (missing/unknown session) |
+| `Denied(status, wwwAuthenticate)` | the caller is refused after the request was read: `401`/`403`/`400`, empty body, the challenge, not JSON-RPC. Written by `ChannelHandlerUtils#sendDeniedAsync` from **both** consumers (`McpOperationHandler#completePostRequest`, `McpInitializationHandler#completeDispatch`, which serves every stateless request); only for an unstarted stream (`McpDispatcher#denied` answers a JSON-RPC error `-32600` once the stream started) → [[authentication]] |
 
-Handler return value `ServerError` ⇒ error envelope (not exception) `ServerError`. Exceptions ⇒ `handleHandlerError`: `CancellationException` → internal error + `Cancelled` outcome; `RequestMappingException` → its error; else `ServerErrors#fromUnhandledException(cause, "Internal error")` `RequestMappingException`. Mapping table [[errors]].
+Handler return value `ServerError` ⇒ error envelope (not exception) `ServerError`. Exceptions ⇒ `handleHandlerError`: `CancellationException` → internal error + `Cancelled` outcome; a security rejection (`AuthenticationException`, `InsufficientScopeException`, mapped by `SecurityRejection#of`) → `Denied` + `Rejected(status)` outcome, debug log; `HandlerFutures#invokeAndMap` lets those through from feature handlers instead of mapping them to feature errors; `RequestMappingException` → its error; else `ServerErrors#fromUnhandledException(cause, "Internal error")` `RequestMappingException`. Mapping table [[errors]].
 
 ## 🔔 Notifications & client responses
 

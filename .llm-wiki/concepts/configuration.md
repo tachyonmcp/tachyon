@@ -2,8 +2,8 @@
 title: Configuration
 tags: [concept, config, builder]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/server/ServerBuilder.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultServerBuilder.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/, tachyon-api/src/main/java/dev/tachyonmcp/api/server/config/]
-updated: 2026-10-01
-commit: cf8f85f7
+updated: 2026-10-16
+commit: 747359f0
 ---
 
 # 🎛️ Configuration
@@ -22,7 +22,7 @@ Verdict: `ServerBuilder` exposes grouped `Consumer<X.Builder>` configurers + sho
 | `network` | [NetworkConfig.Builder](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/NetworkConfig.java) | host/port/address, endpoint, idle, body size, pipelining depth, CORS, allowedHosts, ioEngine, heartbeat |
 | `runtime` | [RuntimeConfig.Builder](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/config/RuntimeConfig.java) (api) | shutdown grace, request timeout, clock |
 | `observability` | [ObservabilityConfig.Builder](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/ObservabilityConfig.java) | slow-request log, listeners, payload capture |
-| `security` | [SecurityConfig.Builder](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/SecurityConfig.java) | authentication provider / `bearerToken` verifier; default `SecurityConfig#disabled` → [[authentication]] |
+| `security` | [SecurityConfig.Builder](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/SecurityConfig.java) | authentication provider / `bearerToken` (`BearerConfig`: resource, authorization servers, scopes, verifier; also published as OAuth metadata); default `SecurityConfig#disabled` → [[authentication]] |
 | `json` | [JsonConfig.Builder](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/config/JsonConfig.java) (api) | serde, input/output validators |
 | `name/version/host/port` | shorthands | |
 | `withTools/withResources/withPrompts/withCompletions` | bootstrap registrations run in `build()` | |

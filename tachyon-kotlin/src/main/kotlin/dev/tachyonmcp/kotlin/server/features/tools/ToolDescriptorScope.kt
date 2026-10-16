@@ -29,6 +29,10 @@ public class ToolDescriptorScope
         public var annotations: ToolAnnotations? = null
         public var icons: List<Icon>? = null
 
+        /** OAuth scopes a caller must hold, all of them, to call this tool; see [ToolDescriptor.requiredScopes]. */
+        @ExperimentalApi
+        public var requiredScopes: List<String>? = null
+
         /** Extension-ownership marker; set by extension implementations only, not by ordinary tools. */
         @ExperimentalApi
         public var extensionId: String? = null
@@ -79,6 +83,7 @@ public class ToolDescriptorScope
             taskSupport?.let(builder::taskSupport)
             annotations?.let(builder::annotations)
             icons?.let(builder::icons)
+            requiredScopes?.let { builder.requiredScopes(it) }
             extensionId?.let(builder::extensionId)
             meta?.let(builder::meta)
             return builder.build()

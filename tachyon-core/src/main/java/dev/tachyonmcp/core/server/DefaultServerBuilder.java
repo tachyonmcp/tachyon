@@ -390,14 +390,15 @@ final class DefaultServerBuilder implements ServerBuilder {
      */
     @Override
     public ServerConfig buildConfig() {
+        final var runtime = runtimeBuilder.build();
         return ServerConfig.builder()
                 .identity(identityBuilder.build())
                 .capabilities(capabilitiesConfig.build())
                 .session(sessionBuilder.build())
                 .network(networkBuilder.build())
-                .runtime(runtimeBuilder.build())
+                .runtime(runtime)
                 .observability(observabilityBuilder.build())
-                .security(securityBuilder.build())
+                .security(securityBuilder.build(runtime.clock()))
                 .build();
     }
 }

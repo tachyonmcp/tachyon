@@ -9,7 +9,9 @@ import dev.tachyonmcp.api.annotations.McpPrompt;
 import dev.tachyonmcp.api.annotations.McpResource;
 import dev.tachyonmcp.api.annotations.McpTool;
 import dev.tachyonmcp.api.annotations.Meta;
+import dev.tachyonmcp.api.server.security.SecurityContext;
 import dev.tachyonmcp.core.server.TachyonServer;
+import dev.tachyonmcp.core.server.security.AccessPolicy;
 import java.util.Map;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
@@ -23,6 +25,36 @@ class TachyonAnnotationProviderTest {
 
     private static TachyonServer build(Object service) {
         return TachyonServer.builder().annotations(a -> a.register(service)).build();
+    }
+
+    @SuppressWarnings("unused")
+    static class Guarded {
+        @McpTool(requiredScopes = {"tools:call", "admin:audit"})
+        String audit() {
+            return "ok";
+        }
+
+        @McpTool
+        String open() {
+            return "ok";
+        }
+    }
+
+    @Test
+    void aToolDeclaresItsRequiredScopesOnTheAnnotation() {
+        try (var server = TachyonServer.builder()
+                .security(s -> s.accessPolicy(AccessPolicy.permitAll())
+                        .authenticationProvider(request -> SecurityContext.anonymous()))
+                .annotations(a -> a.register(new Guarded()))
+                .build()) {
+            assertThat(server.tools().find("audit").orElseThrow().requiredScopes())
+                    .containsExactly("tools:call", "admin:audit");
+            assertThat(server.tools().find("open").orElseThrow().requiredScopes())
+                    .isEmpty();
+        }
+        assertThatIllegalStateException()
+                .isThrownBy(() -> build(new Guarded()))
+                .withMessageContaining("Tool 'audit' declares required scopes");
     }
 
     @SuppressWarnings("unused")

@@ -190,6 +190,24 @@ task-producing tool call created it**, from any of that caller's sessions. Anoth
 `subscriptions/listen` stream does not follow it. This is the MCP rule that receivers bind tasks to
 the authorization context.
 
+> ⚠️ **Deployment requirement.** Tachyon keeps the binding in the memory of the process that created
+> the task. On another node, or after a restart, it sees every task as unowned, so the MCP rule holds
+> only if your connector authorizes each call itself from `ctx.securityContext()`. Run more than one
+> node, or restart with tasks in flight, only with such a connector. Tachyon hands the connector the
+> context of the request being served on every path (`get`, `cancel`, `update`, `list`, `awaitResult`
+> and the check a `subscriptions/listen` stream makes), so the caller is always there to check:
+>
+> ```java
+> .get((ctx, request) -> {
+>     var job = jobs.find(request.taskId());
+>     var caller = ctx.securityContext().principal();
+>     if (job == null || !job.ownedBy(caller == null ? null : caller.getName())) {
+>         throw new TaskNotFoundException(request.taskId());
+>     }
+>     return job.snapshot();
+> })
+> ```
+
 - **Anonymous and server-published tasks are unowned.** A task an unauthenticated caller creates, or
   that you publish through `TachyonServer#tasks().publish(...)`, has no owner. Every task call on it
   goes to the connector, which receives the caller's `InteractionContext` and must authorize the call.

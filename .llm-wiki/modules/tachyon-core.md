@@ -2,8 +2,8 @@
 title: tachyon-core
 tags: [module, core]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/, tachyon-core/src/main/resources/, tachyon-core/pom.xml]
-updated: 2026-09-29
-commit: 4b4b6f7e
+updated: 2026-10-16
+commit: 747359f0
 ---
 
 # ⚙️ tachyon-core
@@ -17,7 +17,8 @@ Verdict: the runtime. ~190 main files. Deps: `slf4j-api`, `netty-codec-http`, `n
 | `server` | `TachyonServer`, `ServerBuilder`, `DefaultServerBuilder`, `DefaultTachyonServer`, `McpDispatcher`, `RpcMethodHandler`, `OutboundSseStream*`, `AnnotationContext`, `HandlerWatchdog` | [[overview]], [[request-lifecycle]] |
 | `server.annotations` | `TachyonAnnotationProvider`, `MethodInvoker`, `ResultMappers` | [[declarative-configuration]] |
 | `server.internal` | `ServerEngine` SPI, `OperationTracker`, `AbstractJanitor`, `NotificationLogSupport` | [[concurrency]] |
-| `server.config` | config records + builders | [[configuration]] |
+| `server.config` | config records + builders; `SecurityConfig` (sealed `Authentication`: `Disabled` / `Bearer` / `Custom`) and `BearerConfig` | [[configuration]], [[authentication]] |
+| `server.security` | the authentication SPI configured through `SecurityConfig`: `AuthenticationProvider`, `AuthenticationRequest`, `AuthenticationException` (unchecked), `AuthenticationChallenge`, `BearerTokenVerifier`, `VerifiedToken`, `AccessPolicy`; `ScopeTokens`, `SecurityRejection` (`@InternalApi`); `BearerTokenAuthenticationProvider`, `ProtectedResourceMetadata`, `Owner`, `InsufficientScopeException` | [[authentication]] |
 | `server.domain` | `ServerErrors`, `InitializeResponse`, `MissingRequiredClientCapabilityException` | [[errors]] |
 | `server.handlers` | `InitializeHandler`, `DiscoverHandler`, `PingHandler`, `EmptyResultHandler`, `LoggingHandlers`, `SubscriptionsListenHandler`, `ExtensionNegotiator` | [[feature-registries]], [[extensions]] |
 | `server.features.*` | registries + `*MethodHandlers` for tools/resources/prompts/completions/tasks/subscriptions; `AbstractRegistry`, `Pagination`, `ChangeSupport`, `ListRequests` | [[feature-registries]], [[tasks]] |
@@ -29,7 +30,7 @@ Verdict: the runtime. ~190 main files. Deps: `slf4j-api`, `netty-codec-http`, `n
 | `protocol.mcp` | `McpHeaderNames`, `McpHeaderValue` (SEP-2243 Base64 sentinel), `MirroredArgument` (`x-mcp-header` ↔ argument), `AbstractMcpRequestMapper` (shared request mapping); `v2025_11_25`, `v2026_07_28` (`McpProtocol`, `codecs/`, `transport/`, generated `models/`) | [[protocol-versions]] |
 | `transport.jsonrpc` | `JsonRpcCodec`, `JsonRpcMessage`, `JsonRpcError`, `ValueSerializer` | [[json-layer]] |
 | `transport.netty` | `NettyServer`, `NettyServerConfig`, `NettyIoEngine`, `McpChannelInitializer`, init/operation handlers, `InteractionHandler`, lifecycle coordinator, `ChannelHandlerUtils` | [[netty-pipeline]] |
-| `transport.netty.http` | guards, request-scoped CORS decisions, synchronous preflight handling, body/expectation rejection headers | [[security-guards]] |
+| `transport.netty.http` | guards, request-scoped CORS decisions, synchronous preflight handling, body/expectation rejection headers; `AuthenticationHandler`, `ProtectedResourceMetadataHandler` | [[security-guards]], [[authentication]] |
 | `transport.netty.sse` | `PostSseStream`, `SseManager`, `SseHeartbeat`, `SseSerializer`, `NettySseConnection` | [[sse-streams]] |
 
 ## 🧠 Who holds what
@@ -39,7 +40,7 @@ Verdict: the runtime. ~190 main files. Deps: `slf4j-api`, `netty-codec-http`, `n
 
 - [DefaultTachyonServer](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java) = state + registries + `methodHandlers` map + pending server→client requests + session manager + event store + extensions; implements [ServerEngine](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/internal/ServerEngine.java) **and** [ExtensionContext](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/extensions/ExtensionContext.java) [DefaultTachyonServer](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java).
 - [McpDispatcher](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java) = per-request flow, one per [McpChannelInitializer](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpChannelInitializer.java) (i.e. per server start) `McpChannelInitializer.java` ctor.
-- [DefaultDispatchContext](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/session/DefaultDispatchContext.java) = per request: delegates channel state, adds engine, request id, outbound stream, observation, notifications impl [DefaultDispatchContext](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/session/DefaultDispatchContext.java).
+- [DefaultDispatchContext](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/session/DefaultDispatchContext.java) = per request: delegates channel state, adds engine, request id, outbound stream, observation, notifications impl, and the request's **caller** (a final field set by its constructor: the connection-scoped `ChannelContext` holds none, see [[authentication]]) [DefaultDispatchContext](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/session/DefaultDispatchContext.java).
 - Handler extension lookup: [DispatchContext#extension](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/session/DispatchContext.java) ⇒ `engine().extension(type)` (`TachyonServer#extension`). [NoopInteractionContext#extension](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/session/NoopInteractionContext.java) ⇒ empty: its `engine()` throws.
 
 ## 📦 Resources

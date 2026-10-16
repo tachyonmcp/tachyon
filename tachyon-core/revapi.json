@@ -1623,6 +1623,36 @@
           "attachments": {
             "since": "1.1.0-SNAPSHOT"
           }
+        },
+        {
+          "ignore": true,
+          "code": "java.method.numberOfParametersChanged",
+          "old": "method void dev.tachyonmcp.core.server.features.completions.CompletionMethodHandlers::register(java.util.Map<java.lang.String, dev.tachyonmcp.core.server.RpcMethodHandler<?, ?>>, dev.tachyonmcp.core.server.features.completions.DefaultCompletionRegistry)",
+          "new": "method void dev.tachyonmcp.core.server.features.completions.CompletionMethodHandlers::register(java.util.Map<java.lang.String, dev.tachyonmcp.core.server.RpcMethodHandler<?, ?>>, dev.tachyonmcp.core.server.features.completions.DefaultCompletionRegistry, dev.tachyonmcp.core.server.features.prompts.DefaultPromptRegistry, dev.tachyonmcp.core.server.features.resources.DefaultResourceRegistry)",
+          "justification": "Server wiring called only by DefaultTachyonServer: completion/complete needs the prompt and resource registries to ask the access policy whether the caller may see what a completion refers to, so a hidden prompt or template completes like an unknown one",
+          "attachments": {
+            "since": "1.1.0-SNAPSHOT"
+          }
+        },
+        {
+          "ignore": true,
+          "code": "java.method.numberOfParametersChanged",
+          "old": "method void dev.tachyonmcp.core.server.features.resources.ResourceMethodHandlers::register(java.util.Map<java.lang.String, dev.tachyonmcp.core.server.RpcMethodHandler<?, ?>>, dev.tachyonmcp.core.server.features.resources.DefaultResourceRegistry)",
+          "new": "method dev.tachyonmcp.core.server.features.subscriptions.SubscriptionTopic<dev.tachyonmcp.core.server.features.resources.ResourceMethodHandlers.ResourceUris> dev.tachyonmcp.core.server.features.resources.ResourceMethodHandlers::register(java.util.Map<java.lang.String, dev.tachyonmcp.core.server.RpcMethodHandler<?, ?>>, dev.tachyonmcp.core.server.features.resources.DefaultResourceRegistry, dev.tachyonmcp.core.server.features.subscriptions.SubscriptionRegistry)",
+          "justification": "Server wiring called only by DefaultTachyonServer: it also installs the subscriptions/listen resource topic, whose authorizer needs the registry to leave out URIs the access policy hides, and returns that topic so updates are published to it",
+          "attachments": {
+            "since": "1.1.0-SNAPSHOT"
+          }
+        },
+        {
+          "ignore": true,
+          "code": "java.method.returnTypeChanged",
+          "old": "method void dev.tachyonmcp.core.server.features.resources.ResourceMethodHandlers::register(java.util.Map<java.lang.String, dev.tachyonmcp.core.server.RpcMethodHandler<?, ?>>, dev.tachyonmcp.core.server.features.resources.DefaultResourceRegistry)",
+          "new": "method dev.tachyonmcp.core.server.features.subscriptions.SubscriptionTopic<dev.tachyonmcp.core.server.features.resources.ResourceMethodHandlers.ResourceUris> dev.tachyonmcp.core.server.features.resources.ResourceMethodHandlers::register(java.util.Map<java.lang.String, dev.tachyonmcp.core.server.RpcMethodHandler<?, ?>>, dev.tachyonmcp.core.server.features.resources.DefaultResourceRegistry, dev.tachyonmcp.core.server.features.subscriptions.SubscriptionRegistry)",
+          "justification": "Returns the resourceSubscriptions topic it registers (requested vs followed URIs), which replaces the public UPDATED constant: the topic's authorizer needs this registry, so it is built here and DefaultTachyonServer publishes updates to the instance it gets back",
+          "attachments": {
+            "since": "1.1.0-SNAPSHOT"
+          }
         }
       ]
     }

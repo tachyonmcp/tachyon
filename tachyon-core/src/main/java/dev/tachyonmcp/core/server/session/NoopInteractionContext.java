@@ -8,7 +8,6 @@ import dev.tachyonmcp.api.runtime.ContextNotifications;
 import dev.tachyonmcp.api.server.domain.LoggingLevel;
 import dev.tachyonmcp.api.server.domain.RequestId;
 import dev.tachyonmcp.api.server.extensions.ServerExtension;
-import dev.tachyonmcp.api.server.security.SecurityContext;
 import dev.tachyonmcp.core.protocol.Protocol;
 import dev.tachyonmcp.core.protocol.ProtocolMappers;
 import dev.tachyonmcp.core.protocol.ProtocolRequestMapper;
@@ -18,6 +17,7 @@ import dev.tachyonmcp.core.runtime.Session;
 import dev.tachyonmcp.core.server.OutboundSseStream;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
 import dev.tachyonmcp.core.server.observability.Observation;
+import dev.tachyonmcp.core.server.security.AccessPolicy;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -53,9 +53,6 @@ public class NoopInteractionContext implements DispatchContext {
 
     @Override
     public void setSession(@Nullable Session session) {}
-
-    @Override
-    public void setSecurityContext(SecurityContext securityContext) {}
 
     @Override
     public <T> Optional<T> get(AttributeKey<T> key) {
@@ -96,6 +93,12 @@ public class NoopInteractionContext implements DispatchContext {
     @Override
     public <E extends ServerExtension> Optional<E> extension(Class<E> type) {
         return Optional.empty();
+    }
+
+    /** Programmatic dispatch has no server and no caller but anonymous: nothing is hidden. */
+    @Override
+    public AccessPolicy accessPolicy() {
+        return AccessPolicy.permitAll();
     }
 
     @Override

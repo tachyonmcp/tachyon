@@ -37,6 +37,16 @@ final class RawSessionClient implements AutoCloseable {
         return http.send(builder.build(), HttpResponse.BodyHandlers.ofString());
     }
 
+    /** A POST whose response is read as it arrives, for a tool call that streams. */
+    CompletableFuture<HttpResponse<Stream<String>>> postStreaming(
+            @Nullable String token, @Nullable String sessionId, String body) {
+        final var builder = request(token, sessionId)
+                .header("Content-Type", "application/json")
+                .header("MCP-Protocol-Version", "2025-11-25")
+                .POST(HttpRequest.BodyPublishers.ofString(body));
+        return http.sendAsync(builder.build(), HttpResponse.BodyHandlers.ofLines());
+    }
+
     /** Completes when the response head arrives; a granted GET stream sends it with its first event. */
     CompletableFuture<HttpResponse<Stream<String>>> listen(
             @Nullable String token, String sessionId, @Nullable String lastEventId) {

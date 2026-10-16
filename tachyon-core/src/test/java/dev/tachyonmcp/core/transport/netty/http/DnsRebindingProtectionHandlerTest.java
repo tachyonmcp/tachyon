@@ -55,7 +55,7 @@ class DnsRebindingProtectionHandlerTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"localhost:8096", "localhost.:8096", "127.0.0.1:8096", "[::1]:8096"})
+    @ValueSource(strings = {"localhost:8096", "localhost.:8096", "127.0.0.1:8096", "127.0.0.2:8096", "[::1]:8096"})
     void allowsLoopbackHostByDefault(String host) {
         channel = new EmbeddedChannel(new DnsRebindingProtectionHandler());
         assertThat(channel.writeInbound(requestWithHost(host)))
@@ -138,8 +138,10 @@ class DnsRebindingProtectionHandlerTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"localhost:garbage", "[::1]evil", "[::1]:80x"})
-    void rejectsMalformedPortSuffix(String host) {
+    @ValueSource(
+            strings = {"localhost:garbage", "[::1]evil", "[::1]:80x", "127.999.0.1:8096", "127.0.0.1.evil.example:8096"
+            })
+    void rejectsMalformedHostsAndNamesThatOnlyLookLikeLoopback(String host) {
         channel = new EmbeddedChannel(new DnsRebindingProtectionHandler());
         channel.writeInbound(requestWithHost(host));
         assertThat(rejectionStatus(channel)).isEqualTo(HttpResponseStatus.FORBIDDEN);

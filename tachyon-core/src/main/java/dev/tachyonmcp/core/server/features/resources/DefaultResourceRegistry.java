@@ -3,6 +3,7 @@ package dev.tachyonmcp.core.server.features.resources;
 
 import dev.tachyonmcp.api.annotations.InternalApi;
 import dev.tachyonmcp.api.runtime.InteractionContext;
+import dev.tachyonmcp.api.server.ServerFeature;
 import dev.tachyonmcp.api.server.config.Mode;
 import dev.tachyonmcp.api.server.domain.ResourceContents;
 import dev.tachyonmcp.api.server.domain.UriTemplateValue;
@@ -21,6 +22,7 @@ import dev.tachyonmcp.core.server.internal.ServerEngine;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -366,6 +368,39 @@ public class DefaultResourceRegistry implements Resources {
     record TemplateMatch(ResourceTemplateEntry entry, Map<String, UriTemplateValue> params) {}
 
     /**
+     * Whether {@code uriOrTemplate} names something the caller may not see: a resource registered under
+     * that URI, or a template that is that string or matches it, exists, and none of those {@code
+     * visible} lets through. A URI nothing names is not hidden, only unknown, and is treated alike by
+     * the caller (a subscription to it is accepted, as it is for a hidden one).
+     *
+     * @param uriOrTemplate a resource URI, or the URI template of a {@code ref/resource} completion
+     * @param visible tells whether the caller may see a resource or a template
+     * @return {@code true} if something is named and all of it is hidden
+     */
+    public boolean isHidden(String uriOrTemplate, Predicate<ServerFeature.Descriptor> visible) {
+        var named = new ArrayList<ServerFeature.Descriptor>();
+        var exact = index.byUri().get(uriOrTemplate);
+        if (exact != null) {
+            named.add(exact.descriptor());
+        }
+        for (var template : templates.values()) {
+            if (template.descriptor().uriTemplate().equals(uriOrTemplate) || matches(template, uriOrTemplate)) {
+                named.add(template.descriptor());
+            }
+        }
+        return !named.isEmpty() && named.stream().noneMatch(visible);
+    }
+
+    private static boolean matches(ResourceTemplateEntry template, String uri) {
+        try {
+            template.uriTemplate().parse(uri);
+            return true;
+        } catch (IllegalArgumentException notThisTemplate) {
+            return false;
+        }
+    }
+
+    /**
      * Finds the most specific registered resource template matching the URI.
      *
      * @param uri the resource URI to match
@@ -373,7 +408,22 @@ public class DefaultResourceRegistry implements Resources {
      */
     @Nullable
     TemplateMatch matchTemplate(String uri) {
+        return matchTemplate(uri, template -> true);
+    }
+
+    /**
+     * Finds the most specific registered resource template matching the URI among the ones {@code
+     * visible} lets through, so a template the caller may not see is never the one that answers.
+     *
+     * @param uri the resource URI to match
+     * @param visible tells whether the caller may see a template
+     * @return the matching template and extracted parameters, or {@code null} if no visible template
+     *     matches
+     */
+    @Nullable
+    TemplateMatch matchTemplate(String uri, Predicate<ResourceTemplateDescriptor> visible) {
         return templates.values().stream()
+                .filter(template -> visible.test(template.descriptor()))
                 .sorted(Comparator.comparingInt((ResourceTemplateEntry t) -> -URI_TEMPLATE_EXPRESSION
                                 .matcher(t.descriptor().uriTemplate())
                                 .replaceAll("")

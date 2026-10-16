@@ -12,6 +12,10 @@ import dev.tachyonmcp.api.server.features.completions.CompletionResult;
 import dev.tachyonmcp.api.server.features.completions.Completions;
 import dev.tachyonmcp.core.protocol.RequestMappingException;
 import dev.tachyonmcp.core.server.RpcMethodHandler;
+import dev.tachyonmcp.core.server.config.FeatureConfig;
+import dev.tachyonmcp.core.server.config.ResourcesConfig;
+import dev.tachyonmcp.core.server.features.prompts.DefaultPromptRegistry;
+import dev.tachyonmcp.core.server.features.resources.DefaultResourceRegistry;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
 import dev.tachyonmcp.core.server.session.DefaultDispatchContext;
 import java.util.ArrayList;
@@ -31,7 +35,11 @@ class DefaultCompletionRegistryTest {
     private final HashMap<String, RpcMethodHandler<?, ?>> handlers = new HashMap<>();
 
     public DefaultCompletionRegistryTest() {
-        CompletionMethodHandlers.register(handlers, (DefaultCompletionRegistry) registry);
+        CompletionMethodHandlers.register(
+                handlers,
+                (DefaultCompletionRegistry) registry,
+                new DefaultPromptRegistry(FeatureConfig.builder().build()),
+                new DefaultResourceRegistry(server, ResourcesConfig.builder().build()));
     }
 
     private static final JsonMapper JSON = new JsonMapper();

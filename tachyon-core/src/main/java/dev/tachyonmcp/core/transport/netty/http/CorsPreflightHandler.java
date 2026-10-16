@@ -91,26 +91,11 @@ public final class CorsPreflightHandler extends ChannelDuplexHandler {
                 final var trimmed = name.strip();
                 if (trimmed.length() > McpHeaderNames.MCP_PARAM_PREFIX.length()
                         && McpHeaderNames.isParamHeader(trimmed)
-                        && isToken(trimmed)) {
+                        && HttpHelpers.isToken(trimmed)) {
                     params.add(trimmed);
                 }
             }
         }
         return params;
-    }
-
-    /** RFC 9110 {@code token}: one or more {@code tchar}. */
-    private static boolean isToken(String name) {
-        for (int i = 0; i < name.length(); i++) {
-            final char c = name.charAt(i);
-            final boolean tchar = (c >= 'a' && c <= 'z')
-                    || (c >= 'A' && c <= 'Z')
-                    || (c >= '0' && c <= '9')
-                    || "!#$%&'*+-.^_`|~".indexOf(c) >= 0;
-            if (!tchar) {
-                return false;
-            }
-        }
-        return true;
     }
 }

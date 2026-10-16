@@ -201,7 +201,9 @@ than one instance, see [deployment](deployment.md#more-than-one-instance).
 The [DNS-rebinding guard](#dns-rebinding-protection) runs first and admits loopback origins,
 on any port, plus any listed in `allowedOrigins`. CORS then answers the browser, so a page
 served from a dev server such as `http://localhost:5173` can call a local server. Only the
-MCP endpoint answers: a preflight to any other path gets `404` and no CORS grant.
+MCP endpoint answers: a preflight to any other path gets `404` and no CORS grant. The one exception
+is the OAuth [Protected Resource Metadata](authentication.md#discovery) of a bearer-token server, whose
+preflight and `GET` are answered by this same CORS policy.
 
 | Option | Default | Description |
 |---|---|---|
@@ -232,7 +234,7 @@ Built in, with no configuration:
 - Preflights grant `Content-Type`, `Authorization`, `MCP-Protocol-Version`, `MCP-Session-Id`,
   `Last-Event-ID`, `Mcp-Method` and `Mcp-Name`, plus each per-tool `Mcp-Param-*` header the
   preflight asks for, by name. There is no wildcard: any other header needs `allowedHeaders`.
-- Responses expose `MCP-Session-Id` and `MCP-Protocol-Version` to script.
+- Responses expose `WWW-Authenticate`, `MCP-Session-Id` and `MCP-Protocol-Version` to script.
 - Browsers may cache a preflight for up to a day.
 - Credentials are never allowed.
 
@@ -516,6 +518,18 @@ TachyonServer(port = 8080) {
 
 Use `observability(...)` in Java and `observability { }` in Kotlin. The older `monitoring`
 aliases are deprecated for removal — migrate any code still calling them.
+
+## Security
+
+`security(...)` in Java configures per-request [authentication](authentication.md). Without a
+provider no authentication handler is installed and the request path is unchanged.
+
+| Option | Default | Description |
+|---|---|---|
+| `bearerToken(configurer)` | — | Requires an OAuth 2.1 bearer token on every HTTP request and publishes the [OAuth metadata](authentication.md#discovery) clients use to get one. `configurer` sets `resource`, `authorizationServers`, `scopesSupported` and `verifier`. `resource` is the server's canonical URI, the audience a token must name: absolute `https` (`http` only for loopback), no fragment, no query, no trailing slash, never taken from request headers. `authorizationServers` (at least one) are the issuers clients may use: `https`, no query, no fragment. `scopesSupported` (optional) are plain scope tokens, never `offline_access`. `verifier` returns a `VerifiedToken` with the token's expiry and audience, which Tachyon enforces. Streams close at the token's expiry. Anything missing or invalid throws `IllegalArgumentException` when you configure it |
+| `authenticationProvider(provider)` | — | Authenticates every HTTP request head with your own provider |
+| `accessPolicy(policy)` | `permitAll()` without authentication; **required** with it | Which tools, resources, resource templates and prompts a caller may see. A refused feature is not listed and answers like an unknown one on every path. Building a server that authenticates without one throws `IllegalStateException`; choose `AccessPolicy.permitAll()` on purpose. See [access policy](authentication.md#access-policy) |
+| `authenticationTimeout` | `10s` | Longest a request waits for the provider; then `503` with `Retry-After`, no challenge, and the connection closes. Must be positive. Keep `readerIdleTimeout` above it |
 
 ## Identity
 

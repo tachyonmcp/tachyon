@@ -3,7 +3,9 @@ package dev.tachyonmcp.core.transport.netty;
 
 import dev.tachyonmcp.core.protocol.Protocols;
 import dev.tachyonmcp.core.server.McpDispatcher;
+import dev.tachyonmcp.core.server.config.SecurityConfig;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
+import dev.tachyonmcp.core.server.security.ProtectedResourceMetadata;
 import dev.tachyonmcp.core.transport.netty.http.AcceptValidationHandler;
 import dev.tachyonmcp.core.transport.netty.http.AuthenticationHandler;
 import dev.tachyonmcp.core.transport.netty.http.ContentTypeValidationHandler;
@@ -14,6 +16,7 @@ import dev.tachyonmcp.core.transport.netty.http.EndpointValidatorHandler;
 import dev.tachyonmcp.core.transport.netty.http.HttpPipeliningGate;
 import dev.tachyonmcp.core.transport.netty.http.McpHeaderGuardHandler;
 import dev.tachyonmcp.core.transport.netty.http.McpHeaderMatchHandler;
+import dev.tachyonmcp.core.transport.netty.http.ProtectedResourceMetadataHandler;
 import dev.tachyonmcp.core.transport.netty.http.StatelessValidatorHandler;
 import dev.tachyonmcp.core.transport.netty.http.TachyonCorsHandler;
 import io.netty.channel.ChannelHandler;
@@ -25,6 +28,7 @@ import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.handler.codec.http.HttpServerKeepAliveHandler;
 import io.netty.handler.codec.http.cors.CorsConfig;
 import io.netty.handler.flush.FlushConsolidationHandler;
+import io.netty.handler.logging.ByteBufFormat;
 import io.netty.handler.logging.LogLevel;
 import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.timeout.IdleStateHandler;
@@ -36,6 +40,7 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.LoggerFactory;
 
 /**
  * Assembles the Netty pipeline for each new MCP channel: validation handlers
@@ -56,9 +61,7 @@ public class McpChannelInitializer extends ChannelInitializer<SocketChannel> {
     public static final int DEFAULT_MAX_CONTENT_LENGTH = 1024 * 1024; // 1 MB
 
     private static final String CHANNEL_LOGGER_NAME = "dev.tachyonmcp.transport.netty.channel";
-    private static final LoggingHandler CHANNEL_LOGGER = new LoggingHandler(CHANNEL_LOGGER_NAME, LogLevel.DEBUG);
-    private static final boolean CHANNEL_LOGGING_ENABLED =
-            org.slf4j.LoggerFactory.getLogger(CHANNEL_LOGGER_NAME).isDebugEnabled();
+    private static final @Nullable LoggingHandler CHANNEL_LOGGER = wireLogger(CHANNEL_LOGGER_NAME);
     private static final int FLUSH_AFTER = FlushConsolidationHandler.DEFAULT_EXPLICIT_FLUSH_AFTER_FLUSHES;
 
     private final Duration readerIdleTimeout;
@@ -74,6 +77,8 @@ public class McpChannelInitializer extends ChannelInitializer<SocketChannel> {
     private final McpHeaderMatchHandler headerMatchHandler;
     // Per-server, not static: carries this server's allowedHosts allowlist (DNS-rebinding protection).
     private final DnsRebindingProtectionHandler dnsRebindingHandler;
+    // Only with bearer tokens: otherwise there is no metadata to serve and no handler in the pipeline.
+    private final @Nullable ProtectedResourceMetadataHandler protectedResourceMetadataHandler;
 
     private final CorsConfig corsConfig;
 
@@ -132,7 +137,28 @@ public class McpChannelInitializer extends ChannelInitializer<SocketChannel> {
         this.protocolRequestHandlers = handlers;
 
         protocolVersionHandler = new ProtocolVersionHandler(stateless);
-        endpointValidatorHandler = new EndpointValidatorHandler(endpointPath);
+        if (server.config().security().authentication() instanceof SecurityConfig.Authentication.Bearer bearer) {
+            endpointValidatorHandler = new EndpointValidatorHandler(
+                    endpointPath,
+                    ProtectedResourceMetadata.paths(bearer.config().resource()));
+            protectedResourceMetadataHandler = new ProtectedResourceMetadataHandler(bearer.config());
+        } else {
+            endpointValidatorHandler = new EndpointValidatorHandler(endpointPath);
+            protectedResourceMetadataHandler = null;
+        }
+    }
+
+    /**
+     * Netty's wire log for the SLF4J logger {@code name}, chosen once from that logger's level. At
+     * {@code TRACE} it hex-dumps every byte, {@code Authorization} headers included, so it must stay
+     * off in production. At {@code DEBUG} it logs events and sizes only. Otherwise there is none.
+     */
+    static @Nullable LoggingHandler wireLogger(String name) {
+        final var logger = LoggerFactory.getLogger(name);
+        if (logger.isTraceEnabled()) {
+            return new LoggingHandler(name, LogLevel.TRACE, ByteBufFormat.HEX_DUMP);
+        }
+        return logger.isDebugEnabled() ? new LoggingHandler(name, LogLevel.DEBUG, ByteBufFormat.SIMPLE) : null;
     }
 
     @Override
@@ -140,12 +166,13 @@ public class McpChannelInitializer extends ChannelInitializer<SocketChannel> {
         childChannels.add(ch);
         final var p = ch.pipeline();
         p.addFirst("flush", new FlushConsolidationHandler(FLUSH_AFTER, true));
-        if (CHANNEL_LOGGING_ENABLED) {
+        if (CHANNEL_LOGGER != null) {
             p.addLast("logger", CHANNEL_LOGGER);
         }
         p.addLast("http", new HttpServerCodec());
         // Right after the codec, so every response any handler below writes is ordered by it.
-        p.addLast("http-pipelining", new HttpPipeliningGate(maxPipelinedRequests));
+        final var pipeliningGate = new HttpPipeliningGate(maxPipelinedRequests);
+        p.addLast("http-pipelining", pipeliningGate);
 
         // SessionTouchHandler is installed lazily at session-bind time (see SessionTouchHandler#install).
         // During initialization, no session is bound to the channel, so no touch is needed.
@@ -156,11 +183,33 @@ public class McpChannelInitializer extends ChannelInitializer<SocketChannel> {
         // (validation handlers write before the aggregator; protocol handlers write after it).
         p.addLast("http-keep-alive", new HttpServerKeepAliveHandler());
         p.addLast("dns-rebinding", dnsRebindingHandler);
-        // Ahead of "cors", so other paths get a bare 404 and never a CORS grant.
+        // Ahead of "cors", so other paths get a bare 404 and never a CORS grant. With bearer tokens it
+        // lets the OAuth metadata paths through to "protected-resource-metadata", below "cors".
         p.addLast("mcp-endpoint", endpointValidatorHandler);
         // Ahead of "cors" so it sees the preflight response CorsHandler writes.
         p.addLast("cors-mcp-param", new CorsPreflightHandler());
         p.addLast("cors", new TachyonCorsHandler(corsConfig));
+        // Behind the Origin check and CORS, which therefore also answer a browser's preflight to the
+        // metadata, and ahead of "authentication": a client refused with 401 needs the metadata before it
+        // has a token. It consumes every request for its paths, so nothing after it sees one.
+        if (protectedResourceMetadataHandler != null) {
+            p.addLast("protected-resource-metadata", protectedResourceMetadataHandler);
+        }
+
+        // On the request head, after Origin validation and CORS (a preflight needs no token, a refusal
+        // carries the CORS headers) and ahead of everything that answers or reads: no body is requested,
+        // read or buffered for a caller that is not authenticated, and no protocol check can tell an
+        // anonymous caller what the server supports. See AuthenticationHandler.
+        final var security = server.config().security();
+        if (security.authenticationProvider() != null) {
+            p.addLast(
+                    "authentication",
+                    new AuthenticationHandler(
+                            security,
+                            server.executor(),
+                            pipeliningGate,
+                            server.config().observability().listeners()));
+        }
 
         // Must precede "protocol-version": a repeated version header would otherwise negotiate on its
         // first value while an intermediary routes on the last.
@@ -188,12 +237,6 @@ public class McpChannelInitializer extends ChannelInitializer<SocketChannel> {
         // FullHttpRequest is still an HttpRequest, so this fallback protocol resolution (for GET/
         // DELETE, which ProtocolVersionHandler doesn't cover) works the same post-aggregation.
         p.addLast("interaction", interactionHandler);
-        // After "interaction", which creates the channel context the caller's security context is
-        // recorded on; ahead of session lookup and dispatch, so a rejected request touches neither.
-        final var authenticationProvider = server.config().security().authenticationProvider();
-        if (authenticationProvider != null) {
-            p.addLast("authentication", new AuthenticationHandler(authenticationProvider, server.executor()));
-        }
         // On a plain HTTP keep-alive socket an idle tick closes the connection. On a channel carrying
         // an open SSE stream the SseHeartbeat scheduler drives heartbeats independently, so idle ticks
         // are a no-op for SSE channels. Lower readerIdleTimeout below any intermediary proxy's idle

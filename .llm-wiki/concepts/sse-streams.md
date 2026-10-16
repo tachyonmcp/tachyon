@@ -2,8 +2,8 @@
 title: SSE streams
 tags: [concept, transport, sse]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpInitializationHandler.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/sse/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/OutboundSseStream.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/OutboundSseStreamMessageRouter.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpOperationHandler.java]
-updated: 2026-10-15
-commit: 1f2c7fa8
+updated: 2026-10-16
+commit: 747359f0
 ---
 
 # 📡 SSE streams
@@ -71,12 +71,25 @@ Slow client (GET): never drop on an open stream. One `pending` queue (event loop
 
 Stalled peer: the channel stays non-writable, [SseHeartbeat#send](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/sse/SseHeartbeat.java) skips, no write completes, and `IdleStateHandler` fires writer idle after `writerIdleTimeout`. Both phases close then. Zero `writerIdleTimeout` disables it.
 
+## ⏳ Token expiry
+
+A stream must not outlive the token that opened it. [SseExpiry#arm](../../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/sse/SseExpiry.java) is called where a stream starts, next to `SseHeartbeat#enable`, from the only two places that turn a channel into an SSE channel: `SseManager#writeOpeningFrames` (the 2025 GET stream, stateful and stateless) and `PostSseStream#doStart` (a streamed POST response and the 2026 `subscriptions/listen` stream, which is a `PostSseStream`). It reads no channel state: the opener passes the `expiresAt` of its own caller (`SecurityContext#expiresAt` of the caller the handler took at its entry) to `SseManager#openStream` / `SseManager#openStatelessStream` and to the `PostSseStream` constructor, `null` for a caller whose credentials do not expire.
+
+- One timer per stream: `eventLoop().schedule` for `expiresAt - clock.instant()` (never negative, never early), cancelled by `closeFuture`. Nothing per event, no allocation on the write path. `expiresAt == null` (anonymous, an API key) or a gap too large for a timer to count: no timer.
+- The timer calls the stream's own graceful close: `retry:` hint, `LastHttpContent`, connection close (`NettySseConnection#close`, `PostSseStream#close`). The same close a server-initiated disconnect uses, so a 2025 client resumes from `Last-Event-ID` and loses no event, and a 2026 client listens again.
+- A `subscriptions/listen` stream ends better than that: its handler registers `OutboundSseStream#onExpiry`, so `PostSseStream#expire` completes the listen request with the graceful `resultType: "complete"` result (Subscriptions § Graceful Closure, as `SubscriptionRegistry#closeAll` does on shutdown) and the stream ends with that response (`SubscriptionsListenHandler#handleAsync`).
+- The timer runs on monotonic time; the expiry is judged by the server's clock. A timer that fires while that clock is still short re-arms for the rest, so a stream never ends before `expiresAt` (`SseExpiry#arm`).
+- `PostSseStream` takes the server `Clock` for this, from `RuntimeConfig#clock`, the clock that judged the token.
+- An in-flight tool call is not cancelled: closing a stream is a disconnect, and a disconnect never cancels (`DisconnectIsNotCancellationTest`). Stateful: its result is logged and replayable. Stateless: `responseUndeliverable()` completes when the connection closes.
+- `subscriptions/listen`: the close runs `SubscriptionsListenHandler`'s `onClose` settle, which removes the registry entry and cancels the pending result, the same path as a client disconnect.
+- L4 in `specs/server-authorization.md` is a Tachyon decision; MCP is silent.
+
 ## 🧯 Close semantics
 
 - `close()` writes `retry: 3000` then last chunk + close (client should reconnect) vs `terminate()` no retry `PostSseStream#doClose`, `NettySseConnection#doClose`.
 - `terminateAsync` also completes on channel close so shutdown drain never hangs — but consults the recorded close cause first, because a failed terminating write closes the channel from its own listener and that fallback would otherwise report success for it `PostSseStream#terminateAsync`.
 - `doClose` cancels heartbeats before the terminating chunk: the scheduled tick is otherwise cancelled only on channel close and could emit a comment the HTTP encoder no longer accepts `SseHeartbeat#cancel`, `NettySseConnection#doClose`.
-- Fire-and-forget calls (`writeEvent`, `comment`, `close`, `terminate`) swallow a shutting-down loop's rejection; `start` fails its stage and `writeEvent(long, byte[], Runnable)` runs `onDropped` instead `PostSseStream#submitWrite`, `PostSseStream#runOnEventLoopQuietly`.
+- Fire-and-forget calls (`writeEvent`, `comment`, `close`, `terminate`) swallow a shutting-down loop's rejection; `start` fails its stage and `writeEvent(long, byte[], Runnable)` runs `onDropped` instead `PostSseStream#dispatch`, `PostSseStream#runOnEventLoopQuietly`.
 - Every write (headers, priming/queued, events, comments, retry, last chunk) shares one failure listener: stash cause via `ChannelHandlerUtils#markCloseFailure`, then close — so `onClose` reports a transport failure, not an ordinary disconnect `PostSseStream#closeOnWriteFailure`. A heartbeat is written by the scheduler, not that listener, and does the same for itself — it is how an idle stream finds a dead peer `SseHeartbeat#send`.
 - SSE responses always `Connection: close` — server hard-closes on end; advertising keep-alive raced FIN vs next request `HttpHelpers#HttpHelpers`.
 

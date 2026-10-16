@@ -6,6 +6,7 @@ import static net.javacrumbs.jsonunit.assertj.JsonAssertions.assertThatJson;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.tachyonmcp.api.server.domain.RequestId;
+import dev.tachyonmcp.api.server.security.SecurityContext;
 import dev.tachyonmcp.core.protocol.Protocols;
 import dev.tachyonmcp.core.server.McpDispatcher;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
@@ -40,7 +41,14 @@ class SubscriptionsListenHandlerTest {
         var ctx = DefaultDispatchContext.create(legacyProtocol, server);
 
         var result = (McpDispatcher.DispatchResult.Response) dispatcher
-                .dispatchRequestAsync(RequestId.of(1), "subscriptions/listen", null, "sess_sub_listen", null, ctx)
+                .dispatchRequestAsync(
+                        RequestId.of(1),
+                        "subscriptions/listen",
+                        null,
+                        "sess_sub_listen",
+                        null,
+                        ctx,
+                        SecurityContext.anonymous())
                 .join();
 
         // language=json

@@ -85,6 +85,18 @@ internal class ToolDescriptorAttributesTest {
 
         descriptor.extensionId() shouldBe "ext"
     }
+
+    @Test
+    fun `requiredScopes is settable via the descriptor scope and keeps its order`() {
+        val descriptor =
+            toolDescriptor("scoped") {
+                requiredScopes =
+                    listOf("tools:call", "admin:audit")
+            }
+
+        descriptor.requiredScopes().toList() shouldBe listOf("tools:call", "admin:audit")
+        toolDescriptor("plain").requiredScopes() shouldBe emptySet()
+    }
 }
 
 internal val DescriptorTaskConnector: TaskConnector =

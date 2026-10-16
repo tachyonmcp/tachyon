@@ -1,85 +1,218 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
 package dev.tachyonmcp.core.transport.netty.http;
 
-import static dev.tachyonmcp.core.transport.netty.ChannelHandlerUtils.getInteractionContext;
-
 import dev.tachyonmcp.api.annotations.InternalApi;
-import dev.tachyonmcp.api.server.security.AuthenticationException;
-import dev.tachyonmcp.api.server.security.AuthenticationProvider;
 import dev.tachyonmcp.api.server.security.SecurityContext;
+import dev.tachyonmcp.core.server.config.SecurityConfig;
+import dev.tachyonmcp.core.server.observability.Observation;
+import dev.tachyonmcp.core.server.observability.ObservationListener;
+import dev.tachyonmcp.core.server.observability.OperationInfo;
+import dev.tachyonmcp.core.server.observability.OperationKind;
+import dev.tachyonmcp.core.server.observability.OperationOutcome;
+import dev.tachyonmcp.core.server.security.AuthenticationException;
+import dev.tachyonmcp.core.server.security.AuthenticationProvider;
+import dev.tachyonmcp.core.server.security.AuthenticationRequest;
+import dev.tachyonmcp.core.server.security.SecurityRejection;
+import dev.tachyonmcp.core.transport.netty.ChannelHandlerUtils;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
-import io.netty.handler.codec.http.FullHttpRequest;
+import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpUtil;
 import io.netty.handler.codec.http.HttpVersion;
+import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.handler.codec.http.QueryStringDecoder;
 import io.netty.util.ReferenceCountUtil;
+import io.netty.util.concurrent.ScheduledFuture;
+import java.time.Duration;
+import java.util.ArrayDeque;
+import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Authenticates every aggregated HTTP request with the configured {@link AuthenticationProvider}
- * and records the result as the channel's current {@link SecurityContext}, which each dispatch
- * context copies. The provider runs on the handler executor, never on the event loop; the request
- * continues down the pipeline on the event loop once it returns.
+ * Authenticates every HTTP request on its head, before its body is requested or read, with the
+ * configured {@link AuthenticationProvider}. The provider sees the method, URI and headers, never a
+ * body, and runs on the handler executor, never on the event loop.
  *
- * <p>A principal without a name is a provider failure: sessions are bound to the name, and a
- * nameless principal could not be told apart from an anonymous caller.
+ * <p>While it runs, the request's later {@link HttpContent} is held here. If the request still has body
+ * to come when a read ends, or more than {@link #HOLD_LIMIT} bytes of it are held before the read ends
+ * (a read loop can deliver several buffers before it completes), the socket is not read any further:
+ * reads are paused through the channel's {@link HttpPipeliningGate}, which stays the one owner of
+ * {@code autoRead}. What is held is therefore bounded by that limit plus one buffer, never by
+ * {@code maxContentLength}. A request that arrives whole in one read, which is every request without a
+ * body and every small one, pauses nothing: there is nothing more to read, and flipping {@code autoRead}
+ * twice would cost two interest-set changes on a real transport. When the provider accepts, the head
+ * and the held content are replayed in order, reads resume if they were paused, and the rest of the
+ * body flows through live. Because the aggregator sits downstream, it answers {@code 100 Continue} only
+ * to an authenticated request, and a request without a token is never buffered.
  *
- * <p>A rejected request is answered per RFC 6750 §3.1 and never reaches dispatch:
- * {@link AuthenticationException.Reason#MISSING_CREDENTIALS} ⇒ {@code 401} with a bare
- * {@code Bearer} challenge, {@code INVALID_TOKEN} ⇒ {@code 401 error="invalid_token"},
- * {@code INVALID_REQUEST} ⇒ {@code 400 error="invalid_request"}. Any other failure means credentials
- * could not be checked and answers {@code 500}, so clients keep a token that may be valid.
+ * <p>The provider sees a read-only {@link AuthenticationRequest} over the head, not the Netty object:
+ * it can read the method, the URI and the headers, and change nothing.
  *
- * <p>Relies on {@link HttpPipeliningGate} admitting one request per channel at a time: the current
- * security context cannot be overwritten while a request is in flight. One instance per channel.
+ * <p>A request rejected with an {@link AuthenticationException} is answered with the status and the
+ * {@code WWW-Authenticate} challenge {@link SecurityRejection} maps it to, the same mapping the
+ * dispatcher uses for a refusal raised later, and the connection closes, since the body was never
+ * read. This handler holds no scheme of its own. Every refusal here, timeouts and provider failures
+ * included, is reported to the server's observers as one {@link OperationKind#AUTHENTICATION}
+ * operation: no dispatch exists yet to report it. Any other failure means credentials
+ * could not be checked and answers {@code 500}, so clients keep a token that may be valid. A provider
+ * still silent after the configured timeout is answered {@code 503} with {@code Retry-After} and no
+ * challenge, for the same reason; it is not interrupted, and its late result is ignored. A principal
+ * without a name is a provider failure: sessions are bound to the name, and a nameless principal could
+ * not be told apart from an anonymous caller.
+ *
+ * <p>The result is recorded with {@link ChannelHandlerUtils#recordCaller} and taken, once, by the
+ * handler that processes the request, which passes it down explicitly: no per-connection object holds
+ * identity. Held content is released on rejection, timeout, {@code channelInactive} and handler removal.
+ *
+ * <p>Relies on {@link HttpPipeliningGate} admitting one request per channel at a time, so there is
+ * never more than one attempt in flight. One instance per channel, since it keeps the request being
+ * authenticated; it is event-loop confined, and only the provider call leaves the loop.
  */
 @InternalApi
 public final class AuthenticationHandler extends ChannelInboundHandlerAdapter {
 
+    /** Body bytes held for one request before reads pause even mid-read; see the class comment. */
+    static final int HOLD_LIMIT = 64 * 1024;
+
     private static final Logger logger = LoggerFactory.getLogger(AuthenticationHandler.class);
 
-    private final AuthenticationProvider<? super HttpRequest> provider;
+    private final AuthenticationProvider provider;
+    private final SecurityConfig.Authentication authentication;
     private final Executor executor;
+    private final Duration timeout;
+    private final HttpPipeliningGate gate;
+    private final List<ObservationListener> listeners;
 
-    public AuthenticationHandler(AuthenticationProvider<? super HttpRequest> provider, Executor executor) {
-        this.provider = Objects.requireNonNull(provider, "provider");
+    private @Nullable Attempt attempt;
+
+    /** The request waiting for its authentication, and what arrived behind its head. */
+    private static final class Attempt {
+        final HttpRequest head;
+        final ArrayDeque<HttpContent> held = new ArrayDeque<>(4);
+        int heldBytes;
+        /** Its last content has arrived, so there is nothing more to read for it. */
+        boolean complete;
+        /** Reads are paused through the gate on its behalf, so it must release them. */
+        boolean holding;
+
+        @Nullable
+        ScheduledFuture<?> deadline;
+
+        Attempt(HttpRequest head) {
+            this.head = head;
+            this.complete = head instanceof LastHttpContent;
+        }
+    }
+
+    /**
+     * @param security how the server authenticates, and how long it waits for the provider
+     * @param executor runs the provider off the event loop
+     * @param gate this channel's pipelining gate, which owns {@code autoRead}
+     * @param listeners told of every request this handler rejects, as an {@link
+     *     OperationKind#AUTHENTICATION} operation; none for a server without observers
+     * @throws IllegalArgumentException if {@code security} authenticates nobody
+     */
+    public AuthenticationHandler(
+            SecurityConfig security, Executor executor, HttpPipeliningGate gate, List<ObservationListener> listeners) {
+        this.provider = Objects.requireNonNull(security.authenticationProvider(), "the server authenticates nobody");
+        this.authentication = security.authentication();
+        this.timeout = security.authenticationTimeout();
         this.executor = Objects.requireNonNull(executor, "executor");
+        this.gate = Objects.requireNonNull(gate, "gate");
+        this.listeners = Objects.requireNonNull(listeners, "listeners");
     }
 
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) {
-        if (!(msg instanceof FullHttpRequest request)) {
+        if (msg instanceof HttpRequest head) {
+            if (attempt != null) {
+                ReferenceCountUtil.release(head);
+                abandon();
+                ctx.close();
+                return;
+            }
+            begin(ctx, head);
+        } else if (msg instanceof HttpContent content && attempt != null) {
+            final var pending = attempt;
+            pending.held.add(content);
+            pending.heldBytes += content.content().readableBytes();
+            pending.complete |= content instanceof LastHttpContent;
+            if (pending.heldBytes > HOLD_LIMIT) {
+                hold(ctx, pending);
+            }
+        } else {
             ctx.fireChannelRead(msg);
-            return;
         }
+    }
+
+    @Override
+    public void channelReadComplete(ChannelHandlerContext ctx) {
+        final var pending = attempt;
+        if (pending == null) {
+            ctx.fireChannelReadComplete();
+        } else {
+            hold(ctx, pending);
+        }
+    }
+
+    /**
+     * Pauses reads for {@code pending} unless it needs no more of them. A request whose last content is
+     * already held asks for nothing further, which is every request without a body and every small one:
+     * pausing then would only flip {@code autoRead} twice.
+     */
+    private void hold(ChannelHandlerContext ctx, Attempt pending) {
+        if (!pending.complete && !pending.holding) {
+            pending.holding = true;
+            gate.holdReads(ctx.channel());
+        }
+    }
+
+    @Override
+    public void channelInactive(ChannelHandlerContext ctx) {
+        abandon();
+        ctx.fireChannelInactive();
+    }
+
+    @Override
+    public void handlerRemoved(ChannelHandlerContext ctx) {
+        abandon();
+    }
+
+    private void begin(ChannelHandlerContext ctx, HttpRequest head) {
+        final var current = new Attempt(head);
+        attempt = current;
         final var outcome = new CompletableFuture<SecurityContext>();
         try {
-            executor.execute(() -> authenticate(request, outcome));
+            current.deadline =
+                    ctx.executor().schedule(() -> expire(ctx, current), timeout.toNanos(), TimeUnit.NANOSECONDS);
+            final var view = new AuthenticationRequest(
+                    head.method().name(), head.uri(), name -> head.headers().getAll(name));
+            executor.execute(() -> authenticate(view, outcome));
         } catch (RejectedExecutionException e) {
             outcome.completeExceptionally(e);
         }
         outcome.whenComplete((securityContext, failure) -> {
             try {
-                ctx.executor().execute(() -> resume(ctx, request, securityContext, failure));
+                ctx.executor().execute(() -> resume(ctx, current, securityContext, failure));
             } catch (RejectedExecutionException e) {
-                ReferenceCountUtil.release(request);
+                logger.debug("Event loop is gone, the pending request is released with the channel");
             }
         });
     }
 
-    private void authenticate(HttpRequest request, CompletableFuture<SecurityContext> outcome) {
+    private void authenticate(AuthenticationRequest request, CompletableFuture<SecurityContext> outcome) {
         try {
             final var securityContext =
                     Objects.requireNonNull(provider.authenticate(request), "provider returned null");
@@ -94,54 +227,138 @@ public final class AuthenticationHandler extends ChannelInboundHandlerAdapter {
         }
     }
 
-    private static void resume(
+    private void resume(
             ChannelHandlerContext ctx,
-            FullHttpRequest request,
+            Attempt completed,
             @Nullable SecurityContext securityContext,
             @Nullable Throwable failure) {
+        if (attempt != completed) {
+            return;
+        }
+        attempt = null;
         if (!ctx.channel().isActive()) {
-            ReferenceCountUtil.release(request);
+            discard(completed);
             return;
         }
-        if (securityContext != null) {
-            final var interaction = getInteractionContext(ctx);
-            if (interaction != null) {
-                interaction.setSecurityContext(securityContext);
+        cancel(completed);
+        if (securityContext == null) {
+            reject(ctx, completed, failure);
+            return;
+        }
+        ChannelHandlerUtils.recordCaller(ctx.channel(), securityContext);
+        ctx.fireChannelRead(completed.head);
+        HttpContent content;
+        while ((content = completed.held.poll()) != null) {
+            if (!ChannelHandlerUtils.dropIfRejected(ctx, content)) {
+                ctx.fireChannelRead(content);
             }
-            ctx.fireChannelRead(request);
-            return;
         }
-        reject(ctx, request, failure);
+        if (completed.holding) {
+            gate.releaseReads(ctx.channel());
+        }
+        ctx.fireChannelReadComplete();
     }
 
-    private static void reject(ChannelHandlerContext ctx, FullHttpRequest request, @Nullable Throwable failure) {
-        final HttpResponseStatus status;
-        final @Nullable String challenge;
-        if (failure instanceof AuthenticationException e) {
-            logger.debug("Rejected {} {}: {} ({})", request.method(), path(request), e.reason(), e.getMessage());
-            status = e.reason() == AuthenticationException.Reason.INVALID_REQUEST
-                    ? HttpResponseStatus.BAD_REQUEST
-                    : HttpResponseStatus.UNAUTHORIZED;
-            challenge = switch (e.reason()) {
-                case MISSING_CREDENTIALS -> "Bearer";
-                case INVALID_TOKEN -> "Bearer error=\"invalid_token\"";
-                case INVALID_REQUEST -> "Bearer error=\"invalid_request\"";
-            };
-        } else {
-            logger.warn("Authentication provider failed for {} {}", request.method(), path(request), failure);
-            status = HttpResponseStatus.INTERNAL_SERVER_ERROR;
-            challenge = null;
+    private void expire(ChannelHandlerContext ctx, Attempt expired) {
+        if (attempt != expired) {
+            return;
         }
-        final var cors = TachyonCorsHandler.decide(ctx, request);
-        ReferenceCountUtil.release(request);
+        attempt = null;
+        logger.warn("Authentication of {} {} timed out after {}", expired.head.method(), path(expired.head), timeout);
+        observe(new OperationOutcome.Rejected(null, 503, 0));
+        respond(ctx, expired, HttpResponseStatus.SERVICE_UNAVAILABLE, null, retryAfterSeconds());
+    }
+
+    private void reject(ChannelHandlerContext ctx, Attempt rejected, @Nullable Throwable failure) {
+        final var head = rejected.head;
+        final var rejection = failure == null ? null : SecurityRejection.of(failure, authentication);
+        if (rejection != null) {
+            logger.debug(
+                    "Rejected {} {}: {} ({})",
+                    head.method(),
+                    path(head),
+                    rejection.status(),
+                    Objects.requireNonNull(failure).getMessage());
+            observe(rejection.outcome());
+            respond(ctx, rejected, HttpResponseStatus.valueOf(rejection.status()), rejection.wwwAuthenticate(), null);
+        } else {
+            logger.warn("Authentication provider failed for {} {}", head.method(), path(head), failure);
+            observe(new OperationOutcome.Rejected(null, 500, 0));
+            respond(ctx, rejected, HttpResponseStatus.INTERNAL_SERVER_ERROR, null, null);
+        }
+    }
+
+    /**
+     * Tells the observers a request was refused on its head, where no dispatch exists to report it:
+     * one {@link OperationKind#AUTHENTICATION} operation, started and completed here with the status.
+     * It carries no header and no URI, so no token can reach a listener.
+     */
+    private void observe(OperationOutcome outcome) {
+        if (listeners.isEmpty()) {
+            return;
+        }
+        final var observation = Observation.start(
+                listeners,
+                OperationInfo.builder(OperationKind.AUTHENTICATION, OperationInfo.AUTHENTICATION_METHOD, null)
+                        .build());
+        observation.closeStart();
+        observation.complete(outcome);
+    }
+
+    /** Answers the request with its own CORS decision and closes: its body was never read. */
+    private void respond(
+            ChannelHandlerContext ctx,
+            Attempt refused,
+            HttpResponseStatus status,
+            @Nullable String challenge,
+            @Nullable String retryAfter) {
+        final var cors = TachyonCorsHandler.decide(ctx, refused.head);
         final var response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, status, Unpooled.EMPTY_BUFFER);
         if (challenge != null) {
             response.headers().set(HttpHeaderNames.WWW_AUTHENTICATE, challenge);
         }
+        if (retryAfter != null) {
+            response.headers().set(HttpHeaderNames.RETRY_AFTER, retryAfter);
+        }
         response.headers().setInt(HttpHeaderNames.CONTENT_LENGTH, 0);
         cors.applyTo(response);
         HttpUtil.setKeepAlive(response, false);
+        cancel(refused);
+        release(refused);
+        ChannelHandlerUtils.markRejected(ctx, refused.head);
         ctx.writeAndFlush(response);
+    }
+
+    private String retryAfterSeconds() {
+        return Long.toString(Math.max(1, Math.ceilDiv(timeout.toMillis(), 1000)));
+    }
+
+    private void abandon() {
+        final var pending = attempt;
+        if (pending != null) {
+            attempt = null;
+            discard(pending);
+        }
+    }
+
+    private static void discard(Attempt dropped) {
+        cancel(dropped);
+        release(dropped);
+        ReferenceCountUtil.release(dropped.head);
+    }
+
+    private static void cancel(Attempt finished) {
+        final var deadline = finished.deadline;
+        if (deadline != null) {
+            deadline.cancel(false);
+        }
+    }
+
+    private static void release(Attempt finished) {
+        HttpContent content;
+        while ((content = finished.held.poll()) != null) {
+            ReferenceCountUtil.release(content);
+        }
     }
 
     /** The query string may carry a token ({@code access_token}); never log it. */

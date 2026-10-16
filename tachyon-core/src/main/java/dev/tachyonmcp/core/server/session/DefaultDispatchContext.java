@@ -21,6 +21,7 @@ import dev.tachyonmcp.core.server.internal.NotificationLogSupport;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
 import dev.tachyonmcp.core.server.observability.Observation;
 import dev.tachyonmcp.core.transport.jsonrpc.JsonRpcCodec;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -51,11 +52,27 @@ public class DefaultDispatchContext implements DispatchContext {
     }
 
     public DefaultDispatchContext(ChannelContext channel, ServerEngine server, @Nullable RequestId requestId) {
+        this(channel, server, requestId, SecurityContext.anonymous());
+    }
+
+    /**
+     * Creates the context of one request. The caller is fixed here and never changes: the channel is
+     * connection-scoped and carries none.
+     *
+     * @param channel the connection's context
+     * @param server the server
+     * @param requestId the JSON-RPC id of the request, or {@code null} for a notification
+     * @param securityContext the caller of this request
+     */
+    public DefaultDispatchContext(
+            ChannelContext channel,
+            ServerEngine server,
+            @Nullable RequestId requestId,
+            SecurityContext securityContext) {
         this.channel = channel;
         this.server = server;
         this.requestId = requestId;
-        // Copied, not delegated: the channel's value moves on to the next request.
-        this.securityContext = channel.securityContext();
+        this.securityContext = Objects.requireNonNull(securityContext, "securityContext");
     }
 
     public static DispatchContext create(Protocol protocol, ServerEngine server) {
@@ -113,11 +130,6 @@ public class DefaultDispatchContext implements DispatchContext {
     @Override
     public SecurityContext securityContext() {
         return securityContext;
-    }
-
-    @Override
-    public void setSecurityContext(SecurityContext securityContext) {
-        channel.setSecurityContext(securityContext);
     }
 
     @Override

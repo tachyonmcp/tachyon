@@ -264,10 +264,9 @@ public final class TaskEngine implements Tasks {
     }
 
     private static IllegalStateException refused(TaskSnapshot snapshot) {
-        var taskId = snapshot.taskId();
         logger.warn(
                 "Refused a publish claiming task {} for a caller that does not own it",
-                taskId.substring(0, Math.min(8, taskId.length() / 2)) + "…");
+                Owner.truncated(snapshot.taskId()));
         return new IllegalStateException("Task ownership conflict");
     }
 

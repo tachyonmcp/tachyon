@@ -169,6 +169,39 @@ class TaskOwnerBindingTest extends AbstractStatelessMcpE2eTest<McpClient> {
         }
     }
 
+    /**
+     * Task bindings live in this process only, so a clustered or restarted server leaves a task to its
+     * connector, which authorizes from {@code ctx.securityContext()}. Every path must hand it the
+     * caller of the request being served: not the creator, not anonymous.
+     */
+    @Test
+    void theConnectorReceivesTheCallerOfEachRequestOnEveryTaskPath() throws Exception {
+        var taskId = UUID.randomUUID().toString();
+        fixture.startExternally(TaskSnapshot.working(taskId, CREATED_AT, 1));
+        try (var alice = signedIn(ALICE);
+                var bob = signedIn(BOB)) {
+            assertThat(alice.post(get(1, taskId))).isSuccess();
+            assertThat(bob.post(get(2, taskId))).isSuccess();
+            assertThat(alice.post("""
+                    {"jsonrpc":"2.0","id":3,"method":"tasks/update","params":{"taskId":"%s","inputResponses":{}}}
+                    """.formatted(taskId))).isSuccess();
+            assertThat(bob.post("""
+                    {"jsonrpc":"2.0","id":4,"method":"tasks/cancel","params":{"taskId":"%s"}}
+                    """.formatted(taskId))).isSuccess();
+            try (var stream = bob.openPostStream(null, listen(taskId))) {
+                stream.await(TaskOwnerBindingTest::isAcknowledgement, ofSeconds(5));
+            }
+
+            assertThat(fixture.connectorCalls())
+                    .containsExactly(
+                            "get:" + taskId + ":alice",
+                            "get:" + taskId + ":bob",
+                            "update:" + taskId + ":alice",
+                            "cancel:" + taskId + ":bob",
+                            "get:" + taskId + ":bob");
+        }
+    }
+
     private static String get(int id, String taskId) {
         // language=JSON
         return """

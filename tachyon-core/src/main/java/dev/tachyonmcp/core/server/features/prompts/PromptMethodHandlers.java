@@ -9,6 +9,7 @@ import dev.tachyonmcp.api.server.features.prompts.PromptResult;
 import dev.tachyonmcp.core.protocol.ProtocolRequestMapper;
 import dev.tachyonmcp.core.server.RpcMethodHandler;
 import dev.tachyonmcp.core.server.domain.ServerErrors;
+import dev.tachyonmcp.core.server.features.Visibility;
 import dev.tachyonmcp.core.server.features.subscriptions.SubscriptionRegistry;
 import dev.tachyonmcp.core.server.features.subscriptions.SubscriptionTopic;
 import dev.tachyonmcp.core.server.internal.HandlerFutures;
@@ -53,10 +54,7 @@ public final class PromptMethodHandlers {
 
         @Override
         public Object handle(DispatchContext context, ProtocolRequestMapper.PageRequest page) {
-            var paginated = registry.list(page.limit(), page.cursor(), descriptor -> {
-                var extensionId = descriptor.extensionId();
-                return extensionId == null || context.isExtensionEnabled(extensionId);
-            });
+            var paginated = registry.list(page.limit(), page.cursor(), Visibility.to(context));
             if (!paginated.cursorValid()) return ServerErrors.invalidParams("Invalid cursor");
             return context.responseMapper().listPromptsResult(paginated.items(), paginated.nextCursor());
         }
@@ -85,15 +83,12 @@ public final class PromptMethodHandlers {
         @Override
         public CompletionStage<Object> handleAsync(
                 DispatchContext context, ProtocolRequestMapper.PromptCallRequest mapped) {
+            // A prompt the caller may not see is an unknown prompt, to the caller and to observers alike.
             var entry = registry.get(mapped.name());
-            if (entry == null) {
+            if (entry == null || !Visibility.of(context, entry.descriptor())) {
                 return CompletableFuture.completedFuture(ServerErrors.invalidParams("Prompt not found"));
             }
             context.observation().info().target(entry.descriptor().name());
-            var extensionId = entry.descriptor().extensionId();
-            if (extensionId != null && !context.isExtensionEnabled(extensionId)) {
-                return CompletableFuture.completedFuture(ServerErrors.invalidParams("Prompt not found"));
-            }
 
             var inputSchema = entry.descriptor().inputSchema();
             if (inputSchema != null) {

@@ -39,7 +39,7 @@ class BearerAuthenticationSessionTest extends AbstractStatefulMcpE2eTest {
     void startSecuredServer() {
         tokens = new TestBearerTokens();
         startServer(
-                b -> b.capabilities(CapabilitiesConfig.Builder::tools).security(s -> s.bearerToken(tokens)),
+                b -> b.capabilities(CapabilitiesConfig.Builder::tools).security(TestBearerTokens.secured(tokens)),
                 tokens::registerWhoAmI);
     }
 
@@ -60,7 +60,8 @@ class BearerAuthenticationSessionTest extends AbstractStatefulMcpE2eTest {
             final var withoutToken = client.post(null, sessionId, whoAmI(2));
 
             assertThat(withoutToken.statusCode()).isEqualTo(401);
-            assertThat(withoutToken.headers().allValues("WWW-Authenticate")).containsExactly("Bearer");
+            assertThat(withoutToken.headers().allValues("WWW-Authenticate"))
+                    .containsExactly(TestBearerTokens.CHALLENGE);
             assertThat(tokens.toolCallers()).isEmpty();
         }
     }

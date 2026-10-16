@@ -10,6 +10,7 @@ import static net.javacrumbs.jsonunit.assertj.JsonAssertions.assertThatJson;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
+import dev.tachyonmcp.api.server.features.tools.ToolResult;
 import dev.tachyonmcp.e2e.mcp.OwnedTasksFixture;
 import dev.tachyonmcp.testkit.Mcp20251125Client;
 import java.util.List;
@@ -141,6 +142,39 @@ class TaskOwnerBindingTest extends AbstractStatefulMcpE2eTest {
                     .hasErrorMessageContaining("Task not found");
             var aliceGet = alice.sendRpc(call(3, "tasks/get", taskId));
             assertThatJson(aliceGet.body()).inPath("$.result.taskId").isEqualTo(taskId);
+        }
+    }
+
+    /**
+     * Task bindings live in this process only, so a clustered or restarted server leaves a task to its
+     * connector, which authorizes from {@code ctx.securityContext()}. Every path must hand it the
+     * caller of the request being served: not the creator, not anonymous.
+     */
+    @Test
+    void theConnectorReceivesTheCallerOfEachRequestOnEveryTaskPath() throws Exception {
+        var working = UUID.randomUUID().toString();
+        var done = UUID.randomUUID().toString();
+        fixture.startExternally(TaskSnapshot.working(working, CREATED_AT, 1));
+        fixture.startExternally(TaskSnapshot.completed(done, CREATED_AT, CREATED_AT, 2, ToolResult.text("finished")));
+        try (var alice = signedIn(ALICE);
+                var bob = signedIn(BOB)) {
+            alice.sendRpc(call(2, "tasks/get", working));
+            bob.sendRpc(call(2, "tasks/get", working));
+            alice.sendRpc(call(3, "tasks/result", done));
+            bob.sendRpc(call(3, "tasks/cancel", working));
+            alice.sendRpc("""
+                    {"jsonrpc":"2.0","id":4,"method":"tasks/list","params":{}}
+                    """);
+
+            assertThat(fixture.connectorCalls())
+                    .containsExactly(
+                            "get:" + working + ":alice",
+                            "get:" + working + ":bob",
+                            "awaitResult:" + done + ":alice",
+                            "get:" + working + ":bob",
+                            "cancel:" + working + ":bob",
+                            "get:" + working + ":bob",
+                            "list:-:alice");
         }
     }
 

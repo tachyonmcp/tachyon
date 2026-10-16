@@ -7,6 +7,7 @@ import static dev.tachyonmcp.core.transport.netty.ChannelHandlerUtils.completeOn
 import static dev.tachyonmcp.core.transport.netty.ChannelHandlerUtils.isRefused;
 import static dev.tachyonmcp.core.transport.netty.ChannelHandlerUtils.sendAccepted;
 import static dev.tachyonmcp.core.transport.netty.ChannelHandlerUtils.sendAcceptedAsync;
+import static dev.tachyonmcp.core.transport.netty.ChannelHandlerUtils.sendDeniedAsync;
 import static dev.tachyonmcp.core.transport.netty.ChannelHandlerUtils.sendPlainTextAndClose;
 import static dev.tachyonmcp.core.transport.netty.ChannelHandlerUtils.sendResponseAndClose;
 import static dev.tachyonmcp.core.transport.netty.McpResponseWriter.sendInternalError;
@@ -14,6 +15,7 @@ import static dev.tachyonmcp.core.transport.netty.McpResponseWriter.sendJsonResp
 import static dev.tachyonmcp.core.transport.netty.McpResponseWriter.sendOptions;
 
 import dev.tachyonmcp.api.server.domain.RequestId;
+import dev.tachyonmcp.api.server.security.SecurityContext;
 import dev.tachyonmcp.core.protocol.mcp.McpHeaderNames;
 import dev.tachyonmcp.core.runtime.ChannelContext;
 import dev.tachyonmcp.core.runtime.Session;
@@ -97,15 +99,25 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
         var cors = TachyonCorsHandler.decide(ctx, req);
         logger.debug("MCP request: {} {}", req.method(), req.uri());
 
+        // The one place this handler learns who is calling, for every method and before anything else is
+        // done with the request: taken once, so the next request on the connection starts with nothing,
+        // and passed down explicitly. The connection's interaction context holds no identity.
+        final var caller = ChannelHandlerUtils.takeCaller(ctx, server);
+        if (caller == null) {
+            logger.warn("Refusing a {} request with no authenticated caller", req.method());
+            sendPlainTextAndClose(ctx, HttpResponseStatus.INTERNAL_SERVER_ERROR, "Internal Server Error", cors);
+            return;
+        }
+
         HttpMethod method = req.method();
         if (method == HttpMethod.OPTIONS) {
             sendOptions(ctx);
         } else if (method == HttpMethod.POST) {
-            handlePost(ctx, req, cors);
+            handlePost(ctx, req, cors, caller);
         } else if (method == HttpMethod.GET) {
-            handleGet(ctx, req, cors);
+            handleGet(ctx, req, cors, caller);
         } else if (method == HttpMethod.DELETE) {
-            handleDelete(ctx, req, cors);
+            handleDelete(ctx, req, cors, caller);
         } else {
             sendResponseAndClose(
                     ctx,
@@ -116,7 +128,7 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
         }
     }
 
-    private void handlePost(ChannelHandlerContext ctx, FullHttpRequest req, CorsDecision cors) {
+    private void handlePost(ChannelHandlerContext ctx, FullHttpRequest req, CorsDecision cors, SecurityContext caller) {
         var sessionId = req.headers().get(McpHeaderNames.MCP_SESSION_ID);
         if (sessionId == null) {
             // A session-less POST may be an initialize (e.g. on a keep-alive channel already in
@@ -130,9 +142,6 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
         // null (e.g. no InteractionHandler configured); enforced non-null only where the
         // original code enforced it, in handlePostRequest.
         final var ic = ChannelHandlerUtils.getInteractionContext(ctx);
-        // The caller of this request, fixed here on the event loop: the channel's security context moves
-        // on to the next request on this connection, so it is never read again after the hop.
-        final var caller = callerOf(ic);
         // Read for the same reason and in the same place: the entry belongs to this request, and a
         // pipelined next request must not be able to overwrite it between the hop and the read.
         final PeekedBody.@Nullable Parsed peeked = PeekedBody.cached(ctx, req);
@@ -168,7 +177,7 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
             ByteBuf body,
             CorsDecision cors,
             @Nullable ChannelContext ic,
-            Owner caller,
+            SecurityContext caller,
             PeekedBody.@Nullable Parsed peeked) {
         final JsonRpcCodec.Parse parse;
         try {
@@ -194,7 +203,7 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
         } finally {
             body.release();
         }
-        dispatchPostMessage(ctx, sessionId, parse, cors, ic);
+        dispatchPostMessage(ctx, sessionId, parse, cors, ic, caller);
     }
 
     private void dispatchPostMessage(
@@ -202,7 +211,8 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
             @Nullable String sessionId,
             JsonRpcCodec.Parse parse,
             CorsDecision cors,
-            @Nullable ChannelContext ic) {
+            @Nullable ChannelContext ic,
+            SecurityContext caller) {
         // Named to not shadow the worker `executor` field: every write below must run on the
         // channel's event loop, while `executor` off-loads work away from it.
         final var eventLoop = ctx.executor();
@@ -229,8 +239,8 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
                         reqMsg,
                         cors,
                         Objects.requireNonNull(
-                                ic,
-                                "InteractionContext is null. Check if InteractionHandler is configured correctly."));
+                                ic, "InteractionContext is null. Check if InteractionHandler is configured correctly."),
+                        caller);
             case JsonRpcMessage.Response resp ->
                 handlePostResponse(ctx, sessionId, ctx.channel().id().asLongText(), resp, cors);
             case JsonRpcMessage.Error err ->
@@ -242,7 +252,7 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
                 // the same JSON-RPC id. Already on the worker executor, so this blocks no event
                 // loop. Guarded so a handler failure still produces the ack.
                 try {
-                    dispatcher.dispatchNotification(not.method(), not.params(), sessionId, ic);
+                    dispatcher.dispatchNotification(not.method(), not.params(), sessionId, ic, caller);
                 } catch (RuntimeException e) {
                     logger.warn("Failed to process {} notification", not.method(), e);
                 }
@@ -288,16 +298,24 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
             @Nullable String sessionId,
             JsonRpcMessage.Request<?> req,
             CorsDecision cors,
-            ChannelContext ic) {
+            ChannelContext ic,
+            SecurityContext caller) {
         var network = server.config().network();
         var postStream = new PostSseStream(
-                ctx.channel(), cors, server::nextEventId, network.heartbeatInterval(), network.maxPendingSseBytes());
+                ctx.channel(),
+                cors,
+                server::nextEventId,
+                network.heartbeatInterval(),
+                network.maxPendingSseBytes(),
+                server.config().runtime().clock(),
+                caller.expiresAt());
         final var requestId = req.id();
         final var method = req.method();
         final var startNs = System.nanoTime();
         final var transportCompletion = new CompletableFuture<Void>();
         dispatcher
-                .dispatchRequestAsync(requestId, method, req.params(), sessionId, postStream, ic, transportCompletion)
+                .dispatchRequestAsync(
+                        requestId, method, req.params(), sessionId, postStream, ic, caller, transportCompletion)
                 .whenComplete((result, ex) -> {
                     try {
                         ctx.executor()
@@ -361,55 +379,81 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
                 }
                 return;
             }
-            if (result instanceof McpDispatcher.DispatchResult.Status(int code, String message)) {
-                // Transport-level signal from the dispatcher — spec ties this condition to a raw HTTP
-                // status, not a JSON-RPC error envelope.
-                postStream.terminate();
-                completeOn(
-                        sendPlainTextAndClose(ctx, HttpResponseStatus.valueOf(code), message, cors),
-                        transportCompletion);
-                return;
-            }
-            if (postStream.started()) {
-                if (m.slowRequestLogging()
-                        && elapsedMs > m.slowRequestThreshold().toMillis()) {
-                    logger.warn("Slow POST-SSE response: id={}, method={}, elapsed={}ms", requestId, method, elapsedMs);
-                } else {
-                    logger.debug("POST-SSE response: id={}, method={}, elapsed={}ms", requestId, method, elapsedMs);
+            // Exhaustive on purpose: an outcome added to DispatchResult and forgotten here must not
+            // compile, instead of failing a cast the executor swallows and leaving the client waiting.
+            switch (Objects.requireNonNull(result, "neither a result nor a failure")) {
+                case McpDispatcher.DispatchResult.Status(int code, String message) -> {
+                    // Transport-level signal from the dispatcher — spec ties this condition to a raw HTTP
+                    // status, not a JSON-RPC error envelope.
+                    postStream.terminate();
+                    completeOn(
+                            sendPlainTextAndClose(ctx, HttpResponseStatus.valueOf(code), message, cors),
+                            transportCompletion);
                 }
-                // Finalization decodes the response body and appends to the event log —
-                // too heavy for the event loop. PostSseStream writes marshal themselves.
-                try {
-                    executor.execute(() ->
-                            finalizePostSseResponse(requestId, sessionId, postStream, result, transportCompletion));
-                } catch (RejectedExecutionException e) {
-                    completeOn(postStream.terminateAsync(), transportCompletion);
+                case McpDispatcher.DispatchResult.Denied(int status, var challenge) -> {
+                    // The dispatcher answers a refusal after the stream opened as a JSON-RPC error, so this
+                    // arrives only for an unstarted stream; one that started in the meantime is just closed.
+                    if (postStream.started()) {
+                        completeOn(postStream.terminateAsync(), transportCompletion);
+                    } else {
+                        postStream.terminate();
+                        completeOn(sendDeniedAsync(ctx, status, challenge, cors), transportCompletion);
+                    }
                 }
-                return;
+                case McpDispatcher.DispatchResult.Accepted accepted -> {
+                    if (postStream.started()) {
+                        completeOn(postStream.terminateAsync(), transportCompletion);
+                    } else {
+                        // See the JSON case: the unused stream must not open a second response.
+                        postStream.terminate();
+                        completeOn(sendAcceptedAsync(ctx, cors), transportCompletion);
+                    }
+                }
+                case McpDispatcher.DispatchResult.Response response -> {
+                    if (postStream.started()) {
+                        if (m.slowRequestLogging()
+                                && elapsedMs > m.slowRequestThreshold().toMillis()) {
+                            logger.warn(
+                                    "Slow POST-SSE response: id={}, method={}, elapsed={}ms",
+                                    requestId,
+                                    method,
+                                    elapsedMs);
+                        } else {
+                            logger.debug(
+                                    "POST-SSE response: id={}, method={}, elapsed={}ms", requestId, method, elapsedMs);
+                        }
+                        // Finalization decodes the response body and appends to the event log —
+                        // too heavy for the event loop. PostSseStream writes marshal themselves.
+                        try {
+                            executor.execute(() -> finalizePostSseResponse(
+                                    requestId, sessionId, postStream, response, transportCompletion));
+                        } catch (RejectedExecutionException e) {
+                            completeOn(postStream.terminateAsync(), transportCompletion);
+                        }
+                    } else {
+                        // A keep-alive JSON response is about to be written; neutralize the unused
+                        // stream so a server→client message that arrives after this check (e.g. an async
+                        // tool's status notification) cannot open a second response on the pooled socket
+                        // and corrupt the next request's reuse of it.
+                        postStream.terminate();
+                        if (m.slowRequestLogging()
+                                && elapsedMs > m.slowRequestThreshold().toMillis()) {
+                            logger.warn(
+                                    "Slow POST response: id={}, method={}, elapsed={}ms", requestId, method, elapsedMs);
+                        } else {
+                            logger.debug("POST response: id={}, method={}, elapsed={}ms", requestId, method, elapsedMs);
+                        }
+                        completeOn(
+                                sendJsonResponse(
+                                        ctx,
+                                        response.responseBody(),
+                                        HttpResponseStatus.valueOf(response.httpStatus()),
+                                        response.sessionId(),
+                                        cors),
+                                transportCompletion);
+                    }
+                }
             }
-            // A keep-alive JSON/202 response is about to be written; neutralize the unused
-            // stream so a server→client message that arrives after this check (e.g. an async
-            // tool's status notification) cannot open a second response on the pooled socket
-            // and corrupt the next request's reuse of it.
-            postStream.terminate();
-            if (result instanceof McpDispatcher.DispatchResult.Accepted) {
-                completeOn(sendAcceptedAsync(ctx, cors), transportCompletion);
-                return;
-            }
-            if (m.slowRequestLogging() && elapsedMs > m.slowRequestThreshold().toMillis()) {
-                logger.warn("Slow POST response: id={}, method={}, elapsed={}ms", requestId, method, elapsedMs);
-            } else {
-                logger.debug("POST response: id={}, method={}, elapsed={}ms", requestId, method, elapsedMs);
-            }
-            var response = (McpDispatcher.DispatchResult.Response) result;
-            completeOn(
-                    sendJsonResponse(
-                            ctx,
-                            response.responseBody(),
-                            HttpResponseStatus.valueOf(response.httpStatus()),
-                            response.sessionId(),
-                            cors),
-                    transportCompletion);
         } catch (RuntimeException e) {
             transportCompletion.completeExceptionally(e);
             throw e;
@@ -420,12 +464,8 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
             RequestId requestId,
             @Nullable String sessionId,
             PostSseStream postStream,
-            McpDispatcher.@Nullable DispatchResult result,
+            McpDispatcher.DispatchResult.Response response,
             CompletableFuture<Void> transportCompletion) {
-        if (!(result instanceof McpDispatcher.DispatchResult.Response response)) {
-            completeOn(postStream.terminateAsync(), transportCompletion);
-            return;
-        }
         var responseBody = response.responseBody();
         try {
             var sseEventId = server.nextEventId();
@@ -471,9 +511,10 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
         });
     }
 
-    private void handleGet(ChannelHandlerContext ctx, FullHttpRequest req, CorsDecision cors) {
+    private void handleGet(ChannelHandlerContext ctx, FullHttpRequest req, CorsDecision cors, SecurityContext caller) {
+        final var expiresAt = caller.expiresAt();
         if (server.isStateless()) {
-            sseManager.openStatelessStream(ctx, cors);
+            sseManager.openStatelessStream(ctx, cors, expiresAt);
             return;
         }
         var sessionId = req.headers().get(McpHeaderNames.MCP_SESSION_ID);
@@ -482,12 +523,11 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
             return;
         }
         final var lastEventId = req.headers().get(McpHeaderNames.LAST_EVENT_ID);
-        final var caller = callerOf(ChannelHandlerUtils.getInteractionContext(ctx));
         final var local = server.getLocalSession(sessionId);
         if (local.isPresent()) {
             ownedBy(local, caller)
                     .ifPresentOrElse(
-                            found -> sseManager.openStream(ctx, found, lastEventId, cors),
+                            found -> sseManager.openStream(ctx, found, lastEventId, cors, expiresAt),
                             () -> sendUnknownSession(ctx, cors));
             return;
         }
@@ -499,19 +539,19 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
                             cors,
                             session,
                             failure,
-                            found -> sseManager.openStream(ctx, found, lastEventId, cors)));
+                            found -> sseManager.openStream(ctx, found, lastEventId, cors, expiresAt)));
         } catch (RejectedExecutionException e) {
             sendPlainTextAndClose(ctx, HttpResponseStatus.SERVICE_UNAVAILABLE, "Server shutting down", cors);
         }
     }
 
-    private void handleDelete(ChannelHandlerContext ctx, FullHttpRequest req, CorsDecision cors) {
+    private void handleDelete(
+            ChannelHandlerContext ctx, FullHttpRequest req, CorsDecision cors, SecurityContext caller) {
         var sessionId = req.headers().get(McpHeaderNames.MCP_SESSION_ID);
         if (sessionId == null || sessionId.isEmpty()) {
             sendPlainTextAndClose(ctx, HttpResponseStatus.BAD_REQUEST, "Missing MCP-Session-Id header", cors);
             return;
         }
-        final var caller = callerOf(ChannelHandlerUtils.getInteractionContext(ctx));
         try {
             CompletableFuture.supplyAsync(
                             () -> {
@@ -568,22 +608,17 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
      * is as good as unknown. A mismatch leaves the session untouched and answers like an unknown id,
      * so a probing caller learns nothing about which ids exist.
      */
-    private static Optional<Session> ownedBy(Optional<Session> found, Owner caller) {
+    private static Optional<Session> ownedBy(Optional<Session> found, SecurityContext caller) {
+        final var owner = Owner.of(caller);
         return found.filter(session -> {
-            if (session.isOwnedBy(caller)) {
+            if (session.isOwnedBy(owner)) {
                 return true;
             }
-            logger.warn("Session owner mismatch, answering as unknown session: sessionId={}", truncated(session.id()));
+            logger.warn(
+                    "Session owner mismatch, answering as unknown session: sessionId={}",
+                    Owner.truncated(session.id()));
             return false;
         });
-    }
-
-    private static Owner callerOf(@Nullable ChannelContext ic) {
-        return ic != null ? Owner.of(ic.securityContext()) : Owner.anonymous();
-    }
-
-    private static String truncated(String sessionId) {
-        return sessionId.substring(0, Math.min(8, sessionId.length() / 2)) + "…";
     }
 
     private static void sendUnknownSession(ChannelHandlerContext ctx, CorsDecision cors) {

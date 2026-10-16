@@ -60,7 +60,7 @@ class SessionOwnerRestoreTest {
     private TachyonServer startNode() {
         final var server = TachyonServer.builder()
                 .capabilities(c -> c.tools())
-                .security(s -> s.bearerToken(tokens))
+                .security(TestBearerTokens.secured(tokens))
                 .session(s -> s.sessionStore(store))
                 .network(n -> n.host("localhost").port(0))
                 .build();

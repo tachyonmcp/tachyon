@@ -2,11 +2,13 @@
 package dev.tachyonmcp.core.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 
 import dev.tachyonmcp.api.runtime.AttributeKey;
 import dev.tachyonmcp.api.runtime.InteractionContext;
 import dev.tachyonmcp.api.runtime.InteractionContext.Lifecycle;
 import dev.tachyonmcp.api.server.domain.RequestId;
+import dev.tachyonmcp.api.server.security.SecurityContext;
 import dev.tachyonmcp.core.protocol.Protocol;
 import dev.tachyonmcp.core.protocol.ProtocolRequestMapper;
 import dev.tachyonmcp.core.protocol.ProtocolResponseMapper;
@@ -34,6 +36,17 @@ class DefaultChannelContextTest {
         assertThat(handlerContext.sessionId()).isNull();
         assertThat(ctx.lifecycle()).isEqualTo(Lifecycle.INITIALIZATION);
         assertThat(ctx.session()).isNull();
+    }
+
+    /** The connection holds no caller, so asking it must not quietly answer anonymous. */
+    @Test
+    void theConnectionHoldsNoCallerAndSaysSoLoudly() {
+        InteractionContext connection = new DefaultChannelContext(new FakeProtocol());
+
+        assertThatIllegalStateException()
+                .isThrownBy(connection::securityContext)
+                .withMessageContaining("no caller")
+                .withMessageContaining("dispatch context");
     }
 
     @Test
@@ -83,7 +96,8 @@ class DefaultChannelContextTest {
             });
 
             new McpDispatcher(engine, Runnable::run)
-                    .dispatchRequestAsync(RequestId.of(1), "test/attributes", Map.of(), null)
+                    .dispatchRequestAsync(
+                            RequestId.of(1), "test/attributes", Map.of(), null, SecurityContext.anonymous())
                     .get(5, TimeUnit.SECONDS);
         }
 
@@ -120,7 +134,8 @@ class DefaultChannelContextTest {
             });
 
             new McpDispatcher(engine, Runnable::run)
-                    .dispatchRequestAsync(RequestId.of(1), "test/attributes", Map.of(), null)
+                    .dispatchRequestAsync(
+                            RequestId.of(1), "test/attributes", Map.of(), null, SecurityContext.anonymous())
                     .get(5, TimeUnit.SECONDS);
         }
 

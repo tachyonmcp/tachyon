@@ -7,10 +7,10 @@ import static dev.tachyonmcp.testkit.JsonRpcResponseAssert.assertThat;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.tachyonmcp.api.server.security.SecurityContext;
+import dev.tachyonmcp.core.server.security.AccessPolicy;
 import dev.tachyonmcp.core.server.security.BearerTokenAuthenticationProvider;
 import dev.tachyonmcp.e2e.mcp.TestBearerTokens;
-import io.netty.handler.codec.http.HttpHeaderNames;
-import io.netty.handler.codec.http.HttpRequest;
+import java.time.Clock;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -28,13 +28,15 @@ class MixedAuthenticationSessionTest extends AbstractStatefulMcpE2eTest {
     @BeforeEach
     void startMixedServer() {
         tokens = new TestBearerTokens();
-        final var bearer = new BearerTokenAuthenticationProvider(tokens);
+        final var bearer =
+                new BearerTokenAuthenticationProvider(TestBearerTokens.bearerConfig(tokens), Clock.systemUTC());
         startServer(
                 b -> b.capabilities(c -> c.tools())
-                        .security(s -> s.authenticationProvider(
-                                (HttpRequest request) -> request.headers().contains(HttpHeaderNames.AUTHORIZATION)
-                                        ? bearer.authenticate(request)
-                                        : SecurityContext.anonymous())),
+                        .security(s -> s.accessPolicy(AccessPolicy.permitAll())
+                                .authenticationProvider(request ->
+                                        request.headers("Authorization").isEmpty()
+                                                ? SecurityContext.anonymous()
+                                                : bearer.authenticate(request))),
                 tokens::registerWhoAmI);
     }
 

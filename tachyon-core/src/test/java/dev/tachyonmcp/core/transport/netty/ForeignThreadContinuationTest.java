@@ -9,6 +9,7 @@ import dev.tachyonmcp.api.server.domain.RequestId;
 import dev.tachyonmcp.api.server.features.tools.AsyncToolFn;
 import dev.tachyonmcp.api.server.features.tools.ToolDescriptor;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
+import dev.tachyonmcp.api.server.security.SecurityContext;
 import dev.tachyonmcp.core.server.McpDispatcher;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
 import java.util.Map;
@@ -66,7 +67,8 @@ class ForeignThreadContinuationTest {
             var dispatcher = new McpDispatcher(server, server.executor());
             var params = Map.of("name", "foreign-thread-tool", "arguments", Map.of());
             dispatcher
-                    .dispatchRequestAsync(RequestId.of(1), "tools/call", params, "sess-foreign")
+                    .dispatchRequestAsync(
+                            RequestId.of(1), "tools/call", params, "sess-foreign", SecurityContext.anonymous())
                     .get(10, TimeUnit.SECONDS);
         }
 

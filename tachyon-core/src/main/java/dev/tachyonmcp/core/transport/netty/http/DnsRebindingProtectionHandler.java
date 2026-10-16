@@ -218,12 +218,7 @@ public class DnsRebindingProtectionHandler extends ChannelInboundHandlerAdapter 
 
     /** Returns {@code true} when {@code authority} ({@code host} or {@code host:port}) is loopback. */
     static boolean isLocalhostAuthority(String authority) {
-        if (authority.isEmpty()) return false;
-        var host = stripPort(authority);
-        return host.equalsIgnoreCase("localhost")
-                || host.equalsIgnoreCase("localhost.")
-                || host.equals("127.0.0.1")
-                || host.equals("[::1]");
+        return !authority.isEmpty() && Origins.isLoopbackHost(stripPort(authority));
     }
 
     /**

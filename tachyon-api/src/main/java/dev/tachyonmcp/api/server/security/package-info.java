@@ -3,8 +3,8 @@
  */
 
 /**
- * Request authentication: the {@link dev.tachyonmcp.api.server.security.SecurityContext} a request
- * carries and the {@link dev.tachyonmcp.api.server.security.AuthenticationProvider} that resolves it.
+ * The {@link dev.tachyonmcp.api.server.security.SecurityContext} a request carries: who the caller is
+ * and which scopes they hold.
  */
 @NullMarked
 @ExperimentalApi
