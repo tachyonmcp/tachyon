@@ -112,6 +112,7 @@ See the [quickstart](docs/quickstart.md) for Java and Kotlin examples plus a `cu
 - [Annotations](docs/annotations.md) -- mcp-java, LangChain4j, and Spring AI providers
 - [Extensions](docs/extensions/) and [MCP Skills](docs/extensions/skills.md), and [MCP Apps](docs/extensions/apps.md) -- custom protocol methods and SEP support
 - [Kotlin DSL](docs/kotlin/) -- builders, scopes, and suspending handlers
+- [Kotlin annotations](docs/annotations.md) -- declarative MCP feature configuration via annotations ([example project](examples/kotlin-annotations/README.md))
 - [Examples](examples/README.md) -- runnable Java and Kotlin servers
 - [FAQ](docs/faq.md) -- frameworks, concurrency, deployment, and compatibility
 
