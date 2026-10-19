@@ -33,16 +33,20 @@ import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.ReferenceCountUtil;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Queue;
+import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 
 /**
  * Authentication on the request head: what is held while the provider runs, what is replayed, and
@@ -52,6 +56,7 @@ import org.junit.jupiter.api.Test;
 class AuthenticationHandlerTest {
 
     private static final Duration TIMEOUT = Duration.ofSeconds(5);
+    private static final String RETRY_AFTER = Long.toString(TIMEOUT.toSeconds());
 
     private final Queue<Runnable> handlerExecutor = new ArrayDeque<>();
     private final List<AuthenticationRequest> seenByProvider = new ArrayList<>();
@@ -84,7 +89,7 @@ class AuthenticationHandlerTest {
                             }),
                             AccessPolicy.permitAll(),
                             TIMEOUT,
-                            SecurityConfig.DEFAULT_MAX_PENDING_AUTHENTICATIONS),
+                            SecurityConfig.DEFAULT_MAX_CONCURRENT_AUTHENTICATIONS),
                     handlerExecutor::add,
                     gate,
                     List.of(),
@@ -223,8 +228,9 @@ class AuthenticationHandlerTest {
 
     /**
      * K7: a verifier or an HTTP client can put the token in an exception, two causes deep. The WARN names
-     * the class; the message and the causes are at DEBUG, off in production. slf4j-simple writes to
-     * {@code System.err} at the time of the call, so the line is captured here.
+     * the class; the message and the causes are at TRACE only, where raw
+     * request data belongs. This logger runs at DEBUG in tests ({@code simplelogger.properties}), and
+     * slf4j-simple writes to {@code System.err} at the time of the call, so both lines are captured here.
      */
     @Test
     void aProviderFailureNeverLogsWhatTheExceptionSays() {
@@ -246,20 +252,23 @@ class AuthenticationHandlerTest {
         response.release();
         final var log = captured.toString(StandardCharsets.UTF_8);
         assertThat(log).contains("WARN", "Authentication provider failed", "java.lang.IllegalStateException");
+        assertThat(LoggerFactory.getLogger(AuthenticationHandler.class).isDebugEnabled())
+                .as("DEBUG is on, so its silence below is proof")
+                .isTrue();
         assertThat(log)
-                .as("neither the message nor any cause reaches the log")
+                .as("neither the message nor any cause reaches WARN or DEBUG")
                 .doesNotContain(token, "introspection failed");
     }
 
-    /** The server's pool of pending authentications is drawn from before the provider runs and refilled after. */
+    /** At capacity the request is turned away before the provider is called, and no permit is taken. */
     @Test
-    void aRequestOverThePendingCapacityIs503BeforeTheProviderRunsAndThePermitComesBack() {
+    void aRequestOverTheCapacityIs503BeforeTheProviderRunsAndThePermitComesBack() {
         permits.drainPermits();
         channel.writeInbound(head(), last(""));
 
         final FullHttpResponse refused = channel.readOutbound();
         assertThat(refused.status()).isEqualTo(HttpResponseStatus.SERVICE_UNAVAILABLE);
-        assertThat(refused.headers().get(HttpHeaderNames.RETRY_AFTER)).isEqualTo("5");
+        assertThat(refused.headers().get(HttpHeaderNames.RETRY_AFTER)).isEqualTo(RETRY_AFTER);
         assertThat(refused.headers().contains(HttpHeaderNames.WWW_AUTHENTICATE)).isFalse();
         assertThat(HttpUtil.isKeepAlive(refused)).isFalse();
         assertThat(seenByProvider).as("the provider is never asked").isEmpty();
@@ -284,43 +293,88 @@ class AuthenticationHandlerTest {
                 .isEqualTo(1);
     }
 
+    /** A server shutting down cannot run the provider: that is no provider failure, and no permit stays taken. */
     @Test
-    void aPermitIsGivenBackOnARefusalATimeoutAndAClosedChannel() {
-        channel.writeInbound(head(), last(""));
-        refused = AuthenticationException.bearerInvalidToken("bad token");
-        runProvider();
-        assertThat(permits.availablePermits()).as("after a refusal").isEqualTo(1);
-        ReferenceCountUtil.release(channel.readOutbound());
+    void anExecutorThatRefusesTheCallAnswers503AndKeepsNoPermit() {
+        final var refusing = otherChannel(
+                task -> {
+                    throw new RejectedExecutionException("shutting down");
+                },
+                TIMEOUT);
+        final var body = last("!");
 
-        final var second = new EmbeddedChannel(new AuthenticationHandler(
-                channelSecurity(), handlerExecutor::add, new HttpPipeliningGate(16), List.of(), permits));
-        second.freezeTime();
-        second.writeInbound(head(), last(""));
-        assertThat(permits.availablePermits()).isZero();
-        second.advanceTimeBy(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
-        second.runScheduledPendingTasks();
-        assertThat(permits.availablePermits()).as("after a timeout").isEqualTo(1);
-        second.finishAndReleaseAll();
+        refusing.writeInbound(head(), body);
+        refusing.runPendingTasks();
 
-        final var third = new EmbeddedChannel(new AuthenticationHandler(
-                channelSecurity(), handlerExecutor::add, new HttpPipeliningGate(16), List.of(), permits));
-        third.writeInbound(head(), last(""));
-        assertThat(permits.availablePermits()).isZero();
-        third.close();
-        assertThat(permits.availablePermits())
-                .as("after the channel closed mid-authentication")
-                .isEqualTo(1);
-        third.finishAndReleaseAll();
+        final FullHttpResponse response = refusing.readOutbound();
+        assertThat(response.status()).isEqualTo(HttpResponseStatus.SERVICE_UNAVAILABLE);
+        assertThat(response.headers().get(HttpHeaderNames.RETRY_AFTER)).isEqualTo(RETRY_AFTER);
+        assertThat(response.headers().contains(HttpHeaderNames.WWW_AUTHENTICATE))
+                .as("no challenge: the client keeps a token that may be valid")
+                .isFalse();
+        assertThat(HttpUtil.isKeepAlive(response)).isFalse();
+        assertThat(body.refCnt()).isZero();
+        assertThat(permits.availablePermits()).isEqualTo(1);
+        response.release();
+        refusing.finishAndReleaseAll();
     }
 
-    private SecurityConfig channelSecurity() {
+    /** Anything else thrown on the way to the provider is a failure like the provider's own, and no permit stays taken. */
+    @Test
+    void anExecutorThatFailsAnswers500AndKeepsNoPermit() {
+        final var failing = otherChannel(
+                task -> {
+                    throw new IllegalStateException("broken executor");
+                },
+                TIMEOUT);
+        final var body = last("!");
+
+        failing.writeInbound(head(), body);
+        failing.runPendingTasks();
+
+        final FullHttpResponse response = failing.readOutbound();
+        assertThat(response.status()).isEqualTo(HttpResponseStatus.INTERNAL_SERVER_ERROR);
+        assertThat(HttpUtil.isKeepAlive(response)).isFalse();
+        assertThat(body.refCnt()).isZero();
+        assertThat(permits.availablePermits()).isEqualTo(1);
+        response.release();
+        failing.finishAndReleaseAll();
+    }
+
+    /** A timeout too long to count in nanoseconds waits as long as one can: no request fails on it. */
+    @Test
+    void anEndlessTimeoutAuthenticatesAndGivesThePermitBack() {
+        final var endless = otherChannel(handlerExecutor::add, ChronoUnit.FOREVER.getDuration());
+
+        endless.writeInbound(head(), last(""));
+        handlerExecutor.remove().run();
+        endless.runPendingTasks();
+
+        assertThat((Object) endless.readInbound()).isInstanceOf(HttpRequest.class);
+        assertThat(permits.availablePermits()).isEqualTo(1);
+
+        permits.drainPermits();
+        endless.writeInbound(head(), last(""));
+
+        final FullHttpResponse atCapacity = endless.readOutbound();
+        assertThat(atCapacity.status()).isEqualTo(HttpResponseStatus.SERVICE_UNAVAILABLE);
+        assertThat(atCapacity.headers().contains(HttpHeaderNames.RETRY_AFTER)).isTrue();
+        atCapacity.release();
+        endless.finishAndReleaseAll();
+    }
+
+    private EmbeddedChannel otherChannel(Executor executor, Duration timeout) {
+        return new EmbeddedChannel(new AuthenticationHandler(
+                channelSecurity(timeout), executor, new HttpPipeliningGate(16), List.of(), permits));
+    }
+
+    private static SecurityConfig channelSecurity(Duration timeout) {
         return new SecurityConfig(
-                new SecurityConfig.Authentication.Custom(request -> {
-                    throw new IllegalStateException("never answers");
-                }),
+                new SecurityConfig.Authentication.Custom(
+                        request -> SecurityContext.authenticated(() -> "alice", List.of())),
                 AccessPolicy.permitAll(),
-                TIMEOUT,
-                SecurityConfig.DEFAULT_MAX_PENDING_AUTHENTICATIONS);
+                timeout,
+                SecurityConfig.DEFAULT_MAX_CONCURRENT_AUTHENTICATIONS);
     }
 
     /** A verifier whose authorization server is down answers like a timeout: keep the token, wait, retry. */
@@ -377,6 +431,10 @@ class AuthenticationHandlerTest {
         assertThat(sink.messages).first().isSameAs(head);
     }
 
+    /**
+     * The provider is not interrupted, so the call cut off at the timeout keeps its permit until it
+     * returns: a stuck provider is not called again past the limit.
+     */
     @Test
     void aTimeoutAnswers503ReleasesTheBodyAndIgnoresALateAcceptance() {
         channel.freezeTime();
@@ -393,13 +451,16 @@ class AuthenticationHandlerTest {
 
         final FullHttpResponse response = channel.readOutbound();
         assertThat(response.status()).isEqualTo(HttpResponseStatus.SERVICE_UNAVAILABLE);
-        assertThat(response.headers().get(HttpHeaderNames.RETRY_AFTER)).isEqualTo("5");
+        assertThat(response.headers().get(HttpHeaderNames.RETRY_AFTER)).isEqualTo(RETRY_AFTER);
         assertThat(response.headers().contains(HttpHeaderNames.WWW_AUTHENTICATE))
                 .as("no challenge: the client keeps a token that may be valid")
                 .isFalse();
         assertThat(HttpUtil.isKeepAlive(response)).isFalse();
         assertThat(first.refCnt()).isZero();
         assertThat(last.refCnt()).isZero();
+        assertThat(permits.availablePermits())
+                .as("answered at the timeout, but the provider still runs")
+                .isZero();
         response.release();
 
         accepted = SecurityContext.authenticated(() -> "alice", List.of());
@@ -407,6 +468,9 @@ class AuthenticationHandlerTest {
 
         assertThat(sink.messages).as("a late result changes nothing").isEmpty();
         assertThat((Object) channel.readOutbound()).isNull();
+        assertThat(permits.availablePermits())
+                .as("given back once the cut-off call returned")
+                .isEqualTo(1);
     }
 
     @Test
@@ -435,6 +499,9 @@ class AuthenticationHandlerTest {
 
         assertThat(first.refCnt()).isZero();
         assertThat(last.refCnt()).isZero();
+        assertThat(permits.availablePermits())
+                .as("the channel closed, but the provider still runs")
+                .isZero();
 
         accepted = SecurityContext.anonymous();
         runProvider();
@@ -442,6 +509,9 @@ class AuthenticationHandlerTest {
         assertThat(sink.messages)
                 .as("a late result for a closed channel does nothing")
                 .isEmpty();
+        assertThat(permits.availablePermits())
+                .as("given back once the orphaned call returned")
+                .isEqualTo(1);
     }
 
     @Test

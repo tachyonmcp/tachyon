@@ -3,6 +3,7 @@ package dev.tachyonmcp.e2e.mcp.v2026_07_28;
 
 import static dev.tachyonmcp.e2e.mcp.TestBearerTokens.ALICE;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 import dev.tachyonmcp.core.server.security.AccessPolicy;
 import dev.tachyonmcp.e2e.mcp.AbstractStatelessMcpE2eTest;
@@ -16,6 +17,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -222,6 +224,54 @@ class HeadAuthenticationTest extends AbstractStatelessMcpE2eTest<Mcp20260728Clie
                     .as("no challenge: the client keeps a token that may be valid")
                     .isEmpty();
             assertThat(Duration.ofNanos(System.nanoTime() - started)).isLessThan(Duration.ofSeconds(3));
+        } finally {
+            release.countDown();
+        }
+    }
+
+    /**
+     * The cap counts verifier calls still running, not requests still waiting: a call cut off at the
+     * timeout keeps the one permit, so the next request is turned away without calling the verifier.
+     */
+    @Test
+    void aStuckVerifierKeepsItsPermitPastTheTimeout() throws Exception {
+        final var release = new CountDownLatch(1);
+        final var hanging = HeadAuthentication.hanging(release);
+        final var calls = new AtomicInteger();
+        startServer(
+                b -> b.capabilities(c -> c.tools())
+                        .security(s -> s.accessPolicy(AccessPolicy.permitAll())
+                                .bearerToken(TestBearerTokens.bearer(token -> {
+                                    calls.incrementAndGet();
+                                    return hanging.verify(token);
+                                }))
+                                .authenticationTimeout(Duration.ofMillis(300))
+                                .maxConcurrentAuthentications(1)),
+                tokens::registerWhoAmI);
+        try (var http = HttpClient.newHttpClient()) {
+            final var authenticated = post(WHOAMI_CALL, "whoami")
+                    .header("Authorization", "Bearer " + ALICE)
+                    .timeout(Duration.ofSeconds(10))
+                    .build();
+
+            final var timedOut = http.send(authenticated, HttpResponse.BodyHandlers.discarding());
+            final var atCapacity = http.send(authenticated, HttpResponse.BodyHandlers.discarding());
+
+            assertThat(timedOut.statusCode()).isEqualTo(503);
+            assertThat(atCapacity.statusCode())
+                    .as("the cut-off call still holds the only permit")
+                    .isEqualTo(503);
+            assertThat(atCapacity.headers().firstValue("Retry-After")).isPresent();
+            assertThat(calls).as("the stuck verifier is not called again").hasValue(1);
+
+            release.countDown();
+
+            await().atMost(Duration.ofSeconds(5))
+                    .untilAsserted(() -> assertThat(http.send(authenticated, HttpResponse.BodyHandlers.discarding())
+                                    .statusCode())
+                            .as("the verifier is reached again once its first call returned")
+                            .isEqualTo(401));
+            assertThat(calls).hasValueGreaterThanOrEqualTo(2);
         } finally {
             release.countDown();
         }

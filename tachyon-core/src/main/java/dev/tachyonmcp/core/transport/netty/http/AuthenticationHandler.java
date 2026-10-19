@@ -67,18 +67,22 @@ import org.slf4j.LoggerFactory;
  * dispatcher uses for a refusal raised later, and the connection closes, since the body was never
  * read. This handler holds no scheme of its own. Every refusal here, timeouts and provider failures
  * included, is reported to the server's observers as one {@link OperationKind#AUTHENTICATION}
- * operation: no dispatch exists yet to report it. A provider that cannot check credentials right now
- * says so with {@link AuthenticationException#unavailable}, a {@code 503} with {@code Retry-After}
- * and no challenge, so clients keep a token that may be valid; any other failure is a bug and answers
- * {@code 500}. A provider still silent after the configured timeout is answered the same {@code 503};
- * it is not interrupted, and its late result is ignored. At most {@link
- * SecurityConfig#maxPendingAuthentications()} requests wait for the provider at once, across every
- * connection of the server; one more is answered the same {@code 503} before the provider is called,
- * so a slow provider cannot pile up threads and held heads without limit. Timeouts and refusals at
- * capacity are counted, and one in {@link #WARN_SAMPLE} is logged at {@code WARN}, the rest at
- * {@code DEBUG}: a slow provider under load must not flood the log; the observers see every one. A principal
- * without a name is a provider failure: sessions are bound to the name, and a nameless principal could
- * not be told apart from an anonymous caller.
+ * operation: no dispatch exists yet to report it. A provider that cannot check credentials right
+ * now says so with {@link AuthenticationException#unavailable}, a {@code 503} with {@code
+ * Retry-After} and no challenge, so clients keep a token that may be valid; any other failure is a
+ * bug and answers {@code 500}. A provider still silent after the configured timeout is answered the
+ * same {@code 503}; it is not interrupted, and its late result is ignored. At most {@link
+ * SecurityConfig#maxConcurrentAuthentications()} provider calls run at once, across every
+ * connection of the server. A call holds its permit until it returns, even after its request was
+ * answered at the timeout or its connection closed, so a stuck provider is not called again past
+ * the limit and cannot pile up threads and held heads; one more request is answered the same {@code
+ * 503} before the provider is called. An executor that refuses the call answers the same {@code
+ * 503}: the provider could not be asked, which is not its failure. Anything else thrown on the way
+ * to the provider is a failure like the provider's own; either way the permit comes back. Timeouts
+ * and refusals at capacity are counted, and one in {@link #WARN_SAMPLE} is logged at {@code WARN},
+ * the rest at {@code DEBUG}: a slow provider under load must not flood the log; the observers see
+ * every one. A principal without a name is a provider failure: sessions are bound to the name, and
+ * a nameless principal could not be told apart from an anonymous caller.
  *
  * <p>The result is recorded with {@link ChannelHandlerUtils#recordCaller} and taken, once, by the
  * handler that processes the request, which passes it down explicitly: no per-connection object holds
@@ -104,7 +108,8 @@ public final class AuthenticationHandler extends ChannelInboundHandlerAdapter {
     private final AuthenticationProvider provider;
     private final SecurityConfig.Authentication authentication;
     private final Executor executor;
-    private final Duration timeout;
+    private final long timeoutNanos;
+    private final long retryAfterSeconds;
     private final HttpPipeliningGate gate;
     private final List<ObservationListener> listeners;
     private final Semaphore permits;
@@ -120,8 +125,6 @@ public final class AuthenticationHandler extends ChannelInboundHandlerAdapter {
         boolean complete;
         /** Reads are paused through the gate on its behalf, so it must release them. */
         boolean holding;
-        /** It holds one of the server's permits until it is settled. */
-        boolean admitted;
 
         @Nullable
         ScheduledFuture<?> deadline;
@@ -138,8 +141,8 @@ public final class AuthenticationHandler extends ChannelInboundHandlerAdapter {
      * @param gate this channel's pipelining gate, which owns {@code autoRead}
      * @param listeners told of every request this handler rejects, as an {@link
      *     OperationKind#AUTHENTICATION} operation; none for a server without observers
-     * @param permits the server's one pool of {@link SecurityConfig#maxPendingAuthentications}
-     *     permits, shared by every channel
+     * @param permits the server's one pool of {@link SecurityConfig#maxConcurrentAuthentications()}
+     *     permits, shared by every channel, one per provider call still running
      * @throws IllegalArgumentException if {@code security} authenticates nobody
      */
     public AuthenticationHandler(
@@ -150,7 +153,10 @@ public final class AuthenticationHandler extends ChannelInboundHandlerAdapter {
             Semaphore permits) {
         this.provider = Objects.requireNonNull(security.authenticationProvider(), "the server authenticates nobody");
         this.authentication = security.authentication();
-        this.timeout = security.authenticationTimeout();
+        // Both conversions saturate: a timeout too long for a long of nanoseconds waits as long as one can.
+        final var timeout = security.authenticationTimeout();
+        this.timeoutNanos = TimeUnit.NANOSECONDS.convert(timeout);
+        this.retryAfterSeconds = Math.max(1, Math.ceilDiv(TimeUnit.MILLISECONDS.convert(timeout), 1000));
         this.executor = Objects.requireNonNull(executor, "executor");
         this.gate = Objects.requireNonNull(gate, "gate");
         this.listeners = Objects.requireNonNull(listeners, "listeners");
@@ -218,21 +224,24 @@ public final class AuthenticationHandler extends ChannelInboundHandlerAdapter {
         attempt = current;
         if (!permits.tryAcquire()) {
             attempt = null;
-            sampled(atCapacity, "Authentication refused at capacity for {} {}", head);
+            sampled(atCapacity, "refused: every permit is held by a running provider call", head);
             observe(new OperationOutcome.Rejected(null, 503, 0));
             respond(ctx, current, HttpResponseStatus.SERVICE_UNAVAILABLE, null, retryAfterSeconds());
             return;
         }
-        current.admitted = true;
         final var outcome = new CompletableFuture<SecurityContext>();
         try {
-            current.deadline =
-                    ctx.executor().schedule(() -> expire(ctx, current), timeout.toNanos(), TimeUnit.NANOSECONDS);
+            current.deadline = ctx.executor().schedule(() -> expire(ctx, current), timeoutNanos, TimeUnit.NANOSECONDS);
             final var view = new AuthenticationRequest(
                     head.method().name(), head.uri(), name -> head.headers().getAll(name));
             executor.execute(() -> authenticate(view, outcome));
         } catch (RejectedExecutionException e) {
-            outcome.completeExceptionally(e);
+            permits.release();
+            outcome.completeExceptionally(AuthenticationException.unavailable(
+                    "the authentication provider cannot be called", Duration.ofSeconds(retryAfterSeconds)));
+        } catch (Throwable t) {
+            permits.release();
+            outcome.completeExceptionally(t);
         }
         outcome.whenComplete((securityContext, failure) -> {
             try {
@@ -255,6 +264,8 @@ public final class AuthenticationHandler extends ChannelInboundHandlerAdapter {
             outcome.complete(securityContext);
         } catch (Throwable t) {
             outcome.completeExceptionally(t);
+        } finally {
+            permits.release();
         }
     }
 
@@ -295,7 +306,7 @@ public final class AuthenticationHandler extends ChannelInboundHandlerAdapter {
             return;
         }
         attempt = null;
-        sampled(timeouts, "Authentication of {} {} timed out", expired.head);
+        sampled(timeouts, "timed out", expired.head);
         observe(new OperationOutcome.Rejected(null, 503, 0));
         respond(ctx, expired, HttpResponseStatus.SERVICE_UNAVAILABLE, null, retryAfterSeconds());
     }
@@ -303,7 +314,7 @@ public final class AuthenticationHandler extends ChannelInboundHandlerAdapter {
     private void reject(ChannelHandlerContext ctx, Attempt rejected, @Nullable Throwable failure) {
         final var head = rejected.head;
         final var rejection = failure == null ? null : SecurityRejection.of(failure, authentication);
-        if (rejection != null && failure != null) {
+        if (rejection != null) {
             logger.debug("Rejected {} {}: {}", head.method(), path(head), rejection.status());
             // The message is the provider's own: at TRACE only, where raw request data belongs.
             logger.trace("Rejected {} {}: {}", head.method(), path(head), failure.getMessage());
@@ -315,14 +326,14 @@ public final class AuthenticationHandler extends ChannelInboundHandlerAdapter {
                     rejection.wwwAuthenticate(),
                     rejection.retryAfter());
         } else {
-            // A verifier or an HTTP client can put the token in an exception message or a cause; at WARN
-            // only the class is named. The whole exception is for DEBUG, which stays off in production.
+            // A verifier or an HTTP client can put the token in an exception message or a cause, so only
+            // the class is named. The whole exception is for TRACE, where raw request data belongs.
             logger.warn(
                     "Authentication provider failed for {} {}: {}",
                     head.method(),
                     path(head),
                     failure == null ? "null" : failure.getClass().getName());
-            logger.debug("Authentication provider failed for {} {}", head.method(), path(head), failure);
+            logger.trace("Authentication provider failed for {} {}", head.method(), path(head), failure);
             observe(new OperationOutcome.Rejected(null, 500, 0));
             respond(ctx, rejected, HttpResponseStatus.INTERNAL_SERVER_ERROR, null, null);
         }
@@ -369,18 +380,21 @@ public final class AuthenticationHandler extends ChannelInboundHandlerAdapter {
         ctx.writeAndFlush(response);
     }
 
-    /** One line in {@link #WARN_SAMPLE} at WARN, with the running count; the rest at DEBUG. */
+    /**
+     * One line in {@link #WARN_SAMPLE} at WARN, with the running count; the rest at DEBUG. The event is
+     * an argument, not part of the pattern, so both patterns stay constant and their placeholders checked.
+     */
     private static void sampled(AtomicLong counter, String event, HttpRequest head) {
         final var count = counter.incrementAndGet();
         if (count % WARN_SAMPLE == 1) {
-            logger.warn(event + " ({} so far)", head.method(), path(head), count);
+            logger.warn("Authentication of {} {} {} ({} so far)", head.method(), path(head), event, count);
         } else {
-            logger.debug(event, head.method(), path(head));
+            logger.debug("Authentication of {} {} {}", head.method(), path(head), event);
         }
     }
 
     private String retryAfterSeconds() {
-        return Long.toString(Math.max(1, Math.ceilDiv(timeout.toMillis(), 1000)));
+        return Long.toString(retryAfterSeconds);
     }
 
     private void abandon() {
@@ -397,15 +411,11 @@ public final class AuthenticationHandler extends ChannelInboundHandlerAdapter {
         ReferenceCountUtil.release(dropped.head);
     }
 
-    /** Settles the attempt: drops its deadline and gives its permit back, once. */
+    /** Drops the attempt's deadline. Its permit is the provider call's, given back when that returns. */
     private void cancel(Attempt finished) {
         final var deadline = finished.deadline;
         if (deadline != null) {
             deadline.cancel(false);
-        }
-        if (finished.admitted) {
-            finished.admitted = false;
-            permits.release();
         }
     }
 

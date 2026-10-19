@@ -149,7 +149,7 @@ public class McpChannelInitializer extends ChannelInitializer<SocketChannel> {
             endpointValidatorHandler = new EndpointValidatorHandler(endpointPath);
             protectedResourceMetadataHandler = null;
         }
-        authenticationPermits = new Semaphore(server.config().security().maxPendingAuthentications());
+        authenticationPermits = new Semaphore(server.config().security().maxConcurrentAuthentications());
     }
 
     /**

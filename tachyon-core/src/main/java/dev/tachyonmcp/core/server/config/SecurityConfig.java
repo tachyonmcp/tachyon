@@ -23,34 +23,36 @@ import org.jspecify.annotations.Nullable;
  *     policy its builder was told to use, since {@link Builder#build} refuses to choose for you
  * @param authenticationTimeout how long a request may wait for the authentication provider before it is
  *     answered {@code 503 Service Unavailable}; positive
- * @param maxPendingAuthentications how many requests may wait for the provider at once, across every
- *     connection; one more is answered {@code 503} at once. Bounds the provider threads and the held
- *     request heads a slow provider can pile up; positive
+ * @param maxConcurrentAuthentications how many authentication provider calls may run at once, across
+ *     every connection; one more request is answered {@code 503} at once. A call keeps its place until
+ *     it returns, even after its request was answered at the timeout or its connection closed, so this
+ *     bounds the provider threads and the held request heads a slow or stuck provider can pile up;
+ *     positive
  */
 @ExperimentalApi
 public record SecurityConfig(
         Authentication authentication,
         AccessPolicy accessPolicy,
         Duration authenticationTimeout,
-        int maxPendingAuthentications) {
+        int maxConcurrentAuthentications) {
 
     /** How long a request waits for its authentication unless configured otherwise. */
     public static final Duration DEFAULT_AUTHENTICATION_TIMEOUT = Duration.ofSeconds(10);
 
-    /** How many requests may wait for the provider at once unless configured otherwise. */
-    public static final int DEFAULT_MAX_PENDING_AUTHENTICATIONS = 1024;
+    /** How many provider calls may run at once unless configured otherwise. */
+    public static final int DEFAULT_MAX_CONCURRENT_AUTHENTICATIONS = 1024;
 
     private static final SecurityConfig DISABLED = new SecurityConfig(
             new Authentication.Disabled(),
             AccessPolicy.permitAll(),
             DEFAULT_AUTHENTICATION_TIMEOUT,
-            DEFAULT_MAX_PENDING_AUTHENTICATIONS);
+            DEFAULT_MAX_CONCURRENT_AUTHENTICATIONS);
 
     /**
      * Validates the settings.
      *
      * @throws IllegalArgumentException if {@code authenticationTimeout} is zero or negative, or {@code
-     *     maxPendingAuthentications} is not positive
+     *     maxConcurrentAuthentications} is not positive
      */
     public SecurityConfig {
         Objects.requireNonNull(authentication, "authentication");
@@ -59,8 +61,8 @@ public record SecurityConfig(
         if (authenticationTimeout.isZero() || authenticationTimeout.isNegative()) {
             throw new IllegalArgumentException("authenticationTimeout must be positive");
         }
-        if (maxPendingAuthentications <= 0) {
-            throw new IllegalArgumentException("maxPendingAuthentications must be positive");
+        if (maxConcurrentAuthentications <= 0) {
+            throw new IllegalArgumentException("maxConcurrentAuthentications must be positive");
         }
     }
 
@@ -164,7 +166,7 @@ public record SecurityConfig(
         private @Nullable BearerConfig bearer;
         private @Nullable AccessPolicy accessPolicy;
         private Duration authenticationTimeout = DEFAULT_AUTHENTICATION_TIMEOUT;
-        private int maxPendingAuthentications = DEFAULT_MAX_PENDING_AUTHENTICATIONS;
+        private int maxConcurrentAuthentications = DEFAULT_MAX_CONCURRENT_AUTHENTICATIONS;
 
         private Builder() {}
 
@@ -237,21 +239,23 @@ public record SecurityConfig(
         }
 
         /**
-         * Bounds how many requests, across every connection, may wait for the authentication provider
-         * at once; {@link SecurityConfig#DEFAULT_MAX_PENDING_AUTHENTICATIONS} (1024) unless set. One
-         * more is answered {@code 503 Service Unavailable} with {@code Retry-After} before the provider
-         * is called, so a slow introspection endpoint cannot pile up provider threads and held request
-         * heads without limit.
+         * Bounds how many authentication provider calls, across every connection, may run at once;
+         * {@link SecurityConfig#DEFAULT_MAX_CONCURRENT_AUTHENTICATIONS} (1024) unless set. One more request
+         * is answered {@code 503 Service Unavailable} with {@code Retry-After} before the provider is
+         * called, so a slow introspection endpoint cannot pile up provider threads and held request
+         * heads without limit. The provider is not interrupted at {@link #authenticationTimeout}: a call
+         * cut off there keeps its place until it returns, so a provider that never returns ends with
+         * every request answered {@code 503}. Give its HTTP client its own timeouts.
          *
-         * @param max the most pending authentications, positive
+         * @param max the most provider calls running at once, positive
          * @return this builder
          * @throws IllegalArgumentException if {@code max} is not positive
          */
-        public Builder maxPendingAuthentications(int max) {
+        public Builder maxConcurrentAuthentications(int max) {
             if (max <= 0) {
-                throw new IllegalArgumentException("maxPendingAuthentications must be positive");
+                throw new IllegalArgumentException("maxConcurrentAuthentications must be positive");
             }
-            this.maxPendingAuthentications = max;
+            this.maxConcurrentAuthentications = max;
             return this;
         }
 
@@ -295,16 +299,16 @@ public record SecurityConfig(
                         new Authentication.Bearer(bearer, clock),
                         policy,
                         authenticationTimeout,
-                        maxPendingAuthentications);
+                        maxConcurrentAuthentications);
             }
             if (custom != null) {
                 return new SecurityConfig(
-                        new Authentication.Custom(custom), policy, authenticationTimeout, maxPendingAuthentications);
+                        new Authentication.Custom(custom), policy, authenticationTimeout, maxConcurrentAuthentications);
             }
             return accessPolicy == null
                     ? DISABLED
                     : new SecurityConfig(
-                            new Authentication.Disabled(), policy, authenticationTimeout, maxPendingAuthentications);
+                            new Authentication.Disabled(), policy, authenticationTimeout, maxConcurrentAuthentications);
         }
     }
 }

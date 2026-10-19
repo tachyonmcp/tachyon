@@ -19,26 +19,44 @@ experimental.
 The [MCP authorization spec](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization#access-token-usage)
 has clients send an OAuth 2.1 access token in `Authorization: Bearer` on every request. Tell Tachyon
 the canonical URI of your server, the authorization server that issues tokens for it, the scopes it
-understands, and give it a `BearerTokenVerifier`:
+understands, and give it a `BearerTokenVerifier`. Here the JWT is checked with Spring Security's
+`JwtDecoder` (`spring-security-oauth2-jose`):
 
 ```java
+// Signature from the issuer's key set; exp and iss when present
+JwtDecoder jwtDecoder = JwtDecoders.fromIssuerLocation("https://auth.example.com");
+
 var server = TachyonServer.builder()
         .security(security -> security.bearerToken(bearer -> bearer
                 .resource(URI.create("https://mcp.example.com/mcp"))
                 .authorizationServers(URI.create("https://auth.example.com"))
                 .scopesSupported("tools:read", "tools:call")
                 .verifier(token -> {
-                    var jwt = jwtDecoder.decode(token); // signature and issuer
+                    final Jwt jwt;
+                    try {
+                        jwt = jwtDecoder.decode(token);
+                    } catch (BadJwtException e) { // malformed, bad signature, expired, wrong issuer
+                        throw AuthenticationException.bearerInvalidToken("invalid token");
+                    } catch (JwtException e) { // key set unreachable: the token may still be valid
+                        throw AuthenticationException.unavailable("cannot check tokens now", Duration.ofSeconds(5));
+                    }
+                    // RFC 9068 requires these; Spring's default validators do not
+                    if (jwt.getSubject() == null || jwt.getExpiresAt() == null || jwt.getAudience() == null) {
+                        throw AuthenticationException.bearerInvalidToken("invalid token");
+                    }
+                    var scope = jwt.getClaimAsString("scope"); // space-separated, RFC 9068 §2.2.3
                     return new VerifiedToken(
-                            new UserPrincipal(jwt.subject()),
-                            jwt.scopes(),
-                            jwt.expiresAt(),
-                            jwt.audience().stream().map(URI::create).collect(toSet()),
-                            URI.create(jwt.issuer()));
+                            new UserPrincipal(jwt.getSubject()),
+                            scope == null ? Set.of() : Arrays.stream(scope.split(" ")).collect(toSet()),
+                            jwt.getExpiresAt(),
+                            jwt.getAudience().stream().map(URI::create).collect(toSet()),
+                            URI.create(jwt.getIssuer().toString()));
                 }))
                 .accessPolicy(AccessPolicy.permitAll()))
         .build();
 ```
+
+Later examples shorten the scope and audience conversions to `scopes(jwt)` and `audience(jwt)`.
 
 A server that authenticates must also say what its callers may see: without an
 [access policy](#access-policy) building it fails, so nothing is left open by forgetting.
@@ -91,7 +109,8 @@ Throw `AuthenticationException.bearerInvalidToken("...")` for a bad token. Throw
 `AuthenticationException.unavailable("...", Duration.ofSeconds(5))` when the token cannot be checked
 right now, for example when an introspection endpoint or a key set is unreachable: that answers `503`
 with `Retry-After`, so the client keeps a token that may still be valid and tries again. Anything else
-you throw is a bug in checking and answers `500`.
+you throw is a bug in checking and answers `500`, so map your JWT library's own exceptions, as the
+example does: a bad token left to escape as the library's exception answers `500`, not `401`.
 
 | Request | Response |
 |---|---|
@@ -267,11 +286,11 @@ client nothing it can act on. Do not write `if (!scopes.contains(...))` in a han
   ```java
   .verifier(token -> {
       var jwt = jwtDecoder.decode(token);
-      var scopes = new HashSet<>(jwt.scopes());
+      var scopes = new HashSet<>(scopes(jwt));
       if (scopes.contains("files:write")) {
           scopes.add("files:read"); // your hierarchy: write implies read
       }
-      return new VerifiedToken(new UserPrincipal(jwt.subject()), scopes, jwt.expiresAt(), audience(jwt));
+      return new VerifiedToken(new UserPrincipal(jwt.getSubject()), scopes, jwt.getExpiresAt(), audience(jwt));
   })
   ```
 - **Scopes never hide a tool.** A tool whose scopes the caller lacks is still in `tools/list`, and the
@@ -298,8 +317,8 @@ record Staff(String name, Set<String> roles) implements Principal {
                 .verifier(token -> {
                     var jwt = jwtDecoder.decode(token);
                     // Resolve roles once, here, and carry them on your own Principal.
-                    var staff = new Staff(jwt.subject(), Set.copyOf(jwt.claim("roles")));
-                    return new VerifiedToken(staff, jwt.scopes(), jwt.expiresAt(), audience(jwt));
+                    var staff = new Staff(jwt.getSubject(), Set.copyOf(jwt.getClaimAsStringList("roles")));
+                    return new VerifiedToken(staff, scopes(jwt), jwt.getExpiresAt(), audience(jwt));
                 }))
         .accessPolicy((caller, feature) -> !feature.name().startsWith("admin-")
                 || (caller.principal() instanceof Staff staff && staff.roles().contains("admin"))))
@@ -333,11 +352,11 @@ record Caller(String name, String clientId) implements Principal { /* getName() 
 
 .verifier(token -> {
     var jwt = jwtDecoder.decode(token);
-    var caller = new Caller(jwt.subject(), jwt.claim("client_id"));
+    var caller = new Caller(jwt.getSubject(), jwt.getClaimAsString("client_id"));
     if (blockedClients.contains(caller.clientId())) {
         throw AuthenticationException.bearerInvalidToken("Client not allowed"); // the whole server
     }
-    return new VerifiedToken(caller, jwt.scopes(), jwt.expiresAt(), audience(jwt));
+    return new VerifiedToken(caller, scopes(jwt), jwt.getExpiresAt(), audience(jwt));
 })
 .accessPolicy((caller, feature) -> !feature.name().equals("partner-export")
         || (caller.principal() instanceof Caller c && trustedClients.contains(c.clientId())))
@@ -384,7 +403,7 @@ record Tenant(String name, String tenantId) implements Principal {
     }
 }
 
-// in the BearerTokenVerifier: new VerifiedToken(new Tenant(jwt.subject(), jwt.claim("tid")), ..., issuer)
+// in the BearerTokenVerifier: new VerifiedToken(new Tenant(jwt.getSubject(), jwt.getClaimAsString("tid")), ..., issuer)
 // in a custom provider, the owner key tells two tenants' "alice" apart:
 //   SecurityContext.authenticated(new Tenant(key.owner(), key.tenantId()), scopes, null, key.tenantId() + "|" + key.owner())
 
@@ -422,14 +441,15 @@ server.tools().register(
   ```
 
   Past the limit the request is answered `503 Service Unavailable` with `Retry-After` and no
-  `WWW-Authenticate`, so the client keeps a token that may be valid, and the connection closes. At most
-  `maxPendingAuthentications` requests wait for the provider at once across every connection, 1024 by
-  default; one more is answered the same `503` before the provider is called, so a slow introspection
-  endpoint cannot pile up provider threads and held request heads without limit. Timeouts and
-  refusals at capacity are counted and one in a hundred is logged at `WARN`, the rest at `DEBUG`;
-  every one reaches the observers. The
-  provider is not interrupted and its late result is ignored, so give its own calls their own
-  timeouts. The MCP spec does not define this status; it is a Tachyon decision.
+  `WWW-Authenticate`, so the client keeps a token that may be valid, and the connection closes. The
+  provider is not interrupted and its late result is ignored. At most `maxConcurrentAuthentications`
+  provider calls run at once across every connection, 1024 by default; one more request is answered
+  the same `503` before the provider is called, so a slow introspection endpoint cannot pile up
+  provider threads and held request heads without limit. A call cut off at the timeout keeps its place
+  until it returns, so a provider that never returns ends with every request answered `503`: give its
+  own calls their own timeouts. Timeouts and refusals at capacity are counted and one in a hundred is
+  logged at `WARN`, the rest at `DEBUG`; every one reaches the observers. The MCP spec does not define
+  this status; it is a Tachyon decision.
 - **No thread-local holder.** The context is passed along with the request. Work a handler hands to
   another thread keeps its own request's caller.
 - **Sessions belong to their creator.** A stateful (2025-11-25) session is bound to the caller of the

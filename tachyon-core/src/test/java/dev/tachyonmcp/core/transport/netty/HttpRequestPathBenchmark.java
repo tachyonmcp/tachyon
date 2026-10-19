@@ -161,11 +161,11 @@ public class HttpRequestPathBenchmark {
                                     request -> SecurityContext.authenticated(() -> "alice", List.of("tools:call"))),
                             AccessPolicy.permitAll(),
                             SecurityConfig.DEFAULT_AUTHENTICATION_TIMEOUT,
-                            SecurityConfig.DEFAULT_MAX_PENDING_AUTHENTICATIONS),
+                            SecurityConfig.DEFAULT_MAX_CONCURRENT_AUTHENTICATIONS),
                     Runnable::run,
                     gate,
                     List.of(),
-                    new Semaphore(SecurityConfig.DEFAULT_MAX_PENDING_AUTHENTICATIONS)));
+                    new Semaphore(SecurityConfig.DEFAULT_MAX_CONCURRENT_AUTHENTICATIONS)));
         }
         handlers.add(McpHeaderGuardHandler.INSTANCE);
         handlers.add(new ProtocolVersionHandler(false));
