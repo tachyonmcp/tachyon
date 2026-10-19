@@ -4,6 +4,7 @@ package dev.tachyonmcp.core.transport.netty;
 import static dev.tachyonmcp.core.transport.netty.InteractionHandler.INTERACTION_CONTEXT_KEY;
 
 import dev.tachyonmcp.api.annotations.InternalApi;
+import dev.tachyonmcp.api.server.config.RuntimeConfig;
 import dev.tachyonmcp.api.server.domain.RequestId;
 import dev.tachyonmcp.api.server.domain.ServerError;
 import dev.tachyonmcp.api.server.security.SecurityContext;
@@ -32,6 +33,7 @@ import io.netty.handler.codec.http.HttpUtil;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.util.AttributeKey;
 import io.netty.util.ReferenceCountUtil;
+import java.time.Duration;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -372,8 +374,32 @@ public final class ChannelHandlerUtils {
         return sendResponse(ctx, status, contentType, Unpooled.wrappedBuffer(body), cors);
     }
 
+    /**
+     * Answers {@code 503 Server shutting down} and closes, with the server's {@link
+     * RuntimeConfig#retryAfter()} as {@code Retry-After} when it is set.
+     *
+     * @param retryAfter the server's {@link RuntimeConfig#retryAfter()}, or {@code null} for none
+     */
+    public static ChannelFuture sendShuttingDown(
+            ChannelHandlerContext ctx, @Nullable Duration retryAfter, CorsDecision cors) {
+        var response = closingResponse(
+                HttpResponseStatus.SERVICE_UNAVAILABLE,
+                "text/plain",
+                ByteBufUtil.writeUtf8(ctx.alloc(), "Server shutting down"),
+                cors);
+        if (retryAfter != null) {
+            response.headers().set(HttpHeaderNames.RETRY_AFTER, Long.toString(retryAfter.toSeconds()));
+        }
+        return ctx.writeAndFlush(response);
+    }
+
     private static ChannelFuture sendResponse(
             ChannelHandlerContext ctx, HttpResponseStatus status, String contentType, ByteBuf body, CorsDecision cors) {
+        return ctx.writeAndFlush(closingResponse(status, contentType, body, cors));
+    }
+
+    private static DefaultFullHttpResponse closingResponse(
+            HttpResponseStatus status, String contentType, ByteBuf body, CorsDecision cors) {
         var response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, status, body);
         response.headers().set(HttpHeaderNames.CONTENT_TYPE, contentType);
         response.headers().set(HttpHeaderNames.CONTENT_LENGTH, body.readableBytes());
@@ -381,6 +407,6 @@ public final class ChannelHandlerUtils {
         // Mark the keep-alive intent; HttpServerKeepAliveHandler adds `Connection: close`
         // and closes the channel after this response when keep-alive is disabled.
         HttpUtil.setKeepAlive(response, false);
-        return ctx.writeAndFlush(response);
+        return response;
     }
 }

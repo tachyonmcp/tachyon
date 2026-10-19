@@ -525,7 +525,9 @@ public class McpDispatcher {
                 dispatchResult = errorResult(id, ServerErrors.internalError("Internal error"), context);
                 outcome = new OperationOutcome.Cancelled();
             } else if (SecurityRejection.of(
-                            unwrapped, context.engine().config().security().authentication())
+                            unwrapped,
+                            context.engine().config().security().authentication(),
+                            context.engine().config().runtime().retryAfter())
                     instanceof SecurityRejection rejection) {
                 logger.debug("Rejected: method={}, id={}, status={}", method, id, rejection.status());
                 dispatchResult = denied(id, rejection, context);

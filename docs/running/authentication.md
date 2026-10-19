@@ -38,7 +38,7 @@ var server = TachyonServer.builder()
                     } catch (BadJwtException e) { // malformed, bad signature, expired, wrong issuer
                         throw AuthenticationException.bearerInvalidToken("invalid token");
                     } catch (JwtException e) { // key set unreachable: the token may still be valid
-                        throw AuthenticationException.unavailable("cannot check tokens now", Duration.ofSeconds(5));
+                        throw AuthenticationException.unavailable("cannot check tokens now");
                     }
                     // RFC 9068 requires these; Spring's default validators do not
                     if (jwt.getSubject() == null || jwt.getExpiresAt() == null || jwt.getAudience() == null) {
@@ -106,11 +106,12 @@ has clients decide for themselves whether to ask for a refresh token, and a reso
 advertise it.
 
 Throw `AuthenticationException.bearerInvalidToken("...")` for a bad token. Throw
-`AuthenticationException.unavailable("...", Duration.ofSeconds(5))` when the token cannot be checked
-right now, for example when an introspection endpoint or a key set is unreachable: that answers `503`
-with `Retry-After`, so the client keeps a token that may still be valid and tries again. Anything else
-you throw is a bug in checking and answers `500`, so map your JWT library's own exceptions, as the
-example does: a bad token left to escape as the library's exception answers `500`, not `401`.
+`AuthenticationException.unavailable("...")` when the token cannot be checked right now, for example
+when an introspection endpoint or a key set is unreachable: that answers `503` with no challenge, so
+the client keeps a token that may still be valid and tries again. The `503` carries the server's one
+[`Retry-After`](configuration.md#runtime), if you set it. Anything else you throw is a bug in
+checking and answers `500`, so map your JWT library's own exceptions, as the example does: a bad
+token left to escape as the library's exception answers `500`, not `401`.
 
 | Request | Response |
 |---|---|
@@ -118,7 +119,7 @@ example does: a bad token left to escape as the library's exception answers `500
 | No `Authorization` header, or another scheme such as `Basic` | `401`, `WWW-Authenticate: Bearer resource_metadata="…", scope="…"` |
 | Malformed, unknown, expired, or issued for another server | `401`, `WWW-Authenticate: Bearer error="invalid_token", resource_metadata="…", scope="…"` |
 | Several `Authorization` headers, or `?access_token=` in the URL | `400`, `WWW-Authenticate: Bearer error="invalid_request"` |
-| Verifier throws `unavailable(...)` | `503`, `Retry-After`, no challenge |
+| Verifier throws `unavailable(...)` | `503`, the server's `Retry-After` if set, no challenge |
 | Verifier throws anything else | `500`, no challenge |
 
 Rejected requests have an empty body, never reach a handler, and close the connection. Tachyon never
@@ -221,8 +222,9 @@ That request is answered `401` with `WWW-Authenticate: ApiKey realm="orders"`.
 - `unauthorized(message, challenge)` is a `401`. It takes a challenge because RFC 9110 §11.6.1 requires
   one on every `401`, so a `401` without a challenge cannot be built.
 - `badRequest(message)` is a `400` with no challenge; `badRequest(message, challenge)` adds one.
-- `unavailable(message, retryAfter)` is a `503` with `Retry-After` and no challenge: the credentials
-  could not be checked right now, so the client keeps them and tries again.
+- `unavailable(message)` is a `503` with no challenge: the credentials could not be checked right
+  now, so the client keeps them and tries again. It carries the server's
+  [`retryAfter`](configuration.md#runtime) as `Retry-After`, if set.
 - `insufficientScope(scopes)` is a `403`. Tachyon throws it for a tool's `requiredScopes`; a handler
   may throw it too. With bearer tokens the server answers with its own `insufficient_scope` challenge
   naming every scope; another scheme answers `403` without a challenge.
@@ -440,11 +442,13 @@ server.tools().register(
       .authenticationTimeout(Duration.ofSeconds(3)))
   ```
 
-  Past the limit the request is answered `503 Service Unavailable` with `Retry-After` and no
-  `WWW-Authenticate`, so the client keeps a token that may be valid, and the connection closes. The
-  provider is not interrupted and its late result is ignored. At most `maxConcurrentAuthentications`
-  provider calls run at once across every connection, 1024 by default; one more request is answered
-  the same `503` before the provider is called, so a slow introspection endpoint cannot pile up
+  Past the limit the request is answered `503 Service Unavailable` with no `WWW-Authenticate`, so the
+  client keeps a token that may be valid, and the connection closes. It carries no `Retry-After`: a
+  retry either reaches the provider or is refused at capacity. The provider is not interrupted and its
+  late result is ignored. At most `maxConcurrentAuthentications` provider calls run at once across
+  every connection, 1024 by default; one more request is answered `503` before the provider is
+  called, with the server's [`retryAfter`](configuration.md#runtime) as `Retry-After` if set, so a
+  slow introspection endpoint cannot pile up
   provider threads and held request heads without limit. A call cut off at the timeout keeps its place
   until it returns, so a provider that never returns ends with every request answered `503`: give its
   own calls their own timeouts. Timeouts and refusals at capacity are counted and one in a hundred is

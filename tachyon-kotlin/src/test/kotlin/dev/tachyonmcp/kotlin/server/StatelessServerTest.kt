@@ -141,15 +141,17 @@ internal class StatelessServerTest {
     }
 
     @Test
-    fun `runtime clock is wired through to the runtime config`() {
+    fun `runtime clock and retryAfter are wired through to the runtime config`() {
         val fixedClock = Clock.fixed(Instant.parse("2025-01-01T00:00:00Z"), ZoneOffset.UTC)
         buildServer {
             name("runtime-clock-test")
             runtime {
                 clock = fixedClock
+                retryAfter = 7.seconds
             }
         }.use { server ->
             server.config().runtime.clock() shouldBe fixedClock
+            server.config().runtime.retryAfter() shouldBe java.time.Duration.ofSeconds(7)
         }
     }
 

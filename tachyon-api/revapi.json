@@ -79,6 +79,15 @@
         },
         {
           "ignore": true,
+          "code": "java.method.abstractMethodAdded",
+          "new": "method dev.tachyonmcp.api.server.config.RuntimeConfig.Builder dev.tachyonmcp.api.server.config.RuntimeConfig.Builder::retryAfter(java.time.Duration)",
+          "justification": "One server-wide Retry-After for the 503s the server decides itself. Builder has a package-private constructor: only the generated DefaultRuntimeConfig.Builder extends it",
+          "attachments": {
+            "since": "1.1.0"
+          }
+        },
+        {
+          "ignore": true,
           "code": "java.method.returnTypeChanged",
           "old": "method java.util.Map<java.lang.String, java.lang.Object> dev.tachyonmcp.api.server.domain.FormInputRequest::requestedSchema()",
           "new": "method dev.tachyonmcp.api.json.JsonSchema dev.tachyonmcp.api.server.domain.FormInputRequest::requestedSchema()",

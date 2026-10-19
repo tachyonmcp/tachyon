@@ -55,6 +55,7 @@ class TachyonPropertiesBindingTest {
             assertThat(config.session()).isEqualTo(SessionConfig.STATELESS);
             assertThat(config.runtime().requestTimeout()).isEqualTo(Duration.ofSeconds(60));
             assertThat(config.runtime().shutdownGracePeriod()).isEqualTo(Duration.ofSeconds(5));
+            assertThat(config.runtime().retryAfter()).isNull();
         });
     }
 
@@ -266,12 +267,16 @@ class TachyonPropertiesBindingTest {
 
     @Test
     void runtimeGroupBinds() {
-        runner.withPropertyValues("tachyon.runtime.request-timeout=15s", "tachyon.runtime.shutdown-grace-period=0s")
+        runner.withPropertyValues(
+                        "tachyon.runtime.request-timeout=15s",
+                        "tachyon.runtime.shutdown-grace-period=0s",
+                        "tachyon.runtime.retry-after=2m")
                 .run(context -> {
                     var runtime = context.getBean(TachyonServer.class).config().runtime();
 
                     assertThat(runtime.requestTimeout()).isEqualTo(Duration.ofSeconds(15));
                     assertThat(runtime.shutdownGracePeriod()).isEqualTo(Duration.ZERO);
+                    assertThat(runtime.retryAfter()).isEqualTo(Duration.ofMinutes(2));
                 });
     }
 
@@ -279,7 +284,7 @@ class TachyonPropertiesBindingTest {
      * Boot binds a suffixless {@code Duration} as milliseconds unless {@code @DurationUnit} says
      * otherwise, so without it {@code reader-idle-timeout: 90} meant 90ms — a timeout three orders of
      * magnitude tighter than the documented "seconds will be used", reaping every connection. Each of
-     * the seven durations gets a distinct value so a misplaced annotation cannot pass.
+     * the eight durations gets a distinct value so a misplaced annotation cannot pass.
      */
     @Test
     void suffixlessDurationsBindAsSecondsAcrossEveryGroup() {
@@ -290,7 +295,8 @@ class TachyonPropertiesBindingTest {
                         "tachyon.session.session-ttl=30",
                         "tachyon.session.janitor-interval=7",
                         "tachyon.runtime.shutdown-grace-period=3",
-                        "tachyon.runtime.request-timeout=45")
+                        "tachyon.runtime.request-timeout=45",
+                        "tachyon.runtime.retry-after=8")
                 .run(context -> {
                     var config = context.getBean(TachyonServer.class).config();
 
@@ -301,6 +307,7 @@ class TachyonPropertiesBindingTest {
                     assertThat(config.session().janitorInterval()).isEqualTo(Duration.ofSeconds(7));
                     assertThat(config.runtime().shutdownGracePeriod()).isEqualTo(Duration.ofSeconds(3));
                     assertThat(config.runtime().requestTimeout()).isEqualTo(Duration.ofSeconds(45));
+                    assertThat(config.runtime().retryAfter()).isEqualTo(Duration.ofSeconds(8));
                 });
     }
 

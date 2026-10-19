@@ -78,6 +78,7 @@ you set and the file they came from.
 |---|---|---|
 | `tachyon.runtime.request-timeout` | `60s` | Timeout for requests the server sends to the client. |
 | `tachyon.runtime.shutdown-grace-period` | `5s` | Time in-flight handlers get to finish on shutdown, before their threads are interrupted. `0` interrupts them immediately. |
+| `tachyon.runtime.retry-after` | — | `Retry-After` of every `503` the server decides itself (shutting down, authentication at capacity or unavailable); never on an authentication timeout. `1s` to `1h`, whole seconds. Unset, none is sent. |
 
 ### Running alongside Spring MVC or WebFlux
 

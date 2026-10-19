@@ -86,7 +86,8 @@ class TachyonConfigurationMetadataTest {
                         "tachyon.session.session-ttl",
                         "tachyon.session.janitor-interval",
                         "tachyon.runtime.shutdown-grace-period",
-                        "tachyon.runtime.request-timeout");
+                        "tachyon.runtime.request-timeout",
+                        "tachyon.runtime.retry-after");
 
         assertThat((String) property("tachyon.port").get("description"))
                 .as("the port collides with server.port, which the description must warn about")

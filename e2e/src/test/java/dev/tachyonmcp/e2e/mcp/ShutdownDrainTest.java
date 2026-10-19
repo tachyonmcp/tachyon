@@ -22,14 +22,17 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
 class ShutdownDrainTest {
-    /** Draining rejects new work with 503, not the 500 a genuine dispatch failure earns. */
+    /**
+     * Draining rejects new work with 503, not the 500 a genuine dispatch failure earns, and with the
+     * server's {@code Retry-After}.
+     */
     @Test
     void refusesNewRequestsWithServiceUnavailableWhileDraining() throws Exception {
         final var result = new CompletableFuture<ToolResult>();
         final var server = (ServerEngine) TachyonServer.builder()
                 .network(n -> n.port(0))
                 .session(s -> s.enabled())
-                .runtime(r -> r.shutdownGracePeriod(Duration.ofSeconds(5)))
+                .runtime(r -> r.shutdownGracePeriod(Duration.ofSeconds(5)).retryAfter(Duration.ofSeconds(30)))
                 .build();
         server.tools().registerAsync(b -> b.name("drain"), (context, request) -> {
             context.notifications().comment("started");
@@ -50,6 +53,7 @@ class ShutdownDrainTest {
                         final var refused = other.ping(otherSession, 7);
                         assertThat(refused.statusCode()).isEqualTo(503);
                         assertThat(refused.body()).isEqualTo("Server shutting down");
+                        assertThat(refused.headers().firstValue("Retry-After")).hasValue("30");
                     });
                     // The already-admitted request still gets its real answer.
                     result.complete(ToolResult.empty());

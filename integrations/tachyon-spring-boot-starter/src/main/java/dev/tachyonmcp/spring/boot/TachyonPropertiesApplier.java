@@ -92,6 +92,7 @@ final class TachyonPropertiesApplier {
         builder.runtime(config -> {
             MAP.from(runtime.shutdownGracePeriod()).to(config::shutdownGracePeriod);
             MAP.from(runtime.requestTimeout()).to(config::requestTimeout);
+            MAP.from(runtime.retryAfter()).to(config::retryAfter);
         });
     }
 

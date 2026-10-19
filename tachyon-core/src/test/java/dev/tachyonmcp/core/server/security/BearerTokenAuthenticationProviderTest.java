@@ -8,7 +8,6 @@ import dev.tachyonmcp.core.server.config.BearerConfig;
 import java.net.URI;
 import java.security.Principal;
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.LinkedHashSet;
@@ -120,7 +119,7 @@ class BearerTokenAuthenticationProviderTest {
                 .isEqualTo(invalidToken);
         assertThat(provider.challengeFor(AuthenticationException.bearerInvalidRequest("two")))
                 .isEqualTo("Bearer error=\"invalid_request\"");
-        assertThat(provider.challengeFor(AuthenticationException.unavailable("down", Duration.ofSeconds(1))))
+        assertThat(provider.challengeFor(AuthenticationException.unavailable("down")))
                 .isNull();
     }
 

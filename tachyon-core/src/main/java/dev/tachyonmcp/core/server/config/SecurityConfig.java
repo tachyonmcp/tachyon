@@ -221,9 +221,11 @@ public record SecurityConfig(
         /**
          * Bounds how long a request waits for the authentication provider, which defaults to {@link
          * SecurityConfig#DEFAULT_AUTHENTICATION_TIMEOUT} (10 seconds). A request still unanswered when it elapses is
-         * answered {@code 503 Service Unavailable} with {@code Retry-After} and no challenge, so the
-         * client keeps a token that may be valid, and the connection closes. The provider is not
-         * interrupted: it keeps running until it returns, and its late result is ignored.
+         * answered {@code 503 Service Unavailable} with no challenge, so the client keeps a token that
+         * may be valid, and the connection closes. It carries no {@code Retry-After}, even with {@link
+         * dev.tachyonmcp.api.server.config.RuntimeConfig#retryAfter()} set: a retry either reaches the
+         * provider or is refused at {@link #maxConcurrentAuthentications capacity}, which carries one. The
+         * provider is not interrupted: it keeps running until it returns, and its late result is ignored.
          *
          * @param timeout the longest wait, positive
          * @return this builder
@@ -241,8 +243,9 @@ public record SecurityConfig(
         /**
          * Bounds how many authentication provider calls, across every connection, may run at once;
          * {@link SecurityConfig#DEFAULT_MAX_CONCURRENT_AUTHENTICATIONS} (1024) unless set. One more request
-         * is answered {@code 503 Service Unavailable} with {@code Retry-After} before the provider is
-         * called, so a slow introspection endpoint cannot pile up provider threads and held request
+         * is answered {@code 503 Service Unavailable}, with {@link
+         * dev.tachyonmcp.api.server.config.RuntimeConfig#retryAfter()} as {@code Retry-After} if set,
+         * before the provider is called, so a slow introspection endpoint cannot pile up provider threads and held request
          * heads without limit. The provider is not interrupted at {@link #authenticationTimeout}: a call
          * cut off there keeps its place until it returns, so a provider that never returns ends with
          * every request answered {@code 503}. Give its HTTP client its own timeouts.

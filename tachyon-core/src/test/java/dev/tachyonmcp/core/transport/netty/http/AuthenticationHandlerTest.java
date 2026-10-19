@@ -56,7 +56,8 @@ import org.slf4j.LoggerFactory;
 class AuthenticationHandlerTest {
 
     private static final Duration TIMEOUT = Duration.ofSeconds(5);
-    private static final String RETRY_AFTER = Long.toString(TIMEOUT.toSeconds());
+    /** The server's one {@code Retry-After}, unlike {@link #TIMEOUT} so neither can pass for the other. */
+    private static final Duration RETRY_AFTER = Duration.ofSeconds(7);
 
     private final Queue<Runnable> handlerExecutor = new ArrayDeque<>();
     private final List<AuthenticationRequest> seenByProvider = new ArrayList<>();
@@ -93,7 +94,8 @@ class AuthenticationHandlerTest {
                     handlerExecutor::add,
                     gate,
                     List.of(),
-                    permits),
+                    permits,
+                    RETRY_AFTER),
             sink);
     private final int readsAtStart = reads.count;
 
@@ -268,7 +270,9 @@ class AuthenticationHandlerTest {
 
         final FullHttpResponse refused = channel.readOutbound();
         assertThat(refused.status()).isEqualTo(HttpResponseStatus.SERVICE_UNAVAILABLE);
-        assertThat(refused.headers().get(HttpHeaderNames.RETRY_AFTER)).isEqualTo(RETRY_AFTER);
+        assertThat(refused.headers().get(HttpHeaderNames.RETRY_AFTER))
+                .as("the server's one Retry-After")
+                .isEqualTo("7");
         assertThat(refused.headers().contains(HttpHeaderNames.WWW_AUTHENTICATE)).isFalse();
         assertThat(HttpUtil.isKeepAlive(refused)).isFalse();
         assertThat(seenByProvider).as("the provider is never asked").isEmpty();
@@ -300,7 +304,8 @@ class AuthenticationHandlerTest {
                 task -> {
                     throw new RejectedExecutionException("shutting down");
                 },
-                TIMEOUT);
+                TIMEOUT,
+                RETRY_AFTER);
         final var body = last("!");
 
         refusing.writeInbound(head(), body);
@@ -308,7 +313,7 @@ class AuthenticationHandlerTest {
 
         final FullHttpResponse response = refusing.readOutbound();
         assertThat(response.status()).isEqualTo(HttpResponseStatus.SERVICE_UNAVAILABLE);
-        assertThat(response.headers().get(HttpHeaderNames.RETRY_AFTER)).isEqualTo(RETRY_AFTER);
+        assertThat(response.headers().get(HttpHeaderNames.RETRY_AFTER)).isEqualTo("7");
         assertThat(response.headers().contains(HttpHeaderNames.WWW_AUTHENTICATE))
                 .as("no challenge: the client keeps a token that may be valid")
                 .isFalse();
@@ -326,7 +331,8 @@ class AuthenticationHandlerTest {
                 task -> {
                     throw new IllegalStateException("broken executor");
                 },
-                TIMEOUT);
+                TIMEOUT,
+                RETRY_AFTER);
         final var body = last("!");
 
         failing.writeInbound(head(), body);
@@ -344,7 +350,7 @@ class AuthenticationHandlerTest {
     /** A timeout too long to count in nanoseconds waits as long as one can: no request fails on it. */
     @Test
     void anEndlessTimeoutAuthenticatesAndGivesThePermitBack() {
-        final var endless = otherChannel(handlerExecutor::add, ChronoUnit.FOREVER.getDuration());
+        final var endless = otherChannel(handlerExecutor::add, ChronoUnit.FOREVER.getDuration(), null);
 
         endless.writeInbound(head(), last(""));
         handlerExecutor.remove().run();
@@ -358,14 +364,16 @@ class AuthenticationHandlerTest {
 
         final FullHttpResponse atCapacity = endless.readOutbound();
         assertThat(atCapacity.status()).isEqualTo(HttpResponseStatus.SERVICE_UNAVAILABLE);
-        assertThat(atCapacity.headers().contains(HttpHeaderNames.RETRY_AFTER)).isTrue();
+        assertThat(atCapacity.headers().contains(HttpHeaderNames.RETRY_AFTER))
+                .as("none configured, none sent")
+                .isFalse();
         atCapacity.release();
         endless.finishAndReleaseAll();
     }
 
-    private EmbeddedChannel otherChannel(Executor executor, Duration timeout) {
+    private EmbeddedChannel otherChannel(Executor executor, Duration timeout, @Nullable Duration retryAfter) {
         return new EmbeddedChannel(new AuthenticationHandler(
-                channelSecurity(timeout), executor, new HttpPipeliningGate(16), List.of(), permits));
+                channelSecurity(timeout), executor, new HttpPipeliningGate(16), List.of(), permits, retryAfter));
     }
 
     private static SecurityConfig channelSecurity(Duration timeout) {
@@ -377,12 +385,12 @@ class AuthenticationHandlerTest {
                 SecurityConfig.DEFAULT_MAX_CONCURRENT_AUTHENTICATIONS);
     }
 
-    /** A verifier whose authorization server is down answers like a timeout: keep the token, wait, retry. */
+    /** A verifier whose authorization server is down: keep the token, wait as the server says, retry. */
     @Test
-    void aProviderThatCannotCheckRightNowAnswers503WithRetryAfterAndNoChallenge() {
+    void aProviderThatCannotCheckRightNowAnswers503WithTheServersRetryAfterAndNoChallenge() {
         channel.writeInbound(head(), last(""));
 
-        refused = AuthenticationException.unavailable("introspection is down", Duration.ofSeconds(7));
+        refused = AuthenticationException.unavailable("introspection is down");
         runProvider();
 
         final FullHttpResponse response = channel.readOutbound();
@@ -451,7 +459,9 @@ class AuthenticationHandlerTest {
 
         final FullHttpResponse response = channel.readOutbound();
         assertThat(response.status()).isEqualTo(HttpResponseStatus.SERVICE_UNAVAILABLE);
-        assertThat(response.headers().get(HttpHeaderNames.RETRY_AFTER)).isEqualTo(RETRY_AFTER);
+        assertThat(response.headers().contains(HttpHeaderNames.RETRY_AFTER))
+                .as("a timeout never sends one: a retry reaches the provider or is refused at capacity")
+                .isFalse();
         assertThat(response.headers().contains(HttpHeaderNames.WWW_AUTHENTICATE))
                 .as("no challenge: the client keeps a token that may be valid")
                 .isFalse();

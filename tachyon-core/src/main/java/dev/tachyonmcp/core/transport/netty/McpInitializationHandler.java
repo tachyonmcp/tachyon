@@ -9,6 +9,7 @@ import static dev.tachyonmcp.core.transport.netty.ChannelHandlerUtils.sendAccept
 import static dev.tachyonmcp.core.transport.netty.ChannelHandlerUtils.sendDeniedAsync;
 import static dev.tachyonmcp.core.transport.netty.ChannelHandlerUtils.sendPlainTextAndClose;
 import static dev.tachyonmcp.core.transport.netty.ChannelHandlerUtils.sendResponseAndClose;
+import static dev.tachyonmcp.core.transport.netty.ChannelHandlerUtils.sendShuttingDown;
 import static dev.tachyonmcp.core.transport.netty.McpResponseWriter.sendJsonResponse;
 import static dev.tachyonmcp.core.transport.netty.McpResponseWriter.sendOptions;
 
@@ -207,8 +208,8 @@ public class McpInitializationHandler extends ChannelInboundHandlerAdapter {
                         if (isRefused(ex)) {
                             logger.debug("Pre-session request refused: method={}", method);
                             completeOn(
-                                    sendPlainTextAndClose(
-                                            ctx, HttpResponseStatus.SERVICE_UNAVAILABLE, "Server shutting down", cors),
+                                    sendShuttingDown(
+                                            ctx, server.config().runtime().retryAfter(), cors),
                                     transportCompletion);
                             return;
                         }
@@ -321,8 +322,8 @@ public class McpInitializationHandler extends ChannelInboundHandlerAdapter {
                         if (isRefused(ex)) {
                             logger.debug("Initialize refused: id={}, elapsed={}ms", id, elapsedMs);
                             completeOn(
-                                    sendPlainTextAndClose(
-                                            ctx, HttpResponseStatus.SERVICE_UNAVAILABLE, "Server shutting down", cors),
+                                    sendShuttingDown(
+                                            ctx, server.config().runtime().retryAfter(), cors),
                                     transportCompletion);
                             return;
                         }

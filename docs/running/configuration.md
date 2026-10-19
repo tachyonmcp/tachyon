@@ -472,6 +472,7 @@ Configured via `runtime { }` / `RuntimeConfig.Builder`.
 | `shutdownGracePeriod` | `5s` | Shared time budget to drain admitted requests through handler completion and transport finalization, then terminate the executor on `close()`; `ZERO` interrupts immediately |
 | `requestTimeout` | `60s` | Timeout for pending requests sent to the client |
 | `clock` | `Clock.systemUTC()` | Clock for task timestamps and TTL/expiry checks; set a fixed or controllable clock in tests |
+| `retryAfter` | none | `Retry-After` of every `503` the server decides itself: a request refused while shutting down, authentication refused at capacity or when the provider cannot be called, and a provider's `AuthenticationException.unavailable`. An authentication timeout never sends one. Whole seconds from `1s` to `1h`; anything else throws `IllegalArgumentException` at build. Spring Boot: `tachyon.runtime.retry-after` |
 
 Shutdown rejects new dispatches while draining, answering them with `503 Service Unavailable`. The executor remains available for asynchronous continuations during the grace period. Subscriptions, extensions, sessions, and event storage are torn down after draining completes or the grace period expires. Unfinished asynchronous stages can outlive that deadline.
 
@@ -529,7 +530,7 @@ provider no authentication handler is installed and the request path is unchange
 | `bearerToken(configurer)` | — | Requires an OAuth 2.1 bearer token on every HTTP request and publishes the [OAuth metadata](authentication.md#discovery) clients use to get one. `configurer` sets `resource`, `authorizationServers`, `scopesSupported` and `verifier`. `resource` is the server's canonical URI, the audience a token must name: absolute `https` (`http` only for loopback), no fragment, no query, no trailing slash, never taken from request headers. `authorizationServers` (at least one) are the issuers clients may use: `https`, no query, no fragment. `scopesSupported` (optional) are plain scope tokens, never `offline_access`. `verifier` returns a `VerifiedToken` with the token's expiry and audience, which Tachyon enforces. Streams close at the token's expiry. Anything missing or invalid throws `IllegalArgumentException` when you configure it |
 | `authenticationProvider(provider)` | — | Authenticates every HTTP request head with your own provider |
 | `accessPolicy(policy)` | `permitAll()` without authentication; **required** with it | Which tools, resources, resource templates and prompts a caller may see. A refused feature is not listed and answers like an unknown one on every path. Building a server that authenticates without one throws `IllegalStateException`; choose `AccessPolicy.permitAll()` on purpose. See [access policy](authentication.md#access-policy) |
-| `authenticationTimeout` | `10s` | Longest a request waits for the provider; then `503` with `Retry-After`, no challenge, and the connection closes. Must be positive. Keep `readerIdleTimeout` above it |
+| `authenticationTimeout` | `10s` | Longest a request waits for the provider; then `503` with no `Retry-After` and no challenge, and the connection closes. Must be positive. Keep `readerIdleTimeout` above it |
 
 ## Identity
 

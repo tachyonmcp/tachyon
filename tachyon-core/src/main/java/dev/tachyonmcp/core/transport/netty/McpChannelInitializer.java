@@ -213,7 +213,8 @@ public class McpChannelInitializer extends ChannelInitializer<SocketChannel> {
                             server.executor(),
                             pipeliningGate,
                             server.config().observability().listeners(),
-                            authenticationPermits));
+                            authenticationPermits,
+                            server.config().runtime().retryAfter()));
         }
 
         // Must precede "protocol-version": a repeated version header would otherwise negotiate on its

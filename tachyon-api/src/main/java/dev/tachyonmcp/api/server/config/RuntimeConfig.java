@@ -4,6 +4,7 @@ package dev.tachyonmcp.api.server.config;
 import java.time.Clock;
 import java.time.Duration;
 import org.immutables.value.Value;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Handler-execution runtime configuration: settings governing how in-flight handlers are drained
@@ -50,13 +51,46 @@ public interface RuntimeConfig {
     }
 
     /**
+     * The {@code Retry-After} of every {@code 503 Service Unavailable} the server decides itself:
+     * authentication refused at capacity or because the provider cannot be called, an authentication
+     * provider's {@code AuthenticationException.unavailable}, and a request refused while the server
+     * shuts down. An authentication timeout never carries one. {@code null} (the default) sends none:
+     * the server cannot know when it will answer again.
+     *
+     * @return whole seconds, from one second to one hour, or {@code null} for no {@code Retry-After}
+     */
+    @Value.Default
+    default @Nullable Duration retryAfter() {
+        return null;
+    }
+
+    /**
+     * Validates {@link #retryAfter()}.
+     *
+     * @throws IllegalArgumentException if {@code retryAfter} is set and is not whole seconds from one
+     *     second to one hour
+     */
+    @Value.Check
+    default void check() {
+        final var retryAfter = retryAfter();
+        if (retryAfter != null
+                && (retryAfter.getNano() != 0
+                        || retryAfter.compareTo(Duration.ofSeconds(1)) < 0
+                        || retryAfter.compareTo(Duration.ofHours(1)) > 0)) {
+            throw new IllegalArgumentException(
+                    "retryAfter must be whole seconds from 1 second to 1 hour, was " + retryAfter);
+        }
+    }
+
+    /**
      * Default Request timeout.
      */
     Duration DEFAULT_REQUEST_TIMEOUT = Duration.ofSeconds(60);
     /**
      * Default.
      */
-    RuntimeConfig DEFAULT = DefaultRuntimeConfig.of(Duration.ofSeconds(5), DEFAULT_REQUEST_TIMEOUT, Clock.systemUTC());
+    RuntimeConfig DEFAULT =
+            DefaultRuntimeConfig.of(Duration.ofSeconds(5), DEFAULT_REQUEST_TIMEOUT, Clock.systemUTC(), null);
 
     /**
      * Creates a new builder.
@@ -97,6 +131,15 @@ public interface RuntimeConfig {
          * @return this builder
          */
         public abstract Builder clock(Clock clock);
+
+        /**
+         * Sets the {@code Retry-After} of every {@code 503} the server decides itself; see {@link
+         * RuntimeConfig#retryAfter()}. Unset, none is sent.
+         *
+         * @param retryAfter whole seconds from one second to one hour, or {@code null} for none
+         * @return this builder
+         */
+        public abstract Builder retryAfter(@Nullable Duration retryAfter);
 
         /**
          * Builds the {@link RuntimeConfig}.

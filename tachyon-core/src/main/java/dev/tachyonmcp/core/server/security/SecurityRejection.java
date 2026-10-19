@@ -4,6 +4,7 @@ package dev.tachyonmcp.core.server.security;
 import dev.tachyonmcp.api.annotations.InternalApi;
 import dev.tachyonmcp.core.server.config.SecurityConfig;
 import dev.tachyonmcp.core.server.observability.OperationOutcome;
+import java.time.Duration;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -33,17 +34,21 @@ public record SecurityRejection(
      *     its own two challenges and a {@code 403} with the {@code insufficient_scope} one, another
      *     scheme answers with what the exception carries, and a {@code 403} without a challenge, since
      *     {@code insufficient_scope} is a Bearer error (RFC 6750 §3.1)
+     * @param retryAfter the server's {@code RuntimeConfig#retryAfter()}, sent with a {@code 503}; {@code
+     *     null} for none
      * @return the rejection, or {@code null} if {@code failure} does not reject the caller
      */
-    public static @Nullable SecurityRejection of(Throwable failure, SecurityConfig.Authentication authentication) {
+    public static @Nullable SecurityRejection of(
+            Throwable failure, SecurityConfig.Authentication authentication, @Nullable Duration retryAfter) {
         if (!(failure instanceof AuthenticationException rejection)) {
             return null;
         }
         final var challenge = authentication instanceof SecurityConfig.Authentication.Bearer bearer
                 ? bearer.challengeFor(rejection)
                 : rejection.wwwAuthenticate();
-        final var retryAfter = rejection.retryAfterSeconds() == 0 ? null : Long.toString(rejection.retryAfterSeconds());
-        return new SecurityRejection(rejection.status(), challenge, retryAfter);
+        final var seconds =
+                rejection.status() == 503 && retryAfter != null ? Long.toString(retryAfter.toSeconds()) : null;
+        return new SecurityRejection(rejection.status(), challenge, seconds);
     }
 
     /** Returns the outcome observers are told: rejected before any handler ran, with this status. */

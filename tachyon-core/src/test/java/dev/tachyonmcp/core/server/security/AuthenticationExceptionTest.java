@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 
-import java.time.Duration;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -64,22 +63,15 @@ class AuthenticationExceptionTest {
         assertThat(forbidden.status()).isEqualTo(403);
         assertThat(forbidden.wwwAuthenticate()).isNull();
         assertThat(forbidden.requiredScopes()).containsExactly("b", "a");
-        assertThat(forbidden.retryAfterSeconds()).isZero();
         assertThatIllegalArgumentException().isThrownBy(() -> AuthenticationException.insufficientScope(Set.of()));
     }
 
     @Test
-    void aCheckThatCannotBeMadeIsA503WithAtLeastOneSecondToWait() {
-        assertThat(AuthenticationException.unavailable("down", Duration.ofMillis(1_500))
-                        .retryAfterSeconds())
-                .isEqualTo(2);
-        assertThat(AuthenticationException.unavailable("down", Duration.ZERO).retryAfterSeconds())
-                .isEqualTo(1);
-        final var down = AuthenticationException.unavailable("down", Duration.ofSeconds(30));
+    void aCheckThatCannotBeMadeIsA503WithNoChallenge() {
+        final var down = AuthenticationException.unavailable("down");
+
         assertThat(down.status()).isEqualTo(503);
         assertThat(down.wwwAuthenticate()).isNull();
         assertThat(down.requiredScopes()).isEmpty();
-        assertThat(AuthenticationException.bearerInvalidToken("x").retryAfterSeconds())
-                .isZero();
     }
 }

@@ -22,9 +22,16 @@ public class RuntimeScope
          */
         public var clock: Clock? = null
 
+        /**
+         * `Retry-After` of every `503` the server decides itself: whole seconds from one second to
+         * one hour. Unset (the default), none is sent. An authentication timeout never sends one.
+         */
+        public var retryAfter: Duration? = null
+
         internal fun applyTo(builder: RuntimeConfig.Builder) {
             shutdownGracePeriod?.let { builder.shutdownGracePeriod(it.toJavaDuration()) }
             requestTimeout?.let { builder.requestTimeout(it.toJavaDuration()) }
             clock?.let { builder.clock(it) }
+            retryAfter?.let { builder.retryAfter(it.toJavaDuration()) }
         }
     }

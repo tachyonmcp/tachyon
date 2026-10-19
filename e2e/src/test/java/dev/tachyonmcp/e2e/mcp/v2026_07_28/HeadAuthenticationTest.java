@@ -199,13 +199,14 @@ class HeadAuthenticationTest extends AbstractStatelessMcpE2eTest<Mcp20260728Clie
     }
 
     @Test
-    void aVerifierThatNeverAnswersIsCutOffWith503AndRetryAfter() throws Exception {
+    void aVerifierThatNeverAnswersIsCutOffWith503AndNoRetryAfter() throws Exception {
         final var release = new CountDownLatch(1);
         startServer(
                 b -> b.capabilities(c -> c.tools())
                         .security(s -> s.accessPolicy(AccessPolicy.permitAll())
                                 .bearerToken(TestBearerTokens.bearer(HeadAuthentication.hanging(release)))
-                                .authenticationTimeout(Duration.ofMillis(300))),
+                                .authenticationTimeout(Duration.ofMillis(300)))
+                        .runtime(r -> r.retryAfter(Duration.ofSeconds(7))),
                 tokens::registerWhoAmI);
         try (var http = HttpClient.newHttpClient()) {
             final var started = System.nanoTime();
@@ -218,8 +219,9 @@ class HeadAuthenticationTest extends AbstractStatelessMcpE2eTest<Mcp20260728Clie
                     HttpResponse.BodyHandlers.ofString());
 
             assertThat(response.statusCode()).as(response.body()).isEqualTo(503);
-            assertThat(response.headers().firstValue("Retry-After").orElseThrow())
-                    .matches("[1-9][0-9]*");
+            assertThat(response.headers().firstValue("Retry-After"))
+                    .as("a timeout never sends one, even with one configured")
+                    .isEmpty();
             assertThat(response.headers().allValues("WWW-Authenticate"))
                     .as("no challenge: the client keeps a token that may be valid")
                     .isEmpty();
@@ -246,7 +248,8 @@ class HeadAuthenticationTest extends AbstractStatelessMcpE2eTest<Mcp20260728Clie
                                     return hanging.verify(token);
                                 }))
                                 .authenticationTimeout(Duration.ofMillis(300))
-                                .maxConcurrentAuthentications(1)),
+                                .maxConcurrentAuthentications(1))
+                        .runtime(r -> r.retryAfter(Duration.ofSeconds(7))),
                 tokens::registerWhoAmI);
         try (var http = HttpClient.newHttpClient()) {
             final var authenticated = post(WHOAMI_CALL, "whoami")
@@ -261,7 +264,10 @@ class HeadAuthenticationTest extends AbstractStatelessMcpE2eTest<Mcp20260728Clie
             assertThat(atCapacity.statusCode())
                     .as("the cut-off call still holds the only permit")
                     .isEqualTo(503);
-            assertThat(atCapacity.headers().firstValue("Retry-After")).isPresent();
+            assertThat(timedOut.headers().firstValue("Retry-After")).isEmpty();
+            assertThat(atCapacity.headers().firstValue("Retry-After"))
+                    .as("the server's one Retry-After")
+                    .hasValue("7");
             assertThat(calls).as("the stuck verifier is not called again").hasValue(1);
 
             release.countDown();

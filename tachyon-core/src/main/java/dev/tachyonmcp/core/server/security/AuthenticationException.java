@@ -3,7 +3,6 @@ package dev.tachyonmcp.core.server.security;
 
 import dev.tachyonmcp.api.annotations.ExperimentalApi;
 import java.io.Serial;
-import java.time.Duration;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.Objects;
@@ -12,10 +11,10 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * Rejects a request whose credentials are missing, malformed, invalid or short of a scope, or that
- * cannot be checked right now, and carries the answer: the status, the {@code WWW-Authenticate}
- * challenge and, for a {@code 503}, {@code Retry-After}. Only this exception rejects the caller: any
- * other exception from an {@link AuthenticationProvider} is a bug in checking and answers {@code
- * 500}, so a client does not discard a token that may be valid.
+ * cannot be checked right now, and carries the answer: the status and the {@code WWW-Authenticate}
+ * challenge. Only this exception rejects the caller: any other exception from an {@link
+ * AuthenticationProvider} is a bug in checking and answers {@code 500}, so a client does not
+ * discard a token that may be valid.
  *
  * <p>Built by factory methods, which keep status and challenge consistent: a {@code 401} always
  * carries a challenge (RFC 9110 §11.6.1: a server generating a {@code 401} MUST send {@code
@@ -54,23 +53,17 @@ public final class AuthenticationException extends RuntimeException {
     private final int status;
     private final @Nullable String wwwAuthenticate;
     private final transient Set<String> requiredScopes;
-    private final long retryAfterSeconds;
 
     private AuthenticationException(
-            int status,
-            String message,
-            @Nullable AuthenticationChallenge challenge,
-            Set<String> requiredScopes,
-            long retryAfterSeconds) {
+            int status, String message, @Nullable AuthenticationChallenge challenge, Set<String> requiredScopes) {
         super(message, null, false, false);
         this.status = status;
         this.wwwAuthenticate = challenge == null ? null : challenge.headerValue();
         this.requiredScopes = requiredScopes;
-        this.retryAfterSeconds = retryAfterSeconds;
     }
 
     private AuthenticationException(int status, String message, @Nullable AuthenticationChallenge challenge) {
-        this(status, message, challenge, Set.of(), 0);
+        this(status, message, challenge, Set.of());
     }
 
     /**
@@ -144,23 +137,21 @@ public final class AuthenticationException extends RuntimeException {
         if (scopes.isEmpty()) {
             throw new IllegalArgumentException("A 403 names at least one required scope");
         }
-        return new AuthenticationException(403, "Insufficient scope", null, Collections.unmodifiableSet(scopes), 0);
+        return new AuthenticationException(403, "Insufficient scope", null, Collections.unmodifiableSet(scopes));
     }
 
     /**
      * Answers that the credentials could not be checked right now and the client should try again:
-     * {@code 503 Service Unavailable} with {@code Retry-After} and no challenge, so the client keeps a
-     * token that may be valid. For an introspection endpoint or a key set that is unreachable. A
-     * provider that throws anything else answers {@code 500}.
+     * {@code 503 Service Unavailable} and no challenge, so the client keeps a token that may be valid.
+     * For an introspection endpoint or a key set that is unreachable. The answer carries the server's
+     * {@code RuntimeConfig#retryAfter()} as {@code Retry-After}, or none when that is unset. A provider
+     * that throws anything else answers {@code 500}.
      *
      * @param message diagnostic message; must not contain the credentials
-     * @param retryAfter how long the client should wait; at least one second is sent
      * @return the exception to throw
      */
-    public static AuthenticationException unavailable(String message, Duration retryAfter) {
-        Objects.requireNonNull(retryAfter, "retryAfter");
-        return new AuthenticationException(
-                503, message, null, Set.of(), Math.max(1, Math.ceilDiv(retryAfter.toMillis(), 1000)));
+    public static AuthenticationException unavailable(String message) {
+        return new AuthenticationException(503, message, null);
     }
 
     /**
@@ -188,14 +179,5 @@ public final class AuthenticationException extends RuntimeException {
      */
     public Set<String> requiredScopes() {
         return requiredScopes;
-    }
-
-    /**
-     * Returns the {@code Retry-After} of a {@code 503}, in seconds.
-     *
-     * @return at least {@code 1} for a {@code 503}; {@code 0} for any other status
-     */
-    public long retryAfterSeconds() {
-        return retryAfterSeconds;
     }
 }

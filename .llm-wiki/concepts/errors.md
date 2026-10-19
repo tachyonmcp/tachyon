@@ -61,6 +61,6 @@ Subscription transport failures produce `StreamFailed(causeType, cause?)`, with 
 | 415 | POST `Content-Type` not `application/json` (or missing); JSON-RPC `-32600`, `id: null` (body unread) | `ContentTypeValidationHandler#reject` |
 | 413/417 | body > `maxContentLength` (1 MB) | `HttpObjectAggregator` |
 | 500 | session lookup failure | `McpOperationHandler#session` |
-| 503 | executor rejected (shutting down) | `ChannelHandlerUtils.isRefused` |
+| 503 | executor rejected (shutting down); `Retry-After` = `RuntimeConfig#retryAfter` if set | `ChannelHandlerUtils.isRefused`, `ChannelHandlerUtils#sendShuttingDown` |
 
 Related: [[request-lifecycle]], [[security-guards]], [[protocol-versions]].

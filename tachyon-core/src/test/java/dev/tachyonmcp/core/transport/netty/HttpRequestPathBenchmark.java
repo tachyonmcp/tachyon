@@ -165,7 +165,8 @@ public class HttpRequestPathBenchmark {
                     Runnable::run,
                     gate,
                     List.of(),
-                    new Semaphore(SecurityConfig.DEFAULT_MAX_CONCURRENT_AUTHENTICATIONS)));
+                    new Semaphore(SecurityConfig.DEFAULT_MAX_CONCURRENT_AUTHENTICATIONS),
+                    null));
         }
         handlers.add(McpHeaderGuardHandler.INSTANCE);
         handlers.add(new ProtocolVersionHandler(false));

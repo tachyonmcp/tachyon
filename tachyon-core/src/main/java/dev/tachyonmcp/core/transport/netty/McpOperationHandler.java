@@ -10,6 +10,7 @@ import static dev.tachyonmcp.core.transport.netty.ChannelHandlerUtils.sendAccept
 import static dev.tachyonmcp.core.transport.netty.ChannelHandlerUtils.sendDeniedAsync;
 import static dev.tachyonmcp.core.transport.netty.ChannelHandlerUtils.sendPlainTextAndClose;
 import static dev.tachyonmcp.core.transport.netty.ChannelHandlerUtils.sendResponseAndClose;
+import static dev.tachyonmcp.core.transport.netty.ChannelHandlerUtils.sendShuttingDown;
 import static dev.tachyonmcp.core.transport.netty.McpResponseWriter.sendInternalError;
 import static dev.tachyonmcp.core.transport.netty.McpResponseWriter.sendJsonResponse;
 import static dev.tachyonmcp.core.transport.netty.McpResponseWriter.sendOptions;
@@ -162,7 +163,7 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
                     });
         } catch (RejectedExecutionException e) {
             body.release();
-            sendPlainTextAndClose(ctx, HttpResponseStatus.SERVICE_UNAVAILABLE, "Server shutting down", cors);
+            sendShuttingDown(ctx, server.config().runtime().retryAfter(), cors);
         }
     }
 
@@ -371,8 +372,8 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
                     postStream.terminate();
                     completeOn(
                             refused
-                                    ? sendPlainTextAndClose(
-                                            ctx, HttpResponseStatus.SERVICE_UNAVAILABLE, "Server shutting down", cors)
+                                    ? sendShuttingDown(
+                                            ctx, server.config().runtime().retryAfter(), cors)
                                     : sendInternalError(
                                             ctx, requestId, cors, ic.protocol().responseMapper()),
                             transportCompletion);
@@ -541,7 +542,7 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
                             failure,
                             found -> sseManager.openStream(ctx, found, lastEventId, cors, expiresAt)));
         } catch (RejectedExecutionException e) {
-            sendPlainTextAndClose(ctx, HttpResponseStatus.SERVICE_UNAVAILABLE, "Server shutting down", cors);
+            sendShuttingDown(ctx, server.config().runtime().retryAfter(), cors);
         }
     }
 
@@ -576,7 +577,7 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
                         }
                     }));
         } catch (RejectedExecutionException e) {
-            sendPlainTextAndClose(ctx, HttpResponseStatus.SERVICE_UNAVAILABLE, "Server shutting down", cors);
+            sendShuttingDown(ctx, server.config().runtime().retryAfter(), cors);
         }
     }
 

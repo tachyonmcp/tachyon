@@ -124,8 +124,13 @@ public record TachyonProperties(
      *                            be used. Zero interrupts running handlers immediately.
      * @param requestTimeout      Timeout for requests the server sends to the client. If a duration
      *                            suffix is not specified, seconds will be used.
+     * @param retryAfter          Retry-After of every 503 the server decides itself (authentication
+     *                            at capacity or unavailable, shutdown); never on an authentication
+     *                            timeout. Whole seconds from 1s to 1h. Unset, none is sent. If a
+     *                            duration suffix is not specified, seconds will be used.
      */
     public record Runtime(
             @DurationUnit(ChronoUnit.SECONDS) @Nullable Duration shutdownGracePeriod,
-            @DurationUnit(ChronoUnit.SECONDS) @Nullable Duration requestTimeout) {}
+            @DurationUnit(ChronoUnit.SECONDS) @Nullable Duration requestTimeout,
+            @DurationUnit(ChronoUnit.SECONDS) @Nullable Duration retryAfter) {}
 }
