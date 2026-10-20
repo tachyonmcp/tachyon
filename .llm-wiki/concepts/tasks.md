@@ -3,7 +3,7 @@ title: Tasks
 tags: [concept, tasks, experimental]
 sources: [tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/tasks/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tasks/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tools/ToolMethodHandlers.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tools/DefaultToolRegistry.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java, extensions/tachyon-extensions-tasks/src/main/java/dev/tachyonmcp/extensions/tasks/, integrations/tachyon-tasks-temporal/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/security/Owner.java]
 updated: 2026-10-20
-commit: d263b96a
+commit: 2d0bcaa4
 ---
 
 # ⏳ Tasks
@@ -57,7 +57,7 @@ Verdict: cache + push **routing**, plus an **owner binding** for tasks a named c
 - **One gate.** `TaskEngine#guard` wraps `get`/`cancel`/`update`/`awaitResult` (`requireVisibleTo` ⇒ `TaskNotFoundException`) and `list` (filters by `isVisibleTo`); the engine's own waits (`awaitResult`, `cancelAndAwait`, `pollUntilTerminal`) and `readableTaskIds` use `connector()`, not the raw one. `TaskMethodHandlers` has no ownership code. `listCached` was removed: it would have bypassed the gate.
 - ⚠️ Limits: process-local; no `ttl` ⇒ bound only while cached (terminal + `keepAlive`, 5 min); `list` is filtered after the connector's page, so a page can come back short with a valid cursor. `InteractionContext#tasks()` (spec "new") is not built, so a worker that publishes before its tool returns publishes unowned, and the tool's later owned create is refused.
 
-- effective pollInterval = snapshot's or config default `TaskEngine#withDefaults`.
+- effective pollInterval = snapshot's or config default, then the binding's normalizer `TaskEngine#withDefaults`. Every cached or returned snapshot passes here. The MCP binding's normalizer serializes a `Completed` result's structured payload with the server serde (`ServerEngine#payloadSerializer`) so `tasks/get`, `tasks/result` and status notifications encode it like `tools/call` `TasksExtension#serializeResult`; the engine itself imports no serde (`EngineBoundaryTest`).
 - `publish(snapshot)` = `publish(snapshot, TaskRoute.NONE)`: upsert. Uncached ⇒ cached unrouted; cached ⇒ `TaskEntry#publish` accepts only **higher revision**; changed ⇒ `TaskEntry#notifyIfNewer` `TaskEngine#publish`. No cache-change callback: publish/remove/eviction push nothing beyond per-task status.
 - `publish(snapshot, route)` (tool path): `putIfAbsent`; existing entry takes `route` only if unrouted (`TaskEntry#route(TaskRoute)`: set once, never re-routed, colliding call succeeds) `TaskEngine#publish`. Route attach itself pushes nothing: the tool result carries that revision; revisions sent before attach are not re-sent.
 - `tasks/get|cancel|result` `TaskEngine#refresh` the connector's snapshot ⇒ a cached task is updated, an unknown id is never cached; a read never routes. `tasks/list` never caches.
@@ -92,7 +92,7 @@ Durable access control (restart, multi-node, a task with no `ttl` after its snap
 | `tasks/list` | legacy only | `list` (null ⇒ method not found) | read only: connector scopes by caller (`TaskListFn#apply`), `withDefaults`; never cached, no notification |
 | `tasks/get` | modern: extension declared | `get`; `TaskNotFoundException` ⇒ invalid params | `getTaskResult` |
 | `tasks/cancel` | modern: extension | modern: `cancel` (fire-and-forget); legacy: `TaskEngine#cancelAndAwait` = `get` (terminal ⇒ -32602, no cancel) ⇒ `cancel` ⇒ poll `get` like `tasks/result` | modern empty / legacy `cancelled` snapshot; other terminal ⇒ -32602 "Cannot cancel task: already in terminal status", ttl ⇒ -32602 expired; no time bound (a never-settling cancel waits until `responseUndeliverable`) |
-| `tasks/result` | legacy only | `awaitResult` (blocking); unset ⇒ `get` until terminal, sleeping snapshot `pollInterval` else `resultPollInterval` (1s), each poll refreshing the cache; ttl elapsed ⇒ -32602 "Task has expired" via `TaskAwaitException`; no time bound (spec: MUST block until terminal); `InteractionContext#responseUndeliverable` ⇒ stops polling, `CancellationException` ⇒ `Cancelled` outcome, task untouched `TaskEngine#awaitResult` | tool call payload (`Completed` payloads first pass `JsonUtils#serializeStructured` with `ServerEngine#payloadSerializer`, so the configured serde applies like in `tools/call` `TaskMethodHandlers.TasksResultHandler#handle`), or the task's JSON-RPC error |
+| `tasks/result` | legacy only | `awaitResult` (blocking); unset ⇒ `get` until terminal, sleeping snapshot `pollInterval` else `resultPollInterval` (1s), each poll refreshing the cache; ttl elapsed ⇒ -32602 "Task has expired" via `TaskAwaitException`; no time bound (spec: MUST block until terminal); `InteractionContext#responseUndeliverable` ⇒ stops polling, `CancellationException` ⇒ `Cancelled` outcome, task untouched `TaskEngine#awaitResult` | tool call payload, or the task's JSON-RPC error |
 | `tasks/update` | modern only + extension | `update(inputResponses)` | empty |
 
 Gates thrown from `decode` as `RequestMappingException` `RequestMappingException`.

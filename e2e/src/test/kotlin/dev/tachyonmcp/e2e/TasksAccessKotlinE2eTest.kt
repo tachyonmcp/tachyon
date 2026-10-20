@@ -14,6 +14,7 @@ import dev.tachyonmcp.kotlin.server.TachyonServer
 import dev.tachyonmcp.kotlin.server.config.tasks
 import dev.tachyonmcp.kotlin.server.domain.TaskSnapshot
 import dev.tachyonmcp.kotlin.server.json.KxSerializationSerde
+import dev.tachyonmcp.testkit.JsonRpcResponseAssert
 import dev.tachyonmcp.testkit.Mcp20251125Client
 import dev.tachyonmcp.testkit.McpTestClients
 import dev.tachyonmcp.testkit.TestTaskConnector
@@ -146,17 +147,58 @@ internal class TasksAccessKotlinE2eTest {
                         """.trimIndent(),
                     )
 
-                ok.statusCode() shouldEqual 200
-                assertThatJson(
-                    ok.body(),
-                ).inPath("$.result.structuredContent").isEqualTo("""{"id":"r-2","page_count":3}""")
-                assertThatJson(ok.body()).inPath("$.result.content[0].text").isEqualTo("done")
-                assertThatJson(failed.body()).inPath("$.result.isError").isEqualTo(true)
-                assertThatJson(
-                    failed.body(),
-                ).inPath("$.result.structuredContent").isEqualTo("""{"id":"r-3","page_count":0}""")
-                assertThatJson(failed.body()).inPath("$.result.content[0].text").isEqualTo("failed")
+                JsonRpcResponseAssert
+                    .assertThat(ok)
+                    .isSuccess()
+                    .hasId(2)
+                    .hasResult(
+                        // language=json
+                        """
+                        {"content":[{"type":"text","text":"done"}],
+                         "structuredContent":{"id":"r-2","page_count":3},
+                         "_meta":{"io.modelcontextprotocol/related-task":{"taskId":"kt-report-2"}}}
+                        """,
+                    )
+                JsonRpcResponseAssert
+                    .assertThat(failed)
+                    .isSuccess()
+                    .hasId(3)
+                    .isToolError()
+                    .hasResult(
+                        // language=json
+                        """
+                        {"content":[{"type":"text","text":"failed"}],
+                         "structuredContent":{"id":"r-3","page_count":0},
+                         "isError":true,
+                         "_meta":{"io.modelcontextprotocol/related-task":{"taskId":"kt-report-3"}}}
+                        """,
+                    )
             }
+            McpTestClients
+                .latest(server.port())
+                .withExtensions(mapOf(TasksExtension.ID to JsonNodeFactory.instance.objectNode()))
+                .use { client ->
+                    val get =
+                        client.post(
+                            """
+                            {"jsonrpc":"2.0","id":4,"method":"tasks/get","params":{"taskId":"kt-report-3"}}
+                            """.trimIndent(),
+                        )
+                    val result =
+                        JsonRpcResponseAssert
+                            .assertThat(get)
+                            .isSuccess()
+                            .hasId(4)
+                            .result()
+                    assertThatJson(result).node("result").isEqualTo(
+                        // language=json
+                        """
+                        {"content":[{"type":"text","text":"failed"}],
+                         "structuredContent":{"id":"r-3","page_count":0},
+                         "isError":true,"resultType":"complete"}
+                        """,
+                    )
+                }
         }
     }
 

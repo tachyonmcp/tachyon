@@ -46,7 +46,8 @@ public sealed interface ToolResult extends HasMeta
 
     /**
      * A result that carries content blocks and an optional structured payload: {@link Success} or
-     * {@link Error}. The two differ on the wire only by {@code isError}.
+     * {@link Error}. The two differ on the wire only by {@code isError}. Construction rejects a
+     * {@link ContentBlock} as the structured payload: blocks belong in {@link #content()}.
      */
     sealed interface Payload extends ToolResult permits Success, Error {
 
@@ -96,6 +97,14 @@ public sealed interface ToolResult extends HasMeta
     @Value.Immutable
     @Value.Style(visibilityString = "PACKAGE", typeImmutable = "Default*", with = "", from = "")
     non-sealed interface Success extends Payload {
+
+        @Value.Check
+        default void checkPayload() {
+            if (structuredValue() instanceof ContentBlock) {
+                throw new IllegalArgumentException(
+                        "A ContentBlock is not a structured payload; use content(...) or error(ContentBlock...)");
+            }
+        }
 
         @Override
         default Success withStructuredValue(@Nullable Object value) {
@@ -193,6 +202,14 @@ public sealed interface ToolResult extends HasMeta
     @Value.Immutable
     @Value.Style(visibilityString = "PACKAGE", typeImmutable = "Default*", with = "", from = "")
     non-sealed interface Error extends Payload {
+
+        @Value.Check
+        default void checkPayload() {
+            if (structuredValue() instanceof ContentBlock) {
+                throw new IllegalArgumentException(
+                        "A ContentBlock is not a structured payload; use content(...) or error(ContentBlock...)");
+            }
+        }
 
         @Override
         default Error withStructuredValue(@Nullable Object value) {
@@ -433,7 +450,7 @@ public sealed interface ToolResult extends HasMeta
      * @param <T> the value type
      */
     static <T> ToolResult structured(T payload, String text) {
-        return Success.of(requirePayload(payload), List.of(TextContent.of(text)));
+        return Success.of(payload, List.of(TextContent.of(text)));
     }
 
     /**
@@ -448,7 +465,7 @@ public sealed interface ToolResult extends HasMeta
      * @param <T> the value type
      */
     static <T> ToolResult structured(T payload) {
-        return Success.of(requirePayload(payload), List.of());
+        return Success.of(payload, List.of());
     }
 
     /**
@@ -485,17 +502,9 @@ public sealed interface ToolResult extends HasMeta
      */
     static <T> ToolResult error(T payload, String text) {
         return Error.builder()
-                .structuredValue(requirePayload(payload))
+                .structuredValue(payload)
                 .content(TextContent.of(text))
                 .build();
-    }
-
-    private static <T> T requirePayload(T payload) {
-        if (payload instanceof ContentBlock) {
-            throw new IllegalArgumentException(
-                    "A ContentBlock is not a structured payload; use content(...) or error(ContentBlock...)");
-        }
-        return payload;
     }
 
     /**

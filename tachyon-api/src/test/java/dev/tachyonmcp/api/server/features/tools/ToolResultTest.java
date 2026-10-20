@@ -145,6 +145,13 @@ class ToolResultTest {
                 .isThrownBy(() -> ToolResult.error(TextContent.of("x"), "text"))
                 .withMessageContaining("ContentBlock");
         assertThatIllegalArgumentException().isThrownBy(() -> ToolResult.structured(TextContent.of("x")));
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> ToolResult.Error.builder()
+                        .structuredValue(TextContent.of("x"))
+                        .build());
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> ToolResult.Success.of(TextContent.of("x"), java.util.List.of()));
+        assertThatIllegalArgumentException().isThrownBy(() -> error.withStructuredValue(TextContent.of("x")));
 
         var singleBlock = (ToolResult.Error) ToolResult.error(TextContent.of("boom"));
         assertThat(singleBlock.structuredValue()).isNull();

@@ -2,17 +2,22 @@
 package dev.tachyonmcp.extensions.tasks;
 
 import dev.tachyonmcp.api.annotations.LegacyApi;
+import dev.tachyonmcp.api.json.PayloadSerializer;
 import dev.tachyonmcp.api.runtime.InteractionContext;
+import dev.tachyonmcp.api.server.domain.TaskResult;
 import dev.tachyonmcp.api.server.extensions.AdvertiseMode;
 import dev.tachyonmcp.api.server.extensions.ConfigurableExtension;
 import dev.tachyonmcp.api.server.extensions.ExtensionBuilder;
 import dev.tachyonmcp.api.server.extensions.ProvidedBy;
 import dev.tachyonmcp.api.server.features.tasks.TaskConnector;
+import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
 import dev.tachyonmcp.api.server.features.tasks.Tasks;
+import dev.tachyonmcp.api.server.features.tools.ToolResult;
 import dev.tachyonmcp.core.server.TachyonServer;
 import dev.tachyonmcp.core.server.features.Pagination;
 import dev.tachyonmcp.core.server.features.tasks.TasksExtensionSupport;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
+import dev.tachyonmcp.core.server.json.JsonUtils;
 import dev.tachyonmcp.extensions.tasks.engine.TaskEngine;
 import dev.tachyonmcp.extensions.tasks.engine.TaskEngineSettings;
 import java.time.Duration;
@@ -124,8 +129,21 @@ public final class TasksExtension implements ConfigurableExtension<TasksExtensio
      * Creates this server's engine and installs it as the task runtime, before any extension
      * registers task-capable tools; called by {@link TasksExtensionProvider}.
      */
+    private static TaskSnapshot serializeResult(TaskSnapshot snapshot, PayloadSerializer serializer) {
+        if (!(snapshot.result() instanceof TaskResult.Completed(ToolResult tool))) return snapshot;
+        var serialized = JsonUtils.serializeStructured(tool, serializer);
+        return serialized == tool
+                ? snapshot
+                : TaskSnapshot.builder()
+                        .from(snapshot)
+                        .result(TaskResult.completed(serialized))
+                        .build();
+    }
+
     void install(ServerEngine server) {
-        var created = new TaskEngine(settings, server.config().runtime().clock());
+        var serializer = server.payloadSerializer();
+        var created = new TaskEngine(
+                settings, server.config().runtime().clock(), snapshot -> serializeResult(snapshot, serializer));
         var binding = new McpTaskBinding(server, created);
         created.addListener(binding);
         server.installTaskRuntime(binding);
