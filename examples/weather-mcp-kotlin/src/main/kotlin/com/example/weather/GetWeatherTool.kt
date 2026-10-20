@@ -34,16 +34,7 @@ import java.util.concurrent.TimeoutException
 private val log = LoggerFactory.getLogger("com.example.weather.GetWeatherTool")
 private const val ELICITATION_TIMEOUT_SECONDS = 600L
 
-private val schemaGenerator =
-    ReflectionClassJsonSchemaGenerator(
-        json = kotlinx.serialization.json.Json { encodeDefaults = false },
-        config = JsonSchemaConfig.Default,
-    )
-
-private val CITY_SCHEMA =
-    JsonSchema.parse(
-        schemaGenerator.generateSchemaString(CityElicitationInput::class),
-    )
+private val CITY_SCHEMA = JsonSchema.generate(CityElicitationInput::class.java)
 
 private data class CityElicitationInput(
     val city: String,
@@ -54,8 +45,8 @@ val getWeatherToolDescriptor =
         name = "get-weather"
         title = "Current Weather"
         description = "Get current weather for a city"
-        inputSchema(schemaGenerator.generateSchemaString(GetWeatherRequest::class))
-        outputSchema(schemaGenerator.generateSchemaString(GetWeatherResponse::class))
+        inputSchema = JsonSchema.generate(GetWeatherRequest::class.java)
+        outputSchema = JsonSchema.generate(GetWeatherResponse::class.java)
         icons = listOf(Icon(SUN_AND_CLOUD, "image/png", listOf("128x128")))
         annotations =
             ToolAnnotations(

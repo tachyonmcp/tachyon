@@ -133,7 +133,8 @@ docs-sync: ## Rewrite Markdown doc snippets from source (snips), then restore ja
 
 mcp-inspector: ## Launch MCP Inspector UI
 	@echo "🧐 MCP Inspector"
-	@npx -y @modelcontextprotocol/inspector@2.10.1 --config mcp-inspector.json
+	@export MCP_INSPECTOR_SECRET_STORE=memory && \
+	npx -y @modelcontextprotocol/inspector --config mcp-inspector.json
 
 claude-sbx: ## Run an agent in a Docker sandbox from sbxenv.yaml (maven + snips kits); AGENT=codex to switch agent, M2=path for local Maven home
 	@echo " 📦  Starting sandbox..."
