@@ -2,8 +2,8 @@
 title: tachyon-kotlin
 tags: [module, kotlin, dsl]
 sources: [tachyon-kotlin/src/main/kotlin/dev/tachyonmcp/kotlin/server/, tachyon-kotlin/src/main/resources/META-INF/services/, tachyon-kotlin-kt-schema/src/main/kotlin/dev/tachyonmcp/kotlin/server/json/ktschema/]
-updated: 2026-10-19
-commit: 79625c4c
+updated: 2026-10-20
+commit: d263b96a
 ---
 
 # 🟣 tachyon-kotlin (+ kt-schema)
@@ -28,7 +28,7 @@ Verdict: thin adapter. DSL builder wraps Java `ServerBuilder`; `suspend` handler
 - Content DSL accepts raw bytes for image/audio blocks: [ContentScope#image](../../tachyon-kotlin/src/main/kotlin/dev/tachyonmcp/kotlin/server/config/ContentScope.kt), [ContentScope#audio](../../tachyon-kotlin/src/main/kotlin/dev/tachyonmcp/kotlin/server/config/ContentScope.kt). Base64 encoding belongs to the wire codecs.
 - [IconBuilder#data](../../tachyon-kotlin/src/main/kotlin/dev/tachyonmcp/kotlin/server/domain/StructuredFactoryBuilders.kt) is experimental: raw bytes require `mimeType`, exclude `src`, and delegate data-URI encoding to [Icon#of](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/domain/Icon.java).
 - `ToolScope#tasks` = `TasksExtension.tasks(ctx)`. Handler-scoped member. Builder configuration uses the imported [tasks](../../tachyon-kotlin/src/main/kotlin/dev/tachyonmcp/kotlin/server/config/TasksExtensions.kt) extension on `TachyonServerBuilder`, delegating to `withExtension`. Server side: `TachyonServer.tasks` extension property `TasksExtensions.kt` (`@file:JvmSynthetic`: Java uses `TasksExtension.tasks(server)`). `ToolScope#tasks` resolves once per call (`lazy(NONE)`). `tachyon-extensions-tasks` is `<optional>` in [tachyon-kotlin/pom.xml](../../tachyon-kotlin/pom.xml): all three touch `TasksExtension` lazily, so a server without the jar runs until first use. `requireTasksModule` (`TasksExtensions.kt`) wraps them: a `NoClassDefFoundError` from `dev/tachyonmcp/extensions/tasks/` ⇒ ISE naming the dependency (cause kept); any other missing class rethrown as is.
-- `ToolScope` result helpers: `success`, `text`, `raw`, `empty`, `fail(msg|{content})`, `inputRequired`, `content { }` `ToolScope`.
+- `ToolScope` result helpers: `success`, `text`, `raw`, `empty`, `fail(msg|{content}|payload[, text])`, `inputRequired`, `content { }` `ToolScope`.
 - Result blocks: `EXACTLY_ONCE` — [ToolScope#content](../../tachyon-kotlin/src/main/kotlin/dev/tachyonmcp/kotlin/server/config/ToolScope.kt), [ToolScope#fail](../../tachyon-kotlin/src/main/kotlin/dev/tachyonmcp/kotlin/server/config/ToolScope.kt), [PromptScope#content](../../tachyon-kotlin/src/main/kotlin/dev/tachyonmcp/kotlin/server/config/PromptScope.kt). [TachyonServerBuilder#typedTool](../../tachyon-kotlin/src/main/kotlin/dev/tachyonmcp/kotlin/server/config/TachyonServerBuilder.kt): `schemaGenerator` runs twice in place (`AT_LEAST_ONCE`).
 - Registration funnels through `KotlinFeatureRegistrar` `KotlinFeatureRegistrar`.
 - Resource-template contents builders retain the handler scope: [TextResourceContentsBuilder#param](../../tachyon-kotlin/src/main/kotlin/dev/tachyonmcp/kotlin/server/domain/TextResourceContentsBuilder.kt) and [BlobResourceContentsBuilder#param](../../tachyon-kotlin/src/main/kotlin/dev/tachyonmcp/kotlin/server/domain/StructuredFactoryBuilders.kt) expose scalar parameters; their `sequence` methods delegate list parameters to [TemplateScope#sequence](../../tachyon-kotlin/src/main/kotlin/dev/tachyonmcp/kotlin/server/config/TemplateScope.kt). Both reject parameter access outside a template handler.

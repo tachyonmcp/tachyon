@@ -2,8 +2,8 @@
 title: tachyon-api
 tags: [module, api]
 sources: [tachyon-api/src/main/java/dev/tachyonmcp/api/]
-updated: 2026-10-16
-commit: 747359f0
+updated: 2026-10-20
+commit: 2d0bcaa4
 ---
 
 # 📜 tachyon-api
@@ -48,7 +48,7 @@ action are required (compact ctor `requireNonNull`), result content is nullable.
 ## 🎁 Results
 
 - Experimental [Icon#of](../../tachyon-api/src/main/java/dev/tachyonmcp/api/server/domain/Icon.java) binary overload creates a Base64 data URI, preserves MIME type/sizes/theme, rejects empty data and blank MIME type.
-- `ToolResult` sealed `Success | Error | InputRequired | Task` + statics `text`, `content`, `structured(payload[, text])`, `error`, `empty`, `task`, `raw(json,text)`, `inputRequired(reqs, state)` `ToolResult`.
+- `ToolResult` sealed `Payload (Success | Error) | InputRequired | Task` + statics `text`, `content`, `structured(payload[, text])`, `error(msg|blocks|payload,text)`, `empty`, `task`, `raw(json,text)`, `inputRequired(reqs, state)` `ToolResult`; textless structured error via `Error.builder()`. Building a `Success`/`Error` with a `ContentBlock` as `structuredValue` throws `IllegalArgumentException` (`@Value.Check`) `ToolResult.Error#checkPayload`. `Payload` holds `structuredValue`/`content`/`withStructuredValue` for both; `Error` ⇒ wire `structuredContent` + `isError:true`, never validated against `outputSchema` `ToolResult.Payload`.
 - `PromptResult` sealed `Messages | InputRequired` `PromptResult`.
 - `InputRequired` (MRTR: `inputRequests` map + opaque `requestState`); follow-up request carries `inputResponses` + `requestState` (`ToolRequest#arguments`).
 

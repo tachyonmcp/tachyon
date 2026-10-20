@@ -17,7 +17,7 @@ import org.jspecify.annotations.Nullable;
 
 /** Outcome of a tool invocation: success, error, input-required. */
 public sealed interface ToolResult extends HasMeta
-        permits ToolResult.Error, ToolResult.InputRequired, ToolResult.Success, ToolResult.Task {
+        permits ToolResult.InputRequired, ToolResult.Payload, ToolResult.Task {
 
     @Override
     default @Nullable Map<String, Object> meta() {
@@ -45,11 +45,11 @@ public sealed interface ToolResult extends HasMeta
     }
 
     /**
-     * A successful invocation, carrying an optional structured value and its content blocks.
+     * A result that carries content blocks and an optional structured payload: {@link Success} or
+     * {@link Error}. The two differ on the wire only by {@code isError}. Construction rejects a
+     * {@link ContentBlock} as the structured payload: blocks belong in {@link #content()}.
      */
-    @Value.Immutable
-    @Value.Style(visibilityString = "PACKAGE", typeImmutable = "Default*", with = "", from = "")
-    non-sealed interface Success extends ToolResult {
+    sealed interface Payload extends ToolResult permits Success, Error {
 
         /**
          * Returns the structured payload, or {@code null} when none was set.
@@ -77,6 +77,42 @@ public sealed interface ToolResult extends HasMeta
          */
         default Optional<Object> structured() {
             return Optional.ofNullable(structuredValue());
+        }
+
+        /**
+         * Returns a copy of this result with its structured payload replaced.
+         *
+         * @param value the structured payload, or {@code null} to drop it
+         * @return a result of the same kind carrying {@code value}
+         */
+        Payload withStructuredValue(@Nullable Object value);
+
+        @Override
+        Payload withMeta(Map<String, Object> m);
+    }
+
+    /**
+     * A successful invocation, carrying an optional structured value and its content blocks.
+     */
+    @Value.Immutable
+    @Value.Style(visibilityString = "PACKAGE", typeImmutable = "Default*", with = "", from = "")
+    non-sealed interface Success extends Payload {
+
+        @Value.Check
+        default void checkPayload() {
+            if (structuredValue() instanceof ContentBlock) {
+                throw new IllegalArgumentException(
+                        "A ContentBlock is not a structured payload; use content(...) or error(ContentBlock...)");
+            }
+        }
+
+        @Override
+        default Success withStructuredValue(@Nullable Object value) {
+            return builder()
+                    .structuredValue(value)
+                    .content(content())
+                    .meta(meta())
+                    .build();
         }
 
         @Override
@@ -157,22 +193,32 @@ public sealed interface ToolResult extends HasMeta
     }
 
     /**
-     * A failed invocation carrying the error's content blocks.
+     * A failed invocation carrying the error's content blocks and an optional structured payload.
+     *
+     * <p>The structured payload is emitted as {@code structuredContent} next to {@code isError:
+     * true}. It is never validated against the tool's {@code outputSchema}, which describes
+     * successful results only.
      */
     @Value.Immutable
     @Value.Style(visibilityString = "PACKAGE", typeImmutable = "Default*", with = "", from = "")
-    non-sealed interface Error extends ToolResult {
+    non-sealed interface Error extends Payload {
 
-        /**
-         * Returns the error content blocks.
-         *
-         * @return the error content blocks
-         */
-        List<ContentBlock> content();
+        @Value.Check
+        default void checkPayload() {
+            if (structuredValue() instanceof ContentBlock) {
+                throw new IllegalArgumentException(
+                        "A ContentBlock is not a structured payload; use content(...) or error(ContentBlock...)");
+            }
+        }
 
         @Override
-        @Nullable
-        Map<String, Object> meta();
+        default Error withStructuredValue(@Nullable Object value) {
+            return builder()
+                    .structuredValue(value)
+                    .content(content())
+                    .meta(meta())
+                    .build();
+        }
 
         /**
          * Creates a new builder for constructing {@code Error} instances.
@@ -196,13 +242,25 @@ public sealed interface ToolResult extends HasMeta
         @Override
         default Error withMeta(Map<String, Object> m) {
             if (m.isEmpty()) return this;
-            return builder().content(content()).meta(HasMeta.merge(meta(), m)).build();
+            return builder()
+                    .structuredValue(structuredValue())
+                    .content(content())
+                    .meta(HasMeta.merge(meta(), m))
+                    .build();
         }
 
         /**
          * Builder for {@link Error}.
          */
         interface Builder {
+            /**
+             * Sets the structured error payload.
+             *
+             * @param structuredValue the structured error payload, or {@code null}
+             * @return this builder
+             */
+            Builder structuredValue(@Nullable Object structuredValue);
+
             /**
              * Sets the error content blocks.
              *
@@ -428,6 +486,25 @@ public sealed interface ToolResult extends HasMeta
      */
     static ToolResult error(ContentBlock... blocks) {
         return Error.of(List.of(blocks));
+    }
+
+    /**
+     * Creates a failed result carrying {@code payload} as structured content plus a human-readable
+     * text block. The payload is emitted as {@code structuredContent} alongside {@code isError:
+     * true} and is not validated against the tool's {@code outputSchema}. For a textless variant
+     * use {@code Error.builder().structuredValue(payload).build()}; the server then emits the
+     * serialized JSON as the text block at encode time.
+     *
+     * @param payload the structured error payload
+     * @param text    the text content for the content block
+     * @return a failed tool result
+     * @param <T> the value type
+     */
+    static <T> ToolResult error(T payload, String text) {
+        return Error.builder()
+                .structuredValue(payload)
+                .content(TextContent.of(text))
+                .build();
     }
 
     /**

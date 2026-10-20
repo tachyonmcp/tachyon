@@ -13,11 +13,16 @@ import dev.tachyonmcp.extensions.tasks.TasksExtension
 import dev.tachyonmcp.kotlin.server.TachyonServer
 import dev.tachyonmcp.kotlin.server.config.tasks
 import dev.tachyonmcp.kotlin.server.domain.TaskSnapshot
+import dev.tachyonmcp.kotlin.server.json.KxSerializationSerde
+import dev.tachyonmcp.testkit.JsonRpcResponseAssert
+import dev.tachyonmcp.testkit.Mcp20251125Client
 import dev.tachyonmcp.testkit.McpTestClients
 import dev.tachyonmcp.testkit.TestTaskConnector
 import io.kotest.matchers.equals.shouldEqual
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.types.shouldBeSameInstanceAs
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import net.javacrumbs.jsonunit.assertj.JsonAssertions.assertThatJson
 import org.assertj.core.api.Assertions.assertThatIllegalArgumentException
 import org.assertj.core.api.Assertions.assertThatIllegalStateException
@@ -92,6 +97,108 @@ internal class TasksAccessKotlinE2eTest {
                     .status() shouldEqual
                     TaskState.COMPLETED
             }
+        }
+    }
+
+    @Serializable
+    private data class Report(
+        val id: String,
+        @SerialName("page_count") val pages: Int,
+    )
+
+    @Test
+    fun `tasks result serializes structured payloads through the configured serde`() {
+        val now = java.time.Instant.now()
+        val jobStore =
+            TestTaskConnector()
+                .publish(
+                    TaskSnapshot.completed(
+                        "kt-report-2",
+                        now,
+                        now,
+                        1,
+                        ToolResult.structured(Report("r-2", 3), "done"),
+                    ),
+                ).publish(
+                    TaskSnapshot.completed(
+                        "kt-report-3",
+                        now,
+                        now,
+                        1,
+                        ToolResult.error(Report("r-3", 0), "failed"),
+                    ),
+                )
+        TachyonServer(port = 0) {
+            json { serde = KxSerializationSerde.Default }
+            tasks(jobStore.connector())
+        }.use { server ->
+            Mcp20251125Client(server.port()).use { client ->
+                client.initialize()
+                val ok =
+                    client.post(
+                        """
+                        {"jsonrpc":"2.0","id":2,"method":"tasks/result","params":{"taskId":"kt-report-2"}}
+                        """.trimIndent(),
+                    )
+                val failed =
+                    client.post(
+                        """
+                        {"jsonrpc":"2.0","id":3,"method":"tasks/result","params":{"taskId":"kt-report-3"}}
+                        """.trimIndent(),
+                    )
+
+                JsonRpcResponseAssert
+                    .assertThat(ok)
+                    .isSuccess()
+                    .hasId(2)
+                    .hasResult(
+                        // language=json
+                        """
+                        {"content":[{"type":"text","text":"done"}],
+                         "structuredContent":{"id":"r-2","page_count":3},
+                         "_meta":{"io.modelcontextprotocol/related-task":{"taskId":"kt-report-2"}}}
+                        """,
+                    )
+                JsonRpcResponseAssert
+                    .assertThat(failed)
+                    .isSuccess()
+                    .hasId(3)
+                    .isToolError()
+                    .hasResult(
+                        // language=json
+                        """
+                        {"content":[{"type":"text","text":"failed"}],
+                         "structuredContent":{"id":"r-3","page_count":0},
+                         "isError":true,
+                         "_meta":{"io.modelcontextprotocol/related-task":{"taskId":"kt-report-3"}}}
+                        """,
+                    )
+            }
+            McpTestClients
+                .latest(server.port())
+                .withExtensions(mapOf(TasksExtension.ID to JsonNodeFactory.instance.objectNode()))
+                .use { client ->
+                    val get =
+                        client.post(
+                            """
+                            {"jsonrpc":"2.0","id":4,"method":"tasks/get","params":{"taskId":"kt-report-3"}}
+                            """.trimIndent(),
+                        )
+                    val result =
+                        JsonRpcResponseAssert
+                            .assertThat(get)
+                            .isSuccess()
+                            .hasId(4)
+                            .result()
+                    assertThatJson(result).node("result").isEqualTo(
+                        // language=json
+                        """
+                        {"content":[{"type":"text","text":"failed"}],
+                         "structuredContent":{"id":"r-3","page_count":0},
+                         "isError":true,"resultType":"complete"}
+                        """,
+                    )
+                }
         }
     }
 

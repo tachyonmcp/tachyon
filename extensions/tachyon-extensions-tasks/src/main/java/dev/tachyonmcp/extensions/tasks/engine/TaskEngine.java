@@ -28,6 +28,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.UnaryOperator;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -61,6 +62,7 @@ public final class TaskEngine implements Tasks {
     private final TaskEngineSettings settings;
     private final TaskConnector guardedConnector;
     private final Clock clock;
+    private final UnaryOperator<TaskSnapshot> normalizer;
     private final List<TaskEvents> listeners = new CopyOnWriteArrayList<>();
 
     /**
@@ -86,8 +88,22 @@ public final class TaskEngine implements Tasks {
      * @param clock the clock for retention and timestamps
      */
     public TaskEngine(TaskEngineSettings settings, Clock clock) {
+        this(settings, clock, UnaryOperator.identity());
+    }
+
+    /**
+     * Creates an engine that passes every snapshot it caches or returns through {@code normalizer}
+     * after applying engine defaults; a protocol binding uses it to encode completed results the way
+     * its wire format expects. Call {@link #start()} to begin evicting expired projections.
+     *
+     * @param settings the engine settings
+     * @param clock the clock for retention and timestamps
+     * @param normalizer the rewrite applied by {@link #withDefaults(TaskSnapshot)}
+     */
+    public TaskEngine(TaskEngineSettings settings, Clock clock, UnaryOperator<TaskSnapshot> normalizer) {
         this.settings = Objects.requireNonNull(settings, "settings");
         this.clock = Objects.requireNonNull(clock, "clock");
+        this.normalizer = Objects.requireNonNull(normalizer, "normalizer");
         this.guardedConnector = guard(settings.connector());
     }
 
@@ -307,19 +323,21 @@ public final class TaskEngine implements Tasks {
     }
 
     /**
-     * Applies engine defaults ({@code pollInterval}) without touching the cache.
+     * Applies engine defaults ({@code pollInterval}) and the binding's normalizer, without touching
+     * the cache. Every snapshot the engine caches or returns passes through here.
      *
      * @param snapshot the task projection
      * @return {@code snapshot} with defaults applied
      */
     public TaskSnapshot withDefaults(TaskSnapshot snapshot) {
         var pollInterval = settings.pollInterval();
-        return pollInterval == null || snapshot.pollInterval() != null
+        var effective = pollInterval == null || snapshot.pollInterval() != null
                 ? snapshot
                 : TaskSnapshot.builder()
                         .from(snapshot)
                         .pollInterval(pollInterval)
                         .build();
+        return normalizer.apply(effective);
     }
 
     /**

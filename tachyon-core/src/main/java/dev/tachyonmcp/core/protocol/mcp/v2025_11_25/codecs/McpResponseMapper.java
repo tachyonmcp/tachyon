@@ -21,7 +21,6 @@ import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
 import dev.tachyonmcp.api.server.features.tools.ToolDescriptor;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
 import dev.tachyonmcp.api.server.features.tools.ToolResult.InputRequired;
-import dev.tachyonmcp.api.server.features.tools.ToolResult.Success;
 import dev.tachyonmcp.core.protocol.ProtocolResponseMapper;
 import dev.tachyonmcp.core.protocol.codec.Codec;
 import dev.tachyonmcp.core.protocol.codec.CodecSupport;
@@ -146,8 +145,7 @@ public class McpResponseMapper implements ProtocolResponseMapper {
             case InputRequired ir ->
                 new InputRequiredPayload(ir.inputRequests(), ir.requestState(), resolveMeta(result));
             case ToolResult.Task ignored -> throw new IllegalArgumentException("Task result requires task mapping");
-            case ToolResult.Error er -> buildCallToolResult(er.content(), null, true, resolveMeta(result));
-            case Success s -> wireSuccess(s, resolveMeta(result));
+            case ToolResult.Payload p -> wirePayload(p, resolveMeta(result));
             default -> throw new IllegalArgumentException("Unsupported ToolResult: " + result.getClass());
         };
     }
@@ -157,8 +155,8 @@ public class McpResponseMapper implements ProtocolResponseMapper {
         return meta == null || meta.isEmpty() ? null : JsonUtils.toObjectTree(meta);
     }
 
-    private Object wireSuccess(Success s, @Nullable ObjectNode meta) {
-        return buildCallToolResult(s.content(), s.structuredValue(), null, meta);
+    private CallToolResult wirePayload(ToolResult.Payload p, @Nullable ObjectNode meta) {
+        return buildCallToolResult(p.content(), p.structuredValue(), p instanceof ToolResult.Error ? true : null, meta);
     }
 
     /**
@@ -275,15 +273,8 @@ public class McpResponseMapper implements ProtocolResponseMapper {
                 new CallToolResult(List.of(), null, null, JsonUtils.toObjectTree(relatedTaskMeta(null, taskId)), null);
             case TaskResult.Completed c ->
                 switch (c.result()) {
-                    case ToolResult.Success s ->
-                        buildCallToolResult(
-                                s.content(),
-                                s.structuredValue(),
-                                null,
-                                JsonUtils.toObjectTree(relatedTaskMeta(s.meta(), taskId)));
-                    case ToolResult.Error e ->
-                        buildCallToolResult(
-                                e.content(), null, true, JsonUtils.toObjectTree(relatedTaskMeta(e.meta(), taskId)));
+                    case ToolResult.Payload p ->
+                        wirePayload(p, JsonUtils.toObjectTree(relatedTaskMeta(p.meta(), taskId)));
                     default ->
                         throw new IllegalStateException("unreachable: TaskResult.Completed cannot nest " + c.result());
                 };

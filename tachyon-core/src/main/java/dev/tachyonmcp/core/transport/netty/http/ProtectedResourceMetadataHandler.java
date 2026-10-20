@@ -23,8 +23,9 @@ import java.util.Set;
 /**
  * Serves the RFC 9728 Protected Resource Metadata of a bearer-token server, so a client that was
  * refused can find the authorization server (MCP authorization § Authorization Server Discovery). The
- * document is rendered once, when the server is built, into one direct, unreleasable buffer, and every
- * answer is a duplicate of it: no copy into the outbound buffer and no reference count per response.
+ * document is rendered once, when the server is built, into one unreleasable buffer, and every answer
+ * is a duplicate of it: no reference count per response. It is wrapped, not allocated, so the leak
+ * detector never tracks it and nothing has to release it when the server stops.
  *
  * <p>It answers {@code GET} and {@code HEAD} (RFC 9110 §9.1: a general-purpose server supports both) on
  * the paths of {@link ProtectedResourceMetadata#paths}, with no authentication, because a client needs
@@ -53,8 +54,7 @@ public final class ProtectedResourceMetadataHandler extends ChannelInboundHandle
     public ProtectedResourceMetadataHandler(BearerConfig bearer) {
         this.paths = ProtectedResourceMetadata.paths(bearer.resource());
         final var json = ProtectedResourceMetadata.json(bearer);
-        this.document =
-                Unpooled.unreleasableBuffer(Unpooled.directBuffer(json.length).writeBytes(json));
+        this.document = Unpooled.unreleasableBuffer(Unpooled.wrappedBuffer(json));
     }
 
     @Override

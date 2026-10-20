@@ -175,6 +175,63 @@ public abstract class AbstractSchemaValidationContractTest<T extends McpClient> 
         }
     }
 
+    @Test
+    void shouldEmitStructuredErrorPayloadWithoutValidatingItAgainstOutputSchema() throws Exception {
+        // language=json
+        var outputSchema = """
+            {"type":"object","properties":{"count":{"type":"integer"}},"required":["count"]}
+            """;
+        startServer(
+                b -> b.json(j -> j.inputSchemaValidator(VALIDATOR).outputSchemaValidator(VALIDATOR)),
+                s -> s.tools()
+                        .register(
+                                ToolDescriptor.builder()
+                                        .name("structured-error")
+                                        .description("Fails with a structured payload shaped unlike its outputSchema")
+                                        .outputSchema(outputSchema)
+                                        .build(),
+                                (context, request) ->
+                                        ToolResult.error(Map.of("code", "NOT_FOUND", "id", 7), "job 7 not found"))
+                        .register(
+                                ToolDescriptor.builder()
+                                        .name("textless-structured-error")
+                                        .description("Fails with a structured payload and no text block")
+                                        .outputSchema(outputSchema)
+                                        .build(),
+                                (context, request) -> ToolResult.Error.builder()
+                                        .structuredValue(Map.of("code", "GONE"))
+                                        .build()));
+
+        try (var client = readyClient()) {
+            var response = client.post("""
+                {"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"structured-error","arguments":{}}}
+                """);
+
+            assertThat(response.statusCode()).isEqualTo(200);
+            assertThat(response)
+                    .isSuccess()
+                    .hasId(3)
+                    .isToolError()
+                    .hasTextContent("job 7 not found")
+                    .hasStructuredContent("""
+                        {"code":"NOT_FOUND","id":7}
+                        """);
+
+            var textless = client.post("""
+                {"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"textless-structured-error","arguments":{}}}
+                """);
+
+            assertThat(textless)
+                    .isSuccess()
+                    .hasId(4)
+                    .isToolError()
+                    .hasTextContent("{\"code\":\"GONE\"}")
+                    .hasStructuredContent("""
+                        {"code":"GONE"}
+                        """);
+        }
+    }
+
     // endregion
 
     // region: Prompt input schema validation

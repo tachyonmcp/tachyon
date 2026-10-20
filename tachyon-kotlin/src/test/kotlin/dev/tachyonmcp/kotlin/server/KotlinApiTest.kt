@@ -397,6 +397,25 @@ internal class KotlinApiTest {
     }
 
     @Test
+    fun `fail with payload builds an error result carrying structured content`() {
+        withToolScope {
+            val payload = mapOf("code" to "NOT_FOUND", "id" to 7)
+            val structured = fail(payload, "job 7 not found").shouldBeInstanceOf<ToolResult.Error>()
+            val textless = fail(payload).shouldBeInstanceOf<ToolResult.Error>()
+            val plain = fail("boom").shouldBeInstanceOf<ToolResult.Error>()
+
+            assertSoftly {
+                structured.structuredValue() shouldBe payload
+                (structured.content().single() as TextContent).text() shouldBe "job 7 not found"
+                textless.structuredValue() shouldBe payload
+                textless.content() shouldHaveSize 0
+                plain.structuredValue() shouldBe null
+                (plain.content().single() as TextContent).text() shouldBe "boom"
+            }
+        }
+    }
+
+    @Test
     fun `inputRequired accepts a request map or vararg pairs`() {
         val ask = RpcMethodRequest("elicitation/create")
 

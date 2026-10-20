@@ -2,8 +2,8 @@
 title: Tasks
 tags: [concept, tasks, experimental]
 sources: [tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/tasks/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tasks/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tools/ToolMethodHandlers.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tools/DefaultToolRegistry.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java, extensions/tachyon-extensions-tasks/src/main/java/dev/tachyonmcp/extensions/tasks/, integrations/tachyon-tasks-temporal/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/security/Owner.java]
-updated: 2026-10-16
-commit: 747359f0
+updated: 2026-10-20
+commit: 2d0bcaa4
 ---
 
 # ⏳ Tasks
@@ -57,7 +57,7 @@ Verdict: cache + push **routing**, plus an **owner binding** for tasks a named c
 - **One gate.** `TaskEngine#guard` wraps `get`/`cancel`/`update`/`awaitResult` (`requireVisibleTo` ⇒ `TaskNotFoundException`) and `list` (filters by `isVisibleTo`); the engine's own waits (`awaitResult`, `cancelAndAwait`, `pollUntilTerminal`) and `readableTaskIds` use `connector()`, not the raw one. `TaskMethodHandlers` has no ownership code. `listCached` was removed: it would have bypassed the gate.
 - ⚠️ Limits: process-local; no `ttl` ⇒ bound only while cached (terminal + `keepAlive`, 5 min); `list` is filtered after the connector's page, so a page can come back short with a valid cursor. `InteractionContext#tasks()` (spec "new") is not built, so a worker that publishes before its tool returns publishes unowned, and the tool's later owned create is refused.
 
-- effective pollInterval = snapshot's or config default `TaskEngine#withDefaults`.
+- effective pollInterval = snapshot's or config default, then the binding's normalizer `TaskEngine#withDefaults`. Every cached or returned snapshot passes here. The MCP binding's normalizer serializes a `Completed` result's structured payload with the server serde (`ServerEngine#payloadSerializer`) so `tasks/get`, `tasks/result` and status notifications encode it like `tools/call` `TasksExtension#serializeResult`; the engine itself imports no serde (`EngineBoundaryTest`).
 - `publish(snapshot)` = `publish(snapshot, TaskRoute.NONE)`: upsert. Uncached ⇒ cached unrouted; cached ⇒ `TaskEntry#publish` accepts only **higher revision**; changed ⇒ `TaskEntry#notifyIfNewer` `TaskEngine#publish`. No cache-change callback: publish/remove/eviction push nothing beyond per-task status.
 - `publish(snapshot, route)` (tool path): `putIfAbsent`; existing entry takes `route` only if unrouted (`TaskEntry#route(TaskRoute)`: set once, never re-routed, colliding call succeeds) `TaskEngine#publish`. Route attach itself pushes nothing: the tool result carries that revision; revisions sent before attach are not re-sent.
 - `tasks/get|cancel|result` `TaskEngine#refresh` the connector's snapshot ⇒ a cached task is updated, an unknown id is never cached; a read never routes. `tasks/list` never caches.

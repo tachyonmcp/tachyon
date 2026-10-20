@@ -2,8 +2,8 @@
 title: Errors
 tags: [concept, errors, protocol]
 sources: [tachyon-api/src/main/java/dev/tachyonmcp/api/server/domain/ServerError.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/domain/ServerErrors.java, tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/mcp/v2025_11_25/codecs/McpResponseMapper.java, tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/mcp/v2026_07_28/codecs/McpResponseMapper.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/PeekedBody.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/jsonrpc/JsonRpcCodec.java]
-updated: 2026-10-15
-commit: 1f2c7fa8
+updated: 2026-10-20
+commit: d263b96a
 ---
 
 # 🚨 Errors
@@ -45,7 +45,7 @@ Dispatcher-level `McpDispatcher.handleHandlerError` `McpDispatcher#handleHandler
 
 Subscription transport failures produce `StreamFailed(causeType, cause?)`, with throwable capture gated by `exceptionDetail` [McpDispatcher#handleHandlerError](../../tachyon-core/src/main/java/dev/tachyonmcp/core/server/McpDispatcher.java); see [[observability]].
 
-`tools/call` cancel ⇒ `"Tool call cancelled"` `ToolsCallHandler#handlerError`. Output-schema failure ⇒ **tool result** `isError` (not JSON-RPC error).
+`tools/call` cancel ⇒ `"Tool call cancelled"` `ToolsCallHandler#handlerError`. Output-schema failure ⇒ **tool result** `isError` (not JSON-RPC error). Both mappers encode `ToolResult.Payload` in one branch, `isError` ⇔ `instanceof Error`; `Error.structuredValue` ⇒ `structuredContent` `McpResponseMapper#callToolResult`, skipped by output validation `ToolsCallHandler#validateOutput` (Success only).
 
 ## 🌐 Plain HTTP responses (no JSON-RPC)
 
