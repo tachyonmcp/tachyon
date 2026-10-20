@@ -10,7 +10,6 @@ import com.example.weather.service.NarrationStyle
 import com.example.weather.service.WeatherService
 import com.example.weather.spi.CityNotFoundException
 import com.example.weather.spi.WeatherObservation
-import dev.tachyonmcp.api.json.JsonSchema
 import dev.tachyonmcp.api.server.domain.Args
 import dev.tachyonmcp.api.server.domain.InvalidArgumentException
 import dev.tachyonmcp.api.server.domain.PromptMessage
@@ -24,6 +23,7 @@ import dev.tachyonmcp.kotlin.server.domain.Icon
 import dev.tachyonmcp.kotlin.server.features.prompts.PromptDescriptor
 import dev.tachyonmcp.kotlin.server.features.resources.ResourceDescriptor
 import dev.tachyonmcp.kotlin.server.json.KxSerializationSerde
+import dev.tachyonmcp.kotlin.server.json.ktschema.ktSchemaGenerator
 import dev.tachyonmcp.opentelemetry.McpOpenTelemetryListener
 import io.opentelemetry.exporter.logging.LoggingMetricExporter
 import io.opentelemetry.exporter.logging.LoggingSpanExporter
@@ -38,7 +38,6 @@ import io.opentelemetry.sdk.trace.export.BatchSpanProcessor
 import io.opentelemetry.sdk.trace.export.SimpleSpanProcessor
 import io.opentelemetry.semconv.ServiceAttributes
 import me.kpavlov.kt.schema.generator.json.JsonSchemaConfig
-import me.kpavlov.kt.schema.generator.json.ReflectionClassJsonSchemaGenerator
 import org.slf4j.LoggerFactory
 import tools.jackson.databind.ObjectMapper
 import java.net.http.HttpClient
@@ -52,11 +51,7 @@ private val MAPPER = ObjectMapper()
 internal val LOGO by lazy { classpathDataUri("/images/logo.png", "image/png") }
 internal val SUN_AND_CLOUD by lazy { classpathDataUri("/images/sun-and-cloud.png", "image/png") }
 
-private val schemaGenerator =
-    ReflectionClassJsonSchemaGenerator(
-        json = kotlinx.serialization.json.Json { encodeDefaults = false },
-        config = JsonSchemaConfig.Default,
-    )
+internal val lenientSchema = ktSchemaGenerator(JsonSchemaConfig.Lenient)
 
 /**
  * Prints spans/metrics to the log with zero external infra, and also ships them via the
@@ -264,7 +259,7 @@ private fun rewriteForecastPromptDescriptor(): PromptDescriptor =
             required = true
         }
         inputSchema =
-            JsonSchema.parse(schemaGenerator.generateSchemaString(NarrationStyleInput::class))
+            lenientSchema(NarrationStyleInput::class.java)
     }
 
 private fun rewriteForecast(

@@ -21,9 +21,11 @@ import java.util.Optional
  *
  * Generates with [JsonSchemaConfig.Lenient]: a property with a Kotlin default or a nullable type is
  * optional, undeclared properties are allowed, and `$defs` use short type names, so a schema
- * accepts every payload kotlinx.serialization would decode with the property absent. Nullable
- * properties carry no null marker, so an explicit `null` on the wire fails validation — pair it
- * with a serde that drops nulls (kotlinx `explicitNulls = false`). kt-schema's own [ReflectionClassJsonSchemaGenerator.Default]
+ * accepts every payload kotlinx.serialization would decode with the property absent. Undeclared
+ * properties pass validation either way; the serde decodes them only with `ignoreUnknownKeys =
+ * true` (the `KxSerializationSerde` default), and rejects them otherwise. Nullable properties
+ * carry no null marker, so an explicit `null` on the wire fails validation — pair it with a serde
+ * that drops nulls (kotlinx `explicitNulls = false`). kt-schema's own [ReflectionClassJsonSchemaGenerator.Default]
  * is [JsonSchemaConfig.Strict], the OpenAI function-calling preset that lists every property as
  * `required`; a typed tool whose output type has a default then fails its own output validation
  * whenever the serde omits that default. Pass `schemaGenerator =

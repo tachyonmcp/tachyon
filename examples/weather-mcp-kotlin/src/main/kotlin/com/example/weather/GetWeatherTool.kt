@@ -12,7 +12,6 @@ import com.example.weather.model.TemperatureUnit.Fahrenheit
 import com.example.weather.service.WeatherService
 import com.example.weather.spi.CityNotFoundException
 import com.example.weather.spi.WeatherObservation
-import dev.tachyonmcp.api.json.JsonSchema
 import dev.tachyonmcp.api.runtime.ElicitationRequest
 import dev.tachyonmcp.api.runtime.ElicitationResult
 import dev.tachyonmcp.api.runtime.InteractionContext
@@ -32,7 +31,7 @@ import java.util.concurrent.TimeoutException
 private val log = LoggerFactory.getLogger("com.example.weather.GetWeatherTool")
 private const val ELICITATION_TIMEOUT_SECONDS = 600L
 
-private val CITY_SCHEMA = JsonSchema.generate(CityElicitationInput::class.java)
+private val CITY_SCHEMA = lenientSchema(CityElicitationInput::class.java)
 
 private data class CityElicitationInput(
     val city: String,
@@ -43,8 +42,8 @@ val getWeatherToolDescriptor =
         name = "get-weather"
         title = "Current Weather"
         description = "Get current weather for a city"
-        inputSchema = JsonSchema.generate(GetWeatherRequest::class.java)
-        outputSchema = JsonSchema.generate(GetWeatherResponse::class.java)
+        inputSchema = lenientSchema(GetWeatherRequest::class.java)
+        outputSchema = lenientSchema(GetWeatherResponse::class.java)
         icons = listOf(Icon(SUN_AND_CLOUD, "image/png", listOf("128x128")))
         annotations =
             ToolAnnotations(
