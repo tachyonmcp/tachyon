@@ -47,7 +47,7 @@ ServiceLoader registrations:
 
 Server requires **exactly one** String-source `JsonSchemaFactory` else ISE `DefaultTachyonServer#discoverSchemaFactory`; used to validate tool schema roots at registration `JsonSchemaUtils#parseSchemaRoot`.
 
-`KtSchemaResourceFactory` looks up `META-INF/kt-schema/schemas/<fqcn path>.json` on the target type's classloader (build-time generated) `KtSchemaResourceFactory#sourceType`.
+`KtSchemaResourceFactory` looks up `META-INF/kt-schema/schemas/<fqcn path>.json` on the target type's classloader (build-time generated) `KtSchemaResourceFactory#toJsonSchema`.
 
 ## ✅ Validation
 

@@ -20,10 +20,10 @@ import java.util.Optional
  * always loads once that artifact is on the classpath — add it explicitly to use `typedTool`.
  *
  * Generates with [JsonSchemaConfig.Lenient]: a property with a Kotlin default or a nullable type is
- * optional, undeclared properties are allowed, and `$defs` use short type names, so a schema never
- * rejects a payload kotlinx.serialization would decode. Nullable properties carry no null marker,
- * so an explicit `null` on the wire fails validation — pair it with a serde that drops nulls
- * (kotlinx `explicitNulls = false`). kt-schema's own [ReflectionClassJsonSchemaGenerator.Default]
+ * optional, undeclared properties are allowed, and `$defs` use short type names, so a schema
+ * accepts every payload kotlinx.serialization would decode with the property absent. Nullable
+ * properties carry no null marker, so an explicit `null` on the wire fails validation — pair it
+ * with a serde that drops nulls (kotlinx `explicitNulls = false`). kt-schema's own [ReflectionClassJsonSchemaGenerator.Default]
  * is [JsonSchemaConfig.Strict], the OpenAI function-calling preset that lists every property as
  * `required`; a typed tool whose output type has a default then fails its own output validation
  * whenever the serde omits that default. Pass `schemaGenerator =

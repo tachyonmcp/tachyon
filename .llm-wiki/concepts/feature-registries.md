@@ -61,7 +61,7 @@ One check, `Visibility#of(DispatchContext, ServerFeature.Descriptor)`: the featu
 
 `ToolMethodHandlers.ToolsCallHandler` `ToolsCallHandler`:
 - Unknown or extension-disabled tool ⇒ `invalidParams("Unknown tool: …")` (hides extension tools).
-- Input schema violations ⇒ invalid params with joined errors (`<path>: <message>`, no prefix at root).
+- Input schema violations ⇒ invalid params with joined errors (`<path>: <message>`, no prefix at root) [SchemaValidationError#join](../../tachyon-api/src/main/java/dev/tachyonmcp/api/json/SchemaValidationError.java).
 - Emits DEBUG log `tachyon.tools` started/completed (visible only if log level permits) `ToolsCallHandler#sendLogging`.
 - `ToolResult` sealed: `Success | Error | InputRequired | Task` `ToolResult`.
 - `Success.structuredValue` POJO serialized via `PayloadSerializer` → `JsonDocument`, then output schema validation; violation ⇒ `ToolResult.error(msg)` (tool-level error, not JSON-RPC), outcome `PayloadFailure` `OperationOutcome`.

@@ -71,6 +71,10 @@
             <artifactId>tachyon-kotlin</artifactId>
         </dependency>
         <dependency>
+            <groupId>dev.tachyonmcp</groupId>
+            <artifactId>tachyon-kotlin-kt-schema</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.jetbrains.kotlinx</groupId>
             <artifactId>kotlinx-serialization-json</artifactId>
             <version>${kotlinx-serialization-json.version}</version>

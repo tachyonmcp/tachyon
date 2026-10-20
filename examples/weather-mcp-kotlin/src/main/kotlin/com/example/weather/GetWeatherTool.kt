@@ -24,8 +24,6 @@ import dev.tachyonmcp.kotlin.server.domain.Icon
 import dev.tachyonmcp.kotlin.server.domain.ToolAnnotations
 import dev.tachyonmcp.kotlin.server.domain.stringOrNull
 import dev.tachyonmcp.kotlin.server.features.tools.ToolDescriptor
-import me.kpavlov.kt.schema.generator.json.JsonSchemaConfig
-import me.kpavlov.kt.schema.generator.json.ReflectionClassJsonSchemaGenerator
 import org.slf4j.LoggerFactory
 import java.util.Locale
 import java.util.concurrent.TimeUnit
