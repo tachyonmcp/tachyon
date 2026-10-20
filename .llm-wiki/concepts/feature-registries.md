@@ -2,8 +2,8 @@
 title: Feature registries
 tags: [concept, tools, resources, prompts, completions, subscriptions]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/handlers/, tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java, tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/mcp/v2026_07_28/codecs/McpResponseMapper.java, extensions/tachyon-extensions-tasks/src/main/java/dev/tachyonmcp/extensions/tasks/McpTaskBinding.java]
-updated: 2026-10-16
-commit: 747359f0
+updated: 2026-10-19
+commit: 79625c4c
 ---
 
 # 🧰 Feature registries
@@ -61,7 +61,7 @@ One check, `Visibility#of(DispatchContext, ServerFeature.Descriptor)`: the featu
 
 `ToolMethodHandlers.ToolsCallHandler` `ToolsCallHandler`:
 - Unknown or extension-disabled tool ⇒ `invalidParams("Unknown tool: …")` (hides extension tools).
-- Input schema violations ⇒ invalid params with joined errors.
+- Input schema violations ⇒ invalid params with joined errors (`<path>: <message>`, no prefix at root) [SchemaValidationError#join](../../tachyon-api/src/main/java/dev/tachyonmcp/api/json/SchemaValidationError.java).
 - Emits DEBUG log `tachyon.tools` started/completed (visible only if log level permits) `ToolsCallHandler#sendLogging`.
 - `ToolResult` sealed: `Success | Error | InputRequired | Task` `ToolResult`.
 - `Success.structuredValue` POJO serialized via `PayloadSerializer` → `JsonDocument`, then output schema validation; violation ⇒ `ToolResult.error(msg)` (tool-level error, not JSON-RPC), outcome `PayloadFailure` `OperationOutcome`.

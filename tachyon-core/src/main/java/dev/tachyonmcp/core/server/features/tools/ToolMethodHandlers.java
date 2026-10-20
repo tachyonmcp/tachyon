@@ -214,7 +214,7 @@ public final class ToolMethodHandlers {
             if (taskSupport == TaskSupport.REQUIRED || mapped.taskAugmented()) {
                 return internalError("Task-producing tool returned a non-task result");
             }
-            var prepared = prepareResult(outputSchema, result);
+            var prepared = prepareResult(mapped.request().name(), outputSchema, result);
             if (prepared instanceof ToolResult.Error) {
                 context.observation().markPayloadFailure();
             }
@@ -232,11 +232,14 @@ public final class ToolMethodHandlers {
             observation.info().responsePayload(CapturedPayload.capture(json, payloadCapture.maxBytes()));
         }
 
-        private ToolResult prepareResult(@Nullable JsonSchema outputSchema, ToolResult result) {
+        private ToolResult prepareResult(String name, @Nullable JsonSchema outputSchema, ToolResult result) {
             var serialized = JsonUtils.serializeStructured(result, payloadSerializer);
             var validationError = validateOutput(outputSchema, serialized);
             if (validationError == null) return serialized;
-            var error = ToolResult.error(validationError);
+            var message =
+                    "Tool '" + name + "' returned structuredContent that violates its outputSchema: " + validationError;
+            logger.warn(message);
+            var error = ToolResult.error(message);
             var meta = serialized.meta();
             return meta == null || meta.isEmpty() ? error : error.withMeta(meta);
         }

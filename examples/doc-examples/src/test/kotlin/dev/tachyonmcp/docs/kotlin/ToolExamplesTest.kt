@@ -85,27 +85,30 @@ class ToolExamplesTest {
     }
 
     @Test
-    fun `a Kotlin default only becomes optional with the kt-schema default config`() {
+    fun `a Kotlin default is optional under the default config and required under the strict one`() {
         TachyonServer(port = 0) {
             json { serde = KxSerializationSerde.Default }
-            typedTool<WeatherQuery, Forecast>(name = "out-of-the-box") { Forecast(it.city) }
             typedTool<WeatherQuery, Forecast>(
-                name = "lenient",
+                name = "out-of-the-box",
                 schemaGenerator = ktSchemaGenerator(JsonSchemaConfig.Default),
+            ) { Forecast(it.city) }
+            typedTool<WeatherQuery, Forecast>(
+                name = "strict",
+                schemaGenerator = ktSchemaGenerator(JsonSchemaConfig.Strict),
             ) { Forecast(it.city) }
         }.use { server ->
             val tools = server.rpcResult("tools/list")
-            tools.tool("out-of-the-box").required() shouldContainExactlyInAnyOrder listOf("city", "units")
-            tools.tool("lenient").required() shouldContainExactly listOf("city")
+            tools.tool("out-of-the-box").required() shouldContainExactly listOf("city")
+            tools.tool("strict").required() shouldContainExactlyInAnyOrder listOf("city", "units")
 
-            assertThatResponse(server.post("tools/call", """{"name":"out-of-the-box","arguments":{"city":"Oslo"}}"""))
-                .hasStatus(400)
-                .isJsonRpcError()
-                .hasErrorCode(-32602)
-            server.rpcResult("tools/call", """{"name":"lenient","arguments":{"city":"Oslo"}}""")
+            server.rpcResult("tools/call", """{"name":"out-of-the-box","arguments":{"city":"Oslo"}}""")
                 .path("structuredContent")
                 .path("summary")
                 .asString() shouldBe "Oslo"
+            assertThatResponse(server.post("tools/call", """{"name":"strict","arguments":{"city":"Oslo"}}"""))
+                .hasStatus(400)
+                .isJsonRpcError()
+                .hasErrorCode(-32602)
         }
     }
 

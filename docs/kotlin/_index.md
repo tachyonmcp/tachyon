@@ -485,15 +485,17 @@ one call, pass `schemaGenerator` (`ktSchemaGenerator` lives in `dev.tachyonmcp.k
 ```kotlin
 typedTool<EchoRequest, EchoResponse>(
     name = "echo",
-    schemaGenerator = ktSchemaGenerator(JsonSchemaConfig.Default),
+    schemaGenerator = ktSchemaGenerator(JsonSchemaConfig.Strict),
 ) { input -> EchoResponse(input.message) }
 ```
 
-> **A Kotlin default does not make a property optional.** Out of the box the generated schema
-> marks a defaulted property `required`, so adding `val units: String = "metric"` to
-> `EchoRequest` would still force every caller to send it. Pass
-> `schemaGenerator = ktSchemaGenerator(JsonSchemaConfig.Default)` to let nullable and defaulted
-> properties be omitted instead.
+> **A Kotlin default makes a property optional.** Out of the box the generated schema is
+> `JsonSchemaConfig.Lenient`: a defaulted property such as `val units: String = "metric"` and any
+> nullable property may be omitted, by callers and by your own output serde, and undeclared
+> properties are allowed. Nullable properties carry no null marker, so send absent rather than
+> `null` (kotlinx: `explicitNulls = false`). Pass `schemaGenerator =
+> ktSchemaGenerator(JsonSchemaConfig.Strict)` to list every property as `required` and reject
+> undeclared ones instead (the OpenAI function-calling shape).
 
 `typedTool` and `tachyon-kotlin-kt-schema` are `@ExperimentalApi` — the shape may still change.
 

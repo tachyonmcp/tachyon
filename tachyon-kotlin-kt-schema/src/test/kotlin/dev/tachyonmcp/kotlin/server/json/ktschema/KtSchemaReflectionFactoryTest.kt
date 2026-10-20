@@ -27,6 +27,36 @@ internal class KtSchemaReflectionFactoryTest {
         val count: Int,
     )
 
+    @Serializable
+    @SerialName("Defaulted")
+    private data class Defaulted(
+        val name: String,
+        val note: String? = null,
+        val count: Int = 1,
+        val unauthenticated: Boolean = false,
+    )
+
+    @Test
+    fun `a Kotlin default or a nullable type makes a property optional`() {
+        val schema = JsonSchema.generate(Defaulted::class.java)
+
+        schema.json() shouldEqualJson
+            $$"""
+            {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "$id": "Defaulted",
+              "type": "object",
+              "properties": {
+                "name": { "type": "string" },
+                "note": { "type": "string" },
+                "count": { "type": "integer" },
+                "unauthenticated": { "type": "boolean" }
+              },
+              "required": ["name"]
+            }
+            """.trimIndent()
+    }
+
     @Test
     fun `KtSchemaReflectionFactory is chained after the resource factory via ServiceLoader`() {
         val factories =
@@ -59,7 +89,6 @@ internal class KtSchemaReflectionFactoryTest {
                   "type": "integer"
                 }
               },
-              "additionalProperties": false,
               "required": [
                 "name",
                 "count"

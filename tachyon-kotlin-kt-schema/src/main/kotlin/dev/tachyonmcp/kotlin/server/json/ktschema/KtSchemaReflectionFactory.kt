@@ -4,6 +4,8 @@ package dev.tachyonmcp.kotlin.server.json.ktschema
 import dev.tachyonmcp.api.annotations.ExperimentalApi
 import dev.tachyonmcp.api.json.JsonSchema
 import dev.tachyonmcp.api.json.spi.JsonSchemaFactory
+import kotlinx.serialization.json.Json
+import me.kpavlov.kt.schema.generator.json.JsonSchemaConfig
 import me.kpavlov.kt.schema.generator.json.ReflectionClassJsonSchemaGenerator
 import java.util.Optional
 
@@ -17,12 +19,31 @@ import java.util.Optional
  * `kt-schema-generator-json-jvm` as a regular (non-optional) dependency. The provider therefore
  * always loads once that artifact is on the classpath — add it explicitly to use `typedTool`.
  *
+ * Generates with [JsonSchemaConfig.Lenient]: a property with a Kotlin default or a nullable type is
+ * optional, undeclared properties are allowed, and `$defs` use short type names, so a schema
+ * accepts every payload kotlinx.serialization would decode with the property absent. Undeclared
+ * properties pass validation either way; the serde decodes them only with `ignoreUnknownKeys =
+ * true` (the `KxSerializationSerde` default), and rejects them otherwise. Nullable properties
+ * carry no null marker, so an explicit `null` on the wire fails validation — pair it with a serde
+ * that drops nulls (kotlinx `explicitNulls = false`). kt-schema's own [ReflectionClassJsonSchemaGenerator.Default]
+ * is [JsonSchemaConfig.Strict], the OpenAI function-calling preset that lists every property as
+ * `required`; a typed tool whose output type has a default then fails its own output validation
+ * whenever the serde omits that default. Pass `schemaGenerator =
+ * ktSchemaGenerator(JsonSchemaConfig.Strict)` per tool to opt back in.
+ *
  * Declines (returns empty) types the Kotlin reflection generator cannot describe, such as Java
  * records with primitive components, so the chain continues to tachyon-core's Java generator.
  */
 @ExperimentalApi
 internal class KtSchemaReflectionFactory : JsonSchemaFactory<Class<*>> {
-    private val generator = ReflectionClassJsonSchemaGenerator.Default
+    private val generator =
+        ReflectionClassJsonSchemaGenerator(
+            json =
+                Json {
+                    encodeDefaults = false
+                },
+            config = JsonSchemaConfig.Lenient,
+        )
 
     override fun sourceType(): Class<Class<*>> = Class::class.java
 

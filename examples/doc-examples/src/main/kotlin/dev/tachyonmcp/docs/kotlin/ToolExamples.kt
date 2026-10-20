@@ -45,7 +45,7 @@ internal fun TachyonServerBuilder.typedToolWithSchemaGenerator() {
     // snips-start: kotlin_typed_tool_schema_generator
     typedTool<EchoRequest, EchoResponse>(
         name = "echo",
-        schemaGenerator = ktSchemaGenerator(JsonSchemaConfig.Default),
+        schemaGenerator = ktSchemaGenerator(JsonSchemaConfig.Strict),
     ) { input -> EchoResponse(input.message) }
     // snips-end: kotlin_typed_tool_schema_generator
 }

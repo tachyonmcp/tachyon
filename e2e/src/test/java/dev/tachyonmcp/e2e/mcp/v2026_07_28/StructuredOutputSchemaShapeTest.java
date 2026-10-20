@@ -107,7 +107,12 @@ class StructuredOutputSchemaShapeTest extends AbstractStatelessMcpE2eTest<McpCli
                     """);
 
             assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
-            assertThat(response).isSuccess().hasId(1).isToolError().hasTextContent("object found, array expected");
+            assertThat(response)
+                    .isSuccess()
+                    .hasId(1)
+                    .isToolError()
+                    .hasTextContent(
+                            "Tool 'bad_array_output' returned structuredContent that violates its outputSchema: object found, array expected");
         }
     }
 

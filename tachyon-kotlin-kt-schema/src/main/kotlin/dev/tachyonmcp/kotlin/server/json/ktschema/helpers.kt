@@ -12,17 +12,20 @@ import me.kpavlov.kt.schema.generator.json.ReflectionClassJsonSchemaGenerator
 
 /**
  * Builds a `typedTool` `schemaGenerator` lambda backed by kt-schema's
- * [ReflectionClassJsonSchemaGenerator], using [config] instead of the process-wide default's
- * [me.kpavlov.kt.schema.generator.json.JsonSchemaConfig.Strict].
+ * [ReflectionClassJsonSchemaGenerator] with [config].
  *
- * For example, `JsonSchemaConfig.Default` lets nullable/defaulted Kotlin properties be omitted
- * instead of required — pass the result as `typedTool(..., schemaGenerator =
- * ktSchemaGenerator(JsonSchemaConfig.Default)) { }`.
+ * Without an argument this is [JsonSchemaConfig.Lenient], the same preset [KtSchemaReflectionFactory]
+ * applies to every `JsonSchema.generate` call: defaulted and nullable properties are
+ * optional, extra properties are allowed, `$defs` use short names, and nullable properties carry
+ * no null marker — an explicit `null` on the wire fails validation, so pair it with a serde that
+ * drops nulls (kotlinx `explicitNulls = false`). `JsonSchemaConfig.Strict` lists every property as
+ * `required`, Kotlin defaults included — pass the result as `typedTool(..., schemaGenerator =
+ * ktSchemaGenerator(JsonSchemaConfig.Strict)) { }`.
  */
 @ExperimentalApi
 @JvmSynthetic
 public fun ktSchemaGenerator(
-    config: JsonSchemaConfig = JsonSchemaConfig.Strict,
+    config: JsonSchemaConfig = JsonSchemaConfig.Lenient,
 ): (Class<*>) -> JsonSchema {
     val generator =
         ReflectionClassJsonSchemaGenerator(json = Json { encodeDefaults = false }, config = config)

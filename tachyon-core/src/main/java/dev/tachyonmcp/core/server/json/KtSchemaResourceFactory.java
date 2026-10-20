@@ -40,7 +40,8 @@ public final class KtSchemaResourceFactory implements JsonSchemaFactory<Class<?>
     @Override
     public Optional<JsonSchema> toJsonSchema(Class<?> type) {
         var path = "META-INF/kt-schema/schemas/%s.json".formatted(type.getName().replace('.', '/'));
-        try (var in = Thread.currentThread().getContextClassLoader().getResourceAsStream(path)) {
+        var loader = type.getClassLoader() != null ? type.getClassLoader() : ClassLoader.getSystemClassLoader();
+        try (var in = loader.getResourceAsStream(path)) {
             if (in == null) {
                 return Optional.empty();
             }
