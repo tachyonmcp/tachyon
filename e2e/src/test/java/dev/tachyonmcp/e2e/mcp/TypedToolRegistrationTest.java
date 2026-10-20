@@ -173,7 +173,6 @@ class TypedToolRegistrationTest {
                                     "$id":"FarewellResponse",
                                     "type":"object",
                                     "properties":{"farewell":{"type":"string"}},
-                                    "additionalProperties":false,
                                     "required":["farewell"]
                                 }
                             }]
@@ -196,7 +195,6 @@ class TypedToolRegistrationTest {
                                     "$id":"FarewellRequest",
                                     "type":"object",
                                     "properties":{"name":{"type":"string"}},
-                                    "additionalProperties":false,
                                     "required":["name"]
                                 },
                                 "outputSchema":{"type":"object","properties":{"farewell":{"type":"string"}},"required":["farewell"]}

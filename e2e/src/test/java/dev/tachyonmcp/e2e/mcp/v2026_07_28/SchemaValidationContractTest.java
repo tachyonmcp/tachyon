@@ -65,7 +65,7 @@ class SchemaValidationContractTest extends AbstractSchemaValidationContractTest<
 
             assertThat(response.statusCode()).isEqualTo(400);
             assertThatJson(response.body()).when(Option.IGNORING_EXTRA_FIELDS).isEqualTo("""
-                {"jsonrpc":"2.0","id":2,"error":{"code":-32602,"message":"integer found, string expected"}}
+                {"jsonrpc":"2.0","id":2,"error":{"code":-32602,"message":"/name: integer found, string expected"}}
                 """);
         }
     }

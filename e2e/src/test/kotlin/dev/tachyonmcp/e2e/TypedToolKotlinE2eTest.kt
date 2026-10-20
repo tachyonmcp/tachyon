@@ -58,9 +58,8 @@ internal class TypedToolKotlinE2eTest : AbstractStatelessMcpE2eTest<Mcp20251125C
             client.initialize()
             val response =
                 client.post(
-                    // The generated schema marks `greeting` required despite its Kotlin default —
-                    // ReflectionClassJsonSchemaGenerator.Default doesn't treat default-valued
-                    // properties as optional — so it must be supplied explicitly here.
+                    // `greeting` is optional in the generated schema (it has a Kotlin default), but the
+                    // default Jackson serde has no jackson-module-kotlin to fill it, so it is sent here.
                     """
                     {"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"greet","arguments":{"name":"World","greeting":"Hi"}}}
                     """.trimIndent(),
@@ -280,7 +279,7 @@ internal class TypedToolKotlinE2eTest : AbstractStatelessMcpE2eTest<Mcp20251125C
 
     @Test
     fun `Schema rejects unknown property`() {
-        // The generated schema sets additionalProperties=false, so an unrecognized argument is
+        // The strict schema sets additionalProperties=false, so an unrecognized argument is
         // rejected by JSON-Schema validation before the tool handler (and its serde) ever runs —
         // a different, earlier failure than kotlinx.serialization's own unknown-key rejection
         // (see KotlinE2eTest's `decode with strict serde rejects unknown key as error`).
@@ -288,6 +287,7 @@ internal class TypedToolKotlinE2eTest : AbstractStatelessMcpE2eTest<Mcp20251125C
             typedTool<GreetArgs, GreetReply>(
                 name = "strict-greet",
                 description = "Strict typed greet tool",
+                schemaGenerator = ktSchemaGenerator(JsonSchemaConfig.Strict),
             ) {
                 val input = request.arguments<GreetArgs>()
 
@@ -324,7 +324,7 @@ internal class TypedToolKotlinE2eTest : AbstractStatelessMcpE2eTest<Mcp20251125C
     }
 
     @Test
-    fun `typedTool with a custom schemaGenerator allows omitting a defaulted argument`() {
+    fun `typedTool allows omitting a defaulted argument out of the box`() {
         TachyonServer(port = 0) {
             // KxSerializationSerde honors kotlinx.serialization defaults on decode; the default
             // Jackson serde does not (no jackson-module-kotlin registered), which is an unrelated,
@@ -334,8 +334,7 @@ internal class TypedToolKotlinE2eTest : AbstractStatelessMcpE2eTest<Mcp20251125C
             }
             typedTool<GreetArgs, GreetReply>(
                 name = "lenient-greet",
-                description = "Typed greet tool with a non-strict schema",
-                schemaGenerator = ktSchemaGenerator(JsonSchemaConfig.Default),
+                description = "Typed greet tool whose defaulted argument may be omitted",
             ) {
                 val input = request.arguments<GreetArgs>()
 

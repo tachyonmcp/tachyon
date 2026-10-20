@@ -2,8 +2,8 @@
 title: tachyon-kotlin
 tags: [module, kotlin, dsl]
 sources: [tachyon-kotlin/src/main/kotlin/dev/tachyonmcp/kotlin/server/, tachyon-kotlin/src/main/resources/META-INF/services/, tachyon-kotlin-kt-schema/src/main/kotlin/dev/tachyonmcp/kotlin/server/json/ktschema/]
-updated: 2026-10-06
-commit: 5bbf33fa
+updated: 2026-10-19
+commit: 79625c4c
 ---
 
 # 🟣 tachyon-kotlin (+ kt-schema)
@@ -49,7 +49,7 @@ Verdict: thin adapter. DSL builder wraps Java `ServerBuilder`; `suspend` handler
 - `KxSerializationSerde(Json)` implements `PayloadSerde` `KxSerializationSerde`.
 - `KotlinxJsonElementFactory` / `KotlinxJsonObjectFactory` (`JsonDocumentFactory` + `JsonSchemaFactory`) via ServiceLoader `tachyon-kotlin/src/main/resources/META-INF/services/`.
 - `JsonInterop.kt`: `JsonElement.toJacksonNode()`, `JsonObject.toJsonSchema()`, `ToolDescriptor.Builder.schemas(...)`.
-- kt-schema module: `KtSchemaReflectionFactory : JsonSchemaFactory<Class<*>>` (reflection-generated schema) + `ktSchemaGenerator(...)` helper `KtSchemaReflectionFactory#sourceType`, `helpers#ktSchemaGenerator`. Generator failure (e.g. Java record with `int`) ⇒ `Optional.empty()`, chain falls to core `JavaTypeSchemaFactory` (`KtSchemaReflectionFactory#toJsonSchema`). Core's `KtSchemaResourceFactory` reads build-time generated schemas instead → [[json-layer]].
+- kt-schema module: `KtSchemaReflectionFactory : JsonSchemaFactory<Class<*>>` (reflection-generated schema, `JsonSchemaConfig.Lenient`; `ktSchemaGenerator(JsonSchemaConfig.Strict)` opts a tool back into all-required) + `ktSchemaGenerator(...)` helper `KtSchemaReflectionFactory#sourceType`, `helpers#ktSchemaGenerator`. Generator failure (e.g. Java record with `int`) ⇒ `Optional.empty()`, chain falls to core `JavaTypeSchemaFactory` (`KtSchemaReflectionFactory#toJsonSchema`). Core's `KtSchemaResourceFactory` reads build-time generated schemas instead → [[json-layer]].
 
 ## 🧪 Tests
 

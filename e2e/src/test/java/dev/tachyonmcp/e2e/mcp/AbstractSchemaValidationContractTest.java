@@ -132,7 +132,7 @@ public abstract class AbstractSchemaValidationContractTest<T extends McpClient> 
 
             // language=JSON
             var expected = """
-                {"jsonrpc":"2.0","id":2,"error":{"code":-32602,"message":"integer found, string expected"}}
+                {"jsonrpc":"2.0","id":2,"error":{"code":-32602,"message":"/name: integer found, string expected"}}
                 """;
             assertThatJson(response.body()).isEqualTo(expected);
         }
@@ -166,7 +166,12 @@ public abstract class AbstractSchemaValidationContractTest<T extends McpClient> 
                 """);
 
             assertThat(response.statusCode()).isEqualTo(200);
-            assertThat(response).isSuccess().hasId(2).isToolError().hasTextContent("string found, integer expected");
+            assertThat(response)
+                    .isSuccess()
+                    .hasId(2)
+                    .isToolError()
+                    .hasTextContent(
+                            "Tool 'bad-structured-output' returned structuredContent that violates its outputSchema: /count: string found, integer expected");
         }
     }
 

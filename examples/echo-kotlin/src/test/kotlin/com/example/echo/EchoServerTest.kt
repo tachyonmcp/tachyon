@@ -6,6 +6,7 @@ import dev.tachyonmcp.core.server.TachyonServer
 import dev.tachyonmcp.testkit.McpClient
 import dev.tachyonmcp.testkit.McpTestClients
 import io.kotest.assertions.json.shouldEqualJson
+import io.kotest.assertions.json.shouldEqualSpecifiedJson
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
@@ -41,7 +42,7 @@ class EchoServerTest {
             )
 
         val json = response.body()
-        json shouldEqualJson
+        json shouldEqualSpecifiedJson
             $$"""
             {"jsonrpc":"2.0","id":1,"result":{"tools":[
                 {
@@ -54,8 +55,7 @@ class EchoServerTest {
                     "properties": {
                       "message":{"type":"string","description":"Message to echo"}
                     },
-                    "required":["message"],
-                    "additionalProperties": false
+                    "required":["message"]
                   } ,
                    "outputSchema": {
                       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -67,7 +67,6 @@ class EchoServerTest {
                           "description": "Response message"
                         }
                       },
-                      "additionalProperties": false,
                       "required": [
                         "reply"
                       ]
