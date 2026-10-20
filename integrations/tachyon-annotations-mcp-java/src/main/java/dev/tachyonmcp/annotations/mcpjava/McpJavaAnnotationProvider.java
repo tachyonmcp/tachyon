@@ -260,7 +260,10 @@ public class McpJavaAnnotationProvider implements AnnotationProvider {
                 .map(this::convertMcpJavaContentBlock)
                 .toList();
         if (response.isError()) {
-            return ToolResult.Error.builder().content(blocks).build();
+            return ToolResult.Error.builder()
+                    .structuredValue(response.structuredContent().orElse(null))
+                    .content(blocks)
+                    .build();
         }
         return ToolResult.Success.builder()
                 .structuredValue(response.structuredContent().orElse(null))

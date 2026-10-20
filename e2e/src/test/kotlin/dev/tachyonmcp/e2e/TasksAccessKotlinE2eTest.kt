@@ -13,11 +13,15 @@ import dev.tachyonmcp.extensions.tasks.TasksExtension
 import dev.tachyonmcp.kotlin.server.TachyonServer
 import dev.tachyonmcp.kotlin.server.config.tasks
 import dev.tachyonmcp.kotlin.server.domain.TaskSnapshot
+import dev.tachyonmcp.kotlin.server.json.KxSerializationSerde
+import dev.tachyonmcp.testkit.Mcp20251125Client
 import dev.tachyonmcp.testkit.McpTestClients
 import dev.tachyonmcp.testkit.TestTaskConnector
 import io.kotest.matchers.equals.shouldEqual
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.types.shouldBeSameInstanceAs
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import net.javacrumbs.jsonunit.assertj.JsonAssertions.assertThatJson
 import org.assertj.core.api.Assertions.assertThatIllegalArgumentException
 import org.assertj.core.api.Assertions.assertThatIllegalStateException
@@ -91,6 +95,67 @@ internal class TasksAccessKotlinE2eTest {
                     .shouldNotBeNull()
                     .status() shouldEqual
                     TaskState.COMPLETED
+            }
+        }
+    }
+
+    @Serializable
+    private data class Report(
+        val id: String,
+        @SerialName("page_count") val pages: Int,
+    )
+
+    @Test
+    fun `tasks result serializes structured payloads through the configured serde`() {
+        val now = java.time.Instant.now()
+        val jobStore =
+            TestTaskConnector()
+                .publish(
+                    TaskSnapshot.completed(
+                        "kt-report-2",
+                        now,
+                        now,
+                        1,
+                        ToolResult.structured(Report("r-2", 3), "done"),
+                    ),
+                ).publish(
+                    TaskSnapshot.completed(
+                        "kt-report-3",
+                        now,
+                        now,
+                        1,
+                        ToolResult.error(Report("r-3", 0), "failed"),
+                    ),
+                )
+        TachyonServer(port = 0) {
+            json { serde = KxSerializationSerde.Default }
+            tasks(jobStore.connector())
+        }.use { server ->
+            Mcp20251125Client(server.port()).use { client ->
+                client.initialize()
+                val ok =
+                    client.post(
+                        """
+                        {"jsonrpc":"2.0","id":2,"method":"tasks/result","params":{"taskId":"kt-report-2"}}
+                        """.trimIndent(),
+                    )
+                val failed =
+                    client.post(
+                        """
+                        {"jsonrpc":"2.0","id":3,"method":"tasks/result","params":{"taskId":"kt-report-3"}}
+                        """.trimIndent(),
+                    )
+
+                ok.statusCode() shouldEqual 200
+                assertThatJson(
+                    ok.body(),
+                ).inPath("$.result.structuredContent").isEqualTo("""{"id":"r-2","page_count":3}""")
+                assertThatJson(ok.body()).inPath("$.result.content[0].text").isEqualTo("done")
+                assertThatJson(failed.body()).inPath("$.result.isError").isEqualTo(true)
+                assertThatJson(
+                    failed.body(),
+                ).inPath("$.result.structuredContent").isEqualTo("""{"id":"r-3","page_count":0}""")
+                assertThatJson(failed.body()).inPath("$.result.content[0].text").isEqualTo("failed")
             }
         }
     }

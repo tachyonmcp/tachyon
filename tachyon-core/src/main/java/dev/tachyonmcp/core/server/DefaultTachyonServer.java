@@ -156,6 +156,11 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
     }
 
     @Override
+    public PayloadSerializer payloadSerializer() {
+        return payloadSerializer;
+    }
+
+    @Override
     public ServerConfig config() {
         return config;
     }

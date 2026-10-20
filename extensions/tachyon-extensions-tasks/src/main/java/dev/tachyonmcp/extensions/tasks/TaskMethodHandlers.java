@@ -2,6 +2,7 @@
 package dev.tachyonmcp.extensions.tasks;
 
 import dev.tachyonmcp.api.server.domain.ServerError;
+import dev.tachyonmcp.api.server.domain.TaskResult;
 import dev.tachyonmcp.api.server.features.tasks.TaskAwaitResultRequest;
 import dev.tachyonmcp.api.server.features.tasks.TaskCancelRequest;
 import dev.tachyonmcp.api.server.features.tasks.TaskGetRequest;
@@ -9,12 +10,14 @@ import dev.tachyonmcp.api.server.features.tasks.TaskListRequest;
 import dev.tachyonmcp.api.server.features.tasks.TaskNotFoundException;
 import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
 import dev.tachyonmcp.api.server.features.tasks.TaskUpdateRequest;
+import dev.tachyonmcp.api.server.features.tools.ToolResult;
 import dev.tachyonmcp.core.protocol.ProtocolRequestMapper;
 import dev.tachyonmcp.core.protocol.RequestMappingException;
 import dev.tachyonmcp.core.server.RpcMethodHandler;
 import dev.tachyonmcp.core.server.domain.ServerErrors;
 import dev.tachyonmcp.core.server.features.tasks.TasksExtensionSupport;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
+import dev.tachyonmcp.core.server.json.JsonUtils;
 import dev.tachyonmcp.core.server.session.DispatchContext;
 import dev.tachyonmcp.extensions.tasks.engine.TaskAwaitException;
 import dev.tachyonmcp.extensions.tasks.engine.TaskEngine;
@@ -182,7 +185,12 @@ final class TaskMethodHandlers {
             } catch (TaskAwaitException e) {
                 return waitFailed("retrieve", e);
             }
-            return context.responseMapper().getTaskPayloadResult(snapshot.result(), snapshot.taskId());
+            var result = snapshot.result();
+            if (result instanceof TaskResult.Completed(ToolResult toolResult)) {
+                result = TaskResult.completed(JsonUtils.serializeStructured(
+                        toolResult, context.engine().payloadSerializer()));
+            }
+            return context.responseMapper().getTaskPayloadResult(result, snapshot.taskId());
         }
     }
 

@@ -94,6 +94,28 @@ public class ToolScope
         public fun fail(message: String): ToolResult = ToolResult.error(message)
 
         /**
+         * Returns a failed [ToolResult] carrying [payload] as `structuredContent` next to
+         * `isError: true`. The payload is not validated against the tool's output schema.
+         *
+         * When [text] is omitted, no text block is attached and the server emits the
+         * serialized JSON as the text content (MCP backwards-compat). Pass [text] to
+         * supply a human-readable text block instead. Mirrors [success].
+         */
+        @ExperimentalApi
+        public fun fail(
+            payload: Any,
+            text: String? = null,
+        ): ToolResult =
+            if (text != null) {
+                ToolResult.error(payload, text)
+            } else {
+                ToolResult.Error
+                    .builder()
+                    .structuredValue(payload)
+                    .build()
+            }
+
+        /**
          * Returns a failed [ToolResult] built from the content blocks collected in [block], for
          * structured or multi-block error output. Mirrors [content].
          *

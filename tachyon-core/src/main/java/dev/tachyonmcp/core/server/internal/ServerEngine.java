@@ -2,6 +2,7 @@
 package dev.tachyonmcp.core.server.internal;
 
 import dev.tachyonmcp.api.annotations.InternalApi;
+import dev.tachyonmcp.api.json.PayloadSerializer;
 import dev.tachyonmcp.api.server.domain.LoggingLevel;
 import dev.tachyonmcp.api.server.domain.ProgressToken;
 import dev.tachyonmcp.api.server.domain.RequestId;
@@ -107,6 +108,9 @@ public interface ServerEngine extends TachyonServer {
 
     /** Returns the executor used for handler dispatch. */
     ExecutorService executor();
+
+    /** Returns the configured serializer for structured tool payloads. */
+    PayloadSerializer payloadSerializer();
 
     /** Returns the server-wide request lifecycle tracker. */
     OperationTracker operations();

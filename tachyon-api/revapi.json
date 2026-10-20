@@ -214,6 +214,15 @@
           "attachments": {
             "since": "1.0.0-beta.23"
           }
+        },
+        {
+          "ignore": true,
+          "code": "java.method.addedToInterface",
+          "new": "method dev.tachyonmcp.api.server.features.tools.ToolResult.Error.Builder dev.tachyonmcp.api.server.features.tools.ToolResult.Error.Builder::structuredValue(java.lang.Object)",
+          "justification": "ToolResult.Error.Builder is implemented only by the Immutables-generated builder; consumers never implement it",
+          "attachments": {
+            "since": "1.1.0"
+          }
         }
       ]
     }

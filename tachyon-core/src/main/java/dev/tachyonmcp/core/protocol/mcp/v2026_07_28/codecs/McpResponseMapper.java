@@ -209,9 +209,12 @@ public final class McpResponseMapper extends dev.tachyonmcp.core.protocol.mcp.v2
             case ToolResult.InputRequired ir ->
                 inputRequired(ir.inputRequests(), ir.requestState(), resolveMeta(result));
             case ToolResult.Task ignored -> throw new IllegalArgumentException("Task result requires task mapping");
-            case ToolResult.Error error -> buildCallToolResult(error.content(), null, true, resolveMeta(result));
-            case ToolResult.Success success ->
-                buildCallToolResult(success.content(), success.structuredValue(), null, resolveMeta(result));
+            case ToolResult.Payload p ->
+                buildCallToolResult(
+                        p.content(),
+                        p.structuredValue(),
+                        p instanceof ToolResult.Error ? true : null,
+                        resolveMeta(result));
             default -> throw new IllegalArgumentException("Unsupported ToolResult: " + result.getClass());
         };
     }

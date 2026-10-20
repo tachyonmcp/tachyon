@@ -304,15 +304,11 @@ public final class JsonUtils {
      * cannot encode Jackson trees.
      */
     public static ToolResult serializeStructured(ToolResult result, PayloadSerializer serializer) {
-        if (!(result instanceof ToolResult.Success success)) return result;
-        var sv = success.structuredValue();
+        if (!(result instanceof ToolResult.Payload payload)) return result;
+        var sv = payload.structuredValue();
         if (sv == null || sv instanceof JsonDocument || sv instanceof JsonNode) return result;
         var json = containsJsonNodes(sv) ? MAPPER.writeValueAsString(sv) : serializer.serialize(sv);
-        return ToolResult.Success.builder()
-                .structuredValue(JsonDocument.of(json))
-                .content(success.content())
-                .meta(success.meta())
-                .build();
+        return payload.withStructuredValue(JsonDocument.of(json));
     }
 
     private static boolean containsJsonNodes(Object structuredValue) {

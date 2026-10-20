@@ -2,6 +2,7 @@
 package dev.tachyonmcp.api.server.features.tools;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 import dev.tachyonmcp.api.server.domain.AudioContent;
 import dev.tachyonmcp.api.server.domain.ContentBlock;
@@ -118,6 +119,36 @@ class ToolResultTest {
 
         assertThat(err).isInstanceOf(ToolResult.Error.class);
         assertThat(((ToolResult.Error) err).content()).containsExactly(TextContent.of("boom"), image);
+    }
+
+    @Test
+    void errorFactoryCarriesStructuredPayloadAndKeepsItAcrossMeta() {
+        var payload = Map.of("code", "NOT_FOUND", "id", 7);
+        ToolResult err = ToolResult.error(payload, "job 7 not found");
+
+        assertThat(err).isInstanceOf(ToolResult.Error.class);
+        var error = (ToolResult.Error) err;
+        assertThat(error.structuredValue()).isEqualTo(payload);
+        assertThat(error.structured()).contains(payload);
+        assertThat(error.content()).containsExactly(TextContent.of("job 7 not found"));
+
+        var withMeta = error.withMeta(Map.of("trace", "id-1"));
+        assertThat(withMeta.structuredValue()).isEqualTo(payload);
+        assertThat(withMeta.meta()).containsEntry("trace", "id-1");
+        assertThat(((ToolResult.Error) ToolResult.error("plain")).structured()).isEmpty();
+
+        var textless = ToolResult.Error.builder().structuredValue(payload).build();
+        assertThat(textless.structuredValue()).isEqualTo(payload);
+        assertThat(textless.content()).isEmpty();
+
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> ToolResult.error(TextContent.of("x"), "text"))
+                .withMessageContaining("ContentBlock");
+        assertThatIllegalArgumentException().isThrownBy(() -> ToolResult.structured(TextContent.of("x")));
+
+        var singleBlock = (ToolResult.Error) ToolResult.error(TextContent.of("boom"));
+        assertThat(singleBlock.structuredValue()).isNull();
+        assertThat(singleBlock.content()).containsExactly(TextContent.of("boom"));
     }
 
     @Test
