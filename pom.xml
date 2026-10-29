@@ -103,7 +103,7 @@
         <temporal.version>1.40.0</temporal.version>
 
         <!-- Plugins -->
-        <jacoco-maven-plugin.version>0.8.15</jacoco-maven-plugin.version>
+        <jacoco-maven-plugin.version>0.8.16</jacoco-maven-plugin.version>
         <revapi.version>0.15.1</revapi.version>
         <revapi-java.version>0.28.4</revapi-java.version>
         <maven-antrun-plugin.version>3.2.0</maven-antrun-plugin.version>
