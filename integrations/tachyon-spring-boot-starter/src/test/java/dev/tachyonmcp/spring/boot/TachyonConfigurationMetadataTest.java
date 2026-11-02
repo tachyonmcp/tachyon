@@ -70,6 +70,7 @@ class TachyonConfigurationMetadataTest {
                         "tachyon.host",
                         "tachyon.port",
                         "tachyon.network.endpoint-path",
+                        "tachyon.network.liveness-path",
                         "tachyon.network.reader-idle-timeout",
                         "tachyon.network.writer-idle-timeout",
                         "tachyon.network.heartbeat-interval",

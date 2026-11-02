@@ -376,6 +376,7 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
                             network.host(),
                             network.port(),
                             network.endpointPath(),
+                            network.livenessPath(),
                             network.readerIdleTimeout(),
                             network.writerIdleTimeout(),
                             network.maxContentLength(),

@@ -14,6 +14,7 @@ import dev.tachyonmcp.core.transport.netty.http.CorsPreflightHandler;
 import dev.tachyonmcp.core.transport.netty.http.DnsRebindingProtectionHandler;
 import dev.tachyonmcp.core.transport.netty.http.EndpointValidatorHandler;
 import dev.tachyonmcp.core.transport.netty.http.HttpPipeliningGate;
+import dev.tachyonmcp.core.transport.netty.http.LivenessHandler;
 import dev.tachyonmcp.core.transport.netty.http.McpHeaderGuardHandler;
 import dev.tachyonmcp.core.transport.netty.http.McpHeaderMatchHandler;
 import dev.tachyonmcp.core.transport.netty.http.ProtectedResourceMetadataHandler;
@@ -78,6 +79,8 @@ public class McpChannelInitializer extends ChannelInitializer<SocketChannel> {
     private final McpHeaderMatchHandler headerMatchHandler;
     // Per-server, not static: carries this server's allowedHosts allowlist (DNS-rebinding protection).
     private final DnsRebindingProtectionHandler dnsRebindingHandler;
+    // Only when liveness is enabled: otherwise there is no probe path and no handler in the pipeline.
+    private final @Nullable LivenessHandler livenessHandler;
     // Only with bearer tokens: otherwise there is no metadata to serve and no handler in the pipeline.
     private final @Nullable ProtectedResourceMetadataHandler protectedResourceMetadataHandler;
     // One pool per server: every channel's AuthenticationHandler draws from it.
@@ -102,6 +105,7 @@ public class McpChannelInitializer extends ChannelInitializer<SocketChannel> {
 
     public McpChannelInitializer(
             String endpointPath,
+            @Nullable String livenessPath,
             boolean stateless,
             ServerEngine server,
             Duration readerIdleTimeout,
@@ -127,6 +131,7 @@ public class McpChannelInitializer extends ChannelInitializer<SocketChannel> {
         this.dispatcher = new McpDispatcher(server, server.executor());
         this.interactionHandler = new InteractionHandler();
         this.headerMatchHandler = new McpHeaderMatchHandler(server);
+        this.livenessHandler = livenessPath == null ? null : new LivenessHandler(livenessPath);
 
         var handlers = new LinkedHashMap<String, ChannelHandler>();
         for (var protocol : Protocols.list()) {
@@ -186,6 +191,11 @@ public class McpChannelInitializer extends ChannelInitializer<SocketChannel> {
         // Placed right after the codec so it governs responses from ALL downstream handlers
         // (validation handlers write before the aggregator; protocol handlers write after it).
         p.addLast("http-keep-alive", new HttpServerKeepAliveHandler());
+        // Ahead of every guard: a Kubernetes probe sends its pod IP as Host and carries no token, and
+        // the answer holds no data. Still behind pipelining and keep-alive, which order and close it.
+        if (livenessHandler != null) {
+            p.addLast("liveness", livenessHandler);
+        }
         p.addLast("dns-rebinding", dnsRebindingHandler);
         // Ahead of "cors", so other paths get a bare 404 and never a CORS grant. With bearer tokens it
         // lets the OAuth metadata paths through to "protected-resource-metadata", below "cors".

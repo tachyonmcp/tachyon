@@ -73,6 +73,17 @@ public class NetworkScope
          */
         public val allowedHosts: MutableList<String> = mutableListOf()
 
+        private var livenessPath: String? = null
+
+        /**
+         * Serves liveness probes on [path] (default `/livez`): `GET`/`HEAD` get `200` with `UP`, or
+         * `{"status":"UP"}` when `Accept` names `application/json`. Answered ahead of authentication, the
+         * DNS-rebinding guard and CORS, so a Kubernetes probe needs no token. Off unless called.
+         */
+        public fun liveness(path: String = NetworkConfig.DEFAULT_LIVENESS_PATH) {
+            livenessPath = path
+        }
+
         internal fun applyTo(builder: NetworkConfig.Builder) {
             require(address == null || (host == null && port == null)) {
                 "address is mutually exclusive with host and port"
@@ -97,5 +108,6 @@ public class NetworkScope
             maxPendingSseBytes?.let(builder::maxPendingSseBytes)
             sseStallTimeout?.let { builder.sseStallTimeout(it.toJavaDuration()) }
             ioEngine?.let(builder::ioEngine)
+            livenessPath?.let(builder::liveness)
         }
     }

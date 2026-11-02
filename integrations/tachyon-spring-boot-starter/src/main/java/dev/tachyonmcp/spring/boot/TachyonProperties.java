@@ -50,6 +50,9 @@ public record TachyonProperties(
      * {@code tachyon.network.*} settings, applied to Tachyon's network configuration.
      *
      * @param endpointPath        HTTP path serving the MCP endpoints.
+     * @param livenessPath        HTTP path answering liveness probes with UP, ahead of
+     *                            authentication and the DNS-rebinding guard. Unset disables it;
+     *                            /livez is the conventional value.
      * @param readerIdleTimeout   Close connections that receive no inbound traffic for this long. If
      *                            a duration suffix is not specified, seconds will be used. Size it
      *                            for dead-peer detection rather than for tool runtime; a long-running
@@ -87,6 +90,7 @@ public record TachyonProperties(
      */
     public record Network(
             @Nullable String endpointPath,
+            @Nullable String livenessPath,
             @DurationUnit(ChronoUnit.SECONDS) @Nullable Duration readerIdleTimeout,
             @DurationUnit(ChronoUnit.SECONDS) @Nullable Duration writerIdleTimeout,
             @DurationUnit(ChronoUnit.SECONDS) @Nullable Duration heartbeatInterval,

@@ -50,6 +50,7 @@ final class TachyonPropertiesApplier {
     private static void applyNetwork(TachyonProperties.Network network, ServerBuilder builder) {
         builder.network(config -> {
             MAP.from(network.endpointPath()).to(config::endpointPath);
+            MAP.from(network.livenessPath()).to(config::liveness);
             MAP.from(network.readerIdleTimeout()).to(config::readerIdleTimeout);
             MAP.from(network.writerIdleTimeout()).to(config::writerIdleTimeout);
             MAP.from(network.heartbeatInterval()).to(config::heartbeatInterval);

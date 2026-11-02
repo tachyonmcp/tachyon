@@ -43,6 +43,7 @@ class SseHeartbeatTest {
                 "127.0.0.1",
                 0,
                 "/mcp",
+                null,
                 Duration.ofMinutes(5),
                 Duration.ofMinutes(5),
                 McpChannelInitializer.DEFAULT_MAX_CONTENT_LENGTH,

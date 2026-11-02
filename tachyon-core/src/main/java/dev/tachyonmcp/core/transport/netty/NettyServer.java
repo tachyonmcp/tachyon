@@ -81,6 +81,7 @@ public final class NettyServer implements Closeable {
                     .childOption(ChannelOption.WRITE_BUFFER_WATER_MARK, new WriteBufferWaterMark(32 * 1024, 128 * 1024))
                     .childHandler(new McpChannelInitializer(
                             config.endpointPath(),
+                            config.livenessPath(),
                             server.isStateless(),
                             server,
                             config.readerIdleTimeout(),

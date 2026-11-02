@@ -49,6 +49,7 @@ Configured via `network { }` / `NetworkConfig.Builder`.
 | `maxPipelinedRequests` | `16` | HTTP/1.1 pipelined requests that may wait behind the one in flight on a connection. Responses always follow request order; the next request gets `429 Too Many Requests` once the ones ahead are answered, and the connection closes. `0` disables pipelining |
 | `maxPendingSseBytes` | `64 * 1024` | Encoded, unsent output one POST-SSE stream may buffer before tools wait for the client; `0` disables buffering, see below. Also bounds live events held for a slow GET listening stream |
 | `sseStallTimeout` | `30s` | How long a GET listening stream may stay unwritable (client not reading) before it closes and the client resumes with `Last-Event-ID`; `Duration.ZERO` disables, leaving stalls to `writerIdleTimeout` |
+| `liveness()` / `liveness(path)` | off | Liveness probe on `/livez` or `path`, see [below](#liveness-probe) |
 | `ioEngine` | `AUTO` | Netty I/O transport, see below |
 
 `.port(int)` is also available as a top-level `ServerBuilder` shortcut.
@@ -274,6 +275,41 @@ matching rules (bracketed IPv6, multiple/missing `Host` headers, HTTP/1.0 exempt
 
 A server behind a public hostname must add that hostname here or every request through it is
 rejected. See [deployment](deployment.md#3-public-hostname).
+
+### Liveness probe
+
+Off by default. `liveness()` serves `/livez`; `liveness(path)` serves `path`, which follows the
+`endpointPath` rules and must differ from it.
+
+<!-- snips: ../../examples/doc-examples/parked/LivenessOptions.java#config_liveness -->
+```java
+.network(n -> n.liveness()) // or n.liveness("/health/live")
+```
+
+<!-- snips: ../../examples/doc-examples/parked/KotlinLiveness.kt#config_kotlin_liveness -->
+```kotlin
+network { liveness() } // or liveness("/health/live")
+```
+
+`GET` and `HEAD` get `200` with `Cache-Control: no-store`. The body is `UP` as `text/plain`, or
+`{"status":"UP"}` when `Accept` names `application/json`. Other methods get `405`. A probe that
+sends a body is answered and the connection closes.
+
+```shell
+curl -i http://localhost:8080/livez
+curl -i -H 'Accept: application/json' http://localhost:8080/livez
+```
+
+The probe is answered ahead of the DNS-rebinding guard, CORS and authentication. A Kubernetes
+probe sends the pod IP as `Host` and carries no token; the answer holds no data to protect. It
+proves the I/O loop answers, not that tools work.
+
+```yaml
+livenessProbe:
+  httpGet:
+    path: /livez
+    port: 8080
+```
 
 ### `Mcp-Param-*` character restrictions
 

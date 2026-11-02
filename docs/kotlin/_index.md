@@ -629,7 +629,7 @@ The `...OrNull` and default-value accessors and `decode<T>()` are extensions fro
 | `CapabilitiesScope` | `capabilities { }` | `tools()`, `resources()`, `prompts()`, `logging`, `completionsMode` |
 | `TasksScope` | `tasks(connector) { }` (needs `tachyon-extensions-tasks`) | `pageSize`, `keepAlive`, `pollInterval`, `resultPollInterval` |
 | `SkillsScope` | `skills(registry) { }` (needs `tachyon-extensions-skills`) | `cacheTtl`, `cacheScope`, `negotiation`, `registry(...)` |
-| `NetworkScope` | `network { }` | `host`, `port`, `endpointPath`, `allowedOrigins`, `allowedHeaders`, `allowedHosts`, `maxContentLength`, `maxPipelinedRequests`, `maxPendingSseBytes`, `sseStallTimeout` |
+| `NetworkScope` | `network { }` | `host`, `port`, `endpointPath`, `allowedOrigins`, `allowedHeaders`, `allowedHosts`, `maxContentLength`, `maxPipelinedRequests`, `maxPendingSseBytes`, `sseStallTimeout`, `liveness()` |
 | `SessionScope` | `session { }` | `enable()`, `sessionTtl`, `sessionIdGenerator` |
 | `RuntimeScope` | `runtime { }` | `shutdownGracePeriod`, `requestTimeout`, `clock` |
 | `ToolScope` | tool lambda | `ctx`, `request`, `arguments`, `tasks`; `success(v)`, `text(t)`, `fail(msg)`, `content { }` |

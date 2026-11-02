@@ -1653,6 +1653,26 @@
           "attachments": {
             "since": "1.1.0-SNAPSHOT"
           }
+        },
+        {
+          "ignore": true,
+          "code": "java.method.numberOfParametersChanged",
+          "old": "method void dev.tachyonmcp.core.transport.netty.McpChannelInitializer::<init>(java.lang.String, boolean, dev.tachyonmcp.core.server.internal.ServerEngine, java.time.Duration, java.time.Duration, int, int, io.netty.channel.group.ChannelGroup, io.netty.handler.codec.http.cors.CorsConfig, java.util.List<java.lang.String>, java.util.function.Consumer<io.netty.channel.ChannelPipeline>)",
+          "new": "method void dev.tachyonmcp.core.transport.netty.McpChannelInitializer::<init>(java.lang.String, java.lang.String, boolean, dev.tachyonmcp.core.server.internal.ServerEngine, java.time.Duration, java.time.Duration, int, int, io.netty.channel.group.ChannelGroup, io.netty.handler.codec.http.cors.CorsConfig, java.util.List<java.lang.String>, java.util.function.Consumer<io.netty.channel.ChannelPipeline>)",
+          "justification": "livenessPath added: installs the opt-in LivenessHandler ahead of the guards when NetworkConfig#livenessPath is set (#474)",
+          "attachments": {
+            "since": "1.1.0-SNAPSHOT"
+          }
+        },
+        {
+          "ignore": true,
+          "code": "java.method.numberOfParametersChanged",
+          "old": "method void dev.tachyonmcp.core.transport.netty.NettyServerConfig::<init>(java.lang.String, int, java.lang.String, java.time.Duration, java.time.Duration, int, int, io.netty.handler.codec.http.cors.CorsConfig, java.util.List<java.lang.String>, dev.tachyonmcp.core.transport.netty.NettyIoEngine, java.util.function.Consumer<io.netty.channel.ChannelPipeline>)",
+          "new": "method void dev.tachyonmcp.core.transport.netty.NettyServerConfig::<init>(java.lang.String, int, java.lang.String, java.lang.String, java.time.Duration, java.time.Duration, int, int, io.netty.handler.codec.http.cors.CorsConfig, java.util.List<java.lang.String>, dev.tachyonmcp.core.transport.netty.NettyIoEngine, java.util.function.Consumer<io.netty.channel.ChannelPipeline>)",
+          "justification": "livenessPath record component carries NetworkConfig#livenessPath to the Netty transport (opt-in liveness probe, #474)",
+          "attachments": {
+            "since": "1.1.0-SNAPSHOT"
+          }
         }
       ]
     }

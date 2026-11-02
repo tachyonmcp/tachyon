@@ -107,6 +107,7 @@ class ProgressKeepAliveTest {
                 "127.0.0.1",
                 0,
                 "/mcp",
+                null,
                 READER_IDLE,
                 Duration.ofMinutes(5),
                 McpChannelInitializer.DEFAULT_MAX_CONTENT_LENGTH,

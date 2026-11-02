@@ -159,6 +159,7 @@ internal class StatefulServerTest {
                 maxPipelinedRequests = 4
                 maxPendingSseBytes = 256 * 1024
                 sseStallTimeout = 10.seconds
+                liveness()
             }
             session {
                 enable()
@@ -240,6 +241,7 @@ internal class StatefulServerTest {
                 maxPipelinedRequests shouldBe 4
                 maxPendingSseBytes shouldBe 256 * 1024
                 sseStallTimeout shouldBe 10.seconds.toJavaDuration()
+                livenessPath shouldBe "/livez"
                 allowPrivateNetworks shouldBe true
             }
 
