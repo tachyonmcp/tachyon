@@ -86,6 +86,7 @@ class NettyServerConfigTest {
                 defaults.host(),
                 defaults.port(),
                 defaults.endpointPath(),
+                defaults.livenessPath(),
                 defaults.readerIdleTimeout(),
                 defaults.writerIdleTimeout(),
                 defaults.maxContentLength(),

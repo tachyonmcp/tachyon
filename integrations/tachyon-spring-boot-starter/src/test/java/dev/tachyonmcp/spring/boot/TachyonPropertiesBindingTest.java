@@ -42,6 +42,7 @@ class TachyonPropertiesBindingTest {
 
             assertThat(config.network().host()).isEqualTo(NetworkConfig.DEFAULT_HOST);
             assertThat(config.network().endpointPath()).isEqualTo(NetworkConfig.DEFAULT_ENDPOINT_PATH);
+            assertThat(config.network().livenessPath()).isNull();
             assertThat(config.network().readerIdleTimeout()).isEqualTo(NetworkConfig.DEFAULT_READER_IDLE_TIMEOUT);
             assertThat(config.network().writerIdleTimeout()).isEqualTo(NetworkConfig.DEFAULT_WRITER_IDLE_TIMEOUT);
             assertThat(config.network().heartbeatInterval()).isEqualTo(NetworkConfig.DEFAULT_HEARTBEAT_INTERVAL);
@@ -62,6 +63,7 @@ class TachyonPropertiesBindingTest {
     void networkGroupBindsIncludingYamlListsAndDataSizes() {
         runner.withPropertyValues(
                         "tachyon.network.endpoint-path=/rpc",
+                        "tachyon.network.liveness-path=/livez",
                         "tachyon.network.reader-idle-timeout=90s",
                         "tachyon.network.writer-idle-timeout=2m",
                         "tachyon.network.heartbeat-interval=5s",
@@ -79,6 +81,7 @@ class TachyonPropertiesBindingTest {
                     var network = context.getBean(TachyonServer.class).config().network();
 
                     assertThat(network.endpointPath()).isEqualTo("/rpc");
+                    assertThat(network.livenessPath()).isEqualTo("/livez");
                     assertThat(network.readerIdleTimeout()).isEqualTo(Duration.ofSeconds(90));
                     assertThat(network.writerIdleTimeout()).isEqualTo(Duration.ofMinutes(2));
                     assertThat(network.heartbeatInterval()).isEqualTo(Duration.ofSeconds(5));

@@ -21,6 +21,7 @@ import org.jspecify.annotations.Nullable;
  * @param host               the host address to bind to
  * @param port               the port to bind to
  * @param endpointPath       the HTTP endpoint path for MCP messages
+ * @param livenessPath       the HTTP path answering liveness probes, or {@code null} for none
  * @param readerIdleTimeout  idle timeout for reading
  * @param writerIdleTimeout  idle timeout for writing
  * @param maxContentLength   maximum HTTP content length in bytes
@@ -39,6 +40,7 @@ public record NettyServerConfig(
         String host,
         int port,
         String endpointPath,
+        @Nullable String livenessPath,
         Duration readerIdleTimeout,
         Duration writerIdleTimeout,
         int maxContentLength,
@@ -150,6 +152,7 @@ public record NettyServerConfig(
                 host,
                 port,
                 NetworkConfig.DEFAULT_ENDPOINT_PATH,
+                null,
                 NetworkConfig.DEFAULT_READER_IDLE_TIMEOUT,
                 NetworkConfig.DEFAULT_WRITER_IDLE_TIMEOUT,
                 McpChannelInitializer.DEFAULT_MAX_CONTENT_LENGTH,

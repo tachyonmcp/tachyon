@@ -131,7 +131,8 @@ class NetworkConfigTest {
                 NettyIoEngine.AUTO,
                 Duration.ofSeconds(15),
                 NetworkConfig.DEFAULT_MAX_PENDING_SSE_BYTES,
-                NetworkConfig.DEFAULT_SSE_STALL_TIMEOUT);
+                NetworkConfig.DEFAULT_SSE_STALL_TIMEOUT,
+                null);
 
         // Mutating the original lists must not affect the config
         origins.add("http://evil.com");
@@ -242,5 +243,34 @@ class NetworkConfigTest {
         var builder = NetworkConfig.builder().endpointPath(null);
 
         assertThatNullPointerException().isThrownBy(builder::build).withMessage("endpointPath");
+    }
+
+    @Test
+    void livenessIsOffUntilEnabled() {
+        assertThat(NetworkConfig.builder().build().livenessPath()).isNull();
+        assertThat(NetworkConfig.builder().liveness().build().livenessPath()).isEqualTo("/livez");
+        assertThat(NetworkConfig.builder().liveness("/health/live").build().livenessPath())
+                .isEqualTo("/health/live");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "livez", "/live z", "/livez?x=1", "/livez#top"})
+    void livenessPathFollowsEndpointPathRules(String path) {
+        var builder = NetworkConfig.builder().liveness(path);
+
+        assertThatIllegalArgumentException()
+                .isThrownBy(builder::build)
+                .withMessage("livenessPath must start with '/' and contain no query, fragment,"
+                        + " whitespace or control characters");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"/mcp", "/mcp/"})
+    void livenessPathMustNotShadowMcpEndpoint(String path) {
+        var builder = NetworkConfig.builder().liveness(path);
+
+        assertThatIllegalArgumentException()
+                .isThrownBy(builder::build)
+                .withMessage("livenessPath must differ from endpointPath");
     }
 }

@@ -62,6 +62,9 @@ import org.jspecify.annotations.Nullable;
  *                           reading) before it closes (default 30s); the client then resumes with
  *                           {@code Last-Event-ID}, losing nothing; {@link Duration#ZERO} disables,
  *                           leaving stalls to {@code writerIdleTimeout}
+ * @param livenessPath       HTTP path answering liveness probes with {@code UP}, ahead of every
+ *                           guard ({@code null} = off, the default); same rules as {@code
+ *                           endpointPath}, and must differ from it
  */
 @ExperimentalApi
 public record NetworkConfig(
@@ -79,7 +82,8 @@ public record NetworkConfig(
         NettyIoEngine ioEngine,
         Duration heartbeatInterval,
         int maxPendingSseBytes,
-        Duration sseStallTimeout) {
+        Duration sseStallTimeout,
+        @Nullable String livenessPath) {
 
     public NetworkConfig {
         if (maxPipelinedRequests < 0) {
@@ -96,6 +100,15 @@ public record NetworkConfig(
         if (!isServablePath(endpointPath)) {
             throw new IllegalArgumentException("endpointPath must start with '/' and contain no query, fragment,"
                     + " whitespace or control characters");
+        }
+        if (livenessPath != null) {
+            if (!isServablePath(livenessPath)) {
+                throw new IllegalArgumentException("livenessPath must start with '/' and contain no query, fragment,"
+                        + " whitespace or control characters");
+            }
+            if (trimSlash(livenessPath).equals(trimSlash(endpointPath))) {
+                throw new IllegalArgumentException("livenessPath must differ from endpointPath");
+            }
         }
         if (allowedOrigins != null) {
             allowedOrigins =
@@ -115,6 +128,10 @@ public record NetworkConfig(
                         .noneMatch(c -> c == '?' || c == '#' || Character.isWhitespace(c) || Character.isISOControl(c));
     }
 
+    private static String trimSlash(String path) {
+        return path.length() > 1 && path.endsWith("/") ? path.substring(0, path.length() - 1) : path;
+    }
+
     public static final String DEFAULT_HOST = "127.0.0.1";
     public static final int UNSET_PORT = -1;
     public static final String DEFAULT_ENDPOINT_PATH = "/mcp";
@@ -124,6 +141,7 @@ public record NetworkConfig(
     public static final int DEFAULT_MAX_PIPELINED_REQUESTS = 16;
     public static final int DEFAULT_MAX_PENDING_SSE_BYTES = 64 * 1024;
     public static final Duration DEFAULT_SSE_STALL_TIMEOUT = Duration.ofSeconds(30);
+    public static final String DEFAULT_LIVENESS_PATH = "/livez";
 
     static final NetworkConfig DEFAULT = new NetworkConfig(
             DEFAULT_HOST,
@@ -140,7 +158,8 @@ public record NetworkConfig(
             NettyIoEngine.AUTO,
             DEFAULT_HEARTBEAT_INTERVAL,
             DEFAULT_MAX_PENDING_SSE_BYTES,
-            DEFAULT_SSE_STALL_TIMEOUT);
+            DEFAULT_SSE_STALL_TIMEOUT,
+            null);
 
     public static Builder builder() {
         return new Builder();
@@ -163,6 +182,7 @@ public record NetworkConfig(
         private Duration heartbeatInterval = DEFAULT.heartbeatInterval;
         private int maxPendingSseBytes = DEFAULT.maxPendingSseBytes;
         private Duration sseStallTimeout = DEFAULT.sseStallTimeout;
+        private @Nullable String livenessPath = DEFAULT.livenessPath;
         private boolean hostPortExplicitlySet;
         private boolean addressExplicitlySet;
 
@@ -345,6 +365,29 @@ public record NetworkConfig(
             return this;
         }
 
+        /**
+         * Serves liveness probes on {@value NetworkConfig#DEFAULT_LIVENESS_PATH}. See {@link
+         * #liveness(String)}.
+         */
+        public Builder liveness() {
+            return liveness(DEFAULT_LIVENESS_PATH);
+        }
+
+        /**
+         * Serves liveness probes on {@code path}: {@code GET} and {@code HEAD} get {@code 200} with
+         * {@code UP} as {@code text/plain}, or {@code {"status":"UP"}} when {@code Accept} admits
+         * {@code application/json}. Answered ahead of authentication, the DNS-rebinding guard and
+         * CORS, so a Kubernetes probe needs no token and may send its pod IP as {@code Host}. It
+         * proves the I/O loop answers, not that tools work. Off by default.
+         *
+         * @throws IllegalArgumentException at {@link #build()} if {@code path} is not a valid path or
+         *     equals the MCP endpoint path
+         */
+        public Builder liveness(String path) {
+            this.livenessPath = Objects.requireNonNull(path, "livenessPath cannot be null");
+            return this;
+        }
+
         /** Builds the {@link NetworkConfig}. */
         public NetworkConfig build() {
             return new NetworkConfig(
@@ -362,7 +405,8 @@ public record NetworkConfig(
                     ioEngine,
                     heartbeatInterval,
                     maxPendingSseBytes,
-                    sseStallTimeout);
+                    sseStallTimeout,
+                    livenessPath);
         }
     }
 }
