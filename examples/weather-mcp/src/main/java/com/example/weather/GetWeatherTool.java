@@ -106,7 +106,7 @@ class GetWeatherTool {
         return correctedCity.isBlank() ? Optional.empty() : Optional.of(correctedCity);
     }
 
-    private static GetWeatherResponse toResponse(String city, WeatherObservation weather, @Nullable TemperatureUnit units) {
+    static GetWeatherResponse toResponse(String city, WeatherObservation weather, @Nullable TemperatureUnit units) {
         var fahrenheit = units == TemperatureUnit.FAHRENHEIT;
         var temperature = fahrenheit ? weather.temperatureCelsius() * 9 / 5 + 32 : weather.temperatureCelsius();
         var unit = fahrenheit ? TemperatureUnit.FAHRENHEIT : TemperatureUnit.CELSIUS;
