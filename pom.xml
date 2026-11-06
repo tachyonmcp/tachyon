@@ -124,7 +124,7 @@
         <ktlint.version>1.5.0</ktlint.version>
         <spotbugs.version>4.10.5</spotbugs.version>
         <findsecbugs-plugin.version>1.14.0</findsecbugs-plugin.version>
-        <dokka-maven-plugin.version>2.2.0</dokka-maven-plugin.version>
+        <dokka-maven-plugin.version>2.3.0</dokka-maven-plugin.version>
 
         <!-- Test configuration -->
         <surefire.forkCount>1C</surefire.forkCount>
