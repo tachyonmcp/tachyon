@@ -4,10 +4,12 @@
 
 package com.example.weather;
 
+import com.example.weather.model.TemperatureUnit;
 import com.example.weather.service.WeatherService;
 import com.example.weather.spi.CityProvider;
 import com.example.weather.spi.WeatherObservation;
 import com.example.weather.spi.WeatherProvider;
+import dev.tachyonmcp.api.json.JsonDocument;
 import dev.tachyonmcp.api.runtime.ContextNotifications;
 import dev.tachyonmcp.api.runtime.InteractionContext;
 import dev.tachyonmcp.api.server.domain.Args;
@@ -17,6 +19,7 @@ import dev.tachyonmcp.api.server.features.tools.ToolFn;
 import dev.tachyonmcp.api.server.features.tools.ToolRequest;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
 import dev.tachyonmcp.core.server.json.JacksonPayloadSerde;
+import dev.tachyonmcp.core.server.json.NetworkntJsonSchemaValidator;
 import dev.tachyonmcp.core.server.session.NoopInteractionContext;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
@@ -28,6 +31,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 import static org.awaitility.Awaitility.await;
 
 class GetWeatherToolTest {
@@ -76,6 +80,29 @@ class GetWeatherToolTest {
         ));
 
         assertThat(result).isEqualTo(ToolResult.error("Could not get weather"));
+    }
+
+    @Test
+    void fahrenheitAboveSeventyPassesOutputSchema() {
+        var validator = new NetworkntJsonSchemaValidator();
+        var schema = GetWeatherTool.DESCRIPTOR.outputSchema();
+
+        var response = GetWeatherTool.toResponse(
+            "Tallinn", new WeatherObservation("Sunny", 22.0, 40, 5.0), TemperatureUnit.FAHRENHEIT);
+
+        assertThat(response.unit()).isEqualTo(TemperatureUnit.FAHRENHEIT);
+        assertThat(response.temperature()).isCloseTo(71.6, within(0.001));
+        assertThat(validator.validate(schema, JsonDocument.of(JacksonPayloadSerde.INSTANCE.serialize(response))))
+            .isEmpty();
+
+        var extremeHot = GetWeatherTool.toResponse(
+            "Death Valley", new WeatherObservation("Sunny", 56.7, 5, 5.0), TemperatureUnit.FAHRENHEIT);
+        var extremeCold = GetWeatherTool.toResponse(
+            "Vostok", new WeatherObservation("Clear", -89.2, 5, 5.0), TemperatureUnit.FAHRENHEIT);
+        assertThat(validator.validate(schema, JsonDocument.of(JacksonPayloadSerde.INSTANCE.serialize(extremeHot))))
+            .isEmpty();
+        assertThat(validator.validate(schema, JsonDocument.of(JacksonPayloadSerde.INSTANCE.serialize(extremeCold))))
+            .isEmpty();
     }
 
     private static final ContextNotifications NOOP_NOTIFICATIONS = new ContextNotifications() {

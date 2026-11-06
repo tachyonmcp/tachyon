@@ -112,7 +112,9 @@ class WeatherServerTest {
             "properties", Map.of(
                 "city", Map.of(
                     "description", "City name (e.g., London, Tokyo, New York)",
-                    "type", "string"),
+                    "type", "string",
+                    "minLength", 1,
+                    "maxLength", 100),
                 "units", Map.of(
                     "description", "Temperature unit (default: celsius)",
                     "oneOf", List.of(
@@ -131,12 +133,13 @@ class WeatherServerTest {
             "required", List.of("city", "condition", "temperature", "unit", "humidity", "windSpeed"),
             "additionalProperties", false,
             "properties", Map.of(
-                "city", Map.of("description", "City name", "type", "string"),
+                "city", Map.of("description", "City name", "type", "string", "minLength", 1, "maxLength", 100),
                 "condition", Map.of("description", "Weather condition", "type", "string"),
-                "temperature", Map.of("description", "Temperature in the response unit", "type", "number"),
+                "temperature", Map.of("description", "Temperature in the response unit", "type", "number",
+                    "minimum", -130, "maximum", 140),
                 "unit", Map.of("description", "Temperature unit", "$ref", "#/$defs/TemperatureUnit"),
-                "humidity", Map.of("description", "Relative humidity percentage", "type", "integer"),
-                "windSpeed", Map.of("description", "Wind speed in km/h", "type", "number")),
+                "humidity", Map.of("description", "Relative humidity percentage", "type", "integer", "minimum", 0),
+                "windSpeed", Map.of("description", "Wind speed in km/h", "type", "number", "minimum", 0)),
             "$defs", Map.of(
                 "TemperatureUnit", Map.of(
                     "type", "string",
