@@ -27,12 +27,13 @@
       "minimumReleaseAge": "3 days"
     },
     {
-      "description": "Kotlin toolchain moves together: compiler, stdlib, coroutines, serialization",
+      "description": "Kotlin toolchain moves together: compiler, stdlib, coroutines, serialization. Never merged automatically",
       "groupName": "kotlin",
       "matchPackageNames": [
         "org.jetbrains.kotlin:**",
         "org.jetbrains.kotlinx:**"
-      ]
+      ],
+      "automerge": false
     },
     {
       "description": "Jackson 2 and 3 BOMs",
@@ -50,14 +51,15 @@
       ]
     },
     {
-      "description": "Maven 3.10 breaks central-publishing-maven-plugin bundles (mavenplugins/central-publishing-maven-plugin#79); lift once fixed",
+      "description": "Maven 3.10 breaks central-publishing-maven-plugin bundles (mavenplugins/central-publishing-maven-plugin#79); lift once fixed. Maven is never merged automatically: the release depends on its version",
       "matchManagers": [
         "maven-wrapper"
       ],
-      "matchPackageNames": [
+      "matchDepNames": [
         "maven"
       ],
-      "allowedVersions": "<3.10"
+      "allowedVersions": "<3.10",
+      "automerge": false
     },
     {
       "groupName": "junit",
