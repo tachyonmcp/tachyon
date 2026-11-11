@@ -14,10 +14,13 @@ import io.temporal.client.WorkflowClient;
 import io.temporal.client.WorkflowNotFoundException;
 import io.temporal.client.WorkflowOptions;
 import io.temporal.client.WorkflowStub;
+import io.temporal.client.WorkflowTargetOptions;
 import java.time.Clock;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.function.BiPredicate;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,13 +35,18 @@ import org.slf4j.LoggerFactory;
  * {@link #cancel} and {@link #submitInput} read it from Temporal on every call and answer any other
  * caller, an anonymous one included, with {@link TaskNotFoundException}, exactly as for an unknown
  * id. The owner therefore survives a restart and holds on every node. A Workflow an anonymous caller
- * started, or one started outside this engine, has no owner: every caller reaches it, and access to
- * it is the application's decision.
+ * started carries an empty memo: it has no owner, every caller reaches it, and access to it is the
+ * application's decision. A Workflow without the memo at all, started outside this engine or before it
+ * wrote the memo, is reached only by callers {@link Builder#unownedAccess} admits, asked on every call;
+ * by default nobody.
  */
 @ExperimentalApi
 public final class TemporalTaskExecutionEngine {
 
-    /** The Workflow memo key that holds the owner key of the caller that started the Workflow. */
+    /**
+     * The Workflow memo key that holds the owner key of the caller that started the Workflow, or an
+     * empty string when that caller was anonymous.
+     */
     public static final String OWNER_MEMO = "tachyon.owner";
 
     private static final Logger logger = LoggerFactory.getLogger(TemporalTaskExecutionEngine.class);
@@ -48,11 +56,13 @@ public final class TemporalTaskExecutionEngine {
     private final Clock clock;
     private final Map<String, TemporalTaskRoute<?>> routesByOperation;
     private final Map<String, TemporalTaskRoute<?>> routesByWorkflowType;
+    private final BiPredicate<InteractionContext, String> unownedAccess;
 
     private TemporalTaskExecutionEngine(Builder builder) {
         workflowClient = Objects.requireNonNull(builder.workflowClient, "workflowClient");
         taskQueue = requireText(builder.taskQueue, "taskQueue");
         clock = Objects.requireNonNull(builder.clock, "clock");
+        unownedAccess = Objects.requireNonNull(builder.unownedAccess, "unownedAccess");
         if (builder.routesByOperation.isEmpty()) {
             throw new IllegalStateException("At least one Temporal task route is required");
         }
@@ -102,9 +112,7 @@ public final class TemporalTaskExecutionEngine {
         var options =
                 WorkflowOptions.newBuilder().setWorkflowId(request.taskId()).setTaskQueue(taskQueue);
         var owner = context.securityContext().ownerKey();
-        if (owner != null) {
-            options.setMemo(Map.of(OWNER_MEMO, owner));
-        }
+        options.setMemo(Map.of(OWNER_MEMO, owner == null ? "" : owner));
         var workflow = workflowClient.newUntypedWorkflowStub(route.workflowType(), options.build());
         workflow.start(route.startArguments(request));
         return TaskSnapshot.working(request.taskId(), clock.instant(), 1);
@@ -177,14 +185,21 @@ public final class TemporalTaskExecutionEngine {
 
     /**
      * Addresses the Workflow for {@code context}'s caller: one {@code describe} gives its owner and
-     * its type. A caller that is not the owner gets the answer of an unknown id.
+     * its type. A caller that is not the owner, or that {@link #unownedAccess} refuses for a Workflow
+     * without the memo, gets the answer of an unknown id. The returned stub is
+     * pinned to the run that was described, not to the Workflow ID: a run that closes and is replaced
+     * under the same ID is then never reached through the owner of its predecessor. It is built from
+     * {@link WorkflowTargetOptions}: the SDK deprecates the stub from a bare {@code WorkflowExecution}
+     * because it does not account for the run ID, and it drops it on cancel.
      */
     private Attached attach(InteractionContext context, String taskId) throws TaskNotFoundException {
-        var workflow = workflowClient.newUntypedWorkflowStub(taskId);
-        var description = workflow.describe();
-        var owner = description.getMemo(OWNER_MEMO, String.class);
-        if (owner != null && !owner.equals(context.securityContext().ownerKey())) {
-            logger.debug("Hiding an owned Temporal workflow from another caller");
+        var description = workflowClient.newUntypedWorkflowStub(taskId).describe();
+        var owner = description.getMemo(OWNER_MEMO, String.class, String.class);
+        var admitted = owner == null
+                ? unownedAccess.test(context, taskId)
+                : owner.isEmpty() || owner.equals(context.securityContext().ownerKey());
+        if (!admitted) {
+            logger.debug("Hiding a Temporal workflow from a caller that may not reach it");
             throw new TaskNotFoundException(taskId);
         }
         var workflowType = description.getWorkflowType();
@@ -192,6 +207,10 @@ public final class TemporalTaskExecutionEngine {
         if (route == null) {
             throw new IllegalStateException("No Temporal task route for Workflow type: " + workflowType);
         }
+        var target = WorkflowTargetOptions.newBuilder()
+                .setWorkflowExecution(description.getExecution())
+                .build();
+        var workflow = workflowClient.newUntypedWorkflowStub(target, Optional.of(workflowType));
         return new Attached(workflow, route);
     }
 
@@ -218,6 +237,7 @@ public final class TemporalTaskExecutionEngine {
         private final Map<String, TemporalTaskRoute<?>> routesByWorkflowType = new LinkedHashMap<>();
         private String taskQueue;
         private Clock clock = Clock.systemUTC();
+        private BiPredicate<InteractionContext, String> unownedAccess = (context, taskId) -> false;
 
         private Builder(WorkflowClient workflowClient) {
             this.workflowClient = Objects.requireNonNull(workflowClient, "workflowClient");
@@ -255,6 +275,21 @@ public final class TemporalTaskExecutionEngine {
          */
         public Builder clock(Clock clock) {
             this.clock = clock;
+            return this;
+        }
+
+        /**
+         * Sets who may reach a Workflow without the {@value TemporalTaskExecutionEngine#OWNER_MEMO} memo: one started outside this
+         * engine, or by a version that did not write the memo. It is asked on every {@code refresh},
+         * {@code cancel} and {@code submitInput} for such a Workflow; a caller it refuses gets {@link
+         * TaskNotFoundException}, as for an unknown id. Keep the authorization those Workflows had
+         * before here until they finish. By default it refuses everyone.
+         *
+         * @param unownedAccess admits the caller of the request to the Workflow with the given ID
+         * @return this builder
+         */
+        public Builder unownedAccess(BiPredicate<InteractionContext, String> unownedAccess) {
+            this.unownedAccess = unownedAccess;
             return this;
         }
 

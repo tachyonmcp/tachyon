@@ -424,5 +424,16 @@ The adapter authorizes every call itself, so it is safe on several nodes and acr
 `SecurityContext#ownerKey()` in the Workflow memo `tachyon.owner`
 (`TemporalTaskExecutionEngine.OWNER_MEMO`); `refresh`, `cancel` and `submitInput` read it from
 Temporal on each call and answer any other caller, an anonymous one included, with `Task not found`.
-A Workflow that an anonymous caller started, or that you started outside the adapter without the
-memo, has no owner and is open to every caller.
+The key is the owner key, not the principal name: two callers that share a name but not a key are two
+owners. A Workflow that an anonymous caller started gets an empty memo: it has no owner and is open to
+every caller.
+
+A Workflow without the memo at all — started before your upgrade, or outside the adapter — is not
+open. Every call on it asks `TemporalTaskExecutionEngine.Builder#unownedAccess`, which refuses
+everyone by default. Put the authorization those Workflows had before there, and keep it until they
+finish:
+
+```java
+TemporalTaskExecutionEngine.builder(client)
+        .unownedAccess((context, taskId) -> legacyOwners.isOwner(taskId, context.securityContext()))
+```
