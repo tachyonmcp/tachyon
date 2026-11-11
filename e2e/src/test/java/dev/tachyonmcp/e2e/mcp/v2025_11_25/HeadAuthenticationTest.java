@@ -3,7 +3,9 @@ package dev.tachyonmcp.e2e.mcp.v2025_11_25;
 
 import static dev.tachyonmcp.e2e.mcp.TestBearerTokens.ALICE;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
+import dev.tachyonmcp.api.server.security.SecurityContext;
 import dev.tachyonmcp.core.server.config.CapabilitiesConfig;
 import dev.tachyonmcp.core.server.security.AccessPolicy;
 import dev.tachyonmcp.e2e.mcp.HeadAuthentication;
@@ -13,7 +15,10 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -191,6 +196,62 @@ class HeadAuthenticationTest extends AbstractStatefulMcpE2eTest {
                     .as("no challenge: the client keeps a token that may be valid")
                     .isEmpty();
             assertThat(Duration.ofNanos(System.nanoTime() - started)).isLessThan(Duration.ofSeconds(3));
+        } finally {
+            release.countDown();
+        }
+    }
+
+    @Test
+    void clientsThatHangUpNeverStartMoreVerifiersThanThereArePermits() throws Exception {
+        final var release = new CountDownLatch(1);
+        final var calls = new AtomicInteger();
+        startServer(
+                b -> b.capabilities(CapabilitiesConfig.Builder::tools)
+                        .security(s -> s.accessPolicy(AccessPolicy.permitAll())
+                                .authenticationProvider(request -> {
+                                    calls.incrementAndGet();
+                                    try {
+                                        release.await(30, TimeUnit.SECONDS);
+                                    } catch (InterruptedException e) {
+                                        Thread.currentThread().interrupt();
+                                    }
+                                    return SecurityContext.authenticated(() -> "caller", List.of());
+                                })
+                                .authenticationTimeout(Duration.ofSeconds(3))
+                                .maxPendingAuthentications(1)),
+                tokens::registerWhoAmI);
+        try {
+            for (int i = 0; i < 5; i++) {
+                HeadAuthentication.hangUpAfterTheHead(port, "2025-11-25");
+            }
+
+            await().atMost(Duration.ofSeconds(5)).until(() -> calls.get() == 1);
+            await().during(Duration.ofMillis(500)).atMost(Duration.ofSeconds(5)).until(() -> calls.get() == 1);
+
+            final var started = System.nanoTime();
+            final var first = HeadAuthentication.anonymousPost(port, "2025-11-25");
+            final var second = HeadAuthentication.anonymousPost(port, "2025-11-25");
+
+            assertThat(first.status()).isEqualTo(503);
+            assertThat(second.status()).isEqualTo(503);
+            assertThat(first.headers().get("retry-after")).matches("[1-9][0-9]*");
+            assertThat(second.headers().get("retry-after")).matches("[1-9][0-9]*");
+            assertThat(Duration.ofNanos(System.nanoTime() - started))
+                    .as("refused at capacity, not after the authentication timeout")
+                    .isLessThan(Duration.ofSeconds(2));
+            assertThat(calls)
+                    .as("the verifier is not called for a request refused at capacity")
+                    .hasValue(1);
+
+            release.countDown();
+
+            final var accepted = await().atMost(Duration.ofSeconds(5))
+                    .pollInterval(Duration.ofMillis(50))
+                    .until(() -> HeadAuthentication.anonymousPost(port, "2025-11-25"), a -> a.status() != 503);
+            assertThat(accepted.status()).as("authenticated and handled").isNotEqualTo(401);
+            assertThat(calls)
+                    .as("the returned verifier freed its permit for exactly one more call")
+                    .hasValue(2);
         } finally {
             release.countDown();
         }

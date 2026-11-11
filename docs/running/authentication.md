@@ -150,9 +150,10 @@ $ curl https://mcp.example.com/.well-known/oauth-protected-resource/mcp
 A [custom provider](#custom-providers) publishes nothing and challenges as it chooses.
 
 > [!WARNING]
-> The one log that can hold a token is the [wire log](observability.md#wire-log) at `TRACE`. It
-> hex-dumps every byte on the connection, `Authorization` headers included. Never enable it in
-> production.
+> Only `TRACE` can hold a token. The [wire log](observability.md#wire-log) hex-dumps every byte on
+> the connection, `Authorization` headers included, and `AuthenticationHandler` logs a failing
+> provider's whole exception there, whose message or causes may quote the token. Never enable
+> `TRACE` in production.
 
 ### Streams end when the token does
 
@@ -423,13 +424,16 @@ server.tools().register(
 
   Past the limit the request is answered `503 Service Unavailable` with `Retry-After` and no
   `WWW-Authenticate`, so the client keeps a token that may be valid, and the connection closes. At most
-  `maxPendingAuthentications` requests wait for the provider at once across every connection, 1024 by
-  default; one more is answered the same `503` before the provider is called, so a slow introspection
-  endpoint cannot pile up provider threads and held request heads without limit. Timeouts and
+  `maxPendingAuthentications` provider calls run at once across every connection, 1024 by
+  default; one more request is answered the same `503` before the provider is called. A call counts
+  until the provider returns, even after its request timed out or its client hung up, so neither a
+  slow introspection endpoint nor clients that connect and leave can pile up provider threads
+  without limit. A provider that never returns keeps its permit, and at the cap every request is
+  answered `503` until verifiers return, so give the provider's own outbound calls their own
+  timeouts. Timeouts and
   refusals at capacity are counted and one in a hundred is logged at `WARN`, the rest at `DEBUG`;
   every one reaches the observers. The
-  provider is not interrupted and its late result is ignored, so give its own calls their own
-  timeouts. The MCP spec does not define this status; it is a Tachyon decision.
+  provider is not interrupted and its late result is ignored. The MCP spec does not define this status; it is a Tachyon decision.
 - **No thread-local holder.** The context is passed along with the request. Work a handler hands to
   another thread keeps its own request's caller.
 - **Sessions belong to their creator.** A stateful (2025-11-25) session is bound to the caller of the

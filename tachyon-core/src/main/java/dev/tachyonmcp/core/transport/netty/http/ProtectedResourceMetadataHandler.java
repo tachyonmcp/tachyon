@@ -84,8 +84,15 @@ public final class ProtectedResourceMetadataHandler extends ChannelInboundHandle
                 .set(HttpHeaderNames.CONTENT_TYPE, "application/json")
                 .setInt(HttpHeaderNames.CONTENT_LENGTH, document.readableBytes());
         cors.applyTo(response);
-        HttpUtil.setKeepAlive(response, HttpUtil.isKeepAlive(request));
-        ReferenceCountUtil.release(request);
+        // Ahead of authentication and the aggregator's size limit: a declared body would stream
+        // unbounded and unauthenticated. Answer, drop the rest (dns-rebinding discards it), close.
+        if (ChannelHandlerUtils.declaresBody(request)) {
+            HttpUtil.setKeepAlive(response, false);
+            ChannelHandlerUtils.markRejected(ctx, request);
+        } else {
+            HttpUtil.setKeepAlive(response, HttpUtil.isKeepAlive(request));
+            ReferenceCountUtil.release(request);
+        }
         ctx.writeAndFlush(response);
     }
 }

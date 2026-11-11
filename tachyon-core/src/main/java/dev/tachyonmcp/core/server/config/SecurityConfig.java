@@ -23,9 +23,10 @@ import org.jspecify.annotations.Nullable;
  *     policy its builder was told to use, since {@link Builder#build} refuses to choose for you
  * @param authenticationTimeout how long a request may wait for the authentication provider before it is
  *     answered {@code 503 Service Unavailable}; positive
- * @param maxPendingAuthentications how many requests may wait for the provider at once, across every
- *     connection; one more is answered {@code 503} at once. Bounds the provider threads and the held
- *     request heads a slow provider can pile up; positive
+ * @param maxPendingAuthentications how many provider calls may run at once, across every connection;
+ *     one more request is answered {@code 503} at once. A call counts until the provider returns,
+ *     even after its request timed out or its client hung up, so this bounds the provider threads;
+ *     positive
  */
 @ExperimentalApi
 public record SecurityConfig(
@@ -37,7 +38,7 @@ public record SecurityConfig(
     /** How long a request waits for its authentication unless configured otherwise. */
     public static final Duration DEFAULT_AUTHENTICATION_TIMEOUT = Duration.ofSeconds(10);
 
-    /** How many requests may wait for the provider at once unless configured otherwise. */
+    /** How many provider calls may run at once unless configured otherwise. */
     public static final int DEFAULT_MAX_PENDING_AUTHENTICATIONS = 1024;
 
     private static final SecurityConfig DISABLED = new SecurityConfig(
@@ -237,11 +238,12 @@ public record SecurityConfig(
         }
 
         /**
-         * Bounds how many requests, across every connection, may wait for the authentication provider
-         * at once; {@link SecurityConfig#DEFAULT_MAX_PENDING_AUTHENTICATIONS} (1024) unless set. One
-         * more is answered {@code 503 Service Unavailable} with {@code Retry-After} before the provider
-         * is called, so a slow introspection endpoint cannot pile up provider threads and held request
-         * heads without limit.
+         * Bounds how many authentication provider calls, across every connection, may run at once;
+         * {@link SecurityConfig#DEFAULT_MAX_PENDING_AUTHENTICATIONS} (1024) unless set. One more
+         * request is answered {@code 503 Service Unavailable} with {@code Retry-After} before the
+         * provider is called. A call counts until the provider returns, even after its request timed
+         * out or its client hung up, so neither a slow introspection endpoint nor clients that connect
+         * and leave can pile up provider threads without limit.
          *
          * @param max the most pending authentications, positive
          * @return this builder
