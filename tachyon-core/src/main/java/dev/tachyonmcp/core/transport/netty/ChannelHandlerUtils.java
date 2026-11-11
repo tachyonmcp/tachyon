@@ -151,6 +151,20 @@ public final class ChannelHandlerUtils {
     }
 
     /**
+     * Whether more of {@code request} may follow its head: a body it declares, or a head the decoder
+     * could not parse. A handler that answers ahead of the aggregator and its size limit must close
+     * after such a request instead of keeping the connection for whatever follows.
+     *
+     * @param request the request head
+     * @return {@code true} if the connection cannot be kept for the next request
+     */
+    public static boolean declaresBody(HttpRequest request) {
+        return request.decoderResult().isFailure()
+                || HttpUtil.isTransferEncodingChunked(request)
+                || HttpUtil.getContentLength(request, 0L) != 0;
+    }
+
+    /**
      * Releases {@code msg} and returns {@code true} when this channel already rejected a request via
      * {@link #rejectAndClose}. The decoder can emit the body's {@code HttpContent} chunks from the
      * same read batch as the {@link HttpRequest} that was rejected, and forwarding headerless content

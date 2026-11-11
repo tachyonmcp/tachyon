@@ -28,7 +28,6 @@ import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.handler.codec.http.QueryStringDecoder;
 import io.netty.util.ReferenceCountUtil;
 import io.netty.util.concurrent.ScheduledFuture;
-import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.List;
 import java.util.Objects;
@@ -72,9 +71,10 @@ import org.slf4j.LoggerFactory;
  * and no challenge, so clients keep a token that may be valid; any other failure is a bug and answers
  * {@code 500}. A provider still silent after the configured timeout is answered the same {@code 503};
  * it is not interrupted, and its late result is ignored. At most {@link
- * SecurityConfig#maxPendingAuthentications()} requests wait for the provider at once, across every
- * connection of the server; one more is answered the same {@code 503} before the provider is called,
- * so a slow provider cannot pile up threads and held heads without limit. Timeouts and refusals at
+ * SecurityConfig#maxPendingAuthentications()} provider calls run at once, across every connection of
+ * the server; one more request is answered the same {@code 503} before the provider is called. A
+ * permit goes back when the provider returns, not when its request times out or hangs up, so neither
+ * a slow provider nor a client that connects and leaves can pile up threads without limit. Timeouts and refusals at
  * capacity are counted, and one in {@link #WARN_SAMPLE} is logged at {@code WARN}, the rest at
  * {@code DEBUG}: a slow provider under load must not flood the log; the observers see every one. A principal
  * without a name is a provider failure: sessions are bound to the name, and a nameless principal could
@@ -104,10 +104,11 @@ public final class AuthenticationHandler extends ChannelInboundHandlerAdapter {
     private final AuthenticationProvider provider;
     private final SecurityConfig.Authentication authentication;
     private final Executor executor;
-    private final Duration timeout;
     private final HttpPipeliningGate gate;
     private final List<ObservationListener> listeners;
     private final Semaphore permits;
+    private final String retryAfterSeconds;
+    private final long timeoutNanos;
 
     private @Nullable Attempt attempt;
 
@@ -120,8 +121,6 @@ public final class AuthenticationHandler extends ChannelInboundHandlerAdapter {
         boolean complete;
         /** Reads are paused through the gate on its behalf, so it must release them. */
         boolean holding;
-        /** It holds one of the server's permits until it is settled. */
-        boolean admitted;
 
         @Nullable
         ScheduledFuture<?> deadline;
@@ -138,7 +137,7 @@ public final class AuthenticationHandler extends ChannelInboundHandlerAdapter {
      * @param gate this channel's pipelining gate, which owns {@code autoRead}
      * @param listeners told of every request this handler rejects, as an {@link
      *     OperationKind#AUTHENTICATION} operation; none for a server without observers
-     * @param permits the server's one pool of {@link SecurityConfig#maxPendingAuthentications}
+     * @param permits the server's one pool of {@link SecurityConfig#maxPendingAuthentications()}
      *     permits, shared by every channel
      * @throws IllegalArgumentException if {@code security} authenticates nobody
      */
@@ -150,11 +149,13 @@ public final class AuthenticationHandler extends ChannelInboundHandlerAdapter {
             Semaphore permits) {
         this.provider = Objects.requireNonNull(security.authenticationProvider(), "the server authenticates nobody");
         this.authentication = security.authentication();
-        this.timeout = security.authenticationTimeout();
         this.executor = Objects.requireNonNull(executor, "executor");
         this.gate = Objects.requireNonNull(gate, "gate");
         this.listeners = Objects.requireNonNull(listeners, "listeners");
         this.permits = Objects.requireNonNull(permits, "permits");
+        final var timeout = security.authenticationTimeout();
+        this.timeoutNanos = timeout.toNanos();
+        this.retryAfterSeconds = Long.toString(Math.max(1, Math.ceilDiv(timeout.toMillis(), 1000)));
     }
 
     @Override
@@ -223,15 +224,14 @@ public final class AuthenticationHandler extends ChannelInboundHandlerAdapter {
             respond(ctx, current, HttpResponseStatus.SERVICE_UNAVAILABLE, null, retryAfterSeconds());
             return;
         }
-        current.admitted = true;
         final var outcome = new CompletableFuture<SecurityContext>();
         try {
-            current.deadline =
-                    ctx.executor().schedule(() -> expire(ctx, current), timeout.toNanos(), TimeUnit.NANOSECONDS);
+            current.deadline = ctx.executor().schedule(() -> expire(ctx, current), timeoutNanos, TimeUnit.NANOSECONDS);
             final var view = new AuthenticationRequest(
                     head.method().name(), head.uri(), name -> head.headers().getAll(name));
             executor.execute(() -> authenticate(view, outcome));
         } catch (RejectedExecutionException e) {
+            permits.release();
             outcome.completeExceptionally(e);
         }
         outcome.whenComplete((securityContext, failure) -> {
@@ -245,8 +245,12 @@ public final class AuthenticationHandler extends ChannelInboundHandlerAdapter {
 
     private void authenticate(AuthenticationRequest request, CompletableFuture<SecurityContext> outcome) {
         try {
-            final var securityContext =
-                    Objects.requireNonNull(provider.authenticate(request), "provider returned null");
+            final SecurityContext securityContext;
+            try {
+                securityContext = Objects.requireNonNull(provider.authenticate(request), "provider returned null");
+            } finally {
+                permits.release();
+            }
             final var principal = securityContext.principal();
             if (principal != null
                     && (principal.getName() == null || principal.getName().isBlank())) {
@@ -316,13 +320,13 @@ public final class AuthenticationHandler extends ChannelInboundHandlerAdapter {
                     rejection.retryAfter());
         } else {
             // A verifier or an HTTP client can put the token in an exception message or a cause; at WARN
-            // only the class is named. The whole exception is for DEBUG, which stays off in production.
+            // only the class is named. The whole exception is at TRACE only, where raw request data belongs.
             logger.warn(
                     "Authentication provider failed for {} {}: {}",
                     head.method(),
                     path(head),
                     failure == null ? "null" : failure.getClass().getName());
-            logger.debug("Authentication provider failed for {} {}", head.method(), path(head), failure);
+            logger.trace("Authentication provider failed for {} {}", head.method(), path(head), failure);
             observe(new OperationOutcome.Rejected(null, 500, 0));
             respond(ctx, rejected, HttpResponseStatus.INTERNAL_SERVER_ERROR, null, null);
         }
@@ -380,7 +384,7 @@ public final class AuthenticationHandler extends ChannelInboundHandlerAdapter {
     }
 
     private String retryAfterSeconds() {
-        return Long.toString(Math.max(1, Math.ceilDiv(timeout.toMillis(), 1000)));
+        return retryAfterSeconds;
     }
 
     private void abandon() {
@@ -397,15 +401,10 @@ public final class AuthenticationHandler extends ChannelInboundHandlerAdapter {
         ReferenceCountUtil.release(dropped.head);
     }
 
-    /** Settles the attempt: drops its deadline and gives its permit back, once. */
-    private void cancel(Attempt finished) {
+    private static void cancel(Attempt finished) {
         final var deadline = finished.deadline;
         if (deadline != null) {
             deadline.cancel(false);
-        }
-        if (finished.admitted) {
-            finished.admitted = false;
-            permits.release();
         }
     }
 

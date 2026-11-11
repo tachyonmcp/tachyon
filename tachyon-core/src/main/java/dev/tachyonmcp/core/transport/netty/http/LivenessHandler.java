@@ -86,7 +86,7 @@ public final class LivenessHandler extends ChannelInboundHandlerAdapter {
                 .setInt(HttpHeaderNames.CONTENT_LENGTH, body.readableBytes());
         // Ahead of the aggregator and its size limit: a declared body would stream unbounded and
         // unauthenticated. Answer, drop the rest (dns-rebinding discards it), close.
-        if (declaresBody(request)) {
+        if (ChannelHandlerUtils.declaresBody(request)) {
             HttpUtil.setKeepAlive(response, false);
             ChannelHandlerUtils.markRejected(ctx, request);
         } else {
@@ -94,12 +94,6 @@ public final class LivenessHandler extends ChannelInboundHandlerAdapter {
             ReferenceCountUtil.release(request);
         }
         ctx.writeAndFlush(response);
-    }
-
-    private static boolean declaresBody(HttpRequest request) {
-        return request.decoderResult().isFailure()
-                || HttpUtil.isTransferEncodingChunked(request)
-                || HttpUtil.getContentLength(request, 0L) != 0;
     }
 
     // ponytail: substring match, ignores q-values; parse ranges if a probe ever sends application/json;q=0

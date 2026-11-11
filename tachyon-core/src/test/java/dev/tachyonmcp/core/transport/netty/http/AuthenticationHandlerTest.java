@@ -37,12 +37,14 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Queue;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 
 /**
  * Authentication on the request head: what is held while the provider runs, what is replayed, and
@@ -223,12 +225,16 @@ class AuthenticationHandlerTest {
 
     /**
      * K7: a verifier or an HTTP client can put the token in an exception, two causes deep. The WARN names
-     * the class; the message and the causes are at DEBUG, off in production. slf4j-simple writes to
-     * {@code System.err} at the time of the call, so the line is captured here.
+     * the class; the message and the causes are at TRACE only, where raw data belongs, so DEBUG, on in
+     * development and here, stays clean. slf4j-simple writes to {@code System.err} at the time of the
+     * call, so the line is captured here.
      */
     @Test
     void aProviderFailureNeverLogsWhatTheExceptionSays() {
         final var token = "eyJ-super-secret-token";
+        final var handlerLog = LoggerFactory.getLogger(AuthenticationHandler.class);
+        assertThat(handlerLog.isDebugEnabled()).as("DEBUG is on").isTrue();
+        assertThat(handlerLog.isTraceEnabled()).as("TRACE is off").isFalse();
         final var saved = System.err;
         final var captured = new java.io.ByteArrayOutputStream();
         System.setErr(new java.io.PrintStream(captured, true, StandardCharsets.UTF_8));
@@ -284,8 +290,9 @@ class AuthenticationHandlerTest {
                 .isEqualTo(1);
     }
 
+    /** A verifier outlives the request it was started for, so the permit is the verifier's, not the request's. */
     @Test
-    void aPermitIsGivenBackOnARefusalATimeoutAndAClosedChannel() {
+    void aPermitStaysTakenUntilTheVerifierReturnsWhateverBecameOfItsRequest() {
         channel.writeInbound(head(), last(""));
         refused = AuthenticationException.bearerInvalidToken("bad token");
         runProvider();
@@ -299,18 +306,55 @@ class AuthenticationHandlerTest {
         assertThat(permits.availablePermits()).isZero();
         second.advanceTimeBy(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
         second.runScheduledPendingTasks();
-        assertThat(permits.availablePermits()).as("after a timeout").isEqualTo(1);
-        second.finishAndReleaseAll();
-
-        final var third = new EmbeddedChannel(new AuthenticationHandler(
-                channelSecurity(), handlerExecutor::add, new HttpPipeliningGate(16), List.of(), permits));
-        third.writeInbound(head(), last(""));
-        assertThat(permits.availablePermits()).isZero();
-        third.close();
+        final FullHttpResponse timedOut = second.readOutbound();
+        assertThat(timedOut.status()).isEqualTo(HttpResponseStatus.SERVICE_UNAVAILABLE);
+        timedOut.release();
         assertThat(permits.availablePermits())
-                .as("after the channel closed mid-authentication")
+                .as("timed out, the verifier still runs")
+                .isZero();
+        handlerExecutor.remove().run();
+        assertThat(permits.availablePermits())
+                .as("the timed out verifier returned")
                 .isEqualTo(1);
-        third.finishAndReleaseAll();
+        second.finishAndReleaseAll();
+    }
+
+    /** Connecting and hanging up must not start a verifier per connection: the pool bounds running verifiers. */
+    @Test
+    void repeatedDisconnectsNeverStartMoreVerifiersThanThereArePermits() {
+        for (int i = 0; i < 5; i++) {
+            final var hangUp = new EmbeddedChannel(new AuthenticationHandler(
+                    channelSecurity(), handlerExecutor::add, new HttpPipeliningGate(16), List.of(), permits));
+            hangUp.writeInbound(head(), last(""));
+            hangUp.close();
+            hangUp.finishAndReleaseAll();
+        }
+
+        assertThat(handlerExecutor).as("verifiers started").hasSize(1);
+        assertThat(permits.availablePermits()).isZero();
+
+        handlerExecutor.remove().run();
+        assertThat(permits.availablePermits()).isEqualTo(1);
+    }
+
+    @Test
+    void aVerifierThatCouldNotStartGivesItsPermitBack() {
+        final var rejecting = new EmbeddedChannel(new AuthenticationHandler(
+                channelSecurity(),
+                task -> {
+                    throw new RejectedExecutionException("shutting down");
+                },
+                new HttpPipeliningGate(16),
+                List.of(),
+                permits));
+        rejecting.writeInbound(head(), last(""));
+        rejecting.runPendingTasks();
+
+        final FullHttpResponse response = rejecting.readOutbound();
+        assertThat(response.status()).isEqualTo(HttpResponseStatus.INTERNAL_SERVER_ERROR);
+        response.release();
+        assertThat(permits.availablePermits()).isEqualTo(1);
+        rejecting.finishAndReleaseAll();
     }
 
     private SecurityConfig channelSecurity() {

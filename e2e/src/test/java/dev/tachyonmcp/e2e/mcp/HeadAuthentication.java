@@ -102,6 +102,19 @@ public final class HeadAuthentication {
         }
     }
 
+    /** Sends only the head of a small POST and hangs up without waiting for any answer. */
+    public static void hangUpAfterTheHead(int port, String protocolVersion) throws IOException {
+        try (var socket = new Socket(InetAddress.getLoopbackAddress(), port)) {
+            final var head = "POST /mcp HTTP/1.1\r\nHost: localhost:" + port + "\r\n"
+                    + "Content-Type: application/json\r\n"
+                    + "Accept: application/json, text/event-stream\r\n"
+                    + "MCP-Protocol-Version: " + protocolVersion + "\r\n"
+                    + "Content-Length: 2\r\n\r\n";
+            socket.getOutputStream().write(head.getBytes(StandardCharsets.US_ASCII));
+            socket.getOutputStream().flush();
+        }
+    }
+
     public static final String API_KEY = "k-123";
 
     private static final AuthenticationChallenge API_KEY_CHALLENGE =

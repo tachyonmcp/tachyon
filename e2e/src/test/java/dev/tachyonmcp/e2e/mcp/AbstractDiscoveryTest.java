@@ -287,14 +287,34 @@ public abstract class AbstractDiscoveryTest<C extends McpClient> extends Abstrac
         assertThat(responses.get(3).header("www-authenticate")).isEqualTo(TestBearerTokens.CHALLENGE);
     }
 
-    @Test
-    void aGetThatCarriesABodyDoesNotDisturbTheNextRequest() throws Exception {
-        final var responses = exchange(
-                "GET " + METADATA_PATH + " HTTP/1.1\r\nHost: localhost:" + port + "\r\nContent-Length: 5\r\n\r\nhello",
-                "GET " + METADATA_PATH + " HTTP/1.1\r\nHost: localhost:" + port + "\r\nConnection: close\r\n\r\n");
+    /**
+     * The metadata is served ahead of authentication and of the aggregator's size limit, so a request
+     * that declares a body is answered and the connection closes without waiting for the body: an
+     * unauthenticated client must not keep a stream of any length flowing.
+     */
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "Transfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n",
+                "Content-Length: 1000000\r\n\r\nabc",
+                "Content-Length: 5\r\n\r\nhello"
+            })
+    void aGetThatDeclaresABodyIsAnsweredAndTheConnectionCloses(String declaredBody) throws Exception {
+        try (var socket = new Socket("localhost", port)) {
+            socket.setSoTimeout(5_000);
+            final var in = socket.getInputStream();
 
-        assertThat(responses.stream().map(CorsRawResponse::status)).containsExactly(200, 200);
-        assertThatJson(responses.get(1).body()).isEqualTo(METADATA);
+            socket.getOutputStream()
+                    .write(("GET " + METADATA_PATH + " HTTP/1.1\r\nHost: localhost:" + port + "\r\n" + declaredBody)
+                            .getBytes(StandardCharsets.US_ASCII));
+            socket.getOutputStream().flush();
+            final var response = CorsRawResponse.read(in);
+
+            assertThat(response.status()).isEqualTo(200);
+            assertThatJson(response.body()).isEqualTo(METADATA);
+            assertThat(response.header("Connection")).isEqualToIgnoringCase("close");
+            assertThat(in.read()).as("server closed the connection").isEqualTo(-1);
+        }
     }
 
     @ParameterizedTest
