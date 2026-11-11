@@ -2,8 +2,8 @@
 title: Overview
 tags: [concept, architecture]
 sources: [pom.xml, Makefile, renovate.json5, .mvn/wrapper/maven-wrapper.properties, .github/workflows/release.yml, tachyon-core/pom.xml, integrations/pom.xml, extensions/pom.xml, tachyon-core/src/main/java/dev/tachyonmcp/core/server/TachyonServer.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/ServerBuilder.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultServerBuilder.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java]
-updated: 2026-10-13
-commit: d8dc6214
+updated: 2026-11-11
+commit: 71d4fdb7
 ---
 
 # 🛰️ Overview
@@ -79,6 +79,6 @@ Release (`.github/workflows/release.yml`) sets the version with `versions:set -D
 
 The release profile's Central `excludeArtifacts` omits `e2e`, `conformance`, and `reports` from published artifacts (`pom.xml`). Their POMs also skip Maven install and deploy, but `central-publishing-maven-plugin` ignores `maven.deploy.skip` (1.0.0 shipped all three), so `excludeArtifacts` is the real switch.
 
-Releases need Maven **3.9.x**: Maven 3.10 makes the plugin's staging install write `maven-metadata-local.xml` (artifactId level) and `_remote.repositories` into the bundle, and Central rejects it with `Bundle has content that does NOT have a .pom file` ([upstream #79](https://github.com/mavenplugins/central-publishing-maven-plugin/issues/79)). The wrapper is pinned to 3.9.16, `renovate.json5` holds the wrapper `<3.10`, and the release profile's enforcer `requireMavenVersion [3.9.0,3.10.0)` fails `make deploy` (dry run too) before anything is built. A dry run (`skipPublishing`) stages no bundle, so bundle-content bugs only show on a real upload; to inspect one locally run `make deploy PUBLISH=true MAVEN_DEPLOY_ARGS="-DcentralBaseUrl=http://127.0.0.1:9 -Dgpg.skip=true ..."` and open `target/central-publishing/central-bundle.zip`.
+Releases need Maven **3.9.x**: Maven 3.10 makes the plugin's staging install write `maven-metadata-local.xml` (artifactId level) and `_remote.repositories` into the bundle, and Central rejects it with `Bundle has content that does NOT have a .pom file` ([upstream #79](https://github.com/mavenplugins/central-publishing-maven-plugin/issues/79)). The wrapper is pinned to 3.9.16, `renovate.json5` holds the wrapper `<3.10` and never automerges a Maven or a Kotlin toolchain update (`automerge: false` on both rules, after the patch automerge rule, so it wins), and the release profile's enforcer `requireMavenVersion [3.9.0,3.10.0)` fails `make deploy` (dry run too) before anything is built. A dry run (`skipPublishing`) stages no bundle, so bundle-content bugs only show on a real upload; to inspect one locally run `make deploy PUBLISH=true MAVEN_DEPLOY_ARGS="-DcentralBaseUrl=http://127.0.0.1:9 -Dgpg.skip=true ..."` and open `target/central-publishing/central-bundle.zip`.
 
 `make lint` also runs `.github/scripts/check-poms.py`: the parentless `tachyon-bom` inherits nothing, so that script asserts it lists exactly the `dev.tachyonmcp` artifacts the root pom manages and pins the same plugin versions, and that every published module declares a unique `automatic.module.name` (written to `Automatic-Module-Name`). `maven-enforcer-plugin` covers Maven/Java version and plugin-version pinning. Python 3 is required at build time for `tachyon-core`'s `ts2java.py` generation (`-Dts2java.skip=true` opts out).
