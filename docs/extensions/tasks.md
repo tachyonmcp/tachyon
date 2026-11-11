@@ -193,7 +193,8 @@ the authorization context.
 > ⚠️ **Deployment requirement.** Tachyon keeps the binding in the memory of the process that created
 > the task. On another node, or after a restart, it sees every task as unowned, so the MCP rule holds
 > only if your connector authorizes each call itself from `ctx.securityContext()`. Run more than one
-> node, or restart with tasks in flight, only with such a connector. Tachyon hands the connector the
+> node, or restart with tasks in flight, only with such a connector; the [Temporal](#temporal) adapter
+> is one. Tachyon hands the connector the
 > context of the request being served on every path (`get`, `cancel`, `update`, `list`, `awaitResult`
 > and the check a `subscriptions/listen` stream makes), so the caller is always there to check:
 >
@@ -417,3 +418,11 @@ open, its session does not idle out.
 Use `tachyon-tasks-temporal` when [Temporal](https://temporal.io) owns execution. The adapter exposes a concrete `start`
 helper because Temporal has a known start contract; that helper is deliberately not part of the
 generic `TaskConnector` SPI. See [the Temporal example](https://github.com/tachyonmcp/tachyon/tree/main/examples/temporal).
+
+The adapter authorizes every call itself, so it is safe on several nodes and across restarts (see
+[Who can reach a task](#who-can-reach-a-task)). `start` stores the caller's
+`SecurityContext#ownerKey()` in the Workflow memo `tachyon.owner`
+(`TemporalTaskExecutionEngine.OWNER_MEMO`); `refresh`, `cancel` and `submitInput` read it from
+Temporal on each call and answer any other caller, an anonymous one included, with `Task not found`.
+A Workflow that an anonymous caller started, or that you started outside the adapter without the
+memo, has no owner and is open to every caller.

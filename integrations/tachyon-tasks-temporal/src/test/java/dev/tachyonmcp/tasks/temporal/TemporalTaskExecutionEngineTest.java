@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import dev.tachyonmcp.api.json.JsonObject;
 import dev.tachyonmcp.api.json.JsonSchema;
@@ -14,9 +15,11 @@ import dev.tachyonmcp.api.server.domain.InputRequestBundle;
 import dev.tachyonmcp.api.server.domain.TaskResult;
 import dev.tachyonmcp.api.server.features.tasks.TaskCancelRequest;
 import dev.tachyonmcp.api.server.features.tasks.TaskGetRequest;
+import dev.tachyonmcp.api.server.features.tasks.TaskNotFoundException;
 import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
 import dev.tachyonmcp.api.server.features.tasks.TaskState;
 import dev.tachyonmcp.api.server.features.tasks.TaskUpdateRequest;
+import dev.tachyonmcp.api.server.security.SecurityContext;
 import io.temporal.client.WorkflowFailedException;
 import io.temporal.failure.CanceledFailure;
 import io.temporal.testing.TestWorkflowEnvironment;
@@ -28,13 +31,22 @@ import io.temporal.workflow.WorkflowMethod;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class TemporalTaskExecutionEngineTest {
 
     private static final String TASK_QUEUE = "tachyon-tasks-temporal-test";
-    private static final InteractionContext CONTEXT = mock(InteractionContext.class);
+    private static final InteractionContext CONTEXT = caller(SecurityContext.anonymous());
+    private static final InteractionContext ALICE = caller(SecurityContext.authenticated(() -> "alice", List.of()));
+    private static final InteractionContext BOB = caller(SecurityContext.authenticated(() -> "bob", List.of()));
+
+    private static InteractionContext caller(SecurityContext securityContext) {
+        var context = mock(InteractionContext.class);
+        when(context.securityContext()).thenReturn(securityContext);
+        return context;
+    }
 
     @Test
     void reattachesToWorkflowAndForwardsInput() throws Exception {
@@ -88,6 +100,75 @@ class TemporalTaskExecutionEngineTest {
                     TaskCancelRequest.builder().taskId("workflow-cancel").build());
 
             var workflow = environment.getWorkflowClient().newUntypedWorkflowStub("workflow-cancel");
+            assertThatThrownBy(() -> workflow.getResult(Void.class))
+                    .isInstanceOf(WorkflowFailedException.class)
+                    .hasCauseInstanceOf(CanceledFailure.class);
+        }
+    }
+
+    /**
+     * 2025-11-25 Tasks § Security: receivers MUST bind tasks to the authorization context. The owner
+     * travels with the Workflow, so an engine that never saw the start (another node, a restart)
+     * still refuses everyone else, and answers as for an unknown id.
+     */
+    @Test
+    void aWorkflowBelongsToTheCallerThatStartedItOnEveryEngine() throws Exception {
+        try (var environment = TestWorkflowEnvironment.newInstance()) {
+            var worker = environment.newWorker(TASK_QUEUE);
+            worker.registerWorkflowImplementationTypes(TestWorkflowImpl.class);
+            environment.start();
+            engine(environment).start(ALICE, request("workflow-owned"));
+            var otherNode = engine(environment);
+            await().atMost(Duration.ofSeconds(5))
+                    .untilAsserted(() -> assertThat(otherNode
+                                    .refresh(ALICE, get("workflow-owned"))
+                                    .status())
+                            .isEqualTo(TaskState.INPUT_REQUIRED));
+            var input = TaskUpdateRequest.builder()
+                    .taskId("workflow-owned")
+                    .inputResponses(Map.of("approved", true))
+                    .build();
+            var cancel = TaskCancelRequest.builder().taskId("workflow-owned").build();
+
+            for (var stranger : List.of(BOB, CONTEXT)) {
+                assertThatThrownBy(() -> otherNode.refresh(stranger, get("workflow-owned")))
+                        .isInstanceOf(TaskNotFoundException.class)
+                        .hasMessage(new TaskNotFoundException("workflow-owned").getMessage());
+                assertThatThrownBy(() -> otherNode.submitInput(stranger, input))
+                        .isInstanceOf(TaskNotFoundException.class);
+                assertThatThrownBy(() -> otherNode.cancel(stranger, cancel)).isInstanceOf(TaskNotFoundException.class);
+            }
+
+            assertThat(otherNode.refresh(ALICE, get("workflow-owned")).status())
+                    .as("neither cancelled nor given input by a stranger")
+                    .isEqualTo(TaskState.INPUT_REQUIRED);
+            otherNode.submitInput(ALICE, input);
+            await().atMost(Duration.ofSeconds(5))
+                    .untilAsserted(() -> assertThat(otherNode
+                                    .refresh(ALICE, get("workflow-owned"))
+                                    .status())
+                            .isEqualTo(TaskState.COMPLETED));
+        }
+    }
+
+    /** A Workflow an anonymous caller started has no owner: access to it is the application's decision. */
+    @Test
+    void aWorkflowStartedAnonymouslyIsOpenToEveryCaller() throws Exception {
+        try (var environment = TestWorkflowEnvironment.newInstance()) {
+            var worker = environment.newWorker(TASK_QUEUE);
+            worker.registerWorkflowImplementationTypes(TestWorkflowImpl.class);
+            environment.start();
+            var engine = engine(environment);
+            engine.start(CONTEXT, request("workflow-open"));
+
+            await().atMost(Duration.ofSeconds(5))
+                    .untilAsserted(() -> assertThat(
+                                    engine.refresh(ALICE, get("workflow-open")).status())
+                            .isEqualTo(TaskState.INPUT_REQUIRED));
+            engine.cancel(
+                    BOB, TaskCancelRequest.builder().taskId("workflow-open").build());
+
+            var workflow = environment.getWorkflowClient().newUntypedWorkflowStub("workflow-open");
             assertThatThrownBy(() -> workflow.getResult(Void.class))
                     .isInstanceOf(WorkflowFailedException.class)
                     .hasCauseInstanceOf(CanceledFailure.class);
