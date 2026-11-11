@@ -2,8 +2,8 @@
 title: Tasks
 tags: [concept, tasks, experimental]
 sources: [tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/tasks/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tasks/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tools/ToolMethodHandlers.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tools/DefaultToolRegistry.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java, extensions/tachyon-extensions-tasks/src/main/java/dev/tachyonmcp/extensions/tasks/, integrations/tachyon-tasks-temporal/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/security/Owner.java]
-updated: 2026-10-20
-commit: 2d0bcaa4
+updated: 2026-11-11
+commit: 71d4fdb7
 ---
 
 # ⏳ Tasks
@@ -101,6 +101,6 @@ Wait release, never task cancel: disconnect on a live session keeps waiting (res
 
 ## 🔌 Temporal integration
 
-`TemporalTaskExecutionEngine` → `connector()`; MCP task id = Workflow id; routes (`TemporalTaskRoute`) define workflow type, start args, status query, snapshot mapper, input update `TemporalTaskExecutionEngine`. Test double: `tachyon-testkit/src/main/java/dev/tachyonmcp/testkit/TestTaskConnector.java`. See [[integrations]].
+`TemporalTaskExecutionEngine` → `connector()`; MCP task id = Workflow id; routes (`TemporalTaskRoute`) define workflow type, start args, status query, snapshot mapper, input update `TemporalTaskExecutionEngine`. Ownership is durable here, unlike `TaskEngine#owners`: `TemporalTaskExecutionEngine#start` writes the caller's `SecurityContext#ownerKey` to the Workflow memo `TemporalTaskExecutionEngine#OWNER_MEMO`, and `TemporalTaskExecutionEngine#attach` (one `describe` for owner and route) answers any other caller of `refresh`/`cancel`/`submitInput` with `TaskNotFoundException`; no memo ⇒ unowned, open to all. Test double: `tachyon-testkit/src/main/java/dev/tachyonmcp/testkit/TestTaskConnector.java`. See [[integrations]].
 
 Related: [[feature-registries]], [[extensions]], [[protocol-versions]].

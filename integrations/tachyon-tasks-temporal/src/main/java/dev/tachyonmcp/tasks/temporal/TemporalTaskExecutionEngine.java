@@ -9,6 +9,7 @@ import dev.tachyonmcp.api.server.features.tasks.TaskGetRequest;
 import dev.tachyonmcp.api.server.features.tasks.TaskNotFoundException;
 import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
 import dev.tachyonmcp.api.server.features.tasks.TaskUpdateRequest;
+import dev.tachyonmcp.api.server.security.SecurityContext;
 import io.temporal.client.WorkflowClient;
 import io.temporal.client.WorkflowNotFoundException;
 import io.temporal.client.WorkflowOptions;
@@ -25,9 +26,20 @@ import org.slf4j.LoggerFactory;
  * Task execution methods backed by one Temporal Workflow Execution per MCP task.
  *
  * <p>Use {@link #connector()} to wire the engine into Tachyon's Tasks capability.
+ *
+ * <p><b>Ownership.</b> A Workflow an authenticated caller starts carries that caller's {@link
+ * SecurityContext#ownerKey() owner key} in the Workflow memo {@value #OWNER_MEMO}. {@link #refresh},
+ * {@link #cancel} and {@link #submitInput} read it from Temporal on every call and answer any other
+ * caller, an anonymous one included, with {@link TaskNotFoundException}, exactly as for an unknown
+ * id. The owner therefore survives a restart and holds on every node. A Workflow an anonymous caller
+ * started, or one started outside this engine, has no owner: every caller reaches it, and access to
+ * it is the application's decision.
  */
 @ExperimentalApi
 public final class TemporalTaskExecutionEngine {
+
+    /** The Workflow memo key that holds the owner key of the caller that started the Workflow. */
+    public static final String OWNER_MEMO = "tachyon.owner";
 
     private static final Logger logger = LoggerFactory.getLogger(TemporalTaskExecutionEngine.class);
 
@@ -72,9 +84,10 @@ public final class TemporalTaskExecutionEngine {
     }
 
     /**
-     * Starts the routed Temporal Workflow and returns its initial MCP projection.
+     * Starts the routed Temporal Workflow and returns its initial MCP projection. The Workflow
+     * belongs to the caller of {@code context}, if it is authenticated.
      *
-     * @param context current MCP interaction
+     * @param context current MCP interaction, which fixes the owner
      * @param request operation, stable Workflow ID, arguments, and metadata
      * @return initial authoritative task snapshot
      */
@@ -86,12 +99,13 @@ public final class TemporalTaskExecutionEngine {
                 request.operation(),
                 route.workflowType(),
                 taskQueue);
-        var workflow = workflowClient.newUntypedWorkflowStub(
-                route.workflowType(),
-                WorkflowOptions.newBuilder()
-                        .setWorkflowId(request.taskId())
-                        .setTaskQueue(taskQueue)
-                        .build());
+        var options =
+                WorkflowOptions.newBuilder().setWorkflowId(request.taskId()).setTaskQueue(taskQueue);
+        var owner = context.securityContext().ownerKey();
+        if (owner != null) {
+            options.setMemo(Map.of(OWNER_MEMO, owner));
+        }
+        var workflow = workflowClient.newUntypedWorkflowStub(route.workflowType(), options.build());
         workflow.start(route.startArguments(request));
         return TaskSnapshot.working(request.taskId(), clock.instant(), 1);
     }
@@ -102,12 +116,13 @@ public final class TemporalTaskExecutionEngine {
      * @param context current MCP interaction
      * @param request task lookup request
      * @return current task snapshot
-     * @throws TaskNotFoundException when Temporal does not know the Workflow ID
+     * @throws TaskNotFoundException when Temporal does not know the Workflow ID, or the Workflow
+     *     belongs to another caller
      */
     public TaskSnapshot refresh(InteractionContext context, TaskGetRequest request) throws TaskNotFoundException {
         try {
-            var workflow = workflow(request.taskId());
-            var snapshot = routeFor(workflow).query(workflow, request.taskId());
+            var owned = attach(context, request.taskId());
+            var snapshot = owned.route().query(owned.workflow(), request.taskId());
             logger.debug(
                     "Refreshed Temporal workflow: taskId={}, state={}, revision={}",
                     request.taskId(),
@@ -124,13 +139,14 @@ public final class TemporalTaskExecutionEngine {
      *
      * @param context current MCP interaction
      * @param request task cancellation request
-     * @throws TaskNotFoundException when Temporal does not know the Workflow ID
+     * @throws TaskNotFoundException when Temporal does not know the Workflow ID, or the Workflow
+     *     belongs to another caller
      */
     public void cancel(InteractionContext context, TaskCancelRequest request) throws TaskNotFoundException {
         try {
-            var workflow = workflow(request.taskId());
+            var owned = attach(context, request.taskId());
             logger.info("Requesting Temporal workflow cancellation: taskId={}", request.taskId());
-            workflow.cancel();
+            owned.workflow().cancel();
         } catch (WorkflowNotFoundException e) {
             throw new TaskNotFoundException(request.taskId(), e);
         }
@@ -141,38 +157,48 @@ public final class TemporalTaskExecutionEngine {
      *
      * @param context current MCP interaction
      * @param input submitted task input
-     * @throws TaskNotFoundException when Temporal does not know the Workflow ID
+     * @throws TaskNotFoundException when Temporal does not know the Workflow ID, or the Workflow
+     *     belongs to another caller
      */
     public void submitInput(InteractionContext context, TaskUpdateRequest input) throws TaskNotFoundException {
         try {
-            var workflow = workflow(input.taskId());
+            var owned = attach(context, input.taskId());
             logger.info(
                     "Submitting input to Temporal workflow: taskId={}, fields={}",
                     input.taskId(),
                     input.inputResponses().keySet());
-            routeFor(workflow).submitInput(workflow, input);
+            owned.route().submitInput(owned.workflow(), input);
         } catch (WorkflowNotFoundException e) {
             throw new TaskNotFoundException(input.taskId(), e);
         }
     }
 
-    private WorkflowStub workflow(String taskId) {
-        return workflowClient.newUntypedWorkflowStub(taskId);
+    private record Attached(WorkflowStub workflow, TemporalTaskRoute<?> route) {}
+
+    /**
+     * Addresses the Workflow for {@code context}'s caller: one {@code describe} gives its owner and
+     * its type. A caller that is not the owner gets the answer of an unknown id.
+     */
+    private Attached attach(InteractionContext context, String taskId) throws TaskNotFoundException {
+        var workflow = workflowClient.newUntypedWorkflowStub(taskId);
+        var description = workflow.describe();
+        var owner = description.getMemo(OWNER_MEMO, String.class);
+        if (owner != null && !owner.equals(context.securityContext().ownerKey())) {
+            logger.debug("Hiding an owned Temporal workflow from another caller");
+            throw new TaskNotFoundException(taskId);
+        }
+        var workflowType = description.getWorkflowType();
+        var route = routesByWorkflowType.get(workflowType);
+        if (route == null) {
+            throw new IllegalStateException("No Temporal task route for Workflow type: " + workflowType);
+        }
+        return new Attached(workflow, route);
     }
 
     private TemporalTaskRoute<?> routeForOperation(String operation) {
         var route = routesByOperation.get(operation);
         if (route == null) {
             throw new IllegalArgumentException("No Temporal route for operation: " + operation);
-        }
-        return route;
-    }
-
-    private TemporalTaskRoute<?> routeFor(WorkflowStub workflow) {
-        var workflowType = workflow.describe().getWorkflowType();
-        var route = routesByWorkflowType.get(workflowType);
-        if (route == null) {
-            throw new IllegalStateException("No Temporal task route for Workflow type: " + workflowType);
         }
         return route;
     }
