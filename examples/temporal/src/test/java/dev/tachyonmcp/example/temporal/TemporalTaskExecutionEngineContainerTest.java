@@ -26,13 +26,14 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
+import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.mock;
 
 @Testcontainers(disabledWithoutDocker = true)
 class TemporalTaskExecutionEngineContainerTest {
 
     private static final String TASK_QUEUE = "tachyon-temporal-container-test";
-    private static final InteractionContext CONTEXT = mock(InteractionContext.class);
+    private static final InteractionContext CONTEXT = mock(InteractionContext.class, CALLS_REAL_METHODS);
 
     @Container
     private static final GenericContainer<?> TEMPORAL = new GenericContainer<>(
