@@ -97,7 +97,7 @@ final class McpTaskBinding implements TaskRuntime, TaskEvents {
         server.subscriptions()
                 .publish(
                         subscriptionTopic,
-                        listen -> listen.taskIds().contains(taskId) && engine.admits(listen.listener(), taskId),
+                        listen -> listen.taskIds().contains(taskId) && engine.admits(listen.listener(), snapshot),
                         "notifications/tasks",
                         mapper -> mapper.taskStatusNotificationParams(snapshot));
     }

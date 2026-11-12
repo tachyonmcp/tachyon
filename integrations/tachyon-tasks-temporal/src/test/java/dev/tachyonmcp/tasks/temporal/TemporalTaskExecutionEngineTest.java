@@ -132,7 +132,10 @@ class TemporalTaskExecutionEngineTest {
             var worker = environment.newWorker(TASK_QUEUE);
             worker.registerWorkflowImplementationTypes(TestWorkflowImpl.class);
             environment.start();
-            engine(environment).start(ALICE_OF_TENANT_ONE, request("workflow-owned"));
+            var started = engine(environment).start(ALICE_OF_TENANT_ONE, request("workflow-owned"));
+            assertThat(started.ownerKey())
+                    .as("the started task carries its owner for the server to cache")
+                    .isEqualTo("tenant-1|alice");
             var otherNode = engine(environment);
             await().atMost(Duration.ofSeconds(5))
                     .untilAsserted(() -> assertThat(otherNode
@@ -144,6 +147,11 @@ class TemporalTaskExecutionEngineTest {
                             .newUntypedWorkflowStub("workflow-owned")
                             .describe()
                             .getMemo(TemporalTaskExecutionEngine.OWNER_MEMO, String.class))
+                    .isEqualTo("tenant-1|alice");
+            assertThat(otherNode
+                            .refresh(ALICE_OF_TENANT_ONE, get("workflow-owned"))
+                            .ownerKey())
+                    .as("another node reads the owner from the memo")
                     .isEqualTo("tenant-1|alice");
 
             for (var stranger : List.of(BOB, CONTEXT, ALICE, ALICE_OF_TENANT_TWO)) {
@@ -185,6 +193,9 @@ class TemporalTaskExecutionEngineTest {
             assertThat(workflow.describe().getMemo(TemporalTaskExecutionEngine.OWNER_MEMO, String.class))
                     .as("an empty memo marks it unowned by design")
                     .isEqualTo("");
+            assertThat(engine.refresh(ALICE, get("workflow-open")).ownerKey())
+                    .as("nobody owns it")
+                    .isNull();
             assertThatThrownBy(() -> workflow.getResult(Void.class))
                     .isInstanceOf(WorkflowFailedException.class)
                     .hasCauseInstanceOf(CanceledFailure.class);
@@ -227,6 +238,9 @@ class TemporalTaskExecutionEngineTest {
                                     .status())
                             .as("neither cancelled nor given input by a refused caller")
                             .isEqualTo(TaskState.INPUT_REQUIRED));
+            assertThat(admitsAlice.refresh(ALICE, get("workflow-legacy")).ownerKey())
+                    .as("a Workflow without the memo has no owner: admitting a caller never makes it theirs")
+                    .isNull();
             admitsAlice.submitInput(ALICE, input("workflow-legacy"));
             await().atMost(Duration.ofSeconds(5))
                     .untilAsserted(() -> assertThat(admitsAlice

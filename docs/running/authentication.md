@@ -451,12 +451,12 @@ server.tools().register(
 - **Tasks belong to their creator.** A task created by a task-producing tool call is bound to the
   caller of that call the same way, but from any of its sessions, and on 2025-11-25 and 2026-07-28
   alike. Another caller gets `Task not found` from `tasks/get`, `tasks/result`, `tasks/cancel` and
-  `tasks/update`, exactly as for an unknown id and before your task connector runs; `tasks/list`
-  leaves it out, and a `subscriptions/listen` stream does not follow it. Tasks an anonymous caller
-  creates, or that you publish yourself, have no owner and stay with the connector. The binding is
-  kept in memory for the task's `ttl`, so it does not survive a restart and is not shared between
-  nodes. **A clustered or restarted server needs a task connector that authorizes every call from
-  `ctx.securityContext()`**; Tachyon hands it the caller's own context on every path. See
+  `tasks/update`, exactly as for an unknown id; `tasks/list` leaves it out, and a
+  `subscriptions/listen` stream does not follow it. The server stamps the owner key on the snapshot as
+  `TaskSnapshot#ownerKey()`. **Your task connector must store it with the task and return it**, the
+  way a `SessionStore` keeps a session's owner; then the binding survives a restart and holds on every
+  node. Tasks an anonymous caller creates, or that you publish yourself, have no owner: only anonymous
+  callers reach them, unless you set `shareUnownedTasks(true)`. See
   [Who can reach a task](../extensions/tasks.md#who-can-reach-a-task).
 - **Owner keys identify callers.** A session or a task is bound to `SecurityContext#ownerKey()`, which
   must be unique and stable for a caller across every issuer and tenant the server accepts. In bearer

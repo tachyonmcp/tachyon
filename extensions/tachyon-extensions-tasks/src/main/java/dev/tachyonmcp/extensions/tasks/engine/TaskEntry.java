@@ -9,6 +9,7 @@ import java.util.Objects;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiConsumer;
 import java.util.function.BooleanSupplier;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Cached task projection plus server-local retention and its push {@link TaskRoute}. The route is
@@ -34,19 +35,36 @@ final class TaskEntry {
         this.cachedAt = clock.instant();
     }
 
-    /** Applies {@code candidate} if its revision is newer; returns whether it did. */
+    /**
+     * Applies {@code candidate} if its revision is newer. The owner never changes: an unowned entry
+     * takes the owner {@code candidate} names, whatever its revision, and a candidate naming another
+     * owner changes nothing.
+     *
+     * @return whether {@code candidate} agrees with this entry's owner
+     */
     boolean publish(TaskSnapshot candidate) {
         lock.lock();
         try {
-            if (candidate.revision() <= snapshot.revision()) {
+            var owner = snapshot.ownerKey();
+            var claimed = candidate.ownerKey();
+            if (owner != null && claimed != null && !owner.equals(claimed)) {
                 return false;
             }
-            cachedAt = clock.instant();
-            snapshot = candidate;
+            var newer = candidate.revision() > snapshot.revision();
+            if (newer) {
+                cachedAt = clock.instant();
+            }
+            snapshot = withOwner(newer ? candidate : snapshot, owner != null ? owner : claimed);
             return true;
         } finally {
             lock.unlock();
         }
+    }
+
+    static TaskSnapshot withOwner(TaskSnapshot snapshot, @Nullable String ownerKey) {
+        return Objects.equals(snapshot.ownerKey(), ownerKey)
+                ? snapshot
+                : TaskSnapshot.builder().from(snapshot).ownerKey(ownerKey).build();
     }
 
     TaskSnapshot snapshot() {

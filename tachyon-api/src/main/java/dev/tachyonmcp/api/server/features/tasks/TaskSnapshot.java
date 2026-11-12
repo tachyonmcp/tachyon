@@ -96,6 +96,24 @@ public interface TaskSnapshot extends HasMeta {
     Map<String, Object> meta();
 
     /**
+     * Returns the {@link dev.tachyonmcp.api.server.security.SecurityContext#ownerKey() owner key} of
+     * the caller the task belongs to, or {@code null} for a task nobody owns.
+     * Server-side only: it never goes on the wire.
+     *
+     * <p>The server stamps it on the snapshot a caller's tool call returns, and refuses a task to every
+     * other caller as if it did not exist. Store it with the task and return it from the connector, so
+     * the owner holds after a restart and on every node. A snapshot the connector returns without it
+     * keeps the owner the server knows: the one it has cached, or remembers until the task's {@code
+     * ttl} once the snapshot leaves the cache. With no owner anywhere, only anonymous callers reach
+     * the task, unless the server shares unowned tasks.
+     *
+     * @return the owner key, or {@code null}
+     */
+    @Value.Redacted
+    @Nullable
+    String ownerKey();
+
+    /**
      * Returns the monotonically increasing projection revision.
      *
      * @return the monotonically increasing projection revision
@@ -111,6 +129,9 @@ public interface TaskSnapshot extends HasMeta {
     default void check() {
         if (taskId().isBlank()) {
             throw new IllegalArgumentException("taskId cannot be blank");
+        }
+        if (ownerKey() != null && ownerKey().isBlank()) {
+            throw new IllegalArgumentException("ownerKey cannot be blank");
         }
         if (revision() < 0) {
             throw new IllegalArgumentException("revision cannot be negative: " + revision());
@@ -390,6 +411,15 @@ public interface TaskSnapshot extends HasMeta {
          * @return this builder
          */
         Builder meta(@Nullable Map<String, ?> meta);
+
+        /**
+         * Sets the owner key of the caller the task belongs to: in a tool, {@code
+         * ctx.securityContext().ownerKey()}.
+         *
+         * @param ownerKey the owner key, or {@code null} for a task nobody owns
+         * @return this builder
+         */
+        Builder ownerKey(@Nullable String ownerKey);
 
         /**
          * Sets the monotonically increasing projection revision.

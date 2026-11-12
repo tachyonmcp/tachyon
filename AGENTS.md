@@ -30,8 +30,8 @@ Specs live under [specs](specs).
 
 Use [tachyon-wiki](.agents/skills/tachyon-wiki/SKILL.md) when creating, updating, reorganizing, or checking wiki pages, including refreshes after code changes.
 
-- **Before work**: read `index.md`, then relevant pages. Still verify claims in code.
-- **After changing code**: update every page whose `sources` cover touched files — fix `Type#member` citations (no line numbers), bump `updated` + `commit`, add page for new concept/module. Same change set as the code.
+- **Before work**: find code with CodeGraph. Wiki only for concept questions (why/how a subsystem works): `index.md`, then the one relevant page. Still verify claims in code.
+- **After changing code**: once, when the change is finished — not per edit. Run `.llm-wiki/tools/stale.sh`, update every page whose `sources` cover touched files — fix `Type#member` citations (no line numbers), bump `updated` + `commit`, add page for new concept/module. Same change set as the code.
 - **Check drift**: `.llm-wiki/tools/stale.sh` (changed sources since page commit + dead `[[links]]`).
 - **Answered hard question?** File answer as page, index it.
 - Smell/bug seen, not fixing now → row in `findings.md`. Fixed → 🗑️ row.
@@ -56,7 +56,7 @@ Use [tachyon-wiki](.agents/skills/tachyon-wiki/SKILL.md) when creating, updating
 - `git mv` for files.
 - Use MCP tools.
 - **Format**: Check on `make lint`, fix with `make format`.
-- **API/Registry design**: see [`specs/guidance.md`](specs/guidance.md) before adding/changing a handler SAM (sync/async shape, checked exceptions, descriptor bundling, `_meta`) or naming registry APIs (`ServerBuilder` nouns, `register`/`registerAsync`/`unregister`, `find`, `descriptors()`).
+- **API/Registry design**: see [`specs/guidance.md`](specs/guidance.md) before adding/changing a handler SAM (sync/async shape, checked exceptions, descriptor bundling, `_meta`) or naming registry APIs (`ServerBuilder` nouns, `register`/`registerAsync`/`unregister`, `find`, `descriptors()`). Long file: grep headings, read only the matching section.
 - **Kotlin DSL** (`tachyon-kotlin`):
   - Each scope class gets its own `*Scope.kt` file.
   - `TachyonServerBuilder` wraps `ServerBuilder` as the DSL receiver. Scope methods on `TachyonServerBuilder` use clean names (`info`, `capabilities`, `network`, `session`) with zero Java member conflicts.

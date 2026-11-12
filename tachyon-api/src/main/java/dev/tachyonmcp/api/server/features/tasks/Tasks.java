@@ -20,8 +20,12 @@ public interface Tasks {
      * {@code notifications/tasks}. Publishing never picks a session from the calling thread, and
      * status is never broadcast to other sessions.
      *
+     * <p>The owner of a task never changes. A snapshot without a {@link TaskSnapshot#ownerKey()} keeps
+     * the owner the task has; a snapshot naming one gives it to a task nobody owns yet.
+     *
      * @param snapshot the snapshot
      * @return the effective cached snapshot
+     * @throws IllegalStateException if {@code snapshot} names an owner other than the task's
      */
     TaskSnapshot publish(TaskSnapshot snapshot);
 
@@ -57,7 +61,8 @@ public interface Tasks {
     TaskSnapshot get(String taskId);
 
     /**
-     * Removes a cached task projection without changing externally owned work.
+     * Removes a cached task projection without changing externally owned work. The server forgets
+     * the task's owner with it: afterwards only the owner the {@link TaskConnector} returns holds.
      *
      * @return {@code true} if a task with this id existed and was removed
      * @param taskId the task id
