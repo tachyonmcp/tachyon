@@ -4,6 +4,9 @@ description: >-
     Apply Tachyon MCP project rules when designing, implementing, reviewing,
     or testing Java and Kotlin server code, MCP protocol behaviour,
     E2E fixtures, concurrency, JSON, schemas, and documentation examples.
+metadata:
+  author: Konstantin Pavlov
+  version: 1.1
 ---
 
 # Prime directives
@@ -21,7 +24,8 @@ description: >-
   pinning or native calls to a suitable executor. Virtual-thread contract and nullability:
   [`../../../specs/tech-stack.md`](../../../specs/tech-stack.md).
 - Kotlin API refactors follow the adapter shapes in
-  [`../../../specs/guidance.md`](../../../specs/guidance.md#kotlin-adapter-shape).
+  [`../../../specs/guidance.md`](../../../specs/guidance.md#kotlin-adapter-shape). The file is long: grep the
+  heading and read only that section.
 - Java `ServerBuilder` is the implementation source of truth. Kotlin adds only thin adaptation for
   suspend lambdas and Kotlin-specific types; never duplicate validation or registration logic.
 - Keep [`weather-mcp`](../../../examples/weather-mcp) and
@@ -40,8 +44,10 @@ description: >-
   - Run the covering `*Benchmark` on the base commit and on the change, with `-prof gc`.
   - If no benchmark covers the path, write one first and commit it, so later changes reuse it.
   - Report ops/s and B/op deltas in the commit message or PR; explain every regression.
-- Run: `./mvnw -pl tachyon-core -am verify -Pjmh -DskipTests -Djmh.args='<BenchmarkRegex> -prof gc'`.
+- Run: `./mvnw -q -pl tachyon-core -am verify -Pjmh -DskipTests -Djmh.args='<BenchmarkRegex> -prof gc -rf json -rff <abs path>.json' > <abs path>.log 2>&1`.
   Use `-Djmh.args`, not `-Dexec.args`: `exec.args` also rewrites the ts2java `exec:exec` runs.
+  Read scores from the JSON result (`primaryMetric.score`, `secondaryMetrics["gc.alloc.rate.norm"].score`);
+  open the log only when the run fails. Never let JMH print into the conversation.
 - Streaming Jackson only on wire paths: `JsonParser`/`JsonGenerator` via `CodecSupport`, no
   `ObjectMapper`/databind. Trees go through `CodecSupport#readTree`/`#readWireTree`/`#writeTree`.
 
@@ -84,16 +90,8 @@ description: >-
 
 # Documentation examples
 
-- For manual testing in onboarding guides, lead with MCP Inspector; retain curl as an alternative.
-- Use HTML `<details>` with descriptive `<summary>` labels for alternative instructions and long
-  setup blocks. Open the recommended testing path with `<details open>`; keep alternatives collapsed.
-  Leave blank lines around fenced Markdown inside the elements and check the rendered Hugo page.
-- Give the launch command, transport, endpoint, tool arguments, and expected result. Verify Inspector
-  commands and UI labels against [its official repository](https://github.com/modelcontextprotocol/inspector),
-  and ground Tachyon behavior in source and existing tests.
-- For Inspector CLI examples, use `--tool-args-json` to preserve types and `--format json` for parsed
-  output. Follow the [CLI smoke-testing guide](https://github.com/modelcontextprotocol/inspector/blob/main/docs/cli-smoke-testing.md)
-  for automation: pin the Inspector version, bound connection time, and preserve failing exit codes.
+Rules for doc code blocks and manual-testing instructions live in the
+[`doc-snippets`](../doc-snippets/SKILL.md) skill. Load it only when editing `docs/`.
 
 # JSON/JSON Schemas
 

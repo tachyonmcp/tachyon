@@ -2,11 +2,13 @@
 name: doc-snippets
 description: >-
   Keep Markdown code examples under docs/**/*.md in sync with real source via
-  snips. Use when adding/editing a doc that embeds source code, when `make
-  docs-check` fails, or when source behind an existing snippet marker changed.
+  snips, and write manual-testing instructions for onboarding guides. Use when
+  adding/editing a doc that embeds source code or tells the reader how to try a
+  server, when `make docs-check` fails, or when source behind an existing
+  snippet marker changed.
 metadata:
   author: Konstantin Pavlov
-  version: 1.0
+  version: 1.1
 ---
 
 # Doc snippets (snips)
@@ -89,6 +91,19 @@ port-0 server and asserts what the page claims.
 - Build files and shell blocks (`${tachyon.version}` placeholders) stay inline; the SNAPSHOT
   switch is the commented `tachyon.version` line in the module pom.
 - Reference page: `docs/quickstart.md` → `quickstart/MyMcpServer.java` + `MyMcpServerTest.java`.
+
+## Manual-testing instructions
+
+- For manual testing in onboarding guides, lead with MCP Inspector; retain curl as an alternative.
+- Use HTML `<details>` with descriptive `<summary>` labels for alternative instructions and long
+  setup blocks. Open the recommended testing path with `<details open>`; keep alternatives collapsed.
+  Leave blank lines around fenced Markdown inside the elements and check the rendered Hugo page.
+- Give the launch command, transport, endpoint, tool arguments, and expected result. Verify Inspector
+  commands and UI labels against [its official repository](https://github.com/modelcontextprotocol/inspector),
+  and ground Tachyon behavior in source and existing tests.
+- For Inspector CLI examples, use `--tool-args-json` to preserve types and `--format json` for parsed
+  output. Follow the [CLI smoke-testing guide](https://github.com/modelcontextprotocol/inspector/blob/main/docs/cli-smoke-testing.md)
+  for automation: pin the Inspector version, bound connection time, and preserve failing exit codes.
 
 ## Gotchas
 
