@@ -2,8 +2,8 @@
 title: Security guards
 tags: [concept, security, transport]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/http/, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/McpChannelInitializer.java, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/NettyServerConfig.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/config/NetworkConfig.java]
-updated: 2026-11-11
-commit: 71d4fdb7
+updated: 2026-11-12
+commit: f930ddf6
 ---
 
 # 🛡️ Security guards

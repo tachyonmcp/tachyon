@@ -35,7 +35,8 @@ class TaskEngineTest {
                     Pagination.DEFAULT_PAGE_SIZE,
                     Duration.ofMinutes(5),
                     Duration.ofSeconds(2),
-                    TaskEngineSettings.DEFAULT_RESULT_POLL_INTERVAL),
+                    TaskEngineSettings.DEFAULT_RESULT_POLL_INTERVAL,
+                    false),
             clock);
 
     @Test
@@ -84,7 +85,8 @@ class TaskEngineTest {
                         Pagination.DEFAULT_PAGE_SIZE,
                         TaskEngineSettings.DEFAULT_KEEP_ALIVE,
                         null,
-                        TaskEngineSettings.DEFAULT_RESULT_POLL_INTERVAL),
+                        TaskEngineSettings.DEFAULT_RESULT_POLL_INTERVAL,
+                        false),
                 clock);
 
         assertThat(guarded.readableTaskIds(NoopInteractionContext.INSTANCE, Set.of("readable", "refused", "failing")))
@@ -113,7 +115,8 @@ class TaskEngineTest {
                         Pagination.DEFAULT_PAGE_SIZE,
                         TaskEngineSettings.DEFAULT_KEEP_ALIVE,
                         null,
-                        TaskEngineSettings.DEFAULT_RESULT_POLL_INTERVAL),
+                        TaskEngineSettings.DEFAULT_RESULT_POLL_INTERVAL,
+                        false),
                 clock);
 
         try {

@@ -34,11 +34,14 @@ import org.slf4j.LoggerFactory;
  * SecurityContext#ownerKey() owner key} in the Workflow memo {@value #OWNER_MEMO}. {@link #refresh},
  * {@link #cancel} and {@link #submitInput} read it from Temporal on every call and answer any other
  * caller, an anonymous one included, with {@link TaskNotFoundException}, exactly as for an unknown
- * id. The owner therefore survives a restart and holds on every node. A Workflow an anonymous caller
- * started carries an empty memo: it has no owner, every caller reaches it, and access to it is the
- * application's decision. A Workflow without the memo at all, started outside this engine or before it
- * wrote the memo, is reached only by callers {@link Builder#unownedAccess} admits, asked on every call;
- * by default nobody.
+ * id. Every snapshot {@link #start} and {@link #refresh} return carries it as {@link
+ * TaskSnapshot#ownerKey()}, so the server refuses other callers from the snapshot too. The owner
+ * therefore survives a restart and holds on every node. A Workflow an anonymous caller started
+ * carries an empty memo: it has no owner, and the server decides who reaches it. A Workflow without
+ * the memo at all, started outside this engine or before it wrote the memo, is reached only by
+ * callers {@link Builder#unownedAccess} admits, asked on every call; by default nobody. Admitting a
+ * caller never makes the Workflow theirs: its snapshot carries no owner, so the server's rule for
+ * unowned tasks applies as well.
  */
 @ExperimentalApi
 public final class TemporalTaskExecutionEngine {
@@ -115,7 +118,7 @@ public final class TemporalTaskExecutionEngine {
         options.setMemo(Map.of(OWNER_MEMO, owner == null ? "" : owner));
         var workflow = workflowClient.newUntypedWorkflowStub(route.workflowType(), options.build());
         workflow.start(route.startArguments(request));
-        return TaskSnapshot.working(request.taskId(), clock.instant(), 1);
+        return withOwner(TaskSnapshot.working(request.taskId(), clock.instant(), 1), owner);
     }
 
     /**
@@ -130,7 +133,7 @@ public final class TemporalTaskExecutionEngine {
     public TaskSnapshot refresh(InteractionContext context, TaskGetRequest request) throws TaskNotFoundException {
         try {
             var owned = attach(context, request.taskId());
-            var snapshot = owned.route().query(owned.workflow(), request.taskId());
+            var snapshot = withOwner(owned.route().query(owned.workflow(), request.taskId()), owned.ownerKey());
             logger.debug(
                     "Refreshed Temporal workflow: taskId={}, state={}, revision={}",
                     request.taskId(),
@@ -181,7 +184,16 @@ public final class TemporalTaskExecutionEngine {
         }
     }
 
-    private record Attached(WorkflowStub workflow, TemporalTaskRoute<?> route) {}
+    private record Attached(
+            WorkflowStub workflow,
+            TemporalTaskRoute<?> route,
+            @Nullable String ownerKey) {}
+
+    private static TaskSnapshot withOwner(TaskSnapshot snapshot, @Nullable String ownerKey) {
+        return ownerKey == null || ownerKey.isEmpty()
+                ? snapshot
+                : TaskSnapshot.builder().from(snapshot).ownerKey(ownerKey).build();
+    }
 
     /**
      * Addresses the Workflow for {@code context}'s caller: one {@code describe} gives its owner and
@@ -195,9 +207,8 @@ public final class TemporalTaskExecutionEngine {
     private Attached attach(InteractionContext context, String taskId) throws TaskNotFoundException {
         var description = workflowClient.newUntypedWorkflowStub(taskId).describe();
         var owner = description.getMemo(OWNER_MEMO, String.class, String.class);
-        var admitted = owner == null
-                ? unownedAccess.test(context, taskId)
-                : owner.isEmpty() || owner.equals(context.securityContext().ownerKey());
+        var callerKey = context.securityContext().ownerKey();
+        var admitted = owner == null ? unownedAccess.test(context, taskId) : owner.isEmpty() || owner.equals(callerKey);
         if (!admitted) {
             logger.debug("Hiding a Temporal workflow from a caller that may not reach it");
             throw new TaskNotFoundException(taskId);
@@ -211,7 +222,7 @@ public final class TemporalTaskExecutionEngine {
                 .setWorkflowExecution(description.getExecution())
                 .build();
         var workflow = workflowClient.newUntypedWorkflowStub(target, Optional.of(workflowType));
-        return new Attached(workflow, route);
+        return new Attached(workflow, route, owner);
     }
 
     private TemporalTaskRoute<?> routeForOperation(String operation) {
@@ -279,11 +290,14 @@ public final class TemporalTaskExecutionEngine {
         }
 
         /**
-         * Sets who may reach a Workflow without the {@value TemporalTaskExecutionEngine#OWNER_MEMO} memo: one started outside this
-         * engine, or by a version that did not write the memo. It is asked on every {@code refresh},
-         * {@code cancel} and {@code submitInput} for such a Workflow; a caller it refuses gets {@link
-         * TaskNotFoundException}, as for an unknown id. Keep the authorization those Workflows had
-         * before here until they finish. By default it refuses everyone.
+         * Sets who may reach a Workflow without the {@value TemporalTaskExecutionEngine#OWNER_MEMO}
+         * memo: one started outside this engine, or by a version that did not write the memo. It is
+         * asked on every {@code refresh}, {@code cancel} and {@code submitInput} for such a Workflow; a
+         * caller it refuses gets {@link TaskNotFoundException}, as for an unknown id. A caller it admits
+         * does not become the owner: the snapshot carries none, so on a server with authentication a
+         * named caller reaches the Workflow only if the server also shares unowned tasks. Keep the
+         * authorization those Workflows had before here until they finish. By default it refuses
+         * everyone.
          *
          * @param unownedAccess admits the caller of the request to the Workflow with the given ID
          * @return this builder

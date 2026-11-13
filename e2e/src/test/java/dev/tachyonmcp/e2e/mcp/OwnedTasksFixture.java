@@ -18,7 +18,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * A bearer-secured server with the tasks extension, a task-producing {@code start} tool and a
  * connector that records who called it, so a test can prove which calls reached the connector.
  * The connector authorizes nothing itself, as a real one might not: whether a caller may reach a
- * task is Tachyon's decision here.
+ * task is Tachyon's decision here. The {@code start} tool stores the task with its caller's owner
+ * key, as an application must for the owner to outlive the server's cache, a restart, or a node.
  */
 public final class OwnedTasksFixture {
 
@@ -27,18 +28,38 @@ public final class OwnedTasksFixture {
     private final TestBearerTokens tokens = new TestBearerTokens();
     private final TestTaskConnector externalSystem = new TestTaskConnector();
     private final List<String> connectorCalls = new CopyOnWriteArrayList<>();
+    private final boolean shareUnownedTasks;
+
+    /** A fixture whose server shares tasks nobody owns with every caller, so tests can reach them. */
+    public OwnedTasksFixture() {
+        this(true);
+    }
+
+    /**
+     * A fixture whose server shares tasks nobody owns, or keeps them from every named caller.
+     *
+     * @param shareUnownedTasks whether every caller reaches a task nobody owns
+     */
+    public OwnedTasksFixture(boolean shareUnownedTasks) {
+        this.shareUnownedTasks = shareUnownedTasks;
+    }
 
     /** Secures the server with the fixture's tokens and wires the recording connector. */
     public void configure(ServerBuilder builder) {
         builder.capabilities(c -> c.tools())
                 .security(TestBearerTokens.secured(tokens))
-                .withExtension(TasksExtension.class, t -> t.connector(recordingConnector()));
+                .withExtension(
+                        TasksExtension.class,
+                        t -> t.connector(recordingConnector()).shareUnownedTasks(shareUnownedTasks));
     }
 
     /** Registers {@code start}: it starts the task named by its {@code taskId} argument and returns it. */
     public void register(TachyonServer server) {
         server.tools().register(b -> b.name("start").taskSupport(TaskSupport.REQUIRED), (context, request) -> {
-            var snapshot = TaskSnapshot.working(request.arguments().stringOr("taskId", ""), CREATED_AT, 1);
+            var snapshot = TaskSnapshot.builder()
+                    .from(TaskSnapshot.working(request.arguments().stringOr("taskId", ""), CREATED_AT, 1))
+                    .ownerKey(context.securityContext().ownerKey())
+                    .build();
             externalSystem.start(snapshot);
             return ToolResult.task(snapshot);
         });

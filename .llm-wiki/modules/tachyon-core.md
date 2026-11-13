@@ -2,8 +2,8 @@
 title: tachyon-core
 tags: [module, core]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/, tachyon-core/src/main/resources/, tachyon-core/pom.xml]
-updated: 2026-11-11
-commit: 71d4fdb7
+updated: 2026-11-12
+commit: f930ddf6
 ---
 
 # ⚙️ tachyon-core

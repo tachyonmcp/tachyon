@@ -119,7 +119,9 @@ class TasksExtensionTest extends AbstractStatelessMcpE2eTest<McpClient> {
                   "resultType":"complete"
                     }
                   """);
-            assertThat(taskEngine.refreshedTaskIds()).containsExactly("workflow-cancel");
+            assertThat(taskEngine.refreshedTaskIds())
+                    .as("read for its owner before the cancel, then by tasks/get")
+                    .containsExactly("workflow-cancel", "workflow-cancel");
         }
     }
 

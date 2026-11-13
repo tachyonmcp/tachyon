@@ -89,6 +89,9 @@ public class TaskSnapshotBuilder
         /** Optional protocol metadata. */
         public var meta: Map<String, Any?>? = from?.meta()
 
+        /** Owner key of the caller the task belongs to; server-side only, never on the wire. */
+        public var ownerKey: String? = from?.ownerKey()
+
         /**
          * Monotonically increasing projection revision. Unset, a snapshot built from a previous one takes
          * its next revision.
@@ -117,6 +120,7 @@ public class TaskSnapshotBuilder
                 .pendingInput(pendingInput)
                 .result(result)
                 .meta(meta)
+                .ownerKey(ownerKey)
                 .build()
         }
     }

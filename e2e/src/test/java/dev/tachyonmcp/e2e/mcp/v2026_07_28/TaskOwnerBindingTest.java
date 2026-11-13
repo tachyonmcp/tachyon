@@ -99,6 +99,58 @@ class TaskOwnerBindingTest extends AbstractStatelessMcpE2eTest<McpClient> {
         }
     }
 
+    /**
+     * The owner travels with the stored task, so a server that has never seen it (restarted, or
+     * another node on the same connector) still refuses everyone but its owner, listen included.
+     */
+    @Test
+    void aRestartedServerStillHidesTheTaskFromAnotherCaller() throws Exception {
+        var taskId = UUID.randomUUID().toString();
+        var unknownId = UUID.randomUUID().toString();
+        try (var alice = signedIn(ALICE)) {
+            assertThat(alice.post(start(1, taskId))).isSuccess().hasResultType("task");
+        }
+
+        stopServer();
+        startServer(fixture::configure, fixture::register);
+
+        try (var alice = signedIn(ALICE);
+                var bob = signedIn(BOB)) {
+            for (var request : List.of("""
+                    {"jsonrpc":"2.0","id":2,"method":"tasks/get","params":{"taskId":"%s"}}
+                    """, """
+                    {"jsonrpc":"2.0","id":2,"method":"tasks/cancel","params":{"taskId":"%s"}}
+                    """, """
+                    {"jsonrpc":"2.0","id":2,"method":"tasks/update","params":{"taskId":"%s","inputResponses":{}}}
+                    """)) {
+                var denied = bob.post(request.formatted(taskId));
+                var unknown = bob.post(request.formatted(unknownId));
+
+                assertThat(denied).isJsonRpcError().hasErrorCode(-32602);
+                assertThat(denied.body())
+                        .as("the refusal reads like an unknown id: %s", request)
+                        .isEqualTo(unknown.body());
+            }
+            assertThat(fixture.connectorCalls())
+                    .as("bob's cancel and update never ran")
+                    .noneMatch(call -> call.equals("cancel:" + taskId + ":bob"))
+                    .noneMatch(call -> call.equals("update:" + taskId + ":bob"));
+            var bobTask = UUID.randomUUID().toString();
+            assertThat(bob.post(start(4, bobTask))).isSuccess().hasResultType("task");
+            try (var stream = bob.openPostStream(null, listen(taskId, bobTask))) {
+                var acknowledged = stream.await(TaskOwnerBindingTest::isAcknowledgement, ofSeconds(5));
+                assertThat(acknowledged.data())
+                        .as("bob's listen follows his own task, not alice's")
+                        .contains(bobTask)
+                        .doesNotContain(taskId);
+            }
+
+            var aliceGet = alice.post(get(3, taskId));
+            assertThat(aliceGet).isSuccess().hasId(3);
+            assertThat(aliceGet.body()).as("the owner never goes on the wire").doesNotContain("alice");
+        }
+    }
+
     @Test
     void aListenStreamAcknowledgesOnlyTheTasksItsCallerMayRead() throws Exception {
         var aliceTask = UUID.randomUUID().toString();
@@ -154,6 +206,46 @@ class TaskOwnerBindingTest extends AbstractStatelessMcpE2eTest<McpClient> {
         }
     }
 
+    /**
+     * A snapshot published without an owner, for a task this server no longer caches, names nobody.
+     * The stream was authorized when it opened, so its owner keeps following the task even on a
+     * server that hides unowned tasks from named callers.
+     */
+    @Test
+    void theOwnersStreamStillFollowsATaskTheApplicationPublishesWithoutAnOwner() throws Exception {
+        stopServer();
+        fixture = new OwnedTasksFixture(false);
+        startServer(fixture::configure, fixture::register);
+        var aliceTask = UUID.randomUUID().toString();
+        var bobTask = UUID.randomUUID().toString();
+        try (var alice = signedIn(ALICE);
+                var bob = signedIn(BOB)) {
+            assertThat(alice.post(start(1, aliceTask))).isSuccess().hasResultType("task");
+            assertThat(bob.post(start(1, bobTask))).isSuccess().hasResultType("task");
+            try (var aliceStream = alice.openPostStream(null, listen(aliceTask));
+                    var bobStream = bob.openPostStream(null, listen(aliceTask, bobTask))) {
+                var aliceAck = aliceStream.await(TaskOwnerBindingTest::isAcknowledgement, ofSeconds(5));
+                var bobAck = bobStream.await(TaskOwnerBindingTest::isAcknowledgement, ofSeconds(5));
+                assertThat(aliceAck.data()).contains(aliceTask);
+                assertThat(bobAck.data()).contains(bobTask).doesNotContain(aliceTask);
+
+                assertThat(tasks(server).remove(aliceTask)).isTrue();
+                assertThat(tasks(server).remove(bobTask)).isTrue();
+                var republished = tasks(server).publish(TaskSnapshot.working(aliceTask, CREATED_AT, 2));
+                tasks(server).publish(TaskSnapshot.working(bobTask, CREATED_AT, 2));
+
+                assertThat(republished.ownerKey())
+                        .as("the server no longer knows the owner")
+                        .isNull();
+                aliceStream.await(frame -> isTaskNotification(frame, aliceTask), ofSeconds(5));
+                bobStream.await(frame -> isTaskNotification(frame, bobTask), ofSeconds(5));
+                assertThat(bobStream.received(frame -> isTaskNotification(frame, aliceTask)))
+                        .as("a stream refused the task when it opened never follows it")
+                        .isEmpty();
+            }
+        }
+    }
+
     @Test
     void aReadBeforeTheCreatorsToolReturnsDoesNotMakeTheTaskUnowned() throws Exception {
         var taskId = UUID.randomUUID().toString();
@@ -170,8 +262,7 @@ class TaskOwnerBindingTest extends AbstractStatelessMcpE2eTest<McpClient> {
     }
 
     /**
-     * Task bindings live in this process only, so a clustered or restarted server leaves a task to its
-     * connector, which authorizes from {@code ctx.securityContext()}. Every path must hand it the
+     * A connector may authorize from {@code ctx.securityContext()} too. Every path must hand it the
      * caller of the request being served: not the creator, not anonymous.
      */
     @Test
@@ -193,10 +284,13 @@ class TaskOwnerBindingTest extends AbstractStatelessMcpE2eTest<McpClient> {
             }
 
             assertThat(fixture.connectorCalls())
+                    .as("a task not cached as owned is read for its owner before an update or a cancel")
                     .containsExactly(
                             "get:" + taskId + ":alice",
                             "get:" + taskId + ":bob",
+                            "get:" + taskId + ":alice",
                             "update:" + taskId + ":alice",
+                            "get:" + taskId + ":bob",
                             "cancel:" + taskId + ":bob",
                             "get:" + taskId + ":bob");
         }

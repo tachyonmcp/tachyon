@@ -2,8 +2,8 @@
 title: Netty pipeline
 tags: [concept, transport, netty]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/http/]
-updated: 2026-11-11
-commit: 71d4fdb7
+updated: 2026-11-12
+commit: f930ddf6
 ---
 
 # 🧪 Netty pipeline

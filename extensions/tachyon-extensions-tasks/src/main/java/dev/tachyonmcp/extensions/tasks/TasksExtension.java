@@ -174,6 +174,7 @@ public final class TasksExtension implements ConfigurableExtension<TasksExtensio
         private Duration keepAlive = DEFAULT_KEEP_ALIVE;
         private @Nullable Duration pollInterval;
         private Duration resultPollInterval = TaskEngineSettings.DEFAULT_RESULT_POLL_INTERVAL;
+        private boolean shareUnownedTasks;
 
         Builder() {}
 
@@ -248,6 +249,22 @@ public final class TasksExtension implements ConfigurableExtension<TasksExtensio
         }
 
         /**
+         * Sets whether every caller reaches a task nobody owns: a snapshot with no {@link
+         * dev.tachyonmcp.api.server.features.tasks.TaskSnapshot#ownerKey() ownerKey}, such as one
+         * started outside a tool call or published by the application without one. Default is
+         * {@code false}: only anonymous callers reach it, so a server without authentication is
+         * unaffected and an authenticated caller sees only its own tasks. A task with an owner is
+         * never shared.
+         *
+         * @param shareUnownedTasks whether every caller reaches a task nobody owns
+         * @return this builder
+         */
+        public Builder shareUnownedTasks(boolean shareUnownedTasks) {
+            this.shareUnownedTasks = shareUnownedTasks;
+            return this;
+        }
+
+        /**
          * Creates the extension.
          *
          * @return a new extension
@@ -259,8 +276,8 @@ public final class TasksExtension implements ConfigurableExtension<TasksExtensio
             if (connector == null) {
                 throw new IllegalStateException("TasksExtension requires a TaskConnector");
             }
-            return new TasksExtension(
-                    new TaskEngineSettings(connector, pageSize, keepAlive, pollInterval, resultPollInterval));
+            return new TasksExtension(new TaskEngineSettings(
+                    connector, pageSize, keepAlive, pollInterval, resultPollInterval, shareUnownedTasks));
         }
     }
 }

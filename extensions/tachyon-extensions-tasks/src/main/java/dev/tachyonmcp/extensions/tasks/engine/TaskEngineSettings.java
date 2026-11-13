@@ -19,13 +19,16 @@ import org.jspecify.annotations.Nullable;
  *                     suggest none when a snapshot omits one
  * @param resultPollInterval wait between {@code get} calls while awaiting a result without a
  *                     connector {@code awaitResult}, when the snapshot suggests no {@code pollInterval}
+ * @param shareUnownedTasks whether every caller reaches a task nobody owns; otherwise only anonymous
+ *                     callers do
  */
 public record TaskEngineSettings(
         TaskConnector connector,
         int pageSize,
         Duration keepAlive,
         @Nullable Duration pollInterval,
-        @LegacyApi Duration resultPollInterval) {
+        @LegacyApi Duration resultPollInterval,
+        boolean shareUnownedTasks) {
 
     /** Default retention window for a terminal task's cached result. */
     public static final Duration DEFAULT_KEEP_ALIVE = Duration.ofMinutes(5);

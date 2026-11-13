@@ -110,6 +110,91 @@ class TaskOwnerBindingTest extends AbstractStatefulMcpE2eTest {
         }
     }
 
+    /**
+     * The owner travels with the stored task, so a server that has never seen it (restarted, or
+     * another node on the same connector) still refuses everyone but its owner.
+     */
+    @Test
+    void aRestartedServerStillHidesTheTaskFromAnotherCaller() throws Exception {
+        var taskId = UUID.randomUUID().toString();
+        var unknownId = UUID.randomUUID().toString();
+        try (var alice = signedIn(ALICE)) {
+            assertThatJson(alice.sendRpc(start(2, taskId)).body())
+                    .inPath("$.result.task.taskId")
+                    .isEqualTo(taskId);
+        }
+
+        stopServer();
+        startServer(fixture::configure, fixture::register);
+
+        try (var alice = signedIn(ALICE);
+                var bob = signedIn(BOB)) {
+            for (var method : List.of("tasks/get", "tasks/result", "tasks/cancel")) {
+                var denied = bob.sendRpc(call(3, method, taskId));
+                var unknown = bob.sendRpc(call(3, method, unknownId));
+
+                assertThatResponse(denied)
+                        .as(method)
+                        .isJsonRpcError()
+                        .hasErrorCode(-32602)
+                        .hasErrorMessageContaining("Task not found");
+                assertThat(denied.body())
+                        .as("%s: the refusal reads like an unknown id", method)
+                        .isEqualTo(unknown.body());
+            }
+            assertThatJson(bob.sendRpc(call(4, "tasks/list", "-")).body())
+                    .inPath("$.result.tasks")
+                    .isArray()
+                    .isEmpty();
+            assertThat(fixture.connectorCalls())
+                    .as("bob's cancel and result never ran")
+                    .noneMatch(call -> call.equals("cancel:" + taskId + ":bob"))
+                    .noneMatch(call -> call.equals("awaitResult:" + taskId + ":bob"));
+
+            var aliceGet = alice.sendRpc(call(5, "tasks/get", taskId));
+            assertThatJson(aliceGet.body()).inPath("$.result.taskId").isEqualTo(taskId);
+            assertThat(aliceGet.body()).as("the owner never goes on the wire").doesNotContain("alice");
+            assertThatJson(alice.sendRpc(call(6, "tasks/list", "-")).body())
+                    .inPath("$.result.tasks[*].taskId")
+                    .isArray()
+                    .containsExactly(taskId);
+        }
+    }
+
+    @Test
+    void aTaskNobodyOwnsIsHiddenFromEverySignedInCallerByDefault() throws Exception {
+        stopServer();
+        fixture = new OwnedTasksFixture(false);
+        startServer(fixture::configure, fixture::register);
+        var taskId = UUID.randomUUID().toString();
+        fixture.startExternally(TaskSnapshot.working(taskId, CREATED_AT, 1));
+        try (var alice = signedIn(ALICE);
+                var bob = signedIn(BOB)) {
+            for (var caller : List.of(alice, bob)) {
+                for (var method : List.of("tasks/get", "tasks/result", "tasks/cancel")) {
+                    assertThatResponse(caller.sendRpc(call(3, method, taskId)))
+                            .as(method)
+                            .isJsonRpcError()
+                            .hasErrorCode(-32602)
+                            .hasErrorMessageContaining("Task not found");
+                }
+                assertThatJson(caller.sendRpc(call(4, "tasks/list", "-")).body())
+                        .inPath("$.result.tasks")
+                        .isArray()
+                        .isEmpty();
+            }
+            assertThat(fixture.connectorCalls())
+                    .as("no cancel or result reached the connector for a task nobody may reach")
+                    .noneMatch(call -> call.startsWith("cancel:") || call.startsWith("awaitResult:"));
+
+            var created = UUID.randomUUID().toString();
+            alice.sendRpc(start(5, created));
+            assertThatJson(alice.sendRpc(call(6, "tasks/get", created)).body())
+                    .inPath("$.result.taskId")
+                    .isEqualTo(created);
+        }
+    }
+
     @Test
     void theOwnerReachesItsTaskFromAnotherSession() throws Exception {
         var taskId = UUID.randomUUID().toString();
@@ -146,8 +231,7 @@ class TaskOwnerBindingTest extends AbstractStatefulMcpE2eTest {
     }
 
     /**
-     * Task bindings live in this process only, so a clustered or restarted server leaves a task to its
-     * connector, which authorizes from {@code ctx.securityContext()}. Every path must hand it the
+     * A connector may authorize from {@code ctx.securityContext()} too. Every path must hand it the
      * caller of the request being served: not the creator, not anonymous.
      */
     @Test
@@ -167,10 +251,13 @@ class TaskOwnerBindingTest extends AbstractStatefulMcpE2eTest {
                     """);
 
             assertThat(fixture.connectorCalls())
+                    .as("a task not cached as owned is read for its owner before a result or a cancel")
                     .containsExactly(
                             "get:" + working + ":alice",
                             "get:" + working + ":bob",
+                            "get:" + done + ":alice",
                             "awaitResult:" + done + ":alice",
+                            "get:" + working + ":bob",
                             "get:" + working + ":bob",
                             "cancel:" + working + ":bob",
                             "get:" + working + ":bob",
