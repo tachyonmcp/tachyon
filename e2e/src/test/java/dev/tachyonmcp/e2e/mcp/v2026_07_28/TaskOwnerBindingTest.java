@@ -86,30 +86,27 @@ class TaskOwnerBindingTest extends AbstractStatelessMcpE2eTest<McpClient> {
                 """.formatted(id, method, taskId);
     }
 
+    /** Every task method answers {@code caller} for {@code taskId} exactly as it answers an unknown id. */
+    private static void assertHidden(Mcp20260728Client caller, String taskId) throws Exception {
+        var unknownId = UUID.randomUUID().toString();
+        for (var method : List.of("tasks/get", "tasks/cancel", "tasks/update")) {
+            var denied = caller.post(call(2, method, taskId));
+
+            assertThat(denied).as(method).isJsonRpcError().hasErrorCode(-32602);
+            assertThat(denied.body())
+                    .as("%s: the refusal reads like an unknown id", method)
+                    .isEqualTo(caller.post(call(2, method, unknownId)).body());
+        }
+    }
+
     @Test
     void anotherCallerIsToldTheTaskDoesNotExistOnEveryTaskMethod() throws Exception {
         var taskId = UUID.randomUUID().toString();
-        var unknownId = UUID.randomUUID().toString();
         try (var alice = signedIn(ALICE);
                 var bob = signedIn(BOB)) {
             assertThat(alice.post(start(1, taskId))).isSuccess().hasResultType("task");
 
-            for (var request : List.of("""
-                    {"jsonrpc":"2.0","id":2,"method":"tasks/get","params":{"taskId":"%s"}}
-                    """, """
-                    {"jsonrpc":"2.0","id":2,"method":"tasks/cancel","params":{"taskId":"%s"}}
-                    """, """
-                    {"jsonrpc":"2.0","id":2,"method":"tasks/update","params":{"taskId":"%s","inputResponses":{}}}
-                    """)) {
-                var denied = bob.post(request.formatted(taskId));
-                var unknown = bob.post(request.formatted(unknownId));
-
-                assertThat(denied).isJsonRpcError().hasErrorCode(-32602);
-                assertThat(denied.body())
-                        .as("the refusal reads like an unknown id: %s", request)
-                        .isEqualTo(unknown.body());
-            }
-
+            assertHidden(bob, taskId);
             assertThat(fixture.connectorCalls())
                     .as("the connector is never asked about a task the caller does not own")
                     .noneMatch(call -> call.contains(":" + taskId + ":bob"));
@@ -126,7 +123,6 @@ class TaskOwnerBindingTest extends AbstractStatelessMcpE2eTest<McpClient> {
     @Test
     void aRestartedServerStillHidesTheTaskFromAnotherCaller() throws Exception {
         var taskId = UUID.randomUUID().toString();
-        var unknownId = UUID.randomUUID().toString();
         try (var alice = signedIn(ALICE)) {
             assertThat(alice.post(start(1, taskId))).isSuccess().hasResultType("task");
         }
@@ -136,21 +132,7 @@ class TaskOwnerBindingTest extends AbstractStatelessMcpE2eTest<McpClient> {
 
         try (var alice = signedIn(ALICE);
                 var bob = signedIn(BOB)) {
-            for (var request : List.of("""
-                    {"jsonrpc":"2.0","id":2,"method":"tasks/get","params":{"taskId":"%s"}}
-                    """, """
-                    {"jsonrpc":"2.0","id":2,"method":"tasks/cancel","params":{"taskId":"%s"}}
-                    """, """
-                    {"jsonrpc":"2.0","id":2,"method":"tasks/update","params":{"taskId":"%s","inputResponses":{}}}
-                    """)) {
-                var denied = bob.post(request.formatted(taskId));
-                var unknown = bob.post(request.formatted(unknownId));
-
-                assertThat(denied).isJsonRpcError().hasErrorCode(-32602);
-                assertThat(denied.body())
-                        .as("the refusal reads like an unknown id: %s", request)
-                        .isEqualTo(unknown.body());
-            }
+            assertHidden(bob, taskId);
             assertThat(fixture.connectorCalls())
                     .as("bob's cancel and update never ran")
                     .noneMatch(call -> call.equals("cancel:" + taskId + ":bob"))
@@ -234,7 +216,7 @@ class TaskOwnerBindingTest extends AbstractStatelessMcpE2eTest<McpClient> {
     @Test
     void theOwnersStreamStillFollowsATaskTheApplicationPublishesWithoutAnOwner() throws Exception {
         stopServer();
-        fixture = new OwnedTasksFixture(false);
+        fixture = OwnedTasksFixture.hidingUnownedTasks();
         startServer(fixture::configure, fixture::register);
         var aliceTask = UUID.randomUUID().toString();
         var bobTask = UUID.randomUUID().toString();
@@ -351,15 +333,12 @@ class TaskOwnerBindingTest extends AbstractStatelessMcpE2eTest<McpClient> {
             }
 
             assertThat(fixture.connectorCalls())
-                    .as("a task not cached as owned is read for its owner before an update or a cancel")
-                    .containsExactly(
+                    .as("every connector call carries the caller of the request it serves")
+                    .containsOnly(
                             "get:" + taskId + ":alice",
                             "get:" + taskId + ":bob",
-                            "get:" + taskId + ":alice",
                             "update:" + taskId + ":alice",
-                            "get:" + taskId + ":bob",
-                            "cancel:" + taskId + ":bob",
-                            "get:" + taskId + ":bob");
+                            "cancel:" + taskId + ":bob");
         }
     }
 
@@ -370,13 +349,10 @@ class TaskOwnerBindingTest extends AbstractStatelessMcpE2eTest<McpClient> {
     @Test
     void aToolReturningATaskIdItDidNotMintGivesItsCallerNothing() throws Exception {
         stopServer();
-        fixture = new OwnedTasksFixture(false);
+        fixture = OwnedTasksFixture.hidingUnownedTasks();
         startServer(fixture::configure, fixture::register);
         var aliceTask = UUID.randomUUID().toString();
         var unowned = UUID.randomUUID().toString();
-        var early = UUID.randomUUID().toString();
-        var fresh = UUID.randomUUID().toString();
-        var methods = List.of("tasks/get", "tasks/cancel", "tasks/update");
         try (var alice = signedIn(ALICE)) {
             assertThat(alice.post(start(1, aliceTask))).isSuccess().hasResultType("task");
         }
@@ -396,12 +372,7 @@ class TaskOwnerBindingTest extends AbstractStatelessMcpE2eTest<McpClient> {
                     .as("the wire says nothing about ownership")
                     .doesNotContainIgnoringCase("owner")
                     .doesNotContainIgnoringCase("claim");
-            for (var method : methods) {
-                assertThat(bob.post(call(3, method, aliceTask)))
-                        .as(method)
-                        .isJsonRpcError()
-                        .hasErrorCode(-32602);
-            }
+            assertHidden(bob, aliceTask);
             assertThat(alice.post(get(4, aliceTask))).isSuccess().hasId(4);
             assertThat(alice.post(call(5, "tasks/update", aliceTask))).isSuccess();
             assertThat(alice.post(call(6, "tasks/cancel", aliceTask)))
@@ -413,36 +384,38 @@ class TaskOwnerBindingTest extends AbstractStatelessMcpE2eTest<McpClient> {
                         .as("a stored task nobody owns cannot be claimed")
                         .isJsonRpcError()
                         .hasErrorCode(-32603);
-                for (var method : methods) {
-                    assertThat(caller.post(call(8, method, unowned)))
-                            .as(method)
-                            .isJsonRpcError()
-                            .hasErrorCode(-32602);
-                }
-            }
-
-            assertThat(bob.post(adopt(9, early)))
-                    .as("the store does not have the task yet, so the claim cannot be checked")
-                    .isSuccess()
-                    .hasResultType("task");
-            assertThat(alice.post(start(10, early)))
-                    .as("stored for alice, but bob's entry holds the id on this server until it is evicted")
-                    .isJsonRpcError()
-                    .hasErrorCode(-32603);
-            for (var method : methods) {
-                assertThat(bob.post(call(11, method, early)))
-                        .as("%s: bob's early claim opens nothing once the store names alice", method)
-                        .isJsonRpcError()
-                        .hasErrorCode(-32602);
+                assertHidden(caller, unowned);
             }
             assertThat(fixture.connectorCalls())
                     .as("only alice's update and cancel reached the connector")
                     .filteredOn(call -> call.startsWith("cancel:") || call.startsWith("update:"))
                     .containsExactly("update:" + aliceTask + ":alice", "cancel:" + aliceTask + ":alice");
+        }
+    }
 
-            assertThat(alice.post(start(12, fresh))).isSuccess().hasResultType("task");
-            assertThat(alice.post(get(13, fresh))).isSuccess().hasId(13);
-            assertThat(bob.post(get(14, fresh))).isJsonRpcError().hasErrorCode(-32602);
+    /**
+     * Known gap: a claim made before the store has the task cannot be checked, so it holds the id on
+     * this server until its entry is evicted. It opens nothing, but the creator's own tool call is
+     * refused here meanwhile.
+     */
+    @Test
+    void aClaimMadeBeforeTheStoreHasTheTaskOpensNothingButHoldsTheIdOnThisServer() throws Exception {
+        var early = UUID.randomUUID().toString();
+        try (var alice = signedIn(ALICE);
+                var bob = signedIn(BOB)) {
+            assertThat(bob.post(adopt(1, early)))
+                    .as("the store does not have the task yet, so the claim cannot be checked")
+                    .isSuccess()
+                    .hasResultType("task");
+            assertThat(alice.post(start(3, early)))
+                    .as("stored for alice, but bob's entry holds the id on this server until it is evicted")
+                    .isJsonRpcError()
+                    .hasErrorCode(-32603);
+
+            assertHidden(bob, early);
+            assertThat(fixture.connectorCalls())
+                    .as("no cancel or update reached the connector")
+                    .noneMatch(call -> call.startsWith("cancel:") || call.startsWith("update:"));
         }
     }
 

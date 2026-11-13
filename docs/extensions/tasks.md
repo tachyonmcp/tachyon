@@ -195,9 +195,7 @@ stamps it on the snapshot your tool returns. **Store it with the job and return 
 connector**: the store names the owner. Tachyon reads the task from your connector on every task
 request and refuses everyone but the owner it returns, so the rule holds after a restart and on every
 node that shares the connector. What one node remembers about a task can refuse a caller, never
-admit one. On a server with authentication a connector that does not return the owner leaves the
-task unowned: nobody reaches it, its creator included, and the tool call that returns it fails with
-`Internal error`. Stamp the owner yourself when the tool starts the job, from the caller's context:
+admit one. Stamp the owner yourself when the tool starts the job, from the caller's context:
 
 ```java
 var snapshot = TaskSnapshot.builder()
@@ -218,6 +216,9 @@ A task is in one of three states:
 | public | `TaskSnapshot.PUBLIC_OWNER_KEY` (`"<public>"`) | every caller |
 | unowned | none (`null`) | nobody on a server with authentication; every caller on a server without it, or with `shareUnownedTasks(true)` |
 
+- **Your connector must return the owner.** On a server with authentication, a connector that does
+  not return `ownerKey` leaves the task unowned: nobody reaches it, its creator included, and the
+  tool call that returns it fails with `Internal error`.
 - **An anonymous caller's task is public.** A task an unauthenticated caller creates gets
   `TaskSnapshot.PUBLIC_OWNER_KEY` as its owner, and every caller reaches it, signed in or not. Store
   and return it like any other owner. A caller that is signed in cannot create a public task from a

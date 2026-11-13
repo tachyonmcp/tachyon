@@ -39,21 +39,17 @@ public final class OwnedTasksFixture {
 
     /** A fixture whose server shares tasks nobody owns with every caller, so tests can reach them. */
     public OwnedTasksFixture() {
-        this(true);
-    }
-
-    /**
-     * A fixture whose server shares tasks nobody owns, or keeps them from every caller.
-     *
-     * @param shareUnownedTasks whether every caller reaches a task nobody owns
-     */
-    public OwnedTasksFixture(boolean shareUnownedTasks) {
-        this(shareUnownedTasks, false);
+        this(true, false);
     }
 
     private OwnedTasksFixture(boolean shareUnownedTasks, boolean admitsAnonymous) {
         this.shareUnownedTasks = shareUnownedTasks;
         this.admitsAnonymous = admitsAnonymous;
+    }
+
+    /** A fixture whose server keeps tasks nobody owns from every caller. */
+    public static OwnedTasksFixture hidingUnownedTasks() {
+        return new OwnedTasksFixture(false, false);
     }
 
     /**
