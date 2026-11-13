@@ -64,11 +64,26 @@ class TaskOwnerBindingTest extends AbstractStatelessMcpE2eTest<McpClient> {
     }
 
     private static String start(int id, String taskId) {
+        return tool(id, "start", taskId);
+    }
+
+    private static String adopt(int id, String taskId) {
+        return tool(id, "adopt", taskId);
+    }
+
+    private static String tool(int id, String name, String taskId) {
         // language=JSON
         return """
                 {"jsonrpc":"2.0","id":%d,"method":"tools/call","params":{
-                  "name":"start","arguments":{"taskId":"%s"}}}
-                """.formatted(id, taskId);
+                  "name":"%s","arguments":{"taskId":"%s"}}}
+                """.formatted(id, name, taskId);
+    }
+
+    private static String call(int id, String method, String taskId) {
+        // language=JSON
+        return """
+                {"jsonrpc":"2.0","id":%d,"method":"%s","params":{"taskId":"%s","inputResponses":{}}}
+                """.formatted(id, method, taskId);
     }
 
     @Test
@@ -345,6 +360,108 @@ class TaskOwnerBindingTest extends AbstractStatelessMcpE2eTest<McpClient> {
                             "get:" + taskId + ":bob",
                             "cancel:" + taskId + ":bob",
                             "get:" + taskId + ":bob");
+        }
+    }
+
+    /**
+     * The store names the owner: what this server remembers may refuse a caller, never admit one. A
+     * tool that returns a task id it did not mint gives its caller nothing.
+     */
+    @Test
+    void aToolReturningATaskIdItDidNotMintGivesItsCallerNothing() throws Exception {
+        stopServer();
+        fixture = new OwnedTasksFixture(false);
+        startServer(fixture::configure, fixture::register);
+        var aliceTask = UUID.randomUUID().toString();
+        var unowned = UUID.randomUUID().toString();
+        var early = UUID.randomUUID().toString();
+        var fresh = UUID.randomUUID().toString();
+        var methods = List.of("tasks/get", "tasks/cancel", "tasks/update");
+        try (var alice = signedIn(ALICE)) {
+            assertThat(alice.post(start(1, aliceTask))).isSuccess().hasResultType("task");
+        }
+
+        stopServer();
+        startServer(fixture::configure, fixture::register);
+        fixture.startExternally(TaskSnapshot.working(unowned, CREATED_AT, 1));
+
+        try (var alice = signedIn(ALICE);
+                var bob = signedIn(BOB)) {
+            var refused = bob.post(adopt(2, aliceTask));
+            assertThat(refused)
+                    .as("the store has the task for alice")
+                    .isJsonRpcError()
+                    .hasErrorCode(-32603);
+            assertThat(refused.body())
+                    .as("the wire says nothing about ownership")
+                    .doesNotContainIgnoringCase("owner")
+                    .doesNotContainIgnoringCase("claim");
+            for (var method : methods) {
+                assertThat(bob.post(call(3, method, aliceTask)))
+                        .as(method)
+                        .isJsonRpcError()
+                        .hasErrorCode(-32602);
+            }
+            assertThat(alice.post(get(4, aliceTask))).isSuccess().hasId(4);
+            assertThat(alice.post(call(5, "tasks/update", aliceTask))).isSuccess();
+            assertThat(alice.post(call(6, "tasks/cancel", aliceTask)))
+                    .as("the owner still reaches, updates and cancels its task")
+                    .isSuccess();
+
+            for (var caller : List.of(alice, bob)) {
+                assertThat(caller.post(adopt(7, unowned)))
+                        .as("a stored task nobody owns cannot be claimed")
+                        .isJsonRpcError()
+                        .hasErrorCode(-32603);
+                for (var method : methods) {
+                    assertThat(caller.post(call(8, method, unowned)))
+                            .as(method)
+                            .isJsonRpcError()
+                            .hasErrorCode(-32602);
+                }
+            }
+
+            assertThat(bob.post(adopt(9, early)))
+                    .as("the store does not have the task yet, so the claim cannot be checked")
+                    .isSuccess()
+                    .hasResultType("task");
+            assertThat(alice.post(start(10, early)))
+                    .as("stored for alice, but bob's entry holds the id on this server until it is evicted")
+                    .isJsonRpcError()
+                    .hasErrorCode(-32603);
+            for (var method : methods) {
+                assertThat(bob.post(call(11, method, early)))
+                        .as("%s: bob's early claim opens nothing once the store names alice", method)
+                        .isJsonRpcError()
+                        .hasErrorCode(-32602);
+            }
+            assertThat(fixture.connectorCalls())
+                    .as("only alice's update and cancel reached the connector")
+                    .filteredOn(call -> call.startsWith("cancel:") || call.startsWith("update:"))
+                    .containsExactly("update:" + aliceTask + ":alice", "cancel:" + aliceTask + ":alice");
+
+            assertThat(alice.post(start(12, fresh))).isSuccess().hasResultType("task");
+            assertThat(alice.post(get(13, fresh))).isSuccess().hasId(13);
+            assertThat(bob.post(get(14, fresh))).isJsonRpcError().hasErrorCode(-32602);
+        }
+    }
+
+    /** A store that keeps no owner, on a server that shares tasks nobody owns: creation still works. */
+    @Test
+    void aStoreThatKeepsNoOwnerStillLetsATaskBeCreatedWhereUnownedTasksAreShared() throws Exception {
+        var taskId = UUID.randomUUID().toString();
+        fixture.startExternally(TaskSnapshot.working(taskId, CREATED_AT, 1));
+        try (var alice = signedIn(ALICE);
+                var bob = signedIn(BOB)) {
+            assertThat(alice.post(adopt(1, taskId))).isSuccess().hasResultType("task");
+
+            assertThat(alice.post(get(2, taskId))).isSuccess().hasId(2);
+            assertThat(alice.post(call(3, "tasks/update", taskId))).isSuccess();
+            assertThat(alice.post(call(4, "tasks/cancel", taskId))).isSuccess();
+            assertThat(bob.post(get(5, taskId)))
+                    .as("this server remembers alice created it")
+                    .isJsonRpcError()
+                    .hasErrorCode(-32602);
         }
     }
 

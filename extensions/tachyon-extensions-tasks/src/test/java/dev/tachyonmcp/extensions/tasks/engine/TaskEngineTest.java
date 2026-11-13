@@ -28,7 +28,9 @@ class TaskEngineTest {
     private final TaskEngine registry = new TaskEngine(
             new TaskEngineSettings(
                     TaskConnector.builder()
-                            .get((ctx, request) -> null)
+                            .get((ctx, request) -> {
+                                throw new TaskNotFoundException(request.taskId());
+                            })
                             .cancel((ctx, request) -> {})
                             .update((ctx, request) -> {})
                             .build(),

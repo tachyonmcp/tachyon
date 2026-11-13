@@ -266,6 +266,10 @@ public final class TasksExtension implements ConfigurableExtension<TasksExtensio
          * authentication always shares it. A task an anonymous caller creates is not unowned but
          * {@link TaskSnapshot#PUBLIC_OWNER_KEY public}, and a task with an owner is never shared.
          *
+         * <p>The connector's snapshot names the owner. With the default, a connector on a server with
+         * authentication must return the {@code ownerKey} each task was created with: a task it
+         * returns without one reaches nobody, its creator included, and a tool cannot create it.
+         *
          * @param shareUnownedTasks whether every caller reaches a task nobody owns
          * @return this builder
          */

@@ -43,11 +43,19 @@ class TaskOwnerBindingTest extends AbstractStatefulMcpE2eTest {
     }
 
     private static String start(int id, String taskId) {
+        return tool(id, "start", taskId);
+    }
+
+    private static String adopt(int id, String taskId) {
+        return tool(id, "adopt", taskId);
+    }
+
+    private static String tool(int id, String name, String taskId) {
         // language=JSON
         return """
                 {"jsonrpc":"2.0","id":%d,"method":"tools/call","params":{
-                  "name":"start","arguments":{"taskId":"%s"},"task":{}}}
-                """.formatted(id, taskId);
+                  "name":"%s","arguments":{"taskId":"%s"},"task":{}}}
+                """.formatted(id, name, taskId);
     }
 
     private static String call(int id, String method, String taskId) {
@@ -279,7 +287,9 @@ class TaskOwnerBindingTest extends AbstractStatefulMcpE2eTest {
             var fromOtherSession = second.sendRpc(call(3, "tasks/get", taskId));
 
             assertThatJson(fromOtherSession.body()).inPath("$.result.taskId").isEqualTo(taskId);
-            assertThat(fixture.connectorCalls()).containsExactly("get:" + taskId + ":alice");
+            assertThat(fixture.connectorCalls())
+                    .as("the stored owner is read once when the task is created, then for the get")
+                    .containsExactly("get:" + taskId + ":alice", "get:" + taskId + ":alice");
         }
     }
 
@@ -336,6 +346,127 @@ class TaskOwnerBindingTest extends AbstractStatefulMcpE2eTest {
                             "cancel:" + working + ":bob",
                             "get:" + working + ":bob",
                             "list:-:alice");
+        }
+    }
+
+    /**
+     * The store names the owner: what this server remembers may refuse a caller, never admit one. A
+     * tool that returns a task id it did not mint gives its caller nothing.
+     */
+    @Test
+    void aToolReturningATaskIdItDidNotMintGivesItsCallerNothing() throws Exception {
+        stopServer();
+        fixture = new OwnedTasksFixture(false);
+        startServer(fixture::configure, fixture::register);
+        var aliceTask = UUID.randomUUID().toString();
+        var unowned = UUID.randomUUID().toString();
+        var early = UUID.randomUUID().toString();
+        var fresh = UUID.randomUUID().toString();
+        try (var alice = signedIn(ALICE)) {
+            assertThatJson(alice.sendRpc(start(2, aliceTask)).body())
+                    .inPath("$.result.task.taskId")
+                    .isEqualTo(aliceTask);
+        }
+
+        stopServer();
+        startServer(fixture::configure, fixture::register);
+        fixture.startExternally(TaskSnapshot.working(unowned, CREATED_AT, 1));
+
+        try (var alice = signedIn(ALICE);
+                var bob = signedIn(BOB)) {
+            var refused = bob.sendRpc(adopt(2, aliceTask));
+            assertThatResponse(refused)
+                    .as("the store has the task for alice")
+                    .isJsonRpcError()
+                    .hasErrorCode(-32603);
+            assertThat(refused.body())
+                    .as("the wire says nothing about ownership")
+                    .doesNotContainIgnoringCase("owner")
+                    .doesNotContainIgnoringCase("claim");
+            for (var method : List.of("tasks/get", "tasks/result", "tasks/cancel")) {
+                assertThatResponse(bob.sendRpc(call(3, method, aliceTask)))
+                        .as(method)
+                        .isJsonRpcError()
+                        .hasErrorCode(-32602)
+                        .hasErrorMessageContaining("Task not found");
+            }
+            assertThatJson(alice.sendRpc(call(4, "tasks/get", aliceTask)).body())
+                    .inPath("$.result.status")
+                    .isEqualTo("working");
+            assertThatJson(alice.sendRpc(call(5, "tasks/cancel", aliceTask)).body())
+                    .as("the owner still reaches and cancels its task")
+                    .inPath("$.result.status")
+                    .isEqualTo("cancelled");
+
+            for (var caller : List.of(alice, bob)) {
+                assertThatResponse(caller.sendRpc(adopt(6, unowned)))
+                        .as("a stored task nobody owns cannot be claimed")
+                        .isJsonRpcError()
+                        .hasErrorCode(-32603);
+                for (var method : List.of("tasks/get", "tasks/result", "tasks/cancel")) {
+                    assertThatResponse(caller.sendRpc(call(7, method, unowned)))
+                            .as(method)
+                            .isJsonRpcError()
+                            .hasErrorCode(-32602)
+                            .hasErrorMessageContaining("Task not found");
+                }
+            }
+
+            assertThatJson(bob.sendRpc(adopt(8, early)).body())
+                    .as("the store does not have the task yet, so the claim cannot be checked")
+                    .inPath("$.result.task.taskId")
+                    .isEqualTo(early);
+            assertThatResponse(alice.sendRpc(start(9, early)))
+                    .as("stored for alice, but bob's entry holds the id on this server until it is evicted")
+                    .isJsonRpcError()
+                    .hasErrorCode(-32603);
+            for (var method : List.of("tasks/get", "tasks/result", "tasks/cancel")) {
+                assertThatResponse(bob.sendRpc(call(10, method, early)))
+                        .as("%s: bob's early claim opens nothing once the store names alice", method)
+                        .isJsonRpcError()
+                        .hasErrorCode(-32602)
+                        .hasErrorMessageContaining("Task not found");
+            }
+            assertThat(fixture.connectorCalls())
+                    .as("no cancel or result of bob's reached the connector")
+                    .noneMatch(call -> call.startsWith("cancel:") && call.endsWith(":bob"))
+                    .noneMatch(call -> call.startsWith("awaitResult:") && call.endsWith(":bob"));
+
+            assertThatJson(alice.sendRpc(start(11, fresh)).body())
+                    .inPath("$.result.task.taskId")
+                    .isEqualTo(fresh);
+            assertThatJson(alice.sendRpc(call(12, "tasks/get", fresh)).body())
+                    .inPath("$.result.taskId")
+                    .isEqualTo(fresh);
+            assertThatResponse(bob.sendRpc(call(13, "tasks/get", fresh)))
+                    .isJsonRpcError()
+                    .hasErrorCode(-32602)
+                    .hasErrorMessageContaining("Task not found");
+        }
+    }
+
+    /** A store that keeps no owner, on a server that shares tasks nobody owns: creation still works. */
+    @Test
+    void aStoreThatKeepsNoOwnerStillLetsATaskBeCreatedWhereUnownedTasksAreShared() throws Exception {
+        var taskId = UUID.randomUUID().toString();
+        fixture.startExternally(TaskSnapshot.working(taskId, CREATED_AT, 1));
+        try (var alice = signedIn(ALICE);
+                var bob = signedIn(BOB)) {
+            assertThatJson(alice.sendRpc(adopt(2, taskId)).body())
+                    .inPath("$.result.task.taskId")
+                    .isEqualTo(taskId);
+
+            assertThatJson(alice.sendRpc(call(3, "tasks/get", taskId)).body())
+                    .inPath("$.result.taskId")
+                    .isEqualTo(taskId);
+            assertThatJson(alice.sendRpc(call(4, "tasks/cancel", taskId)).body())
+                    .inPath("$.result.status")
+                    .isEqualTo("cancelled");
+            assertThatResponse(bob.sendRpc(call(5, "tasks/get", taskId)))
+                    .as("this server remembers alice created it")
+                    .isJsonRpcError()
+                    .hasErrorCode(-32602)
+                    .hasErrorMessageContaining("Task not found");
         }
     }
 

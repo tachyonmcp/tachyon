@@ -192,13 +192,12 @@ the authorization context.
 
 The owner is a field of the task, `TaskSnapshot#ownerKey()`, and never goes on the wire. Tachyon
 stamps it on the snapshot your tool returns. **Store it with the job and return it from your
-connector**, and the rule holds after the cached snapshot is evicted, after a restart, and on every
-node that shares the connector: Tachyon reads the owner from the connector's snapshot and refuses
-everyone else. A connector that does not return it leaves only what one node remembers: the owner of
-a task it has cached, and after eviction until the task's `ttl`. After a restart, on another node, or
-for a task without a `ttl`, such a task reads as unowned, and on a server with authentication
-nobody reaches an unowned task. Stamp the owner yourself when the tool starts the job, from the
-caller's context:
+connector**: the store names the owner. Tachyon reads the task from your connector on every task
+request and refuses everyone but the owner it returns, so the rule holds after a restart and on every
+node that shares the connector. What one node remembers about a task can refuse a caller, never
+admit one. On a server with authentication a connector that does not return the owner leaves the
+task unowned: nobody reaches it, its creator included, and the tool call that returns it fails with
+`Internal error`. Stamp the owner yourself when the tool starts the job, from the caller's context:
 
 ```java
 var snapshot = TaskSnapshot.builder()
@@ -247,8 +246,14 @@ A task is in one of three states:
   with `Internal error` and is logged, and `publish` with a snapshot naming another owner throws
   `IllegalStateException`. One exception: where every caller reaches unowned tasks anyway, an
   anonymous caller's tool may return a task you published unowned, and it becomes public.
-- **One extra read.** For a task whose owner Tachyon does not know, `tasks/cancel`, `tasks/update`
-  and `tasks/result` first call your connector's `get` to learn it.
+- **A tool returns only a task it created for its caller.** When a tool returns a task Tachyon does
+  not hold, Tachyon reads that id from your connector first. A task stored for another owner, or
+  stored without one on a server that hides unowned tasks, is refused: the tool call fails with
+  `Internal error` and is logged. An id your connector answers with `TaskNotFoundException` is new.
+  So a tool that takes a task id from its arguments cannot hand someone else's task to its caller.
+- **Extra reads.** `tasks/cancel`, `tasks/update` and `tasks/result` first call your connector's
+  `get` to check the owner, and so does a tool call that returns a task Tachyon does not hold. If
+  that `get` fails, the request fails.
 - **Streams.** A `subscriptions/listen` stream is authorized when it opens, by your connector's
   `get`. After that it receives every status that names its caller as owner, is public or names no
   owner, and never one that names someone else.

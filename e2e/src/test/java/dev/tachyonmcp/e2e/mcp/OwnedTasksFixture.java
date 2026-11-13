@@ -83,8 +83,17 @@ public final class OwnedTasksFixture {
                                 : bearer.authenticate(request));
     }
 
-    /** Registers {@code start}: it starts the task named by its {@code taskId} argument and returns it. */
+    /**
+     * Registers {@code start}: it starts the task named by its {@code taskId} argument and returns it;
+     * and {@code adopt}: it returns the task named by {@code taskId} without starting anything, as a
+     * tool that takes a task id from its caller would.
+     */
     public void register(TachyonServer server) {
+        server.tools()
+                .register(
+                        b -> b.name("adopt").taskSupport(TaskSupport.REQUIRED),
+                        (context, request) -> ToolResult.task(
+                                TaskSnapshot.working(request.arguments().stringOr("taskId", ""), CREATED_AT, 1)));
         server.tools().register(b -> b.name("start").taskSupport(TaskSupport.REQUIRED), (context, request) -> {
             var snapshot = TaskSnapshot.builder()
                     .from(TaskSnapshot.working(request.arguments().stringOr("taskId", ""), CREATED_AT, 1))

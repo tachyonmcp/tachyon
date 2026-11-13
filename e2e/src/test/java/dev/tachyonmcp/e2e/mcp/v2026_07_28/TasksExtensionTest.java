@@ -86,7 +86,9 @@ class TasksExtensionTest extends AbstractStatelessMcpE2eTest<McpClient> {
                       }
                     }
                   """);
-            assertThat(taskEngine.refreshedTaskIds()).containsExactly("workflow-1");
+            assertThat(taskEngine.refreshedTaskIds())
+                    .as("read for its stored owner when the tool returns the task, then by tasks/get")
+                    .containsExactly("workflow-1", "workflow-1");
         }
     }
 
