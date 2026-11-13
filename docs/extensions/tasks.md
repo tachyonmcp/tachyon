@@ -213,8 +213,9 @@ The [Temporal](#temporal) adapter does this for you: it keeps the owner in the W
 - **A task nobody owns reaches anonymous callers only.** A task an unauthenticated caller creates,
   one started outside a tool call, or one you publish through `TachyonServer#tasks().publish(...)`
   without an `ownerKey`, has no owner. An authenticated caller gets `Task not found` for it and
-  `tasks/list` leaves it out, so a connector that forgets the owner fails closed. A server without
-  authentication is unaffected: every caller is anonymous. To let every caller reach unowned tasks,
+  `tasks/list` leaves it out, so a connector that forgets the owner hides the task from authenticated
+  callers. Callers you let through as anonymous still reach it. A server without authentication is
+  unaffected: every caller is anonymous. To let every caller reach unowned tasks,
   as before 1.1, set `shareUnownedTasks(true)` on the extension builder (Kotlin:
   `shareUnownedTasks = true` in `tasks(connector) { }`). Without authentication the MCP spec's rule
   applies: the task id is a bearer capability. Generate it unguessable, e.g. a random

@@ -414,6 +414,42 @@ class TaskOwnershipTest {
     }
 
     @Test
+    void aTaskOwnedByTheTimeTheAwaitHookReturnsIsHandedToItsOwnerOnly() throws Exception {
+        var never = new CompletableFuture<Void>();
+        var adopting = new TaskEngine(
+                new TaskEngineSettings(
+                        TaskConnector.builder()
+                                .get((ctx, request) -> task(request.taskId(), TaskState.WORKING, 1, null))
+                                .cancel((ctx, request) -> {})
+                                .update((ctx, request) -> {})
+                                .awaitResult((ctx, request) -> owned(request.taskId(), TaskState.COMPLETED, 2, "alice"))
+                                .build(),
+                        Pagination.DEFAULT_PAGE_SIZE,
+                        KEEP_ALIVE,
+                        null,
+                        TaskEngineSettings.DEFAULT_RESULT_POLL_INTERVAL,
+                        true),
+                clock);
+        var connector = adopting.connector();
+
+        assertThat(connector.get().apply(bob, get("adopted")).ownerKey())
+                .as("nobody owns the task when the wait starts, and the server shares unowned tasks")
+                .isNull();
+        assertThatThrownBy(() -> connector.awaitResult().apply(bob, awaitResult("adopted")))
+                .as("the result the hook returns names alice, so bob does not get it")
+                .isInstanceOf(TaskNotFoundException.class);
+        assertThatThrownBy(() -> connector.awaitResult().apply(anonymous, awaitResult("adopted")))
+                .isInstanceOf(TaskNotFoundException.class);
+        assertThatThrownBy(() -> adopting.awaitResult(bob, awaitResult("adopted"), never))
+                .as("the legacy tasks/result path goes through the same check")
+                .isInstanceOf(TaskNotFoundException.class);
+        assertThat(adopting.get("adopted")).as("a refused wait caches nothing").isNull();
+        var result = connector.awaitResult().apply(alice, awaitResult("adopted"));
+        assertThat(result.status()).isEqualTo(TaskState.COMPLETED);
+        assertThat(result.ownerKey()).isEqualTo("alice");
+    }
+
+    @Test
     void removingATaskDropsOnlyTheCachedCopy() throws Exception {
         store(engine.publishAs(alice, task("owned", TaskState.WORKING, 1, TTL), TaskRoute.NONE));
 

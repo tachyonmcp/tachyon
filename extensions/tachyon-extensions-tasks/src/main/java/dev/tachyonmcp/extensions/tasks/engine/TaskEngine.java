@@ -158,7 +158,10 @@ public final class TaskEngine implements Tasks {
         if (awaitResult != null) {
             guarded.awaitResult((ctx, request) -> {
                 requireReachable(connector, ctx, request.taskId(), request.meta());
-                return awaitResult.apply(ctx, request);
+                var result = awaitResult.apply(ctx, request);
+                var caller = Owner.of(ctx.securityContext());
+                require(admits(caller, knownOwner(request.taskId()), result.ownerKey()), request.taskId());
+                return result;
             });
         }
         return guarded.build();

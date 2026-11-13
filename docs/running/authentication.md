@@ -455,8 +455,8 @@ server.tools().register(
   `subscriptions/listen` stream does not follow it. The server stamps the owner key on the snapshot as
   `TaskSnapshot#ownerKey()`. **Your task connector must store it with the task and return it**, the
   way a `SessionStore` keeps a session's owner; then the binding survives a restart and holds on every
-  node. Tasks an anonymous caller creates, or that you publish yourself, have no owner: only anonymous
-  callers reach them, unless you set `shareUnownedTasks(true)`. See
+  node. Tasks an anonymous caller creates, or that you publish yourself without an `ownerKey`, have no
+  owner: only anonymous callers reach them, unless you set `shareUnownedTasks(true)`. See
   [Who can reach a task](../extensions/tasks.md#who-can-reach-a-task).
 - **Owner keys identify callers.** A session or a task is bound to `SecurityContext#ownerKey()`, which
   must be unique and stable for a caller across every issuer and tenant the server accepts. In bearer

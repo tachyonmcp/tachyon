@@ -2,8 +2,8 @@
 title: Findings
 tags: [meta, findings]
 sources: [tachyon-core/ts2java.py, tachyon-core/src/main/java/dev/tachyonmcp/core/, extensions/tachyon-extensions-tasks/src/main/java/dev/tachyonmcp/extensions/tasks/]
-updated: 2026-11-12
-commit: 31926b69
+updated: 2026-11-13
+commit: 8abc5680
 ---
 
 # 🔎 Findings
