@@ -58,6 +58,11 @@ class TaskOwnerBindingTest extends AbstractStatelessMcpE2eTest<McpClient> {
                 .withExtensions(Map.of(TasksExtension.ID, JsonNodeFactory.instance.objectNode()));
     }
 
+    private Mcp20260728Client anonymous() {
+        return new Mcp20260728Client(port)
+                .withExtensions(Map.of(TasksExtension.ID, JsonNodeFactory.instance.objectNode()));
+    }
+
     private static String start(int id, String taskId) {
         // language=JSON
         return """
@@ -241,6 +246,53 @@ class TaskOwnerBindingTest extends AbstractStatelessMcpE2eTest<McpClient> {
                 bobStream.await(frame -> isTaskNotification(frame, bobTask), ofSeconds(5));
                 assertThat(bobStream.received(frame -> isTaskNotification(frame, aliceTask)))
                         .as("a stream refused the task when it opened never follows it")
+                        .isEmpty();
+            }
+        }
+    }
+
+    /**
+     * A server that lets a request without credentials through as anonymous. The task an anonymous
+     * caller creates is public, so a signed-in caller's stream follows it; a task with no owner at
+     * all is followed by nobody.
+     */
+    @Test
+    void aSignedInCallersStreamFollowsAnAnonymousCallersTaskButNotOneNobodyOwns() throws Exception {
+        stopServer();
+        fixture = OwnedTasksFixture.admittingAnonymous();
+        startServer(fixture::configure, fixture::register);
+        var publicTask = UUID.randomUUID().toString();
+        var aliceTask = UUID.randomUUID().toString();
+        var unowned = UUID.randomUUID().toString();
+        fixture.startExternally(TaskSnapshot.working(unowned, CREATED_AT, 1));
+        try (var anonymous = anonymous();
+                var alice = signedIn(ALICE)) {
+            assertThat(anonymous.post(start(1, publicTask))).isSuccess().hasResultType("task");
+            assertThat(alice.post(start(1, aliceTask))).isSuccess().hasResultType("task");
+            assertThat(alice.post(get(2, publicTask))).isSuccess().hasId(2);
+            assertThat(alice.post(get(3, unowned))).isJsonRpcError().hasErrorCode(-32602);
+            assertThat(anonymous.post(get(3, unowned))).isJsonRpcError().hasErrorCode(-32602);
+            assertThat(anonymous.post(get(4, aliceTask))).isJsonRpcError().hasErrorCode(-32602);
+
+            try (var aliceStream = alice.openPostStream(null, listen(publicTask, aliceTask, unowned));
+                    var anonymousStream = anonymous.openPostStream(null, listen(publicTask, aliceTask, unowned))) {
+                var aliceAck = aliceStream.await(TaskOwnerBindingTest::isAcknowledgement, ofSeconds(5));
+                var anonymousAck = anonymousStream.await(TaskOwnerBindingTest::isAcknowledgement, ofSeconds(5));
+                assertThat(aliceAck.data()).contains(publicTask, aliceTask).doesNotContain(unowned);
+                assertThat(anonymousAck.data()).contains(publicTask).doesNotContain(aliceTask, unowned);
+
+                tasks(server).publish(TaskSnapshot.working(unowned, CREATED_AT, 2));
+                tasks(server).publish(TaskSnapshot.working(aliceTask, CREATED_AT, 2));
+                tasks(server).publish(TaskSnapshot.working(publicTask, CREATED_AT, 2));
+
+                aliceStream.await(frame -> isTaskNotification(frame, publicTask), ofSeconds(5));
+                anonymousStream.await(frame -> isTaskNotification(frame, publicTask), ofSeconds(5));
+                assertThat(aliceStream.received(frame -> isTaskNotification(frame, unowned)))
+                        .as("nobody follows a task nobody owns")
+                        .isEmpty();
+                assertThat(anonymousStream.received(
+                                frame -> isTaskNotification(frame, unowned) || isTaskNotification(frame, aliceTask)))
+                        .as("an anonymous caller follows public tasks only")
                         .isEmpty();
             }
         }

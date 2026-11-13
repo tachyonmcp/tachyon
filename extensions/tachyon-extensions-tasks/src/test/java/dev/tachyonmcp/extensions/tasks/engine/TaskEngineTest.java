@@ -36,7 +36,7 @@ class TaskEngineTest {
                     Duration.ofMinutes(5),
                     Duration.ofSeconds(2),
                     TaskEngineSettings.DEFAULT_RESULT_POLL_INTERVAL,
-                    false),
+                    true),
             clock);
 
     @Test
@@ -60,8 +60,11 @@ class TaskEngineTest {
         assertThat(registry.get("task-1")).as("publish caches an unknown task").isEqualTo(published);
 
         assertThat(publishRouted(snapshot("task-1", TaskState.WORKING, 1), route))
-                .as("an older revision from the tool call keeps the cached one")
-                .isEqualTo(published);
+                .as("an older revision from the anonymous tool call keeps the cached one, now public")
+                .isEqualTo(TaskSnapshot.builder()
+                        .from(published)
+                        .ownerKey(TaskSnapshot.PUBLIC_OWNER_KEY)
+                        .build());
         assertThat(publishRouted(snapshot("task-1", TaskState.COMPLETED, 3), new TestRoute("other"))
                         .revision())
                 .as("a colliding tool call is never refused; access is the connector's decision")
@@ -86,7 +89,7 @@ class TaskEngineTest {
                         TaskEngineSettings.DEFAULT_KEEP_ALIVE,
                         null,
                         TaskEngineSettings.DEFAULT_RESULT_POLL_INTERVAL,
-                        false),
+                        true),
                 clock);
 
         assertThat(guarded.readableTaskIds(NoopInteractionContext.INSTANCE, Set.of("readable", "refused", "failing")))

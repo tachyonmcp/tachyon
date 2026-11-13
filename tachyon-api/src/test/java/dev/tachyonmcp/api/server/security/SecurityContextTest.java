@@ -32,4 +32,24 @@ class SecurityContextTest {
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> SecurityContext.authenticated(ALICE, List.of(), null, " "));
     }
+
+    @Test
+    void noCallerHasThePublicOwnerKey() {
+        final Principal named = () -> SecurityContext.PUBLIC_OWNER_KEY;
+
+        assertThat(SecurityContext.PUBLIC_OWNER_KEY)
+                .as("a store that turns an empty string into NULL keeps it")
+                .isNotBlank();
+        assertThatIllegalArgumentException()
+                .as("a provider cannot state it")
+                .isThrownBy(
+                        () -> SecurityContext.authenticated(ALICE, List.of(), null, SecurityContext.PUBLIC_OWNER_KEY));
+        assertThatIllegalArgumentException()
+                .as("a principal cannot be named it")
+                .isThrownBy(() -> SecurityContext.authenticated(named, List.of()));
+        assertThat(SecurityContext.authenticated(named, List.of(), null, "tenant-1|" + named.getName())
+                        .ownerKey())
+                .as("only the whole key is reserved")
+                .isEqualTo("tenant-1|" + SecurityContext.PUBLIC_OWNER_KEY);
+    }
 }

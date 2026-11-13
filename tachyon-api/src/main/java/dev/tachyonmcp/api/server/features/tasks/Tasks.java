@@ -21,7 +21,8 @@ public interface Tasks {
      * status is never broadcast to other sessions.
      *
      * <p>The owner of a task never changes. A snapshot without a {@link TaskSnapshot#ownerKey()} keeps
-     * the owner the task has; a snapshot naming one gives it to a task nobody owns yet.
+     * the owner the task has; a snapshot naming one, or {@link TaskSnapshot#PUBLIC_OWNER_KEY}, gives
+     * it to a task nobody owns yet.
      *
      * @param snapshot the snapshot
      * @return the effective cached snapshot

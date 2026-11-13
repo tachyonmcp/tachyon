@@ -89,7 +89,10 @@ public class TaskSnapshotBuilder
         /** Optional protocol metadata. */
         public var meta: Map<String, Any?>? = from?.meta()
 
-        /** Owner key of the caller the task belongs to; server-side only, never on the wire. */
+        /**
+         * Owner key of the caller the task belongs to, [TaskSnapshot.PUBLIC_OWNER_KEY] for a task every
+         * caller reaches, or `null` for a task nobody owns; server-side only, never on the wire.
+         */
         public var ownerKey: String? = from?.ownerKey()
 
         /**

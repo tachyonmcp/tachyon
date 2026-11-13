@@ -14,6 +14,7 @@ import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
 import dev.tachyonmcp.api.server.features.tasks.Tasks;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
 import dev.tachyonmcp.core.server.TachyonServer;
+import dev.tachyonmcp.core.server.config.SecurityConfig;
 import dev.tachyonmcp.core.server.features.Pagination;
 import dev.tachyonmcp.core.server.features.tasks.TasksExtensionSupport;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
@@ -142,8 +143,17 @@ public final class TasksExtension implements ConfigurableExtension<TasksExtensio
 
     void install(ServerEngine server) {
         var serializer = server.payloadSerializer();
-        var created = new TaskEngine(
-                settings, server.config().runtime().clock(), snapshot -> serializeResult(snapshot, serializer));
+        var config = server.config();
+        var open = config.security().authentication() instanceof SecurityConfig.Authentication.Disabled;
+        var effective = new TaskEngineSettings(
+                settings.connector(),
+                settings.pageSize(),
+                settings.keepAlive(),
+                settings.pollInterval(),
+                settings.resultPollInterval(),
+                settings.shareUnownedTasks() || open);
+        var created =
+                new TaskEngine(effective, config.runtime().clock(), snapshot -> serializeResult(snapshot, serializer));
         var binding = new McpTaskBinding(server, created);
         created.addListener(binding);
         server.installTaskRuntime(binding);
@@ -250,11 +260,11 @@ public final class TasksExtension implements ConfigurableExtension<TasksExtensio
 
         /**
          * Sets whether every caller reaches a task nobody owns: a snapshot with no {@link
-         * dev.tachyonmcp.api.server.features.tasks.TaskSnapshot#ownerKey() ownerKey}, such as one
-         * started outside a tool call or published by the application without one. Default is
-         * {@code false}: only anonymous callers reach it, so a server without authentication is
-         * unaffected and an authenticated caller sees only its own tasks. A task with an owner is
-         * never shared.
+         * TaskSnapshot#ownerKey() ownerKey}, such as one started outside a tool call or published by
+         * the application without one. Default is {@code false}: on a server with authentication
+         * nobody reaches it, not even a caller let through as anonymous. A server without
+         * authentication always shares it. A task an anonymous caller creates is not unowned but
+         * {@link TaskSnapshot#PUBLIC_OWNER_KEY public}, and a task with an owner is never shared.
          *
          * @param shareUnownedTasks whether every caller reaches a task nobody owns
          * @return this builder

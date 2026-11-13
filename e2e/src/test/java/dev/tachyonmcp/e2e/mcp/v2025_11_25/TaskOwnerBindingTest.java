@@ -195,6 +195,80 @@ class TaskOwnerBindingTest extends AbstractStatefulMcpE2eTest {
         }
     }
 
+    /**
+     * A server that lets a request without credentials through as anonymous. The task an anonymous
+     * caller creates is public; a task with no owner at all reaches nobody, anonymous or not.
+     */
+    @Test
+    void anAnonymousCallersTaskIsPublicAndATaskNobodyOwnsReachesNoCaller() throws Exception {
+        stopServer();
+        fixture = OwnedTasksFixture.admittingAnonymous();
+        startServer(fixture::configure, fixture::register);
+        var publicTask = UUID.randomUUID().toString();
+        var aliceTask = UUID.randomUUID().toString();
+        var unowned = UUID.randomUUID().toString();
+        try (var anonymous = new Mcp20251125Client(port);
+                var alice = signedIn(ALICE)) {
+            anonymous.initialize();
+            assertThatJson(anonymous.sendRpc(start(2, publicTask)).body())
+                    .inPath("$.result.task.taskId")
+                    .isEqualTo(publicTask);
+            alice.sendRpc(start(2, aliceTask));
+
+            for (var caller : List.of(anonymous, alice)) {
+                assertThatJson(caller.sendRpc(call(3, "tasks/get", publicTask)).body())
+                        .inPath("$.result.taskId")
+                        .isEqualTo(publicTask);
+            }
+            assertThatJson(alice.sendRpc(call(4, "tasks/list", "-")).body())
+                    .inPath("$.result.tasks[*].taskId")
+                    .isArray()
+                    .containsExactlyInAnyOrder(publicTask, aliceTask);
+            assertThatJson(anonymous.sendRpc(call(4, "tasks/list", "-")).body())
+                    .inPath("$.result.tasks[*].taskId")
+                    .isArray()
+                    .containsExactly(publicTask);
+            assertThatResponse(anonymous.sendRpc(call(5, "tasks/get", aliceTask)))
+                    .as("an anonymous caller never reaches an owned task")
+                    .isJsonRpcError()
+                    .hasErrorCode(-32602)
+                    .hasErrorMessageContaining("Task not found");
+        }
+
+        stopServer();
+        startServer(fixture::configure, fixture::register);
+        fixture.startExternally(TaskSnapshot.working(unowned, CREATED_AT, 1));
+
+        try (var anonymous = new Mcp20251125Client(port);
+                var alice = signedIn(ALICE)) {
+            anonymous.initialize();
+            for (var caller : List.of(anonymous, alice)) {
+                assertThatJson(caller.sendRpc(call(3, "tasks/get", publicTask)).body())
+                        .as("the stored task is still public after a restart")
+                        .inPath("$.result.taskId")
+                        .isEqualTo(publicTask);
+                for (var method : List.of("tasks/get", "tasks/result", "tasks/cancel")) {
+                    assertThatResponse(caller.sendRpc(call(4, method, unowned)))
+                            .as(method)
+                            .isJsonRpcError()
+                            .hasErrorCode(-32602)
+                            .hasErrorMessageContaining("Task not found");
+                }
+            }
+            assertThatJson(alice.sendRpc(call(5, "tasks/list", "-")).body())
+                    .inPath("$.result.tasks[*].taskId")
+                    .isArray()
+                    .containsExactlyInAnyOrder(publicTask, aliceTask);
+            assertThatJson(anonymous.sendRpc(call(5, "tasks/list", "-")).body())
+                    .inPath("$.result.tasks[*].taskId")
+                    .isArray()
+                    .containsExactly(publicTask);
+            assertThat(fixture.connectorCalls())
+                    .as("no cancel or result reached the connector for a task nobody may reach")
+                    .noneMatch(call -> call.startsWith("cancel:") || call.startsWith("awaitResult:"));
+        }
+    }
+
     @Test
     void theOwnerReachesItsTaskFromAnotherSession() throws Exception {
         var taskId = UUID.randomUUID().toString();

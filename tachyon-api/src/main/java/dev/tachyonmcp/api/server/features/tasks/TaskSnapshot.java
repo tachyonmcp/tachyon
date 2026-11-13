@@ -7,6 +7,7 @@ import dev.tachyonmcp.api.server.domain.InputRequestBundle;
 import dev.tachyonmcp.api.server.domain.ServerError;
 import dev.tachyonmcp.api.server.domain.TaskResult;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
+import dev.tachyonmcp.api.server.security.SecurityContext;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
@@ -18,6 +19,24 @@ import org.jspecify.annotations.Nullable;
 @Value.Immutable
 @Value.Style(visibilityString = "PACKAGE", typeImmutable = "Default*")
 public interface TaskSnapshot extends HasMeta {
+
+    /**
+     * The {@link #ownerKey() owner key} of a task every caller may reach, which is what a task an
+     * anonymous caller creates gets. No caller has this key: {@link SecurityContext} refuses it.
+     */
+    String PUBLIC_OWNER_KEY = SecurityContext.PUBLIC_OWNER_KEY;
+
+    /**
+     * Returns the owner key of a task {@code caller} creates: its {@link SecurityContext#ownerKey()
+     * owner key}, or {@link #PUBLIC_OWNER_KEY} for an anonymous caller.
+     *
+     * @param caller the caller creating the task
+     * @return the owner key to store with the task
+     */
+    static String ownerKeyOf(SecurityContext caller) {
+        var key = caller.ownerKey();
+        return key != null ? key : PUBLIC_OWNER_KEY;
+    }
 
     /**
      * Returns the stable task identifier.
@@ -96,18 +115,21 @@ public interface TaskSnapshot extends HasMeta {
     Map<String, Object> meta();
 
     /**
-     * Returns the {@link dev.tachyonmcp.api.server.security.SecurityContext#ownerKey() owner key} of
-     * the caller the task belongs to, or {@code null} for a task nobody owns.
-     * Server-side only: it never goes on the wire.
+     * Returns who may reach the task: the {@link SecurityContext#ownerKey() owner key} of the caller
+     * it belongs to, {@link #PUBLIC_OWNER_KEY} for a task every caller may reach, or {@code null} for
+     * a task nobody owns. Server-side only: it never goes on the wire.
      *
-     * <p>The server stamps it on the snapshot a caller's tool call returns, and refuses a task to every
-     * other caller as if it did not exist. Store it with the task and return it from the connector, so
-     * the owner holds after a restart and on every node. A snapshot the connector returns without it
-     * keeps the owner the server knows: the one it has cached, or remembers until the task's {@code
-     * ttl} once the snapshot leaves the cache. With no owner anywhere, only anonymous callers reach
-     * the task, unless the server shares unowned tasks.
+     * <p>The server stamps {@linkplain #ownerKeyOf the caller's key} on the snapshot a caller's tool
+     * call returns, and refuses a task a caller owns to every other caller as if it did not exist.
+     * Store it with the task and return it from the connector, so the owner holds after a restart and
+     * on every node. A snapshot the connector returns without it keeps the owner the server knows: the
+     * one it has cached, or remembers until the task's {@code ttl} once the snapshot leaves the cache.
+     * With no owner anywhere the task is unowned: a server that authenticates callers refuses it to
+     * every caller unless it shares unowned tasks, and a server without authentication gives it to
+     * every caller. A blank key is refused, so an owner a store lost and gave back as an empty string
+     * never passes for one.
      *
-     * @return the owner key, or {@code null}
+     * @return the owner key, {@link #PUBLIC_OWNER_KEY}, or {@code null}
      */
     @Value.Redacted
     @Nullable
@@ -413,10 +435,11 @@ public interface TaskSnapshot extends HasMeta {
         Builder meta(@Nullable Map<String, ?> meta);
 
         /**
-         * Sets the owner key of the caller the task belongs to: in a tool, {@code
-         * ctx.securityContext().ownerKey()}.
+         * Sets who may reach the task: in a tool, {@code
+         * TaskSnapshot.ownerKeyOf(ctx.securityContext())}.
          *
-         * @param ownerKey the owner key, or {@code null} for a task nobody owns
+         * @param ownerKey the owner key of the caller the task belongs to, {@link #PUBLIC_OWNER_KEY}
+         *     for a task every caller may reach, or {@code null} for a task nobody owns
          * @return this builder
          */
         Builder ownerKey(@Nullable String ownerKey);

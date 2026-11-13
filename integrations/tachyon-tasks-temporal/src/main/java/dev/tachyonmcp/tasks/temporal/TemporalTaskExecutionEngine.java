@@ -37,8 +37,8 @@ import org.slf4j.LoggerFactory;
  * id. Every snapshot {@link #start} and {@link #refresh} return carries it as {@link
  * TaskSnapshot#ownerKey()}, so the server refuses other callers from the snapshot too. The owner
  * therefore survives a restart and holds on every node. A Workflow an anonymous caller started
- * carries an empty memo: it has no owner, and the server decides who reaches it. A Workflow without
- * the memo at all, started outside this engine or before it wrote the memo, is reached only by
+ * carries {@link TaskSnapshot#PUBLIC_OWNER_KEY} there: it is public, and every caller reaches it. A
+ * Workflow without the memo, started outside this engine or before it wrote the memo, is reached only by
  * callers {@link Builder#unownedAccess} admits, asked on every call; by default nobody. Admitting a
  * caller never makes the Workflow theirs: its snapshot carries no owner, so the server's rule for
  * unowned tasks applies as well.
@@ -47,8 +47,8 @@ import org.slf4j.LoggerFactory;
 public final class TemporalTaskExecutionEngine {
 
     /**
-     * The Workflow memo key that holds the owner key of the caller that started the Workflow, or an
-     * empty string when that caller was anonymous.
+     * The Workflow memo key that holds the owner key of the caller that started the Workflow, or
+     * {@link TaskSnapshot#PUBLIC_OWNER_KEY} when that caller was anonymous.
      */
     public static final String OWNER_MEMO = "tachyon.owner";
 
@@ -98,7 +98,7 @@ public final class TemporalTaskExecutionEngine {
 
     /**
      * Starts the routed Temporal Workflow and returns its initial MCP projection. The Workflow
-     * belongs to the caller of {@code context}, if it is authenticated.
+     * belongs to the caller of {@code context}; the Workflow an anonymous caller starts is public.
      *
      * @param context current MCP interaction, which fixes the owner
      * @param request operation, stable Workflow ID, arguments, and metadata
@@ -114,8 +114,8 @@ public final class TemporalTaskExecutionEngine {
                 taskQueue);
         var options =
                 WorkflowOptions.newBuilder().setWorkflowId(request.taskId()).setTaskQueue(taskQueue);
-        var owner = context.securityContext().ownerKey();
-        options.setMemo(Map.of(OWNER_MEMO, owner == null ? "" : owner));
+        var owner = TaskSnapshot.ownerKeyOf(context.securityContext());
+        options.setMemo(Map.of(OWNER_MEMO, owner));
         var workflow = workflowClient.newUntypedWorkflowStub(route.workflowType(), options.build());
         workflow.start(route.startArguments(request));
         return withOwner(TaskSnapshot.working(request.taskId(), clock.instant(), 1), owner);
@@ -190,7 +190,7 @@ public final class TemporalTaskExecutionEngine {
             @Nullable String ownerKey) {}
 
     private static TaskSnapshot withOwner(TaskSnapshot snapshot, @Nullable String ownerKey) {
-        return ownerKey == null || ownerKey.isEmpty()
+        return ownerKey == null
                 ? snapshot
                 : TaskSnapshot.builder().from(snapshot).ownerKey(ownerKey).build();
     }
@@ -208,7 +208,9 @@ public final class TemporalTaskExecutionEngine {
         var description = workflowClient.newUntypedWorkflowStub(taskId).describe();
         var owner = description.getMemo(OWNER_MEMO, String.class, String.class);
         var callerKey = context.securityContext().ownerKey();
-        var admitted = owner == null ? unownedAccess.test(context, taskId) : owner.isEmpty() || owner.equals(callerKey);
+        var admitted = owner == null
+                ? unownedAccess.test(context, taskId)
+                : owner.equals(TaskSnapshot.PUBLIC_OWNER_KEY) || owner.equals(callerKey);
         if (!admitted) {
             logger.debug("Hiding a Temporal workflow from a caller that may not reach it");
             throw new TaskNotFoundException(taskId);
@@ -295,7 +297,7 @@ public final class TemporalTaskExecutionEngine {
          * asked on every {@code refresh}, {@code cancel} and {@code submitInput} for such a Workflow; a
          * caller it refuses gets {@link TaskNotFoundException}, as for an unknown id. A caller it admits
          * does not become the owner: the snapshot carries none, so on a server with authentication a
-         * named caller reaches the Workflow only if the server also shares unowned tasks. Keep the
+         * caller reaches the Workflow only if the server also shares unowned tasks. Keep the
          * authorization those Workflows had before here until they finish. By default it refuses
          * everyone.
          *

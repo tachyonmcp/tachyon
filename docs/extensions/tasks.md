@@ -196,13 +196,14 @@ connector**, and the rule holds after the cached snapshot is evicted, after a re
 node that shares the connector: Tachyon reads the owner from the connector's snapshot and refuses
 everyone else. A connector that does not return it leaves only what one node remembers: the owner of
 a task it has cached, and after eviction until the task's `ttl`. After a restart, on another node, or
-for a task without a `ttl`, such a task reads as unowned. Stamp the owner yourself when the tool
-starts the job, from the caller's context:
+for a task without a `ttl`, such a task reads as unowned, and on a server with authentication
+nobody reaches an unowned task. Stamp the owner yourself when the tool starts the job, from the
+caller's context:
 
 ```java
 var snapshot = TaskSnapshot.builder()
         .from(TaskSnapshot.working(jobId, Instant.now(), 1))
-        .ownerKey(ctx.securityContext().ownerKey())
+        .ownerKey(TaskSnapshot.ownerKeyOf(ctx.securityContext()))
         .build();
 jobs.start(snapshot);
 return ToolResult.task(snapshot);
@@ -210,29 +211,47 @@ return ToolResult.task(snapshot);
 
 The [Temporal](#temporal) adapter does this for you: it keeps the owner in the Workflow memo.
 
-- **A task nobody owns reaches anonymous callers only.** A task an unauthenticated caller creates,
-  one started outside a tool call, or one you publish through `TachyonServer#tasks().publish(...)`
-  without an `ownerKey`, has no owner. An authenticated caller gets `Task not found` for it and
-  `tasks/list` leaves it out, so a connector that forgets the owner hides the task from authenticated
-  callers. Callers you let through as anonymous still reach it. A server without authentication is
-  unaffected: every caller is anonymous. To let every caller reach unowned tasks,
-  as before 1.1, set `shareUnownedTasks(true)` on the extension builder (Kotlin:
-  `shareUnownedTasks = true` in `tasks(connector) { }`). Without authentication the MCP spec's rule
-  applies: the task id is a bearer capability. Generate it unguessable, e.g. a random
-  UUID. Tachyon never generates task ids: the tool or the task execution engine owns their uniqueness
-  and unpredictability.
+A task is in one of three states:
+
+| State | `ownerKey` | Who reaches it |
+|---|---|---|
+| owned | the caller's owner key | that caller only |
+| public | `TaskSnapshot.PUBLIC_OWNER_KEY` (`"<public>"`) | every caller |
+| unowned | none (`null`) | nobody on a server with authentication; every caller on a server without it, or with `shareUnownedTasks(true)` |
+
+- **An anonymous caller's task is public.** A task an unauthenticated caller creates gets
+  `TaskSnapshot.PUBLIC_OWNER_KEY` as its owner, and every caller reaches it, signed in or not. Store
+  and return it like any other owner. A caller that is signed in cannot create a public task from a
+  tool; your application can, by publishing with `ownerKey(TaskSnapshot.PUBLIC_OWNER_KEY)`. The key
+  is a reserved value no caller can have, and it is not empty: a snapshot with an empty `ownerKey` is
+  rejected, so a store that loses the owner and gives back an empty string does not make the task
+  public.
+- **A task nobody owns reaches no caller.** A task you publish through
+  `TachyonServer#tasks().publish(...)` without an `ownerKey`, one started outside a tool call, or one
+  whose owner the connector lost, has no owner. On a server with authentication every caller gets
+  `Task not found` for it, callers you let through as anonymous included, and `tasks/list` leaves it
+  out: Tachyon cannot tell whose it was. A server without authentication is unaffected: every caller
+  reaches it. To let every caller reach unowned tasks on a server with authentication, set
+  `shareUnownedTasks(true)` on the extension builder (Kotlin: `shareUnownedTasks = true` in
+  `tasks(connector) { }`).
+- **A task id is a bearer capability** wherever a task is public or shared: generate it unguessable,
+  e.g. a random UUID. Tachyon never generates task ids: the tool or the task execution engine owns
+  their uniqueness and unpredictability.
 - **Publish for a caller.** A worker that publishes a task before the tool returns sets the same
-  `ownerKey` on the snapshot, so the tool's own return is accepted.
-- **The owner never changes.** `publish` without an `ownerKey` on an owned task keeps working: it
-  updates the status and keeps the owner. A `publish`, or a snapshot your connector returns, that
-  names an owner for a task nobody owns yet gives it that owner. But a tool call that returns a task
-  owned by someone else or a task you already published unowned fails with `Internal error` and is
-  logged, and `publish` with a snapshot naming another owner throws `IllegalStateException`.
+  `ownerKey` on the snapshot, `TaskSnapshot.ownerKeyOf(ctx.securityContext())`, so the tool's own
+  return is accepted.
+- **The owner never changes**, and public is an owner too. `publish` without an `ownerKey` on an
+  owned task keeps working: it updates the status and keeps the owner. A `publish`, or a snapshot
+  your connector returns, that names an owner for a task nobody owns yet gives it that owner. But a
+  tool call that returns a task owned by someone else or a task you already published unowned fails
+  with `Internal error` and is logged, and `publish` with a snapshot naming another owner throws
+  `IllegalStateException`. One exception: where every caller reaches unowned tasks anyway, an
+  anonymous caller's tool may return a task you published unowned, and it becomes public.
 - **One extra read.** For a task whose owner Tachyon does not know, `tasks/cancel`, `tasks/update`
   and `tasks/result` first call your connector's `get` to learn it.
 - **Streams.** A `subscriptions/listen` stream is authorized when it opens, by your connector's
-  `get`. After that it receives every status that names its caller as owner or names no owner, and
-  never one that names someone else.
+  `get`. After that it receives every status that names its caller as owner, is public or names no
+  owner, and never one that names someone else.
 
 To keep a task private to the session that started it, record the session with the job and check
 it in the connector. Answer a task the caller may not see like an
@@ -425,18 +444,18 @@ helper because Temporal has a known start contract; that helper is deliberately 
 generic `TaskConnector` SPI. See [the Temporal example](https://github.com/tachyonmcp/tachyon/tree/main/examples/temporal).
 
 The adapter authorizes every call itself, so it is safe on several nodes and across restarts (see
-[Who can reach a task](#who-can-reach-a-task)). `start` stores the caller's
-`SecurityContext#ownerKey()` in the Workflow memo `tachyon.owner`
+[Who can reach a task](#who-can-reach-a-task)). `start` stores the caller's owner key,
+`TaskSnapshot.ownerKeyOf(...)`, in the Workflow memo `tachyon.owner`
 (`TemporalTaskExecutionEngine.OWNER_MEMO`); `refresh`, `cancel` and `submitInput` read it from
 Temporal on each call and answer any other caller, an anonymous one included, with `Task not found`.
 The key is the owner key, not the principal name: two callers that share a name but not a key are two
-owners. A Workflow that an anonymous caller started gets an empty memo: it has no owner, so the server opens
-it to anonymous callers only, or to every caller with `shareUnownedTasks(true)`.
+owners. A Workflow that an anonymous caller started gets `TaskSnapshot.PUBLIC_OWNER_KEY` in the
+memo: it is public, and every caller reaches it.
 
 A Workflow without the memo at all — started before your upgrade, or outside the adapter — is not
 open. Every call on it asks `TemporalTaskExecutionEngine.Builder#unownedAccess`, which refuses
 everyone by default. A caller it admits does not become the owner: the Workflow stays unowned, so on
-a server with authentication a signed-in caller reaches it only with `shareUnownedTasks(true)` as
+a server with authentication any caller reaches it only with `shareUnownedTasks(true)` as
 well. Put the authorization those Workflows had before there, and keep it until they finish:
 
 ```java

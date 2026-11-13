@@ -46,8 +46,9 @@ import org.slf4j.LoggerFactory;
  * {@code ttl}, and any task after a restart, has only the owner the connector stores. Every task
  * call a caller makes goes through {@link #connector()}, which answers a foreign caller exactly as
  * it would an unknown id; an owner this engine knows refuses before the real connector runs,
- * otherwise the connector's own snapshot names the owner. A task with no owner anywhere reaches
- * anonymous callers only, unless {@link TaskEngineSettings#shareUnownedTasks()}.
+ * otherwise the connector's own snapshot names the owner. A task an anonymous caller creates is
+ * public ({@link TaskSnapshot#PUBLIC_OWNER_KEY}): every caller reaches it. A task with no owner
+ * anywhere reaches nobody, unless {@link TaskEngineSettings#shareUnownedTasks()}.
  */
 public final class TaskEngine implements Tasks {
 
@@ -198,13 +199,17 @@ public final class TaskEngine implements Tasks {
 
     /**
      * Whether {@code caller} may reach a task whose owner this engine and the connector name. Every
-     * owner named must be the caller; with none named, the task is unowned.
+     * owner named must be the caller or public; with none named, the task is unowned.
      */
     private boolean admits(Owner caller, @Nullable String known, @Nullable String stored) {
         if (known == null && stored == null) {
-            return settings.shareUnownedTasks() || caller.key() == null;
+            return settings.shareUnownedTasks();
         }
-        return (known == null || known.equals(caller.key())) && (stored == null || stored.equals(caller.key()));
+        return reaches(caller, known) && reaches(caller, stored);
+    }
+
+    private static boolean reaches(Owner caller, @Nullable String ownerKey) {
+        return ownerKey == null || ownerKey.equals(TaskSnapshot.PUBLIC_OWNER_KEY) || ownerKey.equals(caller.key());
     }
 
     private static void require(boolean admitted, String taskId) throws TaskNotFoundException {
@@ -273,10 +278,13 @@ public final class TaskEngine implements Tasks {
     /**
      * Caches {@code snapshot} for a task a caller creates, routing its push traffic along
      * {@code route} and stamping the caller of {@code ctx} on it as its {@link TaskSnapshot#ownerKey()
-     * owner}. An unrouted entry takes the route; a routed one keeps its own. The owner never changes:
-     * the caller must be the task's owner, so a task owned by someone else, cached or evicted before
-     * its {@code ttl}, a cached task nobody owns, and a snapshot naming another owner are refused
-     * before anything about them changes.
+     * owner}: its owner key, or {@link TaskSnapshot#PUBLIC_OWNER_KEY} for an anonymous caller. An
+     * unrouted entry takes the route; a routed one keeps its own. The owner never changes: the task
+     * must already have the caller's owner, so a task owned by someone else, cached or evicted before
+     * its {@code ttl}, a public task for a signed-in caller, and a snapshot naming another owner are
+     * refused before anything about them changes. So is a cached task nobody owns, with one
+     * exception: where {@link TaskEngineSettings#shareUnownedTasks() every caller reaches it} anyway,
+     * an anonymous caller's publish makes it public.
      *
      * @param ctx the context of the creating request, which fixes the caller
      * @param snapshot the task projection
@@ -285,21 +293,26 @@ public final class TaskEngine implements Tasks {
      * @throws IllegalStateException if the task already has a different owner
      */
     public TaskSnapshot publishAs(InteractionContext ctx, TaskSnapshot snapshot, TaskRoute route) {
-        var key = Owner.of(ctx.securityContext()).key();
+        var owner = TaskSnapshot.ownerKeyOf(ctx.securityContext());
         Objects.requireNonNull(snapshot, "snapshot");
         Objects.requireNonNull(route, "route");
-        if (snapshot.ownerKey() != null && !snapshot.ownerKey().equals(key)) {
+        if (snapshot.ownerKey() != null && !snapshot.ownerKey().equals(owner)) {
             throw refused(snapshot);
         }
-        var effective = withDefaults(TaskEntry.withOwner(snapshot, key));
+        var effective = withDefaults(TaskEntry.withOwner(snapshot, owner));
         var entry = place(effective, route, true);
-        if (entry == null || !Objects.equals(entry.snapshot().ownerKey(), key)) {
+        if (entry == null || !mayPublishAs(owner, entry.snapshot().ownerKey()) || !entry.publish(effective)) {
             throw refused(effective);
         }
         entry.route(route);
-        entry.publish(effective);
         entry.notifyIfNewer(this::fireStatus);
         return entry.snapshot();
+    }
+
+    private boolean mayPublishAs(String owner, @Nullable String held) {
+        return held != null
+                ? held.equals(owner)
+                : owner.equals(TaskSnapshot.PUBLIC_OWNER_KEY) && settings.shareUnownedTasks();
     }
 
     /**
@@ -329,7 +342,7 @@ public final class TaskEngine implements Tasks {
 
     /**
      * Whether a stream {@code caller} opened still follows the task after {@code snapshot}: the owner
-     * it names must be the caller. A snapshot naming no owner goes to every stream, because {@link
+     * it names must be the caller or public. A snapshot naming no owner goes to every stream, because {@link
      * #readableTaskIds} already decided who may read the task when the stream opened. Safe to ask for
      * every event.
      *
@@ -338,8 +351,7 @@ public final class TaskEngine implements Tasks {
      * @return whether the stream receives it
      */
     public boolean admits(Owner caller, TaskSnapshot snapshot) {
-        var owner = snapshot.ownerKey();
-        return owner == null || owner.equals(caller.key());
+        return reaches(caller, snapshot.ownerKey());
     }
 
     private void fireStatus(TaskSnapshot snapshot, TaskRoute route) {

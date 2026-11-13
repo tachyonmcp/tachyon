@@ -6,10 +6,15 @@ import dev.tachyonmcp.api.server.features.tasks.TaskConnector;
 import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
 import dev.tachyonmcp.api.server.features.tasks.TaskSupport;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
+import dev.tachyonmcp.api.server.security.SecurityContext;
 import dev.tachyonmcp.core.server.ServerBuilder;
 import dev.tachyonmcp.core.server.TachyonServer;
+import dev.tachyonmcp.core.server.config.SecurityConfig;
+import dev.tachyonmcp.core.server.security.AccessPolicy;
+import dev.tachyonmcp.core.server.security.BearerTokenAuthenticationProvider;
 import dev.tachyonmcp.extensions.tasks.TasksExtension;
 import dev.tachyonmcp.testkit.TestTaskConnector;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -19,7 +24,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * connector that records who called it, so a test can prove which calls reached the connector.
  * The connector authorizes nothing itself, as a real one might not: whether a caller may reach a
  * task is Tachyon's decision here. The {@code start} tool stores the task with its caller's owner
- * key, as an application must for the owner to outlive the server's cache, a restart, or a node.
+ * key, or the public one for an anonymous caller, as an application must for the owner to outlive
+ * the server's cache, a restart, or a node.
  */
 public final class OwnedTasksFixture {
 
@@ -29,6 +35,7 @@ public final class OwnedTasksFixture {
     private final TestTaskConnector externalSystem = new TestTaskConnector();
     private final List<String> connectorCalls = new CopyOnWriteArrayList<>();
     private final boolean shareUnownedTasks;
+    private final boolean admitsAnonymous;
 
     /** A fixture whose server shares tasks nobody owns with every caller, so tests can reach them. */
     public OwnedTasksFixture() {
@@ -36,21 +43,44 @@ public final class OwnedTasksFixture {
     }
 
     /**
-     * A fixture whose server shares tasks nobody owns, or keeps them from every named caller.
+     * A fixture whose server shares tasks nobody owns, or keeps them from every caller.
      *
      * @param shareUnownedTasks whether every caller reaches a task nobody owns
      */
     public OwnedTasksFixture(boolean shareUnownedTasks) {
+        this(shareUnownedTasks, false);
+    }
+
+    private OwnedTasksFixture(boolean shareUnownedTasks, boolean admitsAnonymous) {
         this.shareUnownedTasks = shareUnownedTasks;
+        this.admitsAnonymous = admitsAnonymous;
+    }
+
+    /**
+     * A fixture whose server also lets a request without credentials through as anonymous, and keeps
+     * tasks nobody owns from every caller.
+     */
+    public static OwnedTasksFixture admittingAnonymous() {
+        return new OwnedTasksFixture(false, true);
     }
 
     /** Secures the server with the fixture's tokens and wires the recording connector. */
     public void configure(ServerBuilder builder) {
         builder.capabilities(c -> c.tools())
-                .security(TestBearerTokens.secured(tokens))
+                .security(admitsAnonymous ? this::bearerOrAnonymous : TestBearerTokens.secured(tokens))
                 .withExtension(
                         TasksExtension.class,
                         t -> t.connector(recordingConnector()).shareUnownedTasks(shareUnownedTasks));
+    }
+
+    private void bearerOrAnonymous(SecurityConfig.Builder security) {
+        final var bearer =
+                new BearerTokenAuthenticationProvider(TestBearerTokens.bearerConfig(tokens), Clock.systemUTC());
+        security.accessPolicy(AccessPolicy.permitAll())
+                .authenticationProvider(
+                        request -> request.headers("Authorization").isEmpty()
+                                ? SecurityContext.anonymous()
+                                : bearer.authenticate(request));
     }
 
     /** Registers {@code start}: it starts the task named by its {@code taskId} argument and returns it. */
@@ -58,7 +88,7 @@ public final class OwnedTasksFixture {
         server.tools().register(b -> b.name("start").taskSupport(TaskSupport.REQUIRED), (context, request) -> {
             var snapshot = TaskSnapshot.builder()
                     .from(TaskSnapshot.working(request.arguments().stringOr("taskId", ""), CREATED_AT, 1))
-                    .ownerKey(context.securityContext().ownerKey())
+                    .ownerKey(TaskSnapshot.ownerKeyOf(context.securityContext()))
                     .build();
             externalSystem.start(snapshot);
             return ToolResult.task(snapshot);

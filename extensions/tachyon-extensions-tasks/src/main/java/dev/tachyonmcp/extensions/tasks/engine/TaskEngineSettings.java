@@ -19,8 +19,7 @@ import org.jspecify.annotations.Nullable;
  *                     suggest none when a snapshot omits one
  * @param resultPollInterval wait between {@code get} calls while awaiting a result without a
  *                     connector {@code awaitResult}, when the snapshot suggests no {@code pollInterval}
- * @param shareUnownedTasks whether every caller reaches a task nobody owns; otherwise only anonymous
- *                     callers do
+ * @param shareUnownedTasks whether every caller reaches a task nobody owns; otherwise nobody does
  */
 public record TaskEngineSettings(
         TaskConnector connector,

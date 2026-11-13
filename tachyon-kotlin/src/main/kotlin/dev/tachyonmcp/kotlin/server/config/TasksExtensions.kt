@@ -99,8 +99,10 @@ public class TasksScope
                 .toKotlinDuration()
 
         /**
-         * Lets every caller reach a task whose snapshot carries no owner. By default only anonymous
-         * callers reach it. An owned task is never shared.
+         * Lets every caller reach a task whose snapshot carries no owner. By default nobody reaches it
+         * on a server with authentication, not even an anonymous caller; a server without
+         * authentication always shares it. The task an anonymous caller creates is public
+         * (`TaskSnapshot.PUBLIC_OWNER_KEY`) and needs no sharing. An owned task is never shared.
          */
         public var shareUnownedTasks: Boolean = false
 
