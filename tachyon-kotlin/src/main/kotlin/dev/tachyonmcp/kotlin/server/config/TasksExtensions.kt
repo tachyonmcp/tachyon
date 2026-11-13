@@ -98,14 +98,6 @@ public class TasksScope
             TasksExtension.DEFAULT_RESULT_POLL_INTERVAL
                 .toKotlinDuration()
 
-        /**
-         * Lets every caller reach a task whose snapshot carries no owner. By default nobody reaches it
-         * on a server with authentication, not even an anonymous caller; a server without
-         * authentication always shares it. The task an anonymous caller creates is public
-         * (`TaskSnapshot.PUBLIC_OWNER_KEY`) and needs no sharing. An owned task is never shared.
-         */
-        public var shareUnownedTasks: Boolean = false
-
         internal fun applyTo(builder: TasksExtension.Builder) {
             builder
                 .connector(connector)
@@ -113,6 +105,5 @@ public class TasksScope
                 .keepAlive(keepAlive.toJavaDuration())
                 .pollInterval(pollInterval?.toJavaDuration())
                 .resultPollInterval(resultPollInterval.toJavaDuration())
-                .shareUnownedTasks(shareUnownedTasks)
         }
     }

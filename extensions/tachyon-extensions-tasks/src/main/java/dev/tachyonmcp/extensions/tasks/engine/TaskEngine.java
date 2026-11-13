@@ -46,8 +46,8 @@ import org.slf4j.LoggerFactory;
  * unknown id. The owner this engine knows, cached or remembered since eviction until the task's
  * {@code ttl}, may refuse a caller before the real connector runs, never admit one. A task an
  * anonymous caller creates is public ({@link TaskSnapshot#PUBLIC_OWNER_KEY}): every caller reaches
- * it. A task the connector returns without an owner reaches nobody, unless {@link
- * TaskEngineSettings#shareUnownedTasks()}.
+ * it. A task the connector returns without an owner reaches nobody, unless the server has no
+ * authentication ({@link TaskEngineSettings#unauthenticated()}).
  */
 public final class TaskEngine implements Tasks {
 
@@ -150,7 +150,8 @@ public final class TaskEngine implements Tasks {
             guarded.awaitResult((ctx, request) -> {
                 read(ctx, getRequest(request.taskId(), request.meta()));
                 var result = awaitResult.apply(ctx, request);
-                require(!refuses(result.ownerKey(), Owner.of(ctx.securityContext())), request.taskId());
+                var caller = Owner.of(ctx.securityContext());
+                require(storeAdmits(caller, knownOwner(request.taskId()), result.ownerKey()), request.taskId());
                 return result;
             });
         }
@@ -180,7 +181,7 @@ public final class TaskEngine implements Tasks {
 
     /** Whether {@code caller} may reach a task the real connector returned with the owner {@code stored}. */
     private boolean storeAdmits(Owner caller, @Nullable String known, @Nullable String stored) {
-        return !refuses(known, caller) && (stored != null ? !refuses(stored, caller) : settings.shareUnownedTasks());
+        return !refuses(known, caller) && (stored != null ? !refuses(stored, caller) : settings.unauthenticated());
     }
 
     /**
@@ -236,11 +237,14 @@ public final class TaskEngine implements Tasks {
      * snapshot without an owner keeps the cached one, a snapshot naming one gives it to a cached task
      * nobody owns yet, and a snapshot naming another owner is not cached.
      *
+     * @param ctx the caller the snapshot was read for
      * @param snapshot the connector's projection
      * @return the cached snapshot, or {@code snapshot} with the engine defaults if the task is not
      *     cached
+     * @throws TaskNotFoundException if the cached task has an owner that is neither the caller nor
+     *     public, as it can once someone else came to own the task after the read
      */
-    public TaskSnapshot refresh(TaskSnapshot snapshot) {
+    public TaskSnapshot refresh(InteractionContext ctx, TaskSnapshot snapshot) throws TaskNotFoundException {
         var effective = withDefaults(Objects.requireNonNull(snapshot, "snapshot"));
         var entry = entries.get(effective.taskId());
         if (entry == null) {
@@ -251,7 +255,9 @@ public final class TaskEngine implements Tasks {
         } else {
             logger.debug("Not caching a read of task {} that names another owner", effective.taskId());
         }
-        return entry.snapshot();
+        var cached = entry.snapshot();
+        require(!refuses(cached.ownerKey(), Owner.of(ctx.securityContext())), cached.taskId());
+        return cached;
     }
 
     /**
@@ -267,16 +273,16 @@ public final class TaskEngine implements Tasks {
      *   <li>a snapshot naming another owner;
      *   <li>a task owned by someone else, cached or evicted before its {@code ttl};
      *   <li>a public task, when the caller is signed in;
-     *   <li>a cached task nobody owns, with one exception: where {@link
-     *       TaskEngineSettings#shareUnownedTasks() every caller reaches it} anyway, an anonymous
-     *       caller's publish makes it public;
-     *   <li>a task this engine does not hold that the real connector stores for another owner, or for
-     *       nobody unless every caller reaches such a task anyway, so a tool cannot claim a task it
-     *       did not create. A task the connector does not know is new.
+     *   <li>a cached task nobody owns, with one exception: on a server without authentication
+     *       ({@link TaskEngineSettings#unauthenticated()}) an anonymous caller's publish makes it
+     *       public;
+     *   <li>a task the real connector does not return for the caller as its owner: one it does not
+     *       know or hides, stores for another owner, or stores for nobody. So a tool cannot claim a
+     *       task it did not create. A server without authentication accepts a task the connector
+     *       does not know or stores for nobody.
      * </ul>
      *
-     * <p>Reads a task this engine does not hold from the real connector, so never call it on an event
-     * loop.
+     * <p>Reads the task from the real connector, so never call it on an event loop.
      *
      * @param ctx the context of the creating request, which fixes the caller
      * @param snapshot the task projection
@@ -293,7 +299,7 @@ public final class TaskEngine implements Tasks {
             throw refused(snapshot);
         }
         var effective = withDefaults(TaskEntry.withOwner(snapshot, owner));
-        if (!entries.containsKey(effective.taskId()) && !storeAllowsClaim(ctx, effective.taskId(), owner)) {
+        if (!storeAllowsClaim(ctx, effective.taskId(), owner)) {
             throw refused(effective);
         }
         var entry = place(effective, route, true);
@@ -306,9 +312,9 @@ public final class TaskEngine implements Tasks {
     }
 
     /**
-     * Whether the real connector lets {@code owner} claim a task this engine does not hold: it does
-     * not know the task, or stores it for {@code owner}, or stores it for nobody where every caller
-     * reaches such a task anyway.
+     * Whether the real connector returns the task for the caller with {@code owner} as its owner. A
+     * task it does not know reads the same as one it hides from the caller, so neither is the
+     * caller's. A server without authentication accepts both, and a task stored for nobody.
      */
     private boolean storeAllowsClaim(InteractionContext ctx, String taskId, String owner) {
         try {
@@ -316,9 +322,9 @@ public final class TaskEngine implements Tasks {
                     .get()
                     .apply(ctx, getRequest(taskId, null))
                     .ownerKey();
-            return stored != null ? stored.equals(owner) : settings.shareUnownedTasks();
+            return stored != null ? stored.equals(owner) : settings.unauthenticated();
         } catch (TaskNotFoundException e) {
-            return true;
+            return settings.unauthenticated();
         } catch (Exception e) {
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
@@ -330,7 +336,7 @@ public final class TaskEngine implements Tasks {
     private boolean mayPublishAs(String owner, @Nullable String cached) {
         return cached != null
                 ? cached.equals(owner)
-                : owner.equals(TaskSnapshot.PUBLIC_OWNER_KEY) && settings.shareUnownedTasks();
+                : owner.equals(TaskSnapshot.PUBLIC_OWNER_KEY) && settings.unauthenticated();
     }
 
     /**
@@ -420,7 +426,7 @@ public final class TaskEngine implements Tasks {
             throws Exception {
         var awaitHook = connector().awaitResult();
         if (awaitHook != null) {
-            return refresh(awaitHook.apply(ctx, request));
+            return refresh(ctx, awaitHook.apply(ctx, request));
         }
         return pollUntilTerminal(ctx, getRequest(request.taskId(), request.meta()), responseUndeliverable);
     }
@@ -452,7 +458,7 @@ public final class TaskEngine implements Tasks {
             throws Exception {
         var connector = connector();
         var getRequest = getRequest(request.taskId(), request.meta());
-        var current = refresh(connector.get().apply(ctx, getRequest));
+        var current = refresh(ctx, connector.get().apply(ctx, getRequest));
         if (current.status().isTerminal()) {
             throw TaskAwaitException.terminal(current.status());
         }
@@ -471,7 +477,7 @@ public final class TaskEngine implements Tasks {
         var undeliverable = responseUndeliverable.toCompletableFuture();
         var get = connector().get();
         while (true) {
-            var snapshot = refresh(get.apply(ctx, getRequest));
+            var snapshot = refresh(ctx, get.apply(ctx, getRequest));
             if (snapshot.status().isTerminal()) {
                 return snapshot;
             }

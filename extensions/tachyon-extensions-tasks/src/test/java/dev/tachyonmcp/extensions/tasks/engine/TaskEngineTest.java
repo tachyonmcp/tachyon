@@ -150,12 +150,13 @@ class TaskEngineTest {
     }
 
     @Test
-    void refreshUpdatesACachedTaskAndNeverCachesAnUnknownOne() {
+    void refreshUpdatesACachedTaskAndNeverCachesAnUnknownOne() throws Exception {
         var cached = registry.publish(snapshot("known", TaskState.WORKING, 2));
 
-        var refreshed = registry.refresh(snapshot("known", TaskState.COMPLETED, 3));
-        var stale = registry.refresh(snapshot("known", TaskState.WORKING, 1));
-        var unknown = registry.refresh(snapshot("unknown", TaskState.WORKING, 1));
+        var caller = NoopInteractionContext.INSTANCE;
+        var refreshed = registry.refresh(caller, snapshot("known", TaskState.COMPLETED, 3));
+        var stale = registry.refresh(caller, snapshot("known", TaskState.WORKING, 1));
+        var unknown = registry.refresh(caller, snapshot("unknown", TaskState.WORKING, 1));
 
         assertThat(refreshed.revision()).isEqualTo(3);
         assertThat(registry.get("known")).isEqualTo(refreshed).isNotEqualTo(cached);

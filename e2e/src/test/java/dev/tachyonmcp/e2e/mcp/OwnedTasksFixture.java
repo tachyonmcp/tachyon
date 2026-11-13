@@ -34,39 +34,27 @@ public final class OwnedTasksFixture {
     private final TestBearerTokens tokens = new TestBearerTokens();
     private final TestTaskConnector externalSystem = new TestTaskConnector();
     private final List<String> connectorCalls = new CopyOnWriteArrayList<>();
-    private final boolean shareUnownedTasks;
     private final boolean admitsAnonymous;
 
-    /** A fixture whose server shares tasks nobody owns with every caller, so tests can reach them. */
+    /** A fixture whose server admits signed-in callers only. */
     public OwnedTasksFixture() {
-        this(true, false);
+        this(false);
     }
 
-    private OwnedTasksFixture(boolean shareUnownedTasks, boolean admitsAnonymous) {
-        this.shareUnownedTasks = shareUnownedTasks;
+    private OwnedTasksFixture(boolean admitsAnonymous) {
         this.admitsAnonymous = admitsAnonymous;
     }
 
-    /** A fixture whose server keeps tasks nobody owns from every caller. */
-    public static OwnedTasksFixture hidingUnownedTasks() {
-        return new OwnedTasksFixture(false, false);
-    }
-
-    /**
-     * A fixture whose server also lets a request without credentials through as anonymous, and keeps
-     * tasks nobody owns from every caller.
-     */
+    /** A fixture whose server also lets a request without credentials through as anonymous. */
     public static OwnedTasksFixture admittingAnonymous() {
-        return new OwnedTasksFixture(false, true);
+        return new OwnedTasksFixture(true);
     }
 
     /** Secures the server with the fixture's tokens and wires the recording connector. */
     public void configure(ServerBuilder builder) {
         builder.capabilities(c -> c.tools())
                 .security(admitsAnonymous ? this::bearerOrAnonymous : TestBearerTokens.secured(tokens))
-                .withExtension(
-                        TasksExtension.class,
-                        t -> t.connector(recordingConnector()).shareUnownedTasks(shareUnownedTasks));
+                .withExtension(TasksExtension.class, t -> t.connector(recordingConnector()));
     }
 
     private void bearerOrAnonymous(SecurityConfig.Builder security) {
@@ -103,6 +91,14 @@ public final class OwnedTasksFixture {
     /** Starts a task in the external system without going through the server. */
     public void startExternally(TaskSnapshot snapshot) {
         externalSystem.start(snapshot);
+    }
+
+    /** Starts a public task in the external system: the only kind every caller reaches. */
+    public void startPublicExternally(TaskSnapshot snapshot) {
+        externalSystem.start(TaskSnapshot.builder()
+                .from(snapshot)
+                .ownerKey(TaskSnapshot.PUBLIC_OWNER_KEY)
+                .build());
     }
 
     /** Returns every connector call as {@code <method>:<taskId>:<caller>}, in order. */

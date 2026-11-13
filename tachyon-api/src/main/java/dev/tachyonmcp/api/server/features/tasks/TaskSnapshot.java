@@ -122,12 +122,10 @@ public interface TaskSnapshot extends HasMeta {
      * <p>The server stamps {@linkplain #ownerKeyOf the caller's key} on the snapshot a caller's tool
      * call returns, and refuses a task a caller owns to every other caller as if it did not exist.
      * Store it with the task and return it from the connector, so the owner holds after a restart and
-     * on every node. A snapshot the connector returns without it keeps the owner the server knows: the
-     * one it has cached, or remembers until the task's {@code ttl} once the snapshot leaves the cache.
-     * With no owner anywhere the task is unowned: a server that authenticates callers refuses it to
-     * every caller unless it shares unowned tasks, and a server without authentication gives it to
-     * every caller. A blank key is refused, so an owner a store lost and gave back as an empty string
-     * never passes for one.
+     * on every node. A snapshot the connector returns without it is unowned: a server that
+     * authenticates callers refuses it to every caller, and a server without authentication gives it
+     * to every caller. A blank key is refused, so an owner a store lost and gave back as an empty
+     * string never passes for one.
      *
      * @return the owner key, {@link #PUBLIC_OWNER_KEY}, or {@code null}
      */

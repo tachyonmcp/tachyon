@@ -18,8 +18,8 @@ import org.jspecify.annotations.Nullable;
  * as for an unknown id. Tachyon reads the task with {@code get} before each {@code cancel}, {@code
  * update} and {@code awaitResult}, when a tool returns a task, and for each task id a {@code
  * subscriptions/listen} stream names. On a server with authentication a task returned without an
- * owner reaches nobody, and a tool cannot create it, unless the tasks extension shares unowned
- * tasks. The connector may authorize further from its {@link
+ * owner reaches nobody, and a tool can return only a task {@code get} already returns for its
+ * caller, with that caller as owner. The connector may authorize further from its {@link
  * dev.tachyonmcp.api.runtime.InteractionContext} (for example against a tenant) and answer a task
  * the caller may not see with {@link TaskNotFoundException}, as for an unknown id. Generate ids that
  * cannot be guessed, as the MCP tasks specification requires.

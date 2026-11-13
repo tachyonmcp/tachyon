@@ -151,7 +151,7 @@ public final class TasksExtension implements ConfigurableExtension<TasksExtensio
                 settings.keepAlive(),
                 settings.pollInterval(),
                 settings.resultPollInterval(),
-                settings.shareUnownedTasks() || open);
+                open);
         var created =
                 new TaskEngine(effective, config.runtime().clock(), snapshot -> serializeResult(snapshot, serializer));
         var binding = new McpTaskBinding(server, created);
@@ -184,7 +184,6 @@ public final class TasksExtension implements ConfigurableExtension<TasksExtensio
         private Duration keepAlive = DEFAULT_KEEP_ALIVE;
         private @Nullable Duration pollInterval;
         private Duration resultPollInterval = TaskEngineSettings.DEFAULT_RESULT_POLL_INTERVAL;
-        private boolean shareUnownedTasks;
 
         Builder() {}
 
@@ -192,6 +191,12 @@ public final class TasksExtension implements ConfigurableExtension<TasksExtensio
          * Sets the connector to the system that owns task execution. Required. Modern operations
          * are required by the connector; legacy {@code tasks/list} and blocking result remain
          * optional.
+         *
+         * <p>The connector's snapshot names the owner of a task. On a server with authentication it
+         * must return the {@link TaskSnapshot#ownerKey() ownerKey} each task was created with: a task
+         * it returns without one reaches nobody, its creator included, and a tool can return only a
+         * task the connector already returns for its caller. A server without authentication is
+         * unaffected.
          *
          * @param connector the task execution connector
          * @return this builder
@@ -259,26 +264,6 @@ public final class TasksExtension implements ConfigurableExtension<TasksExtensio
         }
 
         /**
-         * Sets whether every caller reaches a task nobody owns: a snapshot with no {@link
-         * TaskSnapshot#ownerKey() ownerKey}, such as one started outside a tool call or published by
-         * the application without one. Default is {@code false}: on a server with authentication
-         * nobody reaches it, not even a caller let through as anonymous. A server without
-         * authentication always shares it. A task an anonymous caller creates is not unowned but
-         * {@link TaskSnapshot#PUBLIC_OWNER_KEY public}, and a task with an owner is never shared.
-         *
-         * <p>The connector's snapshot names the owner. With the default, a connector on a server with
-         * authentication must return the {@code ownerKey} each task was created with: a task it
-         * returns without one reaches nobody, its creator included, and a tool cannot create it.
-         *
-         * @param shareUnownedTasks whether every caller reaches a task nobody owns
-         * @return this builder
-         */
-        public Builder shareUnownedTasks(boolean shareUnownedTasks) {
-            this.shareUnownedTasks = shareUnownedTasks;
-            return this;
-        }
-
-        /**
          * Creates the extension.
          *
          * @return a new extension
@@ -290,8 +275,8 @@ public final class TasksExtension implements ConfigurableExtension<TasksExtensio
             if (connector == null) {
                 throw new IllegalStateException("TasksExtension requires a TaskConnector");
             }
-            return new TasksExtension(new TaskEngineSettings(
-                    connector, pageSize, keepAlive, pollInterval, resultPollInterval, shareUnownedTasks));
+            return new TasksExtension(
+                    new TaskEngineSettings(connector, pageSize, keepAlive, pollInterval, resultPollInterval, false));
         }
     }
 }

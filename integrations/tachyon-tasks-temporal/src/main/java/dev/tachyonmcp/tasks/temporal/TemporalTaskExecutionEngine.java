@@ -296,9 +296,9 @@ public final class TemporalTaskExecutionEngine {
          * memo: one started outside this engine, or by a version that did not write the memo. It is
          * asked on every {@code refresh}, {@code cancel} and {@code submitInput} for such a Workflow; a
          * caller it refuses gets {@link TaskNotFoundException}, as for an unknown id. A caller it admits
-         * does not become the owner: the snapshot carries none, so on a server with authentication a
-         * caller reaches the Workflow only if the server also shares unowned tasks. Keep the
-         * authorization those Workflows had before here until they finish. By default it refuses
+         * does not become the owner: the snapshot carries none, so on a server with authentication
+         * nobody reaches the Workflow, whatever this admits. On a server without authentication, keep
+         * the authorization those Workflows had before here until they finish. By default it refuses
          * everyone.
          *
          * @param unownedAccess admits the caller of the request to the Workflow with the given ID

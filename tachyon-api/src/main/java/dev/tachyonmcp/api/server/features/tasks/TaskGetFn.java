@@ -13,7 +13,8 @@ import dev.tachyonmcp.api.runtime.InteractionContext;
  *
  * <p>The snapshot also names who owns the task: return the {@link TaskSnapshot#ownerKey() ownerKey}
  * the task was created with. Tachyon checks the caller against it on every task request, and reads
- * it when a tool returns a task, so a tool cannot claim a task stored for someone else.
+ * it when a tool returns a task: on a server with authentication the task must already be here for
+ * that caller, so a tool cannot claim a task it did not create.
  */
 @FunctionalInterface
 @ExperimentalApi

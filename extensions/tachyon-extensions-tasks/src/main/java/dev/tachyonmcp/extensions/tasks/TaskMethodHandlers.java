@@ -118,11 +118,11 @@ final class TaskMethodHandlers {
             var connector = registry.connector();
             final TaskSnapshot snapshot;
             try {
-                snapshot = connector.get().apply(context, request);
+                snapshot = registry.refresh(context, connector.get().apply(context, request));
             } catch (TaskNotFoundException e) {
                 return taskNotFound("retrieve");
             }
-            return context.responseMapper().getTaskResult(registry.refresh(snapshot));
+            return context.responseMapper().getTaskResult(snapshot);
         }
     }
 
