@@ -14,6 +14,7 @@ import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
 import dev.tachyonmcp.api.server.features.tasks.Tasks;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
 import dev.tachyonmcp.core.server.TachyonServer;
+import dev.tachyonmcp.core.server.config.SecurityConfig;
 import dev.tachyonmcp.core.server.features.Pagination;
 import dev.tachyonmcp.core.server.features.tasks.TasksExtensionSupport;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
@@ -142,8 +143,17 @@ public final class TasksExtension implements ConfigurableExtension<TasksExtensio
 
     void install(ServerEngine server) {
         var serializer = server.payloadSerializer();
-        var created = new TaskEngine(
-                settings, server.config().runtime().clock(), snapshot -> serializeResult(snapshot, serializer));
+        var config = server.config();
+        var open = config.security().authentication() instanceof SecurityConfig.Authentication.Disabled;
+        var effective = new TaskEngineSettings(
+                settings.connector(),
+                settings.pageSize(),
+                settings.keepAlive(),
+                settings.pollInterval(),
+                settings.resultPollInterval(),
+                open);
+        var created =
+                new TaskEngine(effective, config.runtime().clock(), snapshot -> serializeResult(snapshot, serializer));
         var binding = new McpTaskBinding(server, created);
         created.addListener(binding);
         server.installTaskRuntime(binding);
@@ -174,7 +184,6 @@ public final class TasksExtension implements ConfigurableExtension<TasksExtensio
         private Duration keepAlive = DEFAULT_KEEP_ALIVE;
         private @Nullable Duration pollInterval;
         private Duration resultPollInterval = TaskEngineSettings.DEFAULT_RESULT_POLL_INTERVAL;
-        private boolean shareUnownedTasks;
 
         Builder() {}
 
@@ -182,6 +191,12 @@ public final class TasksExtension implements ConfigurableExtension<TasksExtensio
          * Sets the connector to the system that owns task execution. Required. Modern operations
          * are required by the connector; legacy {@code tasks/list} and blocking result remain
          * optional.
+         *
+         * <p>The connector's snapshot names the owner of a task. On a server with authentication it
+         * must return the {@link TaskSnapshot#ownerKey() ownerKey} each task was created with: a task
+         * it returns without one reaches nobody, its creator included, and a tool can return only a
+         * task the connector already returns for its caller. A server without authentication is
+         * unaffected.
          *
          * @param connector the task execution connector
          * @return this builder
@@ -249,22 +264,6 @@ public final class TasksExtension implements ConfigurableExtension<TasksExtensio
         }
 
         /**
-         * Sets whether every caller reaches a task nobody owns: a snapshot with no {@link
-         * dev.tachyonmcp.api.server.features.tasks.TaskSnapshot#ownerKey() ownerKey}, such as one
-         * started outside a tool call or published by the application without one. Default is
-         * {@code false}: only anonymous callers reach it, so a server without authentication is
-         * unaffected and an authenticated caller sees only its own tasks. A task with an owner is
-         * never shared.
-         *
-         * @param shareUnownedTasks whether every caller reaches a task nobody owns
-         * @return this builder
-         */
-        public Builder shareUnownedTasks(boolean shareUnownedTasks) {
-            this.shareUnownedTasks = shareUnownedTasks;
-            return this;
-        }
-
-        /**
          * Creates the extension.
          *
          * @return a new extension
@@ -276,8 +275,8 @@ public final class TasksExtension implements ConfigurableExtension<TasksExtensio
             if (connector == null) {
                 throw new IllegalStateException("TasksExtension requires a TaskConnector");
             }
-            return new TasksExtension(new TaskEngineSettings(
-                    connector, pageSize, keepAlive, pollInterval, resultPollInterval, shareUnownedTasks));
+            return new TasksExtension(
+                    new TaskEngineSettings(connector, pageSize, keepAlive, pollInterval, resultPollInterval, false));
         }
     }
 }

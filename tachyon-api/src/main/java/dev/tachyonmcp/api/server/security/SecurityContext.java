@@ -24,6 +24,13 @@ import org.jspecify.annotations.Nullable;
 public sealed interface SecurityContext permits AnonymousSecurityContext, AuthenticatedSecurityContext {
 
     /**
+     * The {@link #ownerKey() owner key} no caller has: it marks what every caller may reach, such as a
+     * task an anonymous caller created. It is not empty, so a store that turns an empty string into
+     * {@code NULL}, or a missing value into an empty string, never yields it.
+     */
+    String PUBLIC_OWNER_KEY = "<public>";
+
+    /**
      * Returns the context of an unauthenticated caller: no principal, no scopes.
      *
      * @return the anonymous context
@@ -38,6 +45,7 @@ public sealed interface SecurityContext permits AnonymousSecurityContext, Authen
      * @param principal the authenticated identity
      * @param scopes the scopes the caller was granted; copied
      * @return a new authenticated context
+     * @throws IllegalArgumentException if the principal's name is blank or {@link #PUBLIC_OWNER_KEY}
      */
     static SecurityContext authenticated(Principal principal, Collection<String> scopes) {
         return authenticated(principal, scopes, null);
@@ -51,6 +59,7 @@ public sealed interface SecurityContext permits AnonymousSecurityContext, Authen
      * @param scopes the scopes the caller was granted; copied
      * @param expiresAt when the credentials stop being valid, or {@code null} if they do not
      * @return a new authenticated context
+     * @throws IllegalArgumentException if the principal's name is blank or {@link #PUBLIC_OWNER_KEY}
      */
     static SecurityContext authenticated(Principal principal, Collection<String> scopes, @Nullable Instant expiresAt) {
         return authenticated(principal, scopes, expiresAt, principal.getName());
@@ -67,7 +76,7 @@ public sealed interface SecurityContext permits AnonymousSecurityContext, Authen
      * @param ownerKey what identifies this caller for ownership, unique across every issuer and
      *     tenant the server accepts; for example {@code issuer + "|" + subject}
      * @return a new authenticated context
-     * @throws IllegalArgumentException if {@code ownerKey} is blank
+     * @throws IllegalArgumentException if {@code ownerKey} is blank or {@link #PUBLIC_OWNER_KEY}
      */
     static SecurityContext authenticated(
             Principal principal, Collection<String> scopes, @Nullable Instant expiresAt, String ownerKey) {

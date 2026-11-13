@@ -41,13 +41,13 @@ import org.slf4j.LoggerFactory;
  * <p><b>Ownership.</b> A task a caller creates ({@link #publishAs}) belongs to that caller, from any
  * of its sessions: its {@link TaskSnapshot#ownerKey()} names it, and never changes. The owner lives
  * on the snapshot, so it lives wherever the connector stores the task: after a restart, and on every
- * node. This engine also remembers the owner of a task it evicted until the task's {@code ttl}, so a
- * connector that stores no owner keeps the task with its owner for that long; a task without a
- * {@code ttl}, and any task after a restart, has only the owner the connector stores. Every task
- * call a caller makes goes through {@link #connector()}, which answers a foreign caller exactly as
- * it would an unknown id; an owner this engine knows refuses before the real connector runs,
- * otherwise the connector's own snapshot names the owner. A task with no owner anywhere reaches
- * anonymous callers only, unless {@link TaskEngineSettings#shareUnownedTasks()}.
+ * node. The store names the owner: every task call a caller makes goes through {@link #connector()},
+ * which reads the task from the real connector and answers a foreign caller exactly as it would an
+ * unknown id. The owner this engine knows, cached or remembered since eviction until the task's
+ * {@code ttl}, may refuse a caller before the real connector runs, never admit one. A task an
+ * anonymous caller creates is public ({@link TaskSnapshot#PUBLIC_OWNER_KEY}): every caller reaches
+ * it. A task the connector returns without an owner reaches nobody, unless the server has no
+ * authentication ({@link TaskEngineSettings#unauthenticated()}).
  */
 public final class TaskEngine implements Tasks {
 
@@ -111,10 +111,10 @@ public final class TaskEngine implements Tasks {
     /**
      * Returns the connector to the system that owns task execution, as a caller may use it: a call
      * naming a task the caller may not reach fails with {@link TaskNotFoundException}, the exception
-     * an unknown id raises, and a listing leaves such tasks out. An owner this engine knows, cached
-     * or remembered since eviction, refuses before the real connector runs; for a task whose owner it
-     * does not know, {@code cancel}, {@code update} and {@code awaitResult} first read the task with
-     * {@code get} to learn it. The real connector is reachable from nowhere else in this engine.
+     * an unknown id raises, and a listing leaves such tasks out. {@code cancel}, {@code update} and
+     * {@code awaitResult} first read the task with {@code get}, for the owner its store names. Apart
+     * from the read {@link #publishAs} makes, the real connector is reachable from nowhere else in
+     * this engine.
      *
      * @return the guarded connector
      */
@@ -125,22 +125,13 @@ public final class TaskEngine implements Tasks {
     @SuppressWarnings("deprecation")
     private TaskConnector guard(TaskConnector connector) {
         var guarded = TaskConnector.builder()
-                .get((ctx, request) -> {
-                    var caller = Owner.of(ctx.securityContext());
-                    var known = knownOwner(request.taskId());
-                    if (known != null) {
-                        require(admits(caller, known, null), request.taskId());
-                    }
-                    var snapshot = connector.get().apply(ctx, request);
-                    require(admits(caller, known, snapshot.ownerKey()), request.taskId());
-                    return snapshot;
-                })
+                .get(this::read)
                 .cancel((ctx, request) -> {
-                    requireReachable(connector, ctx, request.taskId(), request.meta());
+                    read(ctx, getRequest(request.taskId(), request.meta()));
                     connector.cancel().apply(ctx, request);
                 })
                 .update((ctx, request) -> {
-                    requireReachable(connector, ctx, request.taskId(), request.meta());
+                    read(ctx, getRequest(request.taskId(), request.meta()));
                     connector.update().apply(ctx, request);
                 });
         var list = connector.list();
@@ -149,7 +140,7 @@ public final class TaskEngine implements Tasks {
                 var caller = Owner.of(ctx.securityContext());
                 var page = list.apply(ctx, request);
                 var visible = page.items().stream()
-                        .filter(snapshot -> admits(caller, knownOwner(snapshot.taskId()), snapshot.ownerKey()))
+                        .filter(snapshot -> storeAdmits(caller, knownOwner(snapshot.taskId()), snapshot.ownerKey()))
                         .toList();
                 return PaginatedResult.of(visible, page.nextCursor(), page.cursorValid());
             });
@@ -157,32 +148,24 @@ public final class TaskEngine implements Tasks {
         var awaitResult = connector.awaitResult();
         if (awaitResult != null) {
             guarded.awaitResult((ctx, request) -> {
-                requireReachable(connector, ctx, request.taskId(), request.meta());
+                read(ctx, getRequest(request.taskId(), request.meta()));
                 var result = awaitResult.apply(ctx, request);
                 var caller = Owner.of(ctx.securityContext());
-                require(admits(caller, knownOwner(request.taskId()), result.ownerKey()), request.taskId());
+                require(storeAdmits(caller, knownOwner(request.taskId()), result.ownerKey()), request.taskId());
                 return result;
             });
         }
         return guarded.build();
     }
 
-    /**
-     * Refuses {@code ctx}'s caller a task it may not reach, before an operation that changes or waits
-     * on it: from the owner this engine knows if there is one, otherwise from the connector's {@code
-     * get}.
-     */
-    private void requireReachable(
-            TaskConnector connector, InteractionContext ctx, String taskId, @Nullable Map<String, Object> meta)
-            throws Exception {
+    /** Reads the task from the real connector for the caller of {@code ctx}, or refuses it as unknown. */
+    private TaskSnapshot read(InteractionContext ctx, TaskGetRequest request) throws Exception {
         var caller = Owner.of(ctx.securityContext());
-        var known = knownOwner(taskId);
-        if (known != null) {
-            require(admits(caller, known, null), taskId);
-            return;
-        }
-        var stored = connector.get().apply(ctx, getRequest(taskId, meta));
-        require(admits(caller, null, stored.ownerKey()), taskId);
+        var known = knownOwner(request.taskId());
+        require(!refuses(known, caller), request.taskId());
+        var snapshot = settings.connector().get().apply(ctx, request);
+        require(storeAdmits(caller, known, snapshot.ownerKey()), request.taskId());
+        return snapshot;
     }
 
     /** The owner of the cached task, or the one remembered since its eviction. */
@@ -192,19 +175,21 @@ public final class TaskEngine implements Tasks {
     }
 
     private @Nullable String retainedOwner(String taskId) {
-        var kept = retained.get(taskId);
-        return kept != null && clock.instant().isBefore(kept.until()) ? kept.ownerKey() : null;
+        var retention = retained.get(taskId);
+        return retention != null && clock.instant().isBefore(retention.until()) ? retention.ownerKey() : null;
+    }
+
+    /** Whether {@code caller} may reach a task the real connector returned with the owner {@code stored}. */
+    private boolean storeAdmits(Owner caller, @Nullable String known, @Nullable String stored) {
+        return !refuses(known, caller) && (stored != null ? !refuses(stored, caller) : settings.unauthenticated());
     }
 
     /**
-     * Whether {@code caller} may reach a task whose owner this engine and the connector name. Every
-     * owner named must be the caller; with none named, the task is unowned.
+     * Whether {@code ownerKey} names an owner that is neither {@code caller} nor public. No owner
+     * refuses nobody.
      */
-    private boolean admits(Owner caller, @Nullable String known, @Nullable String stored) {
-        if (known == null && stored == null) {
-            return settings.shareUnownedTasks() || caller.key() == null;
-        }
-        return (known == null || known.equals(caller.key())) && (stored == null || stored.equals(caller.key()));
+    private static boolean refuses(@Nullable String ownerKey, Owner caller) {
+        return ownerKey != null && !ownerKey.equals(TaskSnapshot.PUBLIC_OWNER_KEY) && !ownerKey.equals(caller.key());
     }
 
     private static void require(boolean admitted, String taskId) throws TaskNotFoundException {
@@ -252,11 +237,14 @@ public final class TaskEngine implements Tasks {
      * snapshot without an owner keeps the cached one, a snapshot naming one gives it to a cached task
      * nobody owns yet, and a snapshot naming another owner is not cached.
      *
+     * @param ctx the caller the snapshot was read for
      * @param snapshot the connector's projection
      * @return the cached snapshot, or {@code snapshot} with the engine defaults if the task is not
      *     cached
+     * @throws TaskNotFoundException if the cached task has an owner that is neither the caller nor
+     *     public, as it can once someone else came to own the task after the read
      */
-    public TaskSnapshot refresh(TaskSnapshot snapshot) {
+    public TaskSnapshot refresh(InteractionContext ctx, TaskSnapshot snapshot) throws TaskNotFoundException {
         var effective = withDefaults(Objects.requireNonNull(snapshot, "snapshot"));
         var entry = entries.get(effective.taskId());
         if (entry == null) {
@@ -267,39 +255,88 @@ public final class TaskEngine implements Tasks {
         } else {
             logger.debug("Not caching a read of task {} that names another owner", effective.taskId());
         }
-        return entry.snapshot();
+        var cached = entry.snapshot();
+        require(!refuses(cached.ownerKey(), Owner.of(ctx.securityContext())), cached.taskId());
+        return cached;
     }
 
     /**
      * Caches {@code snapshot} for a task a caller creates, routing its push traffic along
      * {@code route} and stamping the caller of {@code ctx} on it as its {@link TaskSnapshot#ownerKey()
-     * owner}. An unrouted entry takes the route; a routed one keeps its own. The owner never changes:
-     * the caller must be the task's owner, so a task owned by someone else, cached or evicted before
-     * its {@code ttl}, a cached task nobody owns, and a snapshot naming another owner are refused
-     * before anything about them changes.
+     * owner}: its owner key, or {@link TaskSnapshot#PUBLIC_OWNER_KEY} for an anonymous caller. An
+     * unrouted entry takes the route; a routed one keeps its own.
+     *
+     * <p>The owner never changes, so the publish is refused, before anything about the task changes,
+     * for:
+     *
+     * <ul>
+     *   <li>a snapshot naming another owner;
+     *   <li>a task owned by someone else, cached or evicted before its {@code ttl};
+     *   <li>a public task, when the caller is signed in;
+     *   <li>a cached task nobody owns, with one exception: on a server without authentication
+     *       ({@link TaskEngineSettings#unauthenticated()}) an anonymous caller's publish makes it
+     *       public;
+     *   <li>a task the real connector does not return for the caller as its owner: one it does not
+     *       know or hides, stores for another owner, or stores for nobody. So a tool cannot claim a
+     *       task it did not create. A server without authentication accepts a task the connector
+     *       does not know or stores for nobody.
+     * </ul>
+     *
+     * <p>Reads the task from the real connector, so never call it on an event loop.
      *
      * @param ctx the context of the creating request, which fixes the caller
      * @param snapshot the task projection
      * @param route where push traffic goes, or {@link TaskRoute#NONE}
      * @return the effective snapshot, carrying the caller's owner key
-     * @throws IllegalStateException if the task already has a different owner
+     * @throws IllegalStateException if the task already has a different owner, or the connector fails
+     *     to read it
      */
     public TaskSnapshot publishAs(InteractionContext ctx, TaskSnapshot snapshot, TaskRoute route) {
-        var key = Owner.of(ctx.securityContext()).key();
+        var owner = TaskSnapshot.ownerKeyOf(ctx.securityContext());
         Objects.requireNonNull(snapshot, "snapshot");
         Objects.requireNonNull(route, "route");
-        if (snapshot.ownerKey() != null && !snapshot.ownerKey().equals(key)) {
+        if (snapshot.ownerKey() != null && !snapshot.ownerKey().equals(owner)) {
             throw refused(snapshot);
         }
-        var effective = withDefaults(TaskEntry.withOwner(snapshot, key));
+        var effective = withDefaults(TaskEntry.withOwner(snapshot, owner));
+        if (!storeAllowsClaim(ctx, effective.taskId(), owner)) {
+            throw refused(effective);
+        }
         var entry = place(effective, route, true);
-        if (entry == null || !Objects.equals(entry.snapshot().ownerKey(), key)) {
+        if (entry == null || !mayPublishAs(owner, entry.snapshot().ownerKey()) || !entry.publish(effective)) {
             throw refused(effective);
         }
         entry.route(route);
-        entry.publish(effective);
         entry.notifyIfNewer(this::fireStatus);
         return entry.snapshot();
+    }
+
+    /**
+     * Whether the real connector returns the task for the caller with {@code owner} as its owner. A
+     * task it does not know reads the same as one it hides from the caller, so neither is the
+     * caller's. A server without authentication accepts both, and a task stored for nobody.
+     */
+    private boolean storeAllowsClaim(InteractionContext ctx, String taskId, String owner) {
+        try {
+            var stored = settings.connector()
+                    .get()
+                    .apply(ctx, getRequest(taskId, null))
+                    .ownerKey();
+            return stored != null ? stored.equals(owner) : settings.unauthenticated();
+        } catch (TaskNotFoundException e) {
+            return settings.unauthenticated();
+        } catch (Exception e) {
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+            throw new IllegalStateException("Could not read the stored owner of a task", e);
+        }
+    }
+
+    private boolean mayPublishAs(String owner, @Nullable String cached) {
+        return cached != null
+                ? cached.equals(owner)
+                : owner.equals(TaskSnapshot.PUBLIC_OWNER_KEY) && settings.unauthenticated();
     }
 
     /**
@@ -310,12 +347,12 @@ public final class TaskEngine implements Tasks {
      */
     private @Nullable TaskEntry place(TaskSnapshot effective, TaskRoute route, boolean claim) {
         return entries.computeIfAbsent(effective.taskId(), taskId -> {
-            var kept = retainedOwner(taskId);
+            var retainedOwner = retainedOwner(taskId);
             var claimed = effective.ownerKey();
-            if (kept != null && !kept.equals(claimed) && (claim || claimed != null)) {
+            if (retainedOwner != null && !retainedOwner.equals(claimed) && (claim || claimed != null)) {
                 return null;
             }
-            var owned = TaskEntry.withOwner(effective, kept != null ? kept : claimed);
+            var owned = TaskEntry.withOwner(effective, retainedOwner != null ? retainedOwner : claimed);
             return new TaskEntry(owned, route, settings.keepAlive(), clock);
         });
     }
@@ -329,7 +366,7 @@ public final class TaskEngine implements Tasks {
 
     /**
      * Whether a stream {@code caller} opened still follows the task after {@code snapshot}: the owner
-     * it names must be the caller. A snapshot naming no owner goes to every stream, because {@link
+     * it names must be the caller or public. A snapshot naming no owner goes to every stream, because {@link
      * #readableTaskIds} already decided who may read the task when the stream opened. Safe to ask for
      * every event.
      *
@@ -338,8 +375,7 @@ public final class TaskEngine implements Tasks {
      * @return whether the stream receives it
      */
     public boolean admits(Owner caller, TaskSnapshot snapshot) {
-        var owner = snapshot.ownerKey();
-        return owner == null || owner.equals(caller.key());
+        return !refuses(snapshot.ownerKey(), caller);
     }
 
     private void fireStatus(TaskSnapshot snapshot, TaskRoute route) {
@@ -390,7 +426,7 @@ public final class TaskEngine implements Tasks {
             throws Exception {
         var awaitHook = connector().awaitResult();
         if (awaitHook != null) {
-            return refresh(awaitHook.apply(ctx, request));
+            return refresh(ctx, awaitHook.apply(ctx, request));
         }
         return pollUntilTerminal(ctx, getRequest(request.taskId(), request.meta()), responseUndeliverable);
     }
@@ -422,7 +458,7 @@ public final class TaskEngine implements Tasks {
             throws Exception {
         var connector = connector();
         var getRequest = getRequest(request.taskId(), request.meta());
-        var current = refresh(connector.get().apply(ctx, getRequest));
+        var current = refresh(ctx, connector.get().apply(ctx, getRequest));
         if (current.status().isTerminal()) {
             throw TaskAwaitException.terminal(current.status());
         }
@@ -441,7 +477,7 @@ public final class TaskEngine implements Tasks {
         var undeliverable = responseUndeliverable.toCompletableFuture();
         var get = connector().get();
         while (true) {
-            var snapshot = refresh(get.apply(ctx, getRequest));
+            var snapshot = refresh(ctx, get.apply(ctx, getRequest));
             if (snapshot.status().isTerminal()) {
                 return snapshot;
             }
@@ -551,15 +587,15 @@ public final class TaskEngine implements Tasks {
 
     void runJanitorSweep() {
         var now = clock.instant();
-        retained.values().removeIf(kept -> !now.isBefore(kept.until()));
+        retained.values().removeIf(retention -> !now.isBefore(retention.until()));
         for (var cached : entries.entrySet()) {
             var taskId = cached.getKey();
             var entry = cached.getValue();
             entry.evictIfExpired(() -> {
-                var kept = retain(taskId, entry.snapshot(), now);
+                var retention = retain(taskId, entry.snapshot(), now);
                 var removed = entries.remove(taskId, entry);
-                if (!removed && kept != null) {
-                    retained.remove(taskId, kept);
+                if (!removed && retention != null) {
+                    retained.remove(taskId, retention);
                 }
                 return removed;
             });
@@ -577,8 +613,8 @@ public final class TaskEngine implements Tasks {
         if (!now.isBefore(until)) {
             return null;
         }
-        var kept = new Retained(owner, until);
-        retained.put(taskId, kept);
-        return kept;
+        var retention = new Retained(owner, until);
+        retained.put(taskId, retention);
+        return retention;
     }
 }

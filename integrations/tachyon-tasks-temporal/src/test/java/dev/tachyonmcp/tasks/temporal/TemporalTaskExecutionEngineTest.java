@@ -172,7 +172,7 @@ class TemporalTaskExecutionEngineTest {
         }
     }
 
-    /** A Workflow an anonymous caller started has no owner: access to it is the application's decision. */
+    /** A Workflow an anonymous caller started is public: every caller reaches it. */
     @Test
     void aWorkflowStartedAnonymouslyIsOpenToEveryCaller() throws Exception {
         try (var environment = TestWorkflowEnvironment.newInstance()) {
@@ -180,7 +180,9 @@ class TemporalTaskExecutionEngineTest {
             worker.registerWorkflowImplementationTypes(TestWorkflowImpl.class);
             environment.start();
             var engine = engine(environment);
-            engine.start(CONTEXT, request("workflow-open"));
+            assertThat(engine.start(CONTEXT, request("workflow-open")).ownerKey())
+                    .as("the task an anonymous caller starts is public")
+                    .isEqualTo(TaskSnapshot.PUBLIC_OWNER_KEY);
 
             await().atMost(Duration.ofSeconds(5))
                     .untilAsserted(() -> assertThat(
@@ -191,11 +193,11 @@ class TemporalTaskExecutionEngineTest {
 
             var workflow = environment.getWorkflowClient().newUntypedWorkflowStub("workflow-open");
             assertThat(workflow.describe().getMemo(TemporalTaskExecutionEngine.OWNER_MEMO, String.class))
-                    .as("an empty memo marks it unowned by design")
-                    .isEqualTo("");
+                    .as("the memo holds the public owner key")
+                    .isEqualTo(TaskSnapshot.PUBLIC_OWNER_KEY);
             assertThat(engine.refresh(ALICE, get("workflow-open")).ownerKey())
-                    .as("nobody owns it")
-                    .isNull();
+                    .as("it reads back as public, not as a task nobody owns")
+                    .isEqualTo(TaskSnapshot.PUBLIC_OWNER_KEY);
             assertThatThrownBy(() -> workflow.getResult(Void.class))
                     .isInstanceOf(WorkflowFailedException.class)
                     .hasCauseInstanceOf(CanceledFailure.class);
@@ -220,6 +222,14 @@ class TemporalTaskExecutionEngineTest {
                                     .setTaskQueue(TASK_QUEUE)
                                     .build())
                     .start(Map.of("customer", "Ada"));
+            client.newUntypedWorkflowStub(
+                            "TestWorkflow",
+                            WorkflowOptions.newBuilder()
+                                    .setWorkflowId("workflow-empty-memo")
+                                    .setTaskQueue(TASK_QUEUE)
+                                    .setMemo(Map.of(TemporalTaskExecutionEngine.OWNER_MEMO, ""))
+                                    .build())
+                    .start(Map.of("customer", "Ada"));
             var byDefault = engine(client);
             var admitsAlice = builder(client)
                     .unownedAccess((context, taskId) -> context == ALICE)
@@ -227,6 +237,7 @@ class TemporalTaskExecutionEngineTest {
 
             for (var caller : List.of(ALICE, BOB, CONTEXT)) {
                 assertHidden(byDefault, caller, "workflow-legacy");
+                assertHidden(admitsAlice, caller, "workflow-empty-memo");
             }
             for (var stranger : List.of(BOB, CONTEXT)) {
                 assertHidden(admitsAlice, stranger, "workflow-legacy");

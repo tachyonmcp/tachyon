@@ -86,7 +86,9 @@ class TasksExtensionTest extends AbstractStatelessMcpE2eTest<McpClient> {
                       }
                     }
                   """);
-            assertThat(taskEngine.refreshedTaskIds()).containsExactly("workflow-1");
+            assertThat(taskEngine.refreshedTaskIds())
+                    .as("tasks/get reads the task from the connector")
+                    .containsOnly("workflow-1");
         }
     }
 
@@ -120,8 +122,8 @@ class TasksExtensionTest extends AbstractStatelessMcpE2eTest<McpClient> {
                     }
                   """);
             assertThat(taskEngine.refreshedTaskIds())
-                    .as("read for its owner before the cancel, then by tasks/get")
-                    .containsExactly("workflow-cancel", "workflow-cancel");
+                    .as("the connector is read for this task only")
+                    .containsOnly("workflow-cancel");
         }
     }
 

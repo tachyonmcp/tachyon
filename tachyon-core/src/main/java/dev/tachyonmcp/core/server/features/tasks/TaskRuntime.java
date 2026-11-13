@@ -48,12 +48,15 @@ public interface TaskRuntime {
      * <p>The owner never changes. A task nobody owns, for example one a worker published through
      * {@code TachyonServer#tasks()} before the tool returned, cannot be claimed afterwards, and a task
      * owned by someone else cannot be taken over. Both are refused and nothing about them changes.
+     * So is, on a server with authentication, a task the implementation's store does not hold for
+     * the caller: a tool returns only a task it created for its caller and stored with its owner.
      *
      * @param context the context of the tool call, which fixes the session and the caller
      * @param snapshot the task the tool returned
      * @param progressToken the tool call's progress token, or {@code null} when it sent none
      * @return the effective snapshot
-     * @throws IllegalStateException if the task already has a different owner
+     * @throws IllegalStateException if the task already has a different owner, or its stored owner
+     *     cannot be read
      */
     TaskSnapshot publish(DispatchContext context, TaskSnapshot snapshot, @Nullable ProgressToken progressToken);
 

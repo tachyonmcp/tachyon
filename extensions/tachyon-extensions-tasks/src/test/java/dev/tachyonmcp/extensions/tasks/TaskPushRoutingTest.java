@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import dev.tachyonmcp.api.server.domain.ProgressToken;
 import dev.tachyonmcp.api.server.features.PaginatedResult;
 import dev.tachyonmcp.api.server.features.tasks.TaskConnector;
+import dev.tachyonmcp.api.server.features.tasks.TaskNotFoundException;
 import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
 import dev.tachyonmcp.api.server.features.tasks.TaskState;
 import dev.tachyonmcp.api.server.features.tasks.Tasks;
@@ -30,7 +31,9 @@ class TaskPushRoutingTest {
 
     /** Serves legacy {@code tasks/list}, so no push may hint at the task set: MCP defines no {@code tasks/list_changed}. */
     private static final TaskConnector CONNECTOR = TaskConnector.builder()
-            .get((ctx, request) -> null)
+            .get((ctx, request) -> {
+                throw new TaskNotFoundException(request.taskId());
+            })
             .cancel((ctx, request) -> {})
             .update((ctx, request) -> {})
             .list((ctx, request) -> PaginatedResult.of(List.of(), null, true))

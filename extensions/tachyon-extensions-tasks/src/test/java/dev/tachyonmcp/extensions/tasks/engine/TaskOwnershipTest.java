@@ -18,6 +18,7 @@ import dev.tachyonmcp.api.server.features.tasks.TaskState;
 import dev.tachyonmcp.api.server.features.tasks.TaskUpdateRequest;
 import dev.tachyonmcp.api.server.security.SecurityContext;
 import dev.tachyonmcp.core.server.features.Pagination;
+import dev.tachyonmcp.core.server.security.Owner;
 import dev.tachyonmcp.core.server.session.NoopInteractionContext;
 import java.time.Clock;
 import java.time.Duration;
@@ -31,6 +32,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 
@@ -38,9 +40,8 @@ import org.junit.jupiter.api.Test;
  * A task belongs to the caller that created it, and its owner travels with its snapshot, so the
  * connector that stores the task stores the owner too. The engine answers anyone else as it answers
  * an unknown id, whether the task is cached, evicted, or unknown to this engine (another node, a
- * restart). The engine remembers the owner of an evicted task until the task's ttl, for a connector
- * that stores none. A task nobody owns is reached only by anonymous callers unless the server shares
- * it.
+ * restart). The store names the owner: the owner this engine knows may refuse a caller, never admit
+ * one. A task its store names no owner for reaches nobody unless the server has no authentication.
  */
 class TaskOwnershipTest {
 
@@ -75,24 +76,91 @@ class TaskOwnershipTest {
 
     @Test
     void aCallersPublishStampsItsOwnerOnTheSnapshot() {
-        var owned = engine.publishAs(alice, task("owned", TaskState.WORKING, 1, null), TaskRoute.NONE);
-        var anonymousTask = engine.publishAs(anonymous, task("anonymous", TaskState.WORKING, 1, null), TaskRoute.NONE);
+        var owned = start(engine, alice, task("owned", TaskState.WORKING, 1, null), TaskRoute.NONE);
+        var anonymousTask = start(engine, anonymous, task("anonymous", TaskState.WORKING, 1, null), TaskRoute.NONE);
 
         assertThat(owned.ownerKey()).isEqualTo("alice");
         assertThat(engine.get("owned")).isEqualTo(owned);
         assertThat(anonymousTask.ownerKey())
-                .as("an anonymous caller owns nothing")
-                .isNull();
+                .as("a task an anonymous caller creates is public")
+                .isEqualTo(TaskSnapshot.PUBLIC_OWNER_KEY);
         assertThatThrownBy(() -> engine.publishAs(bob, owned("forged", TaskState.WORKING, 1, "alice"), TaskRoute.NONE))
                 .as("a caller cannot publish a task stamped with someone else's owner")
                 .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> engine.publishAs(
+                        bob, owned("forged", TaskState.WORKING, 1, TaskSnapshot.PUBLIC_OWNER_KEY), TaskRoute.NONE))
+                .as("a signed-in caller's tool cannot make its task public")
+                .isInstanceOf(IllegalStateException.class);
         assertThat(engine.get("forged")).isNull();
+        for (var blank : List.of("", " ")) {
+            assertThatThrownBy(() -> owned("blank", TaskState.WORKING, 1, blank))
+                    .as("an owner a store lost and gave back empty is not the public key")
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+    }
+
+    @Test
+    void aPublicTaskReachesEveryCallerAndStaysPublic() throws Exception {
+        var created = start(engine, anonymous, task("public", TaskState.COMPLETED, 1, TTL), TaskRoute.NONE);
+        var byTheApplication =
+                engine.publish(owned("by-the-application", TaskState.WORKING, 1, TaskSnapshot.PUBLIC_OWNER_KEY));
+        store(byTheApplication);
+        var connector = engine.connector();
+
+        assertThat(byTheApplication.ownerKey())
+                .as("the application may publish a public task")
+                .isEqualTo(TaskSnapshot.PUBLIC_OWNER_KEY);
+        for (var caller : List.of(alice, bob, anonymous)) {
+            for (var taskId : List.of("public", "by-the-application")) {
+                assertThat(connector.get().apply(caller, get(taskId)).taskId()).isEqualTo(taskId);
+                connector.cancel().apply(caller, cancel(taskId));
+                assertThat(connector
+                                .awaitResult()
+                                .apply(caller, awaitResult(taskId))
+                                .taskId())
+                        .isEqualTo(taskId);
+            }
+            assertThat(engine.admits(Owner.of(caller.securityContext()), created))
+                    .as("a stream any caller opened follows a public task")
+                    .isTrue();
+        }
+        assertThatThrownBy(() -> engine.publishAs(alice, task("public", TaskState.COMPLETED, 2, TTL), TaskRoute.NONE))
+                .as("a public task is nobody's to take over")
+                .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> engine.publish(owned("public", TaskState.COMPLETED, 2, "alice")))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(engine.publishAs(anonymous, task("public", TaskState.COMPLETED, 2, TTL), TaskRoute.NONE)
+                        .revision())
+                .as("an anonymous caller publishes for it again")
+                .isEqualTo(2);
+
+        clock.advance(KEEP_ALIVE.plusSeconds(1));
+        engine.runJanitorSweep();
+
+        assertThat(engine.get("public")).as("the snapshot was evicted").isNull();
+        assertThat(connector.get().apply(bob, get("public")).taskId())
+                .as("an evicted task stays public: its store names the public key")
+                .isEqualTo("public");
+        assertThatThrownBy(() -> engine.publishAs(alice, task("public", TaskState.COMPLETED, 3, TTL), TaskRoute.NONE))
+                .isInstanceOf(IllegalStateException.class);
+
+        clock.advance(TTL);
+        engine.runJanitorSweep();
+
+        for (var caller : List.of(alice, bob, anonymous)) {
+            for (var each : List.of(engine, engine(false))) {
+                assertThat(each.connector().get().apply(caller, get("public")).ownerKey())
+                        .as("the stored public key keeps the task public past its ttl and after a restart")
+                        .isEqualTo(TaskSnapshot.PUBLIC_OWNER_KEY);
+            }
+        }
     }
 
     @Test
     void anotherCallerNeverReachesTheRealConnectorForACachedOwnedTask() throws Exception {
-        store(engine.publishAs(alice, task("owned", TaskState.WORKING, 1, null), new TestRoute("alice-session")));
+        start(engine, alice, task("owned", TaskState.WORKING, 1, null), new TestRoute("alice-session"));
         var connector = engine.connector();
+        connectorCalls.clear();
 
         assertThatThrownBy(() -> connector.get().apply(bob, get("owned"))).isInstanceOf(TaskNotFoundException.class);
         assertThatThrownBy(() -> connector.cancel().apply(bob, cancel("owned")))
@@ -106,16 +174,18 @@ class TaskOwnershipTest {
         assertThat(connectorCalls).as("nothing reached the real connector").isEmpty();
 
         assertThat(connector.get().apply(alice, get("owned")).taskId()).isEqualTo("owned");
+        connectorCalls.clear();
         connector.cancel().apply(alice, cancel("owned"));
         assertThat(connectorCalls)
-                .as("the cached owner needs no extra read before a cancel")
-                .containsExactly("get:owned", "cancel:owned");
+                .as("the store names the owner before a cancel, even for a cached task")
+                .containsSubsequence("get:owned", "cancel:owned");
     }
 
     @Test
     void aRestartedEngineReadsTheOwnerFromTheConnector() throws Exception {
-        store(engine.publishAs(alice, task("owned", TaskState.WORKING, 1, null), TaskRoute.NONE));
-        var restarted = engine(false).connector();
+        start(engine, alice, task("owned", TaskState.WORKING, 1, null), TaskRoute.NONE);
+        var restartedEngine = engine(false);
+        var restarted = restartedEngine.connector();
 
         assertThatThrownBy(() -> restarted.get().apply(bob, get("owned"))).isInstanceOf(TaskNotFoundException.class);
         assertThatThrownBy(() -> restarted.cancel().apply(bob, cancel("owned")))
@@ -129,17 +199,28 @@ class TaskOwnershipTest {
         assertThat(connectorCalls)
                 .as("an uncached task is read to learn its owner, and nothing else reaches the connector")
                 .containsOnly("get:owned");
+        assertThatThrownBy(
+                        () -> restartedEngine.publishAs(bob, task("owned", TaskState.WORKING, 2, null), TaskRoute.NONE))
+                .as("a tool cannot claim a task its store holds for someone else")
+                .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() ->
+                        restartedEngine.publishAs(anonymous, task("owned", TaskState.WORKING, 2, null), TaskRoute.NONE))
+                .as("nor can an anonymous caller's tool make it public")
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(restartedEngine.get("owned"))
+                .as("a refused claim caches nothing")
+                .isNull();
 
-        connectorCalls.clear();
         assertThat(restarted.get().apply(alice, get("owned")).ownerKey()).isEqualTo("alice");
+        connectorCalls.clear();
         restarted.cancel().apply(alice, cancel("owned"));
-        assertThat(connectorCalls).containsExactly("get:owned", "get:owned", "cancel:owned");
+        assertThat(connectorCalls).containsSubsequence("get:owned", "cancel:owned");
     }
 
     @Test
     void anEvictedTaskStaysHiddenWhetherOrNotItHasATtl() throws Exception {
-        store(engine.publishAs(alice, task("with-ttl", TaskState.COMPLETED, 1, TTL), TaskRoute.NONE));
-        store(engine.publishAs(alice, task("without-ttl", TaskState.COMPLETED, 1, null), TaskRoute.NONE));
+        start(engine, alice, task("with-ttl", TaskState.COMPLETED, 1, TTL), TaskRoute.NONE);
+        start(engine, alice, task("without-ttl", TaskState.COMPLETED, 1, null), TaskRoute.NONE);
         var connector = engine.connector();
 
         clock.advance(KEEP_ALIVE.plusSeconds(1));
@@ -163,95 +244,118 @@ class TaskOwnershipTest {
     }
 
     @Test
-    void anEvictedTaskKeepsItsOwnerUntilItsTtlEvenIfTheConnectorStoresNone() throws Exception {
-        var shared = engine(true);
-        var engines = List.of(engine, shared);
-        for (var each : engines) {
-            each.publishAs(alice, task("kept", TaskState.COMPLETED, 1, TTL), TaskRoute.NONE);
+    void aStoreThatNamesNoOwnerHidesTheTaskUnlessTheServerHasNoAuthentication() throws Exception {
+        store(task("kept", TaskState.COMPLETED, 1, TTL));
+        var noAuth = engine(true);
+
+        for (var caller : List.of(alice, bob, anonymous)) {
+            assertThatThrownBy(
+                            () -> engine.publishAs(caller, task("kept", TaskState.COMPLETED, 1, TTL), TaskRoute.NONE))
+                    .as("where unowned tasks are hidden, a task its store names no owner for cannot be created")
+                    .isInstanceOf(IllegalStateException.class);
+            assertThatThrownBy(() -> engine.connector().get().apply(caller, get("kept")))
+                    .as("with authentication nobody reaches a task nobody owns")
+                    .isInstanceOf(TaskNotFoundException.class);
         }
+        assertThat(engine.get("kept")).as("a refused claim caches nothing").isNull();
+        assertThat(noAuth.publishAs(alice, task("kept", TaskState.COMPLETED, 1, TTL), TaskRoute.NONE)
+                        .ownerKey())
+                .as("creation still works on a server without authentication")
+                .isEqualTo("alice");
+    }
+
+    @Test
+    void theOwnerThisEngineKnowsRefusesAnotherCallerWhileCachedAndAfterEviction() throws Exception {
+        store(task("kept", TaskState.COMPLETED, 1, TTL));
+        var noAuth = engine(true);
+        noAuth.publishAs(alice, task("kept", TaskState.COMPLETED, 1, TTL), TaskRoute.NONE);
+
+        assertOnlyAliceReachesKept(noAuth, "cached");
+
         clock.advance(KEEP_ALIVE.plusSeconds(1));
+        noAuth.runJanitorSweep();
 
-        for (var each : engines) {
-            each.runJanitorSweep();
-            var connector = each.connector();
-            var bobsSession = new TestRoute("bob-session");
-
-            assertThat(each.get("kept")).as("the snapshot was evicted").isNull();
-            assertThatThrownBy(() -> connector.get().apply(bob, get("kept")))
-                    .as("sharing unowned tasks never shares an evicted owned one")
-                    .isInstanceOf(TaskNotFoundException.class);
-            assertThatThrownBy(() -> connector.cancel().apply(bob, cancel("kept")))
-                    .isInstanceOf(TaskNotFoundException.class);
-            assertThatThrownBy(() -> connector.get().apply(anonymous, get("kept")))
-                    .isInstanceOf(TaskNotFoundException.class);
-            assertThat(connectorCalls)
-                    .as("the retained owner refuses before the connector runs")
-                    .isEmpty();
-            assertThatThrownBy(() -> each.publishAs(bob, task("kept", TaskState.COMPLETED, 2, TTL), bobsSession))
-                    .as("another caller cannot claim the id of an evicted task")
-                    .isInstanceOf(IllegalStateException.class);
-            assertThatThrownBy(() -> each.publishAs(anonymous, task("kept", TaskState.COMPLETED, 2, TTL), bobsSession))
-                    .isInstanceOf(IllegalStateException.class);
-            assertThatThrownBy(() -> each.publish(owned("kept", TaskState.COMPLETED, 2, "bob")))
-                    .isInstanceOf(IllegalStateException.class);
-            assertThat(each.get("kept")).as("a refused claim caches nothing").isNull();
-
-            connector.cancel().apply(alice, cancel("kept"));
-            assertThat(connector.get().apply(alice, get("kept")).taskId())
-                    .as("the owner still reaches a task whose connector stores no owner")
-                    .isEqualTo("kept");
-            assertThat(connectorCalls)
-                    .as("the retained owner needs no extra read before a cancel")
-                    .containsExactly("cancel:kept", "get:kept");
-            connectorCalls.clear();
-        }
+        assertThat(noAuth.get("kept")).as("the snapshot was evicted").isNull();
+        assertOnlyAliceReachesKept(noAuth, "evicted");
+        assertThat(noAuth.get("kept")).as("a refused claim caches nothing").isNull();
 
         clock.advance(TTL);
-        engines.forEach(TaskEngine::runJanitorSweep);
+        noAuth.runJanitorSweep();
 
-        assertThat(shared.connector().get().apply(bob, get("kept")).taskId())
-                .as("past its ttl only the connector knows the task, and it stores no owner")
+        assertThat(noAuth.connector().get().apply(bob, get("kept")).taskId())
+                .as("past its ttl only the store knows the task, and it names no owner")
                 .isEqualTo("kept");
-        assertThatThrownBy(() -> engine.connector().get().apply(bob, get("kept")))
-                .isInstanceOf(TaskNotFoundException.class);
-        assertThat(engine.connector().get().apply(anonymous, get("kept")).taskId())
-                .isEqualTo("kept");
-        assertThat(engine.publishAs(bob, task("kept", TaskState.WORKING, 1, TTL), TaskRoute.NONE)
+        assertThat(noAuth.publishAs(bob, task("kept", TaskState.WORKING, 1, TTL), TaskRoute.NONE)
                         .ownerKey())
-                .as("past its ttl the id is free again")
+                .as("so on a server without authentication the id is free again")
                 .isEqualTo("bob");
+    }
+
+    /** The store names no owner for the task "kept"; {@code noAuth} knows alice created it. */
+    private void assertOnlyAliceReachesKept(TaskEngine noAuth, String stage) throws Exception {
+        var connector = noAuth.connector();
+        var bobsSession = new TestRoute("bob-session");
+        connectorCalls.clear();
+
+        assertThatThrownBy(() -> connector.get().apply(bob, get("kept")))
+                .as("%s: no authentication never opens a task this engine knows the owner of", stage)
+                .isInstanceOf(TaskNotFoundException.class);
+        assertThatThrownBy(() -> connector.cancel().apply(bob, cancel("kept")))
+                .isInstanceOf(TaskNotFoundException.class);
+        assertThatThrownBy(() -> connector.get().apply(anonymous, get("kept")))
+                .isInstanceOf(TaskNotFoundException.class);
+        assertThat(connectorCalls)
+                .as("%s: the owner this engine knows refuses before the connector runs", stage)
+                .isEmpty();
+        assertThatThrownBy(() -> noAuth.publishAs(bob, task("kept", TaskState.COMPLETED, 2, TTL), bobsSession))
+                .as("%s: another caller cannot claim the id", stage)
+                .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> noAuth.publishAs(anonymous, task("kept", TaskState.COMPLETED, 2, TTL), bobsSession))
+                .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> noAuth.publish(owned("kept", TaskState.COMPLETED, 2, "bob")))
+                .isInstanceOf(IllegalStateException.class);
+
+        connectorCalls.clear();
+        connector.cancel().apply(alice, cancel("kept"));
+        assertThat(connector.get().apply(alice, get("kept")).taskId())
+                .as("%s: the owner still reaches a task whose store names no owner", stage)
+                .isEqualTo("kept");
+        assertThat(connectorCalls).containsSubsequence("get:kept", "cancel:kept");
     }
 
     @Test
     void theRetainedOwnerComesBackWithTheTaskAndGoesWhenTheApplicationRemovesIt() throws Exception {
-        engine.publishAs(alice, task("kept", TaskState.COMPLETED, 1, TTL), TaskRoute.NONE);
-        engine.publishAs(alice, task("removed", TaskState.COMPLETED, 1, TTL), TaskRoute.NONE);
-        engine.publishAs(alice, task("without-ttl", TaskState.COMPLETED, 1, null), TaskRoute.NONE);
+        var noAuth = engine(true);
+        store(task("removed", TaskState.COMPLETED, 1, TTL));
+        store(task("without-ttl", TaskState.COMPLETED, 1, null));
+        noAuth.publishAs(alice, task("kept", TaskState.COMPLETED, 1, TTL), TaskRoute.NONE);
+        noAuth.publishAs(alice, task("removed", TaskState.COMPLETED, 1, TTL), TaskRoute.NONE);
+        noAuth.publishAs(alice, task("without-ttl", TaskState.COMPLETED, 1, null), TaskRoute.NONE);
         clock.advance(KEEP_ALIVE.plusSeconds(1));
-        engine.runJanitorSweep();
+        noAuth.runJanitorSweep();
 
-        assertThat(engine.publish(task("kept", TaskState.COMPLETED, 2, TTL)).ownerKey())
+        assertThat(noAuth.publish(task("kept", TaskState.COMPLETED, 2, TTL)).ownerKey())
                 .as("an application publish without an owner takes the retained one")
                 .isEqualTo("alice");
-        assertThat(engine.get("kept").ownerKey()).isEqualTo("alice");
-        assertThat(engine.remove("removed")).as("no cached copy is left").isFalse();
-        assertThat(engine.connector().get().apply(anonymous, get("removed")).ownerKey())
+        assertThat(noAuth.get("kept").ownerKey()).isEqualTo("alice");
+        assertThat(noAuth.remove("removed")).as("no cached copy is left").isFalse();
+        assertThat(noAuth.connector().get().apply(anonymous, get("removed")).ownerKey())
                 .as("removing a task forgets its retained owner")
                 .isNull();
-        assertThat(engine.publishAs(bob, task("removed", TaskState.WORKING, 1, TTL), TaskRoute.NONE)
+        assertThat(noAuth.publishAs(bob, task("removed", TaskState.WORKING, 1, TTL), TaskRoute.NONE)
                         .ownerKey())
                 .isEqualTo("bob");
-        assertThat(engine.connector().get().apply(anonymous, get("without-ttl")).taskId())
-                .as("a task without a ttl is not retained: its connector must store the owner")
+        assertThat(noAuth.connector().get().apply(anonymous, get("without-ttl")).taskId())
+                .as("a task without a ttl is not retained: its store must name the owner")
                 .isEqualTo("without-ttl");
     }
 
     @Test
-    void anUnownedCachedTaskTakesTheOwnerItsConnectorOrApplicationNames() {
+    void anUnownedCachedTaskTakesTheOwnerItsConnectorOrApplicationNames() throws Exception {
         engine.publish(task("read", TaskState.WORKING, 1, null));
         engine.publish(task("published", TaskState.WORKING, 2, null));
 
-        var read = engine.refresh(owned("read", TaskState.COMPLETED, 2, "alice"));
+        var read = engine.refresh(alice, owned("read", TaskState.COMPLETED, 2, "alice"));
         var published = engine.publish(owned("published", TaskState.WORKING, 2, "alice"));
 
         assertThat(read.revision())
@@ -265,7 +369,8 @@ class TaskOwnershipTest {
         assertThatThrownBy(() -> engine.publish(owned("published", TaskState.COMPLETED, 3, "bob")))
                 .as("once taken, the owner never changes")
                 .isInstanceOf(IllegalStateException.class);
-        assertThat(engine.refresh(owned("read", TaskState.COMPLETED, 3, "bob")).revision())
+        assertThat(engine.refresh(alice, owned("read", TaskState.COMPLETED, 3, "bob"))
+                        .revision())
                 .isEqualTo(2);
         assertThat(engine.get("read").ownerKey()).isEqualTo("alice");
         assertThat(pushed)
@@ -274,25 +379,28 @@ class TaskOwnershipTest {
     }
 
     @Test
-    void aListingHoldsOnlyTheCallersTasks() throws Exception {
-        store(engine.publishAs(alice, task("alices", TaskState.WORKING, 1, null), TaskRoute.NONE));
-        store(engine.publishAs(bob, task("bobs", TaskState.WORKING, 1, null), TaskRoute.NONE));
+    void aListingHoldsTheCallersTasksAndThePublicOnes() throws Exception {
+        start(engine, alice, task("alices", TaskState.WORKING, 1, null), TaskRoute.NONE);
+        start(engine, bob, task("bobs", TaskState.WORKING, 1, null), TaskRoute.NONE);
+        start(engine, anonymous, task("public", TaskState.WORKING, 1, null), TaskRoute.NONE);
         store(task("unowned", TaskState.WORKING, 1, null));
         var list = TaskListRequest.builder().limit(10).build();
 
-        assertThat(ids(engine.connector().list().apply(alice, list))).containsExactly("alices");
-        assertThat(ids(engine.connector().list().apply(bob, list))).containsExactly("bobs");
-        assertThat(ids(engine.connector().list().apply(anonymous, list))).containsExactly("unowned");
+        assertThat(ids(engine.connector().list().apply(alice, list))).containsExactly("alices", "public");
+        assertThat(ids(engine.connector().list().apply(bob, list))).containsExactly("bobs", "public");
+        assertThat(ids(engine.connector().list().apply(anonymous, list)))
+                .as("an anonymous caller reaches public tasks, not the ones nobody owns")
+                .containsExactly("public");
         assertThat(ids(engine(false).connector().list().apply(alice, list)))
                 .as("a restarted engine filters by the stored owner")
-                .containsExactly("alices");
+                .containsExactly("alices", "public");
     }
 
     @Test
-    void aTaskNobodyOwnsIsHiddenFromNamedCallersUnlessTheServerSharesIt() throws Exception {
+    void aTaskNobodyOwnsIsHiddenFromEveryCallerUnlessTheServerHasNoAuthentication() throws Exception {
         store(task("unowned", TaskState.WORKING, 1, null));
-        store(engine.publishAs(alice, task("alices", TaskState.WORKING, 1, null), TaskRoute.NONE));
-        var shared = engine(true).connector();
+        start(engine, alice, task("alices", TaskState.WORKING, 1, null), TaskRoute.NONE);
+        var noAuth = engine(true).connector();
         var list = TaskListRequest.builder().limit(10).build();
 
         assertThatThrownBy(() -> engine.connector().get().apply(bob, get("unowned")))
@@ -300,14 +408,17 @@ class TaskOwnershipTest {
         assertThatThrownBy(() -> engine.connector().cancel().apply(bob, cancel("unowned")))
                 .isInstanceOf(TaskNotFoundException.class);
         assertThat(connectorCalls).as("the refused cancel never ran").doesNotContain("cancel:unowned");
-        assertThat(engine.connector().get().apply(anonymous, get("unowned")).taskId())
-                .as("an anonymous caller still reaches what nobody owns: a server without authentication")
-                .isEqualTo("unowned");
+        assertThatThrownBy(() -> engine.connector().get().apply(anonymous, get("unowned")))
+                .as("a caller let through as anonymous is no exception")
+                .isInstanceOf(TaskNotFoundException.class);
 
-        assertThat(shared.get().apply(bob, get("unowned")).taskId()).isEqualTo("unowned");
-        assertThat(ids(shared.list().apply(bob, list))).containsExactly("unowned");
-        assertThatThrownBy(() -> shared.get().apply(bob, get("alices")))
-                .as("sharing unowned tasks never shares an owned one")
+        assertThat(noAuth.get().apply(bob, get("unowned")).taskId()).isEqualTo("unowned");
+        assertThat(noAuth.get().apply(anonymous, get("unowned")).taskId())
+                .as("without authentication every caller reaches what nobody owns")
+                .isEqualTo("unowned");
+        assertThat(ids(noAuth.list().apply(bob, list))).containsExactly("unowned");
+        assertThatThrownBy(() -> noAuth.get().apply(bob, get("alices")))
+                .as("no authentication never opens an owned task")
                 .isInstanceOf(TaskNotFoundException.class);
     }
 
@@ -315,7 +426,7 @@ class TaskOwnershipTest {
     void theOwnerOfATaskNeverChanges() {
         var alicesSession = new TestRoute("alice-session");
         var bobsSession = new TestRoute("bob-session");
-        engine.publishAs(alice, task("owned", TaskState.WORKING, 1, null), alicesSession);
+        start(engine, alice, task("owned", TaskState.WORKING, 1, null), alicesSession);
         engine.publish(task("unowned", TaskState.WORKING, 1, null));
 
         assertThatThrownBy(() -> engine.publishAs(bob, task("owned", TaskState.COMPLETED, 2, null), bobsSession))
@@ -353,18 +464,33 @@ class TaskOwnershipTest {
                         .ownerKey())
                 .as("the application may create a task for a caller")
                 .isEqualTo("bob");
-        assertThat(engine.publishAs(anonymous, task("unowned", TaskState.COMPLETED, 2, null), bobsSession)
-                        .revision())
-                .as("an anonymous caller keeps publishing for a task nobody owns")
+        assertThatThrownBy(
+                        () -> engine.publishAs(anonymous, task("unowned", TaskState.COMPLETED, 2, null), bobsSession))
+                .as("an anonymous caller cannot open a task nobody reaches to everyone")
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(engine.get("unowned").ownerKey()).isNull();
+
+        var noAuth = engine(true);
+        noAuth.publish(task("unowned", TaskState.WORKING, 1, null));
+        assertThatThrownBy(() -> noAuth.publishAs(alice, task("unowned", TaskState.COMPLETED, 2, null), alicesSession))
+                .as("no authentication does not let a named caller claim a task nobody owns")
+                .isInstanceOf(IllegalStateException.class);
+        var opened = noAuth.publishAs(anonymous, task("unowned", TaskState.COMPLETED, 2, null), bobsSession);
+        assertThat(opened.revision())
+                .as("where everyone reaches it anyway, an anonymous caller publishes: worker first, tool second")
                 .isEqualTo(2);
+        assertThat(opened.ownerKey()).as("which makes the task public").isEqualTo(TaskSnapshot.PUBLIC_OWNER_KEY);
+        assertThatThrownBy(() -> noAuth.publish(owned("unowned", TaskState.COMPLETED, 3, "alice")))
+                .as("and public it stays")
+                .isInstanceOf(IllegalStateException.class);
     }
 
     @Test
-    void aConnectorReadNeverChangesTheCachedOwner() {
-        engine.publishAs(alice, task("owned", TaskState.WORKING, 1, null), TaskRoute.NONE);
+    void aConnectorReadNeverChangesTheCachedOwner() throws Exception {
+        start(engine, alice, task("owned", TaskState.WORKING, 1, null), TaskRoute.NONE);
 
-        var unstamped = engine.refresh(task("owned", TaskState.WORKING, 2, null));
-        var foreign = engine.refresh(owned("owned", TaskState.WORKING, 3, "bob"));
+        var unstamped = engine.refresh(alice, task("owned", TaskState.WORKING, 2, null));
+        var foreign = engine.refresh(alice, owned("owned", TaskState.WORKING, 3, "bob"));
 
         assertThat(unstamped.revision()).isEqualTo(2);
         assertThat(unstamped.ownerKey())
@@ -395,21 +521,23 @@ class TaskOwnershipTest {
                         KEEP_ALIVE,
                         null,
                         Duration.ofMillis(1),
-                        false),
+                        true),
                 clock);
+        var hooking = engine(true);
+        store(task("hooked", TaskState.COMPLETED, 1, null));
 
-        engine.awaitResult(anonymous, awaitResult("hooked"), never);
+        hooking.awaitResult(anonymous, awaitResult("hooked"), never);
         polling.cancelAndAwait(anonymous, cancel("polled"), never);
 
-        assertThat(engine.get("hooked"))
+        assertThat(hooking.get("hooked"))
                 .as("awaitResult through the connector's hook")
                 .isNull();
         assertThat(polling.get("polled")).as("cancelAndAwait and its poll loop").isNull();
-        store(engine.publishAs(alice, task("hooked", TaskState.WORKING, 1, null), TaskRoute.NONE));
-        assertThat(engine.get("hooked").ownerKey())
+        store(hooking.publishAs(alice, task("hooked", TaskState.WORKING, 1, null), TaskRoute.NONE));
+        assertThat(hooking.get("hooked").ownerKey())
                 .as("the creator is not refused for the earlier read")
                 .isEqualTo("alice");
-        assertThatThrownBy(() -> engine.connector().get().apply(bob, get("hooked")))
+        assertThatThrownBy(() -> hooking.connector().get().apply(bob, get("hooked")))
                 .isInstanceOf(TaskNotFoundException.class);
     }
 
@@ -433,7 +561,7 @@ class TaskOwnershipTest {
         var connector = adopting.connector();
 
         assertThat(connector.get().apply(bob, get("adopted")).ownerKey())
-                .as("nobody owns the task when the wait starts, and the server shares unowned tasks")
+                .as("nobody owns the task when the wait starts, and the server has no authentication")
                 .isNull();
         assertThatThrownBy(() -> connector.awaitResult().apply(bob, awaitResult("adopted")))
                 .as("the result the hook returns names alice, so bob does not get it")
@@ -450,8 +578,99 @@ class TaskOwnershipTest {
     }
 
     @Test
+    void aTaskOwnedWhileACallerWaitedIsNotHandedToTheWaiter() throws Exception {
+        var never = new CompletableFuture<Void>();
+        var self = new AtomicReference<TaskEngine>();
+        var claimedMeanwhile = new TaskEngine(
+                new TaskEngineSettings(
+                        TaskConnector.builder()
+                                .get((ctx, request) -> task(request.taskId(), TaskState.WORKING, 1, null))
+                                .cancel((ctx, request) -> {})
+                                .update((ctx, request) -> {})
+                                .awaitResult((ctx, request) -> {
+                                    self.get().publish(owned(request.taskId(), TaskState.COMPLETED, 2, "alice"));
+                                    return task(request.taskId(), TaskState.COMPLETED, 1, null);
+                                })
+                                .build(),
+                        Pagination.DEFAULT_PAGE_SIZE,
+                        KEEP_ALIVE,
+                        null,
+                        TaskEngineSettings.DEFAULT_RESULT_POLL_INTERVAL,
+                        true),
+                clock);
+        self.set(claimedMeanwhile);
+
+        assertThatThrownBy(() -> claimedMeanwhile.awaitResult(bob, awaitResult("legacy-wait"), never))
+                .as("alice owns the task by the time the wait ends, so bob does not get her cached snapshot")
+                .isInstanceOf(TaskNotFoundException.class);
+        assertThatThrownBy(() -> claimedMeanwhile.connector().awaitResult().apply(bob, awaitResult("hook-wait")))
+                .as("nor the result the hook returns, though it names no owner")
+                .isInstanceOf(TaskNotFoundException.class);
+        assertThatThrownBy(() -> claimedMeanwhile.refresh(bob, task("legacy-wait", TaskState.COMPLETED, 1, null)))
+                .as("a read bob made before alice owned the task does not return her cached snapshot")
+                .isInstanceOf(TaskNotFoundException.class);
+        var alices = claimedMeanwhile.awaitResult(alice, awaitResult("legacy-wait"), never);
+        assertThat(alices.revision()).isEqualTo(2);
+        assertThat(alices.ownerKey()).isEqualTo("alice");
+    }
+
+    @Test
+    void aWaitResultThatNamesNoOwnerIsUnownedLikeAnyStoredSnapshot() throws Exception {
+        var never = new CompletableFuture<Void>();
+        var forgetful = TaskConnector.builder()
+                .get((ctx, request) -> owned(request.taskId(), TaskState.WORKING, 1, "alice"))
+                .cancel((ctx, request) -> {})
+                .update((ctx, request) -> {})
+                .awaitResult((ctx, request) -> task(request.taskId(), TaskState.COMPLETED, 2, null))
+                .build();
+        var secured = engine(forgetful, false);
+        var noAuth = engine(forgetful, true);
+
+        assertThat(secured.connector().get().apply(alice, get("waited")).ownerKey())
+                .as("the store names alice when the wait starts")
+                .isEqualTo("alice");
+        assertThatThrownBy(() -> secured.connector().awaitResult().apply(alice, awaitResult("waited")))
+                .as("with authentication a result that names no owner is nobody's, as it is from get")
+                .isInstanceOf(TaskNotFoundException.class);
+        assertThatThrownBy(() -> secured.awaitResult(alice, awaitResult("waited"), never))
+                .as("the legacy tasks/result path goes through the same check")
+                .isInstanceOf(TaskNotFoundException.class);
+        assertThat(secured.get("waited")).as("a refused wait caches nothing").isNull();
+        var shared = noAuth.connector().awaitResult().apply(alice, awaitResult("waited"));
+        assertThat(shared.status())
+                .as("a server without authentication gives an unowned result to its caller")
+                .isEqualTo(TaskState.COMPLETED);
+        assertThat(shared.revision()).isEqualTo(2);
+        assertThat(shared.ownerKey()).isNull();
+    }
+
+    @Test
+    void aToolCannotClaimATaskItsConnectorDoesNotReturnForItsCaller() throws Exception {
+        assertThatThrownBy(() ->
+                        engine.publishAs(bob, task("absent", TaskState.WORKING, 1, null), new TestRoute("bob-session")))
+                .as("unknown to the connector or hidden from bob: the engine cannot tell, so it is not bob's")
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(engine.get("absent")).as("a refused claim caches nothing").isNull();
+        assertThat(pushed).isEmpty();
+
+        var created = start(engine, alice, task("absent", TaskState.WORKING, 1, null), TaskRoute.NONE);
+
+        assertThat(created.ownerKey())
+                .as("the refused claim does not hold the id against its creator")
+                .isEqualTo("alice");
+        assertThat(engine.connector().get().apply(alice, get("absent")).taskId())
+                .isEqualTo("absent");
+        assertThat(engine(true)
+                        .publishAs(anonymous, task("new", TaskState.WORKING, 1, null), TaskRoute.NONE)
+                        .ownerKey())
+                .as(
+                        "a server without authentication has no caller to protect: a task its connector does not know is new")
+                .isEqualTo(TaskSnapshot.PUBLIC_OWNER_KEY);
+    }
+
+    @Test
     void removingATaskDropsOnlyTheCachedCopy() throws Exception {
-        store(engine.publishAs(alice, task("owned", TaskState.WORKING, 1, TTL), TaskRoute.NONE));
+        start(engine, alice, task("owned", TaskState.WORKING, 1, TTL), TaskRoute.NONE);
 
         assertThat(engine.remove("owned")).isTrue();
 
@@ -461,28 +680,41 @@ class TaskOwnershipTest {
                 .isInstanceOf(TaskNotFoundException.class);
     }
 
-    private TaskEngine engine(boolean shareUnownedTasks) {
+    private TaskEngine engine(boolean unauthenticated) {
+        return engine(storingConnector(), unauthenticated);
+    }
+
+    private TaskEngine engine(TaskConnector connector, boolean unauthenticated) {
         return new TaskEngine(
                 new TaskEngineSettings(
-                        storingConnector(),
+                        connector,
                         Pagination.DEFAULT_PAGE_SIZE,
                         KEEP_ALIVE,
                         null,
                         TaskEngineSettings.DEFAULT_RESULT_POLL_INTERVAL,
-                        shareUnownedTasks),
+                        unauthenticated),
                 clock);
+    }
+
+    /** Starts a task as a tool must: stores it with its caller's owner, then hands it to the engine. */
+    private TaskSnapshot start(TaskEngine engine, InteractionContext caller, TaskSnapshot snapshot, TaskRoute route) {
+        store(TaskSnapshot.builder()
+                .from(snapshot)
+                .ownerKey(TaskSnapshot.ownerKeyOf(caller.securityContext()))
+                .build());
+        return engine.publishAs(caller, snapshot, route);
     }
 
     private void store(TaskSnapshot snapshot) {
         stored.put(snapshot.taskId(), snapshot);
     }
 
-    /** Hands back what it was given, as a real connector does; an id it never stored reads as unowned. */
+    /** Hands back what it was given, as a real connector does; it does not know an id it never stored. */
     private TaskConnector storingConnector() {
         return TaskConnector.builder()
                 .get((ctx, request) -> {
                     connectorCalls.add("get:" + request.taskId());
-                    return read(request.taskId(), TaskState.WORKING);
+                    return read(request.taskId());
                 })
                 .cancel((ctx, request) -> connectorCalls.add("cancel:" + request.taskId()))
                 .update((ctx, request) -> connectorCalls.add("update:" + request.taskId()))
@@ -495,14 +727,17 @@ class TaskOwnershipTest {
                 })
                 .awaitResult((ctx, request) -> {
                     connectorCalls.add("awaitResult:" + request.taskId());
-                    return read(request.taskId(), TaskState.COMPLETED);
+                    return read(request.taskId());
                 })
                 .build();
     }
 
-    private TaskSnapshot read(String taskId, TaskState fallbackStatus) {
+    private TaskSnapshot read(String taskId) throws TaskNotFoundException {
         var known = stored.get(taskId);
-        return known != null ? known : task(taskId, fallbackStatus, 1, null);
+        if (known == null) {
+            throw new TaskNotFoundException(taskId);
+        }
+        return known;
     }
 
     private static List<String> ids(PaginatedResult<TaskSnapshot> page) {

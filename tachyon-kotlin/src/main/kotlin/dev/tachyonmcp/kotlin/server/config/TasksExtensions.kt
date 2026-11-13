@@ -98,12 +98,6 @@ public class TasksScope
             TasksExtension.DEFAULT_RESULT_POLL_INTERVAL
                 .toKotlinDuration()
 
-        /**
-         * Lets every caller reach a task whose snapshot carries no owner. By default only anonymous
-         * callers reach it. An owned task is never shared.
-         */
-        public var shareUnownedTasks: Boolean = false
-
         internal fun applyTo(builder: TasksExtension.Builder) {
             builder
                 .connector(connector)
@@ -111,6 +105,5 @@ public class TasksScope
                 .keepAlive(keepAlive.toJavaDuration())
                 .pollInterval(pollInterval?.toJavaDuration())
                 .resultPollInterval(resultPollInterval.toJavaDuration())
-                .shareUnownedTasks(shareUnownedTasks)
         }
     }

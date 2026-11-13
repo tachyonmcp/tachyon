@@ -455,8 +455,10 @@ server.tools().register(
   `subscriptions/listen` stream does not follow it. The server stamps the owner key on the snapshot as
   `TaskSnapshot#ownerKey()`. **Your task connector must store it with the task and return it**, the
   way a `SessionStore` keeps a session's owner; then the binding survives a restart and holds on every
-  node. Tasks an anonymous caller creates, or that you publish yourself without an `ownerKey`, have no
-  owner: only anonymous callers reach them, unless you set `shareUnownedTasks(true)`. See
+  node. A task an anonymous caller creates is public: every caller reaches it. A task you publish
+  yourself without an `ownerKey`, or one your connector returns without it, has no owner: nobody
+  reaches it, its creator included. A tool can return only a task your connector already returns
+  with its caller's owner key. See
   [Who can reach a task](../extensions/tasks.md#who-can-reach-a-task).
 - **Owner keys identify callers.** A session or a task is bound to `SecurityContext#ownerKey()`, which
   must be unique and stable for a caller across every issuer and tenant the server accepts. In bearer
@@ -464,7 +466,8 @@ server.tools().register(
   its own key to `SecurityContext.authenticated(principal, scopes, expiresAt, ownerKey)`; the shorter
   overloads use the principal's name. A provider returning a principal with no name, or a blank one,
   is a provider failure (`500`), because the session or task could not be told apart from an
-  anonymous one.
+  anonymous one. So is the key `SecurityContext.PUBLIC_OWNER_KEY` (`<public>`), which marks a task
+  every caller may reach.
 
 The metadata is served right after the Origin (DNS-rebinding) check and before everything else, so it
 needs no token. Authentication runs right after the Origin check, the endpoint check and CORS, and

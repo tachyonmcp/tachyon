@@ -17,5 +17,8 @@ record AuthenticatedSecurityContext(
         if (ownerKey == null || ownerKey.isBlank()) {
             throw new IllegalArgumentException("An owner key is not blank");
         }
+        if (ownerKey.equals(SecurityContext.PUBLIC_OWNER_KEY)) {
+            throw new IllegalArgumentException("No caller has the public owner key");
+        }
     }
 }
