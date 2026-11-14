@@ -97,15 +97,22 @@
         <micrometer.version>1.17.2</micrometer.version>
         <mockito.version>5.24.0</mockito.version>
         <netty.version>4.2.20.Final</netty.version>
+        <opentelemetry-semconv.version>1.45.0-alpha</opentelemetry-semconv.version>
+        <opentelemetry.version>1.68.0</opentelemetry.version>
         <slf4j.version>2.0.20</slf4j.version>
         <snakeyaml.version>2.7</snakeyaml.version>
         <spring-boot.version>4.1.2</spring-boot.version>
         <temporal.version>1.40.0</temporal.version>
 
         <!-- Plugins -->
+        <cyclonedx-maven-plugin.version>2.9.3</cyclonedx-maven-plugin.version>
+        <detekt.version>2.0.0-alpha.6</detekt.version>
+        <dokka-maven-plugin.version>2.3.0</dokka-maven-plugin.version>
+        <findsecbugs-plugin.version>1.14.0</findsecbugs-plugin.version>
         <jacoco-maven-plugin.version>0.8.16</jacoco-maven-plugin.version>
-        <revapi.version>0.15.1</revapi.version>
-        <revapi-java.version>0.28.4</revapi-java.version>
+        <kotlinx-coroutines.version>1.11.0</kotlinx-coroutines.version>
+        <kotlinx-serialization-json.version>1.11.0</kotlinx-serialization-json.version>
+        <ktlint.version>1.5.0</ktlint.version>
         <maven-antrun-plugin.version>3.2.0</maven-antrun-plugin.version>
         <maven-clean-plugin.version>3.5.0</maven-clean-plugin.version>
         <maven-compiler-plugin.version>3.16.0</maven-compiler-plugin.version>
@@ -115,16 +122,13 @@
         <maven-resources-plugin.version>3.5.0</maven-resources-plugin.version>
         <maven-source-plugin.version>3.4.0</maven-source-plugin.version>
         <maven-surefire-plugin.version>3.6.1</maven-surefire-plugin.version>
-        <versions-maven-plugin.version>2.25.1</versions-maven-plugin.version>
         <palantir-java-format.version>2.98.0</palantir-java-format.version>
-        <cyclonedx-maven-plugin.version>2.9.3</cyclonedx-maven-plugin.version>
-        <spotless-maven-plugin.version>3.11.0</spotless-maven-plugin.version>
+        <revapi-java.version>0.28.4</revapi-java.version>
+        <revapi.version>0.15.1</revapi.version>
         <spotbugs-maven-plugin.version>4.10.5.0</spotbugs-maven-plugin.version>
-        <detekt.version>2.0.0-alpha.6</detekt.version>
-        <ktlint.version>1.5.0</ktlint.version>
         <spotbugs.version>4.10.5</spotbugs.version>
-        <findsecbugs-plugin.version>1.14.0</findsecbugs-plugin.version>
-        <dokka-maven-plugin.version>2.3.0</dokka-maven-plugin.version>
+        <spotless-maven-plugin.version>3.11.0</spotless-maven-plugin.version>
+        <versions-maven-plugin.version>2.25.1</versions-maven-plugin.version>
 
         <!-- Test configuration -->
         <surefire.forkCount>1C</surefire.forkCount>
@@ -134,8 +138,6 @@
             java.base/sun.nio.ch=ALL-UNNAMED --add-opens java.base/java.nio.channels.spi=ALL-UNNAMED
             -Dio.netty.leakDetection.level=PARANOID -Djdk.tracePinnedThreads=short
         </argLine>
-        <kotlinx-coroutines.version>1.11.0</kotlinx-coroutines.version>
-        <kotlinx-serialization-json.version>1.11.0</kotlinx-serialization-json.version>
     </properties>
 
     <dependencyManagement>
