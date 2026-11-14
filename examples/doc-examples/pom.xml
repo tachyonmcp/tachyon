@@ -25,7 +25,7 @@
         <mcp-java.version>1.0.0</mcp-java.version>
         <kt-schema.version>0.10.0</kt-schema.version>
         <kotlinx-serialization-json.version>1.11.0</kotlinx-serialization-json.version>
-        <opentelemetry.version>1.65.0</opentelemetry.version>
+        <opentelemetry.version>1.68.0</opentelemetry.version>
         <junit.version>6.1.3</junit.version>
         <assertj.version>3.27.7</assertj.version>
         <awaitility.version>4.3.0</awaitility.version>
