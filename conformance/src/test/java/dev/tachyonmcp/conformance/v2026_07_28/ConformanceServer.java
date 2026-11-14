@@ -10,6 +10,7 @@ import dev.tachyonmcp.api.server.features.tools.ToolResult;
 import dev.tachyonmcp.conformance.AbstractConformanceServer;
 import dev.tachyonmcp.core.server.ServerBuilder;
 import dev.tachyonmcp.core.server.TachyonServer;
+import dev.tachyonmcp.core.server.config.CapabilitiesConfig;
 import dev.tachyonmcp.core.server.config.SessionConfig;
 import dev.tachyonmcp.core.server.domain.MissingRequiredClientCapabilityException;
 import dev.tachyonmcp.core.server.internal.ServerEngine;
@@ -25,7 +26,7 @@ public class ConformanceServer extends AbstractConformanceServer {
 
     /** Returns the configured server builder, for subclasses to extend before it is built. */
     protected ServerBuilder builder(boolean isStateful) {
-        final var builder = TachyonServer.builder();
+        final var builder = TachyonServer.builder().capabilities(CapabilitiesConfig.Builder::logging);
         if (isStateful) {
             builder.session(SessionConfig.Builder::enabled);
         }

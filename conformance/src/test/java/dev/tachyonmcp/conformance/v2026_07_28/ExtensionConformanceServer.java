@@ -144,7 +144,12 @@ public class ExtensionConformanceServer extends ConformanceServer {
     private ToolResult start(long millis, UnaryOperator<TaskSnapshot.Builder> finish) {
         var snapshot = TaskSnapshot.working(UUID.randomUUID().toString(), Instant.now(), 1);
         tasks.put(snapshot.taskId(), snapshot);
-        scheduler.schedule(() -> settle(snapshot.taskId(), finish), millis, TimeUnit.MILLISECONDS);
+        scheduler.schedule(
+                () -> settle(
+                        snapshot.taskId(),
+                        current -> finish.apply(next(current)).build()),
+                millis,
+                TimeUnit.MILLISECONDS);
         return ToolResult.task(snapshot);
     }
 
@@ -158,40 +163,40 @@ public class ExtensionConformanceServer extends ConformanceServer {
     }
 
     private void answer(TaskUpdateRequest request) throws TaskNotFoundException {
-        var current = require(request.taskId());
-        var pending = current.pendingInput();
-        if (pending == null) return;
-        var remaining = new HashMap<>(pending.inputRequests());
-        remaining.keySet().removeAll(request.inputResponses().keySet());
-        settle(
-                current.taskId(),
-                s -> remaining.isEmpty()
-                        ? s.status(TaskState.COMPLETED)
-                                .pendingInput(null)
-                                .result(TaskResult.completed(ToolResult.text(
-                                        "Received " + request.inputResponses().keySet())))
-                        : s.pendingInput(new InputRequestBundle(remaining, null)));
+        var answered = request.inputResponses().keySet();
+        settle(require(request.taskId()).taskId(), current -> {
+            var pending = current.pendingInput();
+            if (pending == null) return current;
+            var remaining = new HashMap<>(pending.inputRequests());
+            remaining.keySet().removeAll(answered);
+            return remaining.isEmpty()
+                    ? TaskSnapshot.completed(
+                            current.taskId(),
+                            current.createdAt(),
+                            Instant.now(),
+                            current.revision() + 1,
+                            ToolResult.text("Received " + answered))
+                    : next(current)
+                            .pendingInput(new InputRequestBundle(remaining, null))
+                            .build();
+        });
     }
 
     private void cancel(TaskSnapshot task) {
-        tasks.computeIfPresent(
+        settle(
                 task.taskId(),
-                (id, current) -> current.status().isTerminal()
-                        ? current
-                        : TaskSnapshot.cancelled(id, current.createdAt(), Instant.now(), current.revision() + 1));
+                current -> TaskSnapshot.cancelled(
+                        current.taskId(), current.createdAt(), Instant.now(), current.revision() + 1));
     }
 
-    /** Applies {@code change} to a task that is not terminal yet. */
-    private void settle(String taskId, UnaryOperator<TaskSnapshot.Builder> change) {
+    /** Replaces a task that is not terminal yet with {@code change} applied to it. */
+    private void settle(String taskId, UnaryOperator<TaskSnapshot> change) {
         tasks.computeIfPresent(
-                taskId,
-                (id, current) -> current.status().isTerminal()
-                        ? current
-                        : change.apply(TaskSnapshot.builder()
-                                        .from(current)
-                                        .lastUpdatedAt(Instant.now())
-                                        .revision(current.revision() + 1))
-                                .build());
+                taskId, (id, current) -> current.status().isTerminal() ? current : change.apply(current));
+    }
+
+    private static TaskSnapshot.Builder next(TaskSnapshot current) {
+        return TaskSnapshot.builder().next(current).lastUpdatedAt(Instant.now());
     }
 
     private TaskSnapshot require(String taskId) throws TaskNotFoundException {

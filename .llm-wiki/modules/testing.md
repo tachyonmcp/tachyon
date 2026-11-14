@@ -3,7 +3,7 @@ title: Testing
 tags: [module, testing, e2e, conformance]
 sources: [pom.xml, e2e/src/test/, conformance/, Makefile, reports/pom.xml, tachyon-core/src/test/, .github/workflows/build.yml, .github/workflows/release.yml]
 updated: 2026-11-14
-commit: e8d90f99
+commit: 734f9997
 ---
 
 # ✅ Testing
@@ -55,7 +55,7 @@ Pattern: abstract contract in root, one subclass per protocol package → same b
 
 ## 📏 Conformance
 
-`conformance/src/test/java/dev/tachyonmcp/conformance/` holds the shared parts: `AbstractServerConformanceTest`, `AbstractConformanceServer`, `ConformanceRunner`, `ConformanceReportWriter`. There is one package per spec version, the e2e scheme: `ServerConformanceTest` + `ConformanceServer`.
+`conformance/src/test/java/dev/tachyonmcp/conformance/` holds the shared parts: [AbstractServerConformanceTest](../../conformance/src/test/java/dev/tachyonmcp/conformance/AbstractServerConformanceTest.java), [AbstractConformanceServer](../../conformance/src/test/java/dev/tachyonmcp/conformance/AbstractConformanceServer.java), [ConformanceRunner](../../conformance/src/test/java/dev/tachyonmcp/conformance/ConformanceRunner.java), [ConformanceReportWriter](../../conformance/src/test/java/dev/tachyonmcp/conformance/ConformanceReportWriter.java). There is one package per spec version, the e2e scheme: `ServerConformanceTest` + [ConformanceServer](../../conformance/src/test/java/dev/tachyonmcp/conformance/v2026_07_28/ConformanceServer.java) (2025-11-25 has [its own](../../conformance/src/test/java/dev/tachyonmcp/conformance/v2025_11_25/ConformanceServer.java)).
 
 | Class | Upstream ref | Run | Judges | Server |
 |---|---|---|---|---|
@@ -68,9 +68,10 @@ Pattern: abstract contract in root, one subclass per protocol package → same b
   - `every listed scenario ran`: executed ⊇ `list --server [--spec-version v]`.
   - Then one test per judged scenario: failed and not in the baseline → fail, with check details from `server-<scenario>-<ts>/checks.json` (`ConformanceReportWriter#failedChecks`); failed and in the baseline → abort; passes but in the baseline → fail (stale entry).
 - The bare run is the only one that reaches the `[extension]` scenarios: `--spec-version` drops them, and upstream runs them on the 2026-07-28 wire. It also replays the timeline scenarios at upstream's default wire (non-draft → 2025-11-25). The spec-version runs already judge those, and they share the baseline file, so the bare run judges only the extension ones.
-- `v2026_07_28.ExtensionConformanceServer` extends the 2026 `ConformanceServer` (via `ConformanceServer#builder`) with `TasksExtension` (an in-memory connector), `SkillsExtension` (classpath `skills/greeting`), and the task fixtures upstream names (`greet`, `slow_compute`, `failing_job`, `protocol_error_job`, `confirm_delete`, `multi_input`, `test_tool_with_task`). It stays separate: REQUIRED-task tools in the 2026 server's `tools/list` break `http-header-validation`, which probes a listed tool. Stateful, so the bare run's 2025-wire replays get sessions; the 2026 wire has none either way (`McpProtocol#supportsSessions`).
+- [ExtensionConformanceServer](../../conformance/src/test/java/dev/tachyonmcp/conformance/v2026_07_28/ExtensionConformanceServer.java) extends the 2026 [ConformanceServer#builder](../../conformance/src/test/java/dev/tachyonmcp/conformance/v2026_07_28/ConformanceServer.java) with `TasksExtension` (an in-memory connector), `SkillsExtension` (classpath `skills/greeting`), and the task fixtures upstream names (`greet`, `slow_compute`, `failing_job`, `protocol_error_job`, `confirm_delete`, `multi_input`, `test_tool_with_task`). It stays separate: REQUIRED-task tools in the 2026 server's `tools/list` break `http-header-validation`, which probes a listed tool. Stateful, so the bare run's 2025-wire replays get sessions; the 2026 wire has none either way (`McpProtocol#supportsSessions`).
 - `conformance/conformance-baseline-<suite>.yml` holds known failures by scenario name. The 2026 file baselines 3 Tachyon gaps, one row each in [[findings]].
 - The ref is a literal in each test class, so runs are deterministic from the IDE and in CI. `ConformanceRunner#packageSpec`: a version → npm `@modelcontextprotocol/conformance@<v>`; anything else (SHA, branch) → `github:modelcontextprotocol/conformance#<ref>`, which npx clones and builds via `prepare`.
+- Each npx call has a 2 min deadline (`ConformanceRunner#exec` kills the process tree and throws), under the 5 min `@Timeout` on `serverConformance`. A cold git install plus the suite took about 1 min on CI.
 - The suite name is derived from the package (`v2026_07_28` → `2026-07-28`).
 - `list` failing or listing nothing fails the test, so the suite can't pass on zero tests (`ConformanceRunner#listScenarios`).
 - No upstream branch knows `2027-03-30`. `main` still has `DRAFT_PROTOCOL_VERSION = '2026-07-28'`.

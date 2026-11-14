@@ -4,11 +4,13 @@ package dev.tachyonmcp.conformance;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.jspecify.annotations.Nullable;
 
 class ConformanceRunner {
@@ -16,6 +18,9 @@ class ConformanceRunner {
     private static final String CONFORMANCE_PACKAGE = "@modelcontextprotocol/conformance";
 
     private static final String CONFORMANCE_REPOSITORY = "github:modelcontextprotocol/conformance";
+
+    // two calls (run + list) must fit the 5 min @Timeout
+    private static final Duration DEADLINE = Duration.ofMinutes(2);
 
     private final String packageSpec;
 
@@ -83,6 +88,13 @@ class ConformanceRunner {
             args.addAll(List.of("--spec-version", specVersion));
         }
         var process = new ProcessBuilder(args).redirectErrorStream(true).start();
+        var timedOut = new AtomicBoolean();
+        process.onExit().orTimeout(DEADLINE.toMillis(), TimeUnit.MILLISECONDS).whenComplete((p, failure) -> {
+            if (failure != null) {
+                timedOut.set(true);
+                destroyTree(process);
+            }
+        });
 
         var outputLines = new ArrayList<String>();
         try (var reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
@@ -90,8 +102,20 @@ class ConformanceRunner {
             while ((line = reader.readLine()) != null) {
                 outputLines.add(line);
             }
+            var exitCode = process.waitFor();
+            if (timedOut.get()) {
+                throw new IllegalStateException("Conformance '" + String.join(" ", command) + "' timed out after "
+                        + DEADLINE.toMinutes() + " min:\n" + String.join("\n", outputLines));
+            }
+            return new ConformanceResult(exitCode, outputLines);
+        } finally {
+            destroyTree(process);
         }
-        return new ConformanceResult(process.waitFor(), outputLines);
+    }
+
+    private static void destroyTree(Process process) {
+        process.descendants().forEach(ProcessHandle::destroyForcibly);
+        process.destroyForcibly();
     }
 
     record ConformanceResult(int exitCode, List<String> outputLines) {

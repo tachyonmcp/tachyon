@@ -3,7 +3,7 @@ title: Findings
 tags: [meta, findings]
 sources: [tachyon-core/ts2java.py, tachyon-core/src/main/java/dev/tachyonmcp/core/, extensions/tachyon-extensions-tasks/src/main/java/dev/tachyonmcp/extensions/tasks/]
 updated: 2026-11-14
-commit: e8d90f99
+commit: 734f9997
 ---
 
 # 🔎 Findings
@@ -15,9 +15,9 @@ Spotted while reading code. Runtime verification noted per finding. Fixed in cod
 - ⚠️ `UnsupportedProtocolVersionHandler` encodes the rejection with `ProtocolVersionHandler#LATEST_PROTOCOL` (not `Protocols#baseline`) + HTTP 400, even for legacy-looking clients. Intentional per SEP-2575? `UnsupportedProtocolVersionHandler#channelRead`
 - ⚠️ POST-SSE budget per stream only; no global cap or connection limit. `PostSseStream#reserve`
 - ⚠️ Perf: notifications round-trip bytes → `String` → bytes. `DefaultTachyonServer#sendSerializedNotification` builds `notificationJson` as a `String`; `SseSerializer#measure` then counts its UTF-8 size (~0.7 ns/char, charAt loop, not vectorized) and `SseSerializer#encode` transcodes it back. Carry `byte[]` end to end (like the final response, `PostSseStream#writeEvent(long, byte[], Runnable)`): length is free, encode is a copy. Touches `SseEvent`, `JsonRpcCodec`, event log (stores `String`).
-- 🐛 SEP-2322 + SEP-2663: a `taskSupport=required` tool cannot answer round 1 with `InputRequiredResult`; `mapResult` rejects every non-task result of a REQUIRED tool ("Task-producing tool returned a non-task result"), so MRTR-then-task composition fails. Conformance `tasks-mrtr-composition`, baselined. `ToolMethodHandlers.ToolsCallHandler#mapResult`
-- 🐛 SEP-2243: `Mcp-Name` is not mirrored to `params.taskId` for `tasks/*`, so a mismatched header on `tasks/get` is served instead of rejected with -32020. Conformance `tasks-request-headers`, baselined. `McpHeaderNames#mirroredNameField`
-- 🐛 SEP-2640: `skills/get` omits `ttlMs` and `cacheScope`; only `skills/list` carries them, and the 2026-07-28 spec requires both. Conformance `sep-2640-skills-enumeration`, baselined. `SkillsExtension#getSkill`
+- 🐛 SEP-2322 + SEP-2663: a `taskSupport=required` tool cannot answer round 1 with `InputRequiredResult`; `mapResult` rejects every non-task result of a REQUIRED tool ("Task-producing tool returned a non-task result"), so MRTR-then-task composition fails. Conformance `tasks-mrtr-composition`, baselined. [ToolMethodHandlers.ToolsCallHandler#mapResult](../tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tools/ToolMethodHandlers.java)
+- 🐛 SEP-2243: `Mcp-Name` is not mirrored to `params.taskId` for `tasks/*`, so a mismatched header on `tasks/get` is served instead of rejected with -32020. Conformance `tasks-request-headers`, baselined. [McpHeaderNames#mirroredNameField](../tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/mcp/McpHeaderNames.java)
+- 🐛 SEP-2640: `skills/get` omits `ttlMs` and `cacheScope`; only `skills/list` carries them, and the 2026-07-28 spec requires both. Conformance `sep-2640-skills-enumeration`, baselined. [SkillsExtension#getSkill](../extensions/tachyon-extensions-skills/src/main/java/dev/tachyonmcp/extensions/skills/SkillsExtension.java)
 - ⚠️ Several producers on one POST-SSE stream: a parked producer can be overtaken ⇒ wire ids out of order ⇒ `Last-Event-ID` resume may skip one. Pre-existing race, wider with parking. `PostSseStream#awaitCapacity`
 - ⚠️ Platform `ServerBuilder#threadFactory`: parked producer holds an OS thread until `writerIdleTimeout`. `DefaultServerBuilder#build`
 - ⚠️ On a server without authentication, a task nobody owns (server-published, connector returns no `ownerKey`) is left to the connector: `tasks/*` go to it, and `subscriptions/listen` task ids pass its `get` once when the stream opens ([McpTaskBinding#taskIdsTopic](../extensions/tachyon-extensions-tasks/src/main/java/dev/tachyonmcp/extensions/tasks/McpTaskBinding.java), [TaskEngine#readableTaskIds](../extensions/tachyon-extensions-tasks/src/main/java/dev/tachyonmcp/extensions/tasks/engine/TaskEngine.java)), not per event: a permission the connector revokes later keeps flowing until the stream closes. Safe only with unguessable task ids.
