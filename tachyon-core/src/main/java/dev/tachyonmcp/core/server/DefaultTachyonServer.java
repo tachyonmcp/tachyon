@@ -1037,7 +1037,7 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
             if (closed || current == null) {
                 return;
             }
-            logger.info("Stopping TachyonMCP Server transport");
+            logger.debug("Stopping TachyonMCP Server transport");
             if (current instanceof NettyServer netty) {
                 netty.stopAccepting();
             }
@@ -1081,7 +1081,7 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
                 netty.stopAccepting();
             }
             try {
-                logger.info("Shutting down TachyonMCP Server");
+                logger.debug("Shutting down TachyonMCP Server");
                 final var deadline = System.nanoTime()
                         + config.runtime().shutdownGracePeriod().toNanos();
                 subscriptionRegistry.closeAll();

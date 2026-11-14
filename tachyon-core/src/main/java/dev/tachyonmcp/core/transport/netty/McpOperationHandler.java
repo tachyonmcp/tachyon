@@ -572,7 +572,7 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
                             sendUnknownSession(ctx, cors);
                         } else {
                             sendPlainTextAndClose(ctx, HttpResponseStatus.OK, "", cors);
-                            logger.info("Session terminated via DELETE: {}", sessionId);
+                            logger.debug("Session terminated via DELETE: {}", sessionId);
                         }
                     }));
         } catch (RejectedExecutionException e) {

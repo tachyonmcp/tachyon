@@ -639,10 +639,10 @@ public class McpDispatcher {
         }
         switch (method) {
             case NOTIFICATIONS_INITIALIZED -> {
-                logger.info("Client initialized notification received");
+                logger.debug("Client initialized notification received");
                 sessionOpt.ifPresent(session -> {
                     if (session.activate()) {
-                        logger.info("Session activated: {}", sessionId);
+                        logger.debug("Session activated: {}", sessionId);
                     }
                 });
                 observation.complete(new OperationOutcome.NotificationAccepted());
