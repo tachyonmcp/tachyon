@@ -21,6 +21,8 @@ import java.util.Map;
 import java.util.Set;
 import net.javacrumbs.jsonunit.core.Option;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.ResourceAccessMode;
+import org.junit.jupiter.api.parallel.ResourceLock;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.node.JsonNodeFactory;
 
@@ -240,6 +242,7 @@ public abstract class AbstractExtensionsTest<C extends McpClient> extends Abstra
     }
 
     @Test
+    @ResourceLock(value = "System.err", mode = ResourceAccessMode.READ_WRITE)
     void badClientInputIsNotWarnedButServerBugIs() throws Exception {
         startServer(it -> it.withExtensions(new ThrowingTestExtension()));
         var saved = System.err;

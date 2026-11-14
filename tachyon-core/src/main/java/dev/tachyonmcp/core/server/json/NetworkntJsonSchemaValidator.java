@@ -29,7 +29,7 @@ public class NetworkntJsonSchemaValidator implements JsonSchemaValidator {
     public static final NetworkntJsonSchemaValidator INSTANCE = new NetworkntJsonSchemaValidator();
 
     public NetworkntJsonSchemaValidator() {
-        this.registry = SchemaRegistry.withDialect(MCP_DIALECT);
+        this.registry = SchemaRegistry.withDefaultDialect(MCP_DIALECT);
     }
 
     @Override

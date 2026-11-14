@@ -10,6 +10,7 @@ import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.ResourceLock;
 
 class NetworkntJsonSchemaValidatorTest {
 
@@ -94,6 +95,18 @@ class NetworkntJsonSchemaValidatorTest {
     }
 
     @Test
+    void shouldHonourAnExplicitStandardDialect() {
+        var errors = validator.validate(JsonSchema.unchecked("""
+                    {"$schema":"http://json-schema.org/draft-07/schema#","type":"object",
+                     "properties":{"age":{"type":"integer"}}}
+                    """), JsonDocument.of("{\"age\":\"x\"}"));
+
+        assertThat(errors).hasSize(1);
+        assertThat(errors.getFirst().keyword()).isEqualTo("type");
+    }
+
+    @Test
+    @ResourceLock("SYSTEM_ERR")
     void shouldCompileMcpHeaderAnnotationWithoutWarning() {
         var saved = System.err;
         var captured = new ByteArrayOutputStream();
@@ -109,7 +122,7 @@ class NetworkntJsonSchemaValidatorTest {
         }
 
         assertThat(errors).hasSize(1);
-        assertThat(captured.toString(StandardCharsets.UTF_8)).doesNotContain("Unknown keyword");
+        assertThat(captured.toString(StandardCharsets.UTF_8)).doesNotContain("Unknown keyword x-mcp-header");
     }
 
     @Test

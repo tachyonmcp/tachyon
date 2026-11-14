@@ -44,6 +44,7 @@ import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.ResourceLock;
 import org.slf4j.LoggerFactory;
 
 /**
@@ -230,6 +231,7 @@ class AuthenticationHandlerTest {
      * call, so the line is captured here.
      */
     @Test
+    @ResourceLock("SYSTEM_ERR")
     void aProviderFailureNeverLogsWhatTheExceptionSays() {
         final var token = "eyJ-super-secret-token";
         final var handlerLog = LoggerFactory.getLogger(AuthenticationHandler.class);
