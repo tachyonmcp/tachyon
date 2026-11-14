@@ -16,6 +16,7 @@ import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -25,6 +26,7 @@ import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.TestFactory;
 import org.junit.jupiter.api.TestInstance;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
 import org.slf4j.Logger;
@@ -83,6 +85,7 @@ public abstract class AbstractServerConformanceTest {
     }
 
     @TestFactory
+    @Timeout(value = 5, unit = TimeUnit.MINUTES)
     Stream<DynamicTest> serverConformance() throws Exception {
         assumeTrue(ConformanceRunner.isNpxAvailable(), "npx is not available on this system");
 

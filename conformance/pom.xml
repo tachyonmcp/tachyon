@@ -81,6 +81,7 @@
                 </os>
                 <property>
                     <name>netty.native.enabled</name>
+                    <!-- on unless -Dnetty.native.enabled=false -->
                     <value>!false</value>
                 </property>
             </activation>
@@ -109,6 +110,7 @@
                 </os>
                 <property>
                     <name>netty.native.enabled</name>
+                    <!-- on unless -Dnetty.native.enabled=false -->
                     <value>!false</value>
                 </property>
             </activation>

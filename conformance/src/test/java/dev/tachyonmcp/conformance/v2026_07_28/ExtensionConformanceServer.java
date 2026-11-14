@@ -52,8 +52,7 @@ public class ExtensionConformanceServer extends ConformanceServer {
     protected ServerBuilder builder(boolean isStateful) {
         var connector = TaskConnector.builder()
                 .get((ctx, request) -> require(request.taskId()))
-                .cancel((ctx, request) ->
-                        settle(require(request.taskId()).taskId(), s -> s.status(TaskState.CANCELLED)))
+                .cancel((ctx, request) -> cancel(require(request.taskId())))
                 .update((ctx, request) -> answer(request))
                 .build();
         return super.builder(isStateful)
@@ -172,6 +171,14 @@ public class ExtensionConformanceServer extends ConformanceServer {
                                 .result(TaskResult.completed(ToolResult.text(
                                         "Received " + request.inputResponses().keySet())))
                         : s.pendingInput(new InputRequestBundle(remaining, null)));
+    }
+
+    private void cancel(TaskSnapshot task) {
+        tasks.computeIfPresent(
+                task.taskId(),
+                (id, current) -> current.status().isTerminal()
+                        ? current
+                        : TaskSnapshot.cancelled(id, current.createdAt(), Instant.now(), current.revision() + 1));
     }
 
     /** Applies {@code change} to a task that is not terminal yet. */
