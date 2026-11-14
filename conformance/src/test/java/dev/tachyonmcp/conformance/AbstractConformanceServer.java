@@ -33,7 +33,9 @@ import javax.crypto.spec.SecretKeySpec;
 import org.awaitility.Awaitility;
 import org.jspecify.annotations.Nullable;
 
-abstract class AbstractConformanceServer {
+public abstract class AbstractConformanceServer {
+
+    protected static final JsonSchema ANY_ARGS_SCHEMA = JsonSchema.objectSchema();
 
     // language=json
     protected static final JsonSchema INPUT_SCHEMA_NO_ARGS = parseJson("""

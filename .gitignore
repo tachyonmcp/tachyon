@@ -161,3 +161,6 @@ local.properties
 .kerno/
 .agents/skills/kerno-*
 .claude/skills/kerno-*
+
+## Agentic garbage
+**/.cc-writes/

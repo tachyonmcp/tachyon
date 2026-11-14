@@ -1,10 +1,11 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
-package dev.tachyonmcp.conformance;
+package dev.tachyonmcp.conformance.v2025_11_25;
 
 import dev.tachyonmcp.api.json.JsonSchema;
 import dev.tachyonmcp.api.runtime.ElicitationRequest;
 import dev.tachyonmcp.api.server.domain.Args;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
+import dev.tachyonmcp.conformance.AbstractConformanceServer;
 import dev.tachyonmcp.core.server.TachyonServer;
 import dev.tachyonmcp.core.server.config.CapabilitiesConfig;
 import dev.tachyonmcp.core.server.config.SessionConfig;
@@ -16,7 +17,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
-class DefaultConformanceServer extends AbstractConformanceServer {
+class ConformanceServer extends AbstractConformanceServer {
 
     @Override
     protected ServerEngine createServer(boolean isStateful) {
