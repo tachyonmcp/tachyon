@@ -13,11 +13,16 @@ import dev.tachyonmcp.api.server.extensions.ServerExtension;
 import dev.tachyonmcp.api.server.features.tools.ToolDescriptor;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
 import dev.tachyonmcp.testkit.McpClient;
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.Set;
 import net.javacrumbs.jsonunit.core.Option;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.ResourceAccessMode;
+import org.junit.jupiter.api.parallel.ResourceLock;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.node.JsonNodeFactory;
 
@@ -234,6 +239,32 @@ public abstract class AbstractExtensionsTest<C extends McpClient> extends Abstra
                     .hasErrorMessage("Internal error");
             assertThat(response.body()).doesNotContain("sensitive state detail");
         }
+    }
+
+    @Test
+    @ResourceLock(value = "System.err", mode = ResourceAccessMode.READ_WRITE)
+    void badClientInputIsNotWarnedButServerBugIs() throws Exception {
+        startServer(it -> it.withExtensions(new ThrowingTestExtension()));
+        var saved = System.err;
+        var captured = new ByteArrayOutputStream();
+        System.setErr(new PrintStream(captured, true, StandardCharsets.UTF_8));
+        try (var client = negotiatedClient(Map.of())) {
+            send(client, """
+                    {"jsonrpc":"2.0","id":2,"method":"throwing/invalid-argument","params":{}}
+                    """);
+            send(client, """
+                    {"jsonrpc":"2.0","id":3,"method":"throwing/illegal-argument","params":{}}
+                    """);
+            send(client, """
+                    {"jsonrpc":"2.0","id":4,"method":"throwing/illegal-state","params":{}}
+                    """);
+        } finally {
+            System.setErr(saved);
+        }
+
+        assertThat(captured.toString(StandardCharsets.UTF_8))
+                .contains("WARN", "method=throwing/illegal-state")
+                .doesNotContain("method=throwing/invalid-argument", "method=throwing/illegal-argument");
     }
 
     private static class TestExtension implements ServerExtension {

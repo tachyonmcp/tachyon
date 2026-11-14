@@ -94,7 +94,7 @@ public final class SessionManager implements AutoCloseable {
             previous.close();
             logger.debug("Replaced existing session: {}", sessionId);
         }
-        logger.info("Session created: {}", sessionId);
+        logger.debug("Session created: {}", sessionId);
         return creation.created();
     }
 
@@ -176,7 +176,7 @@ public final class SessionManager implements AutoCloseable {
                 return;
             }
             closeAndTerminate(local, Termination.UNCONDITIONAL);
-            logger.info("Session removed: {}", sessionId);
+            logger.debug("Session removed: {}", sessionId);
         });
     }
 

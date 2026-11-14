@@ -106,7 +106,7 @@ public final class TemporalTaskExecutionEngine {
      */
     public TaskSnapshot start(InteractionContext context, TemporalTaskStartRequest request) {
         var route = routeForOperation(request.operation());
-        logger.info(
+        logger.debug(
                 "Starting Temporal workflow: taskId={}, operation={}, workflowType={}, taskQueue={}",
                 request.taskId(),
                 request.operation(),
@@ -156,7 +156,7 @@ public final class TemporalTaskExecutionEngine {
     public void cancel(InteractionContext context, TaskCancelRequest request) throws TaskNotFoundException {
         try {
             var owned = attach(context, request.taskId());
-            logger.info("Requesting Temporal workflow cancellation: taskId={}", request.taskId());
+            logger.debug("Requesting Temporal workflow cancellation: taskId={}", request.taskId());
             owned.workflow().cancel();
         } catch (WorkflowNotFoundException e) {
             throw new TaskNotFoundException(request.taskId(), e);
@@ -174,7 +174,7 @@ public final class TemporalTaskExecutionEngine {
     public void submitInput(InteractionContext context, TaskUpdateRequest input) throws TaskNotFoundException {
         try {
             var owned = attach(context, input.taskId());
-            logger.info(
+            logger.debug(
                     "Submitting input to Temporal workflow: taskId={}, fields={}",
                     input.taskId(),
                     input.inputResponses().keySet());

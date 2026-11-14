@@ -5,6 +5,7 @@ import dev.tachyonmcp.api.server.domain.ProgressToken;
 import dev.tachyonmcp.api.server.domain.ServerCapabilities;
 import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
 import dev.tachyonmcp.core.protocol.RequestMappingException;
+import dev.tachyonmcp.core.server.domain.ServerErrors;
 import dev.tachyonmcp.core.server.features.subscriptions.SubscriptionTopic;
 import dev.tachyonmcp.core.server.features.tasks.TaskRuntime;
 import dev.tachyonmcp.core.server.features.tasks.TasksExtensionSupport;
@@ -13,6 +14,7 @@ import dev.tachyonmcp.core.server.security.Owner;
 import dev.tachyonmcp.core.server.session.DispatchContext;
 import dev.tachyonmcp.extensions.tasks.engine.TaskEngine;
 import dev.tachyonmcp.extensions.tasks.engine.TaskEvents;
+import dev.tachyonmcp.extensions.tasks.engine.TaskOwnershipException;
 import dev.tachyonmcp.extensions.tasks.engine.TaskRoute;
 import java.util.List;
 import java.util.Objects;
@@ -82,7 +84,11 @@ final class McpTaskBinding implements TaskRuntime, TaskEvents {
 
     @Override
     public TaskSnapshot publish(DispatchContext context, TaskSnapshot snapshot, @Nullable ProgressToken progressToken) {
-        return engine.publishAs(context, snapshot, McpTaskRoute.of(context.sessionId(), progressToken));
+        try {
+            return engine.publishAs(context, snapshot, McpTaskRoute.of(context.sessionId(), progressToken));
+        } catch (TaskOwnershipException e) {
+            throw new RequestMappingException(ServerErrors.internalError("Internal error"), e);
+        }
     }
 
     @Override
