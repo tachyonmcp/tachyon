@@ -12,17 +12,19 @@ class ConformanceRunner {
 
     private static final String CONFORMANCE_PACKAGE = "@modelcontextprotocol/conformance";
 
+    private static final String CONFORMANCE_REPOSITORY = "github:modelcontextprotocol/conformance";
+
     private final String serverUrl;
 
-    private final String conformanceVersion;
+    private final String packageSpec;
 
     private final String outputDir;
 
     private final String baselineFile;
 
-    ConformanceRunner(String serverUrl, String conformanceVersion, String outputDir, String baselineFile) {
+    ConformanceRunner(String serverUrl, String packageSpec, String outputDir, String baselineFile) {
         this.serverUrl = serverUrl;
-        this.conformanceVersion = conformanceVersion;
+        this.packageSpec = packageSpec;
         this.outputDir = outputDir;
         this.baselineFile = baselineFile;
     }
@@ -37,46 +39,33 @@ class ConformanceRunner {
         }
     }
 
-    List<String> listScenarios(String protocolVersion) throws IOException, InterruptedException {
-        var args = List.of("npx", "--yes", CONFORMANCE_PACKAGE + "@" + conformanceVersion, "list");
-
-        var process = new ProcessBuilder(args).redirectErrorStream(true).start();
-        var outputLines = new ArrayList<String>();
-        try (var reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                outputLines.add(line);
-            }
-        }
-        process.waitFor(30, TimeUnit.SECONDS);
-
-        var serverLines = outputLines.stream()
-                .dropWhile(l -> !l.startsWith("Server scenarios"))
-                .skip(1)
-                .takeWhile(l -> !l.startsWith("Client scenarios"))
-                .filter(l -> l.startsWith("  - "))
-                .toList();
-
-        return createScenarios(protocolVersion, serverLines);
+    /**
+     * Returns the npx package spec of {@code ref}: an npm release for a version, otherwise the upstream
+     * git repository at that commit (or branch).
+     */
+    static String packageSpec(String ref) {
+        return Character.isDigit(ref.charAt(0)) && ref.indexOf('.') > 0
+                ? CONFORMANCE_PACKAGE + "@" + ref
+                : CONFORMANCE_REPOSITORY + "#" + ref;
     }
 
-    static ArrayList<String> createScenarios(String protocolVersion, List<String> serverLines) {
-        var scenarios = new ArrayList<String>();
-        for (var line : serverLines) {
-            var bracket = line.indexOf('[');
-            var name = bracket > 0
-                    ? line.substring(4, bracket).strip()
-                    : line.substring(4).strip();
-            if (bracket > 0) {
-                var versionsStr = line.substring(bracket + 1, line.indexOf(']', bracket));
-                var versions = List.of(versionsStr.split(",\\s*"));
-                if (!versions.contains(protocolVersion)) {
-                    continue;
-                }
-            }
-            scenarios.add(name);
+    List<String> listScenarios(String specVersion) throws IOException, InterruptedException {
+        var args = List.of("npx", "--yes", packageSpec, "list", "--server", "--spec-version", specVersion);
+        var result = exec(args, 10, TimeUnit.MINUTES);
+        var output = result.outputLines();
+        var names = output.stream()
+                .dropWhile(l -> !l.startsWith("Server scenarios"))
+                .filter(l -> l.startsWith("  - "))
+                .map(l -> {
+                    var bracket = l.indexOf('[');
+                    return (bracket > 0 ? l.substring(4, bracket) : l.substring(4)).strip();
+                })
+                .toList();
+        if (!result.passed() || names.isEmpty()) {
+            throw new IllegalStateException("Conformance list found no server scenarios (exit " + result.exitCode()
+                    + "):\n" + String.join("\n", output));
         }
-        return scenarios;
+        return names;
     }
 
     ConformanceResult runSuite(String suiteName, String protocolVersion) throws IOException, InterruptedException {
@@ -91,7 +80,7 @@ class ConformanceRunner {
         var args = new ArrayList<>(List.of(
                 "npx",
                 "--yes",
-                CONFORMANCE_PACKAGE + "@" + conformanceVersion,
+                packageSpec,
                 "server",
                 "--url",
                 serverUrl,
@@ -100,7 +89,11 @@ class ConformanceRunner {
                 "--output-dir",
                 outputDir));
         args.addAll(List.of(extraArgs));
+        return exec(args, 3, TimeUnit.MINUTES);
+    }
 
+    private static ConformanceResult exec(List<String> args, long timeout, TimeUnit unit)
+            throws IOException, InterruptedException {
         var process = new ProcessBuilder(args).redirectErrorStream(true).start();
 
         var outputLines = new ArrayList<String>();
@@ -111,8 +104,8 @@ class ConformanceRunner {
             }
         }
 
-        var finished = process.waitFor(3, TimeUnit.MINUTES);
-        return new ConformanceResult(finished, process.exitValue(), outputLines);
+        var finished = process.waitFor(timeout, unit);
+        return new ConformanceResult(finished, finished ? process.exitValue() : -1, outputLines);
     }
 
     public record ConformanceResult(boolean finished, int exitCode, List<String> outputLines) {

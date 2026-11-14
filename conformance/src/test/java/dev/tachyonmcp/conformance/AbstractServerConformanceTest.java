@@ -29,31 +29,36 @@ import org.slf4j.LoggerFactory;
 @Tag("conformance")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @Execution(ExecutionMode.CONCURRENT)
-abstract class AbstractServerConformanceTest {
+public abstract class AbstractServerConformanceTest {
 
     private static final Logger log = LoggerFactory.getLogger(AbstractServerConformanceTest.class);
     private final AbstractConformanceServer serverFactory;
-    private final String conformanceVersion;
+    private final String packageSpec;
     private final String baselineFileName;
     private final String suiteName;
-    private final String protocolVersion;
+    private final String specVersion;
     private final boolean stateful;
     private final ServerInstance statefulServer;
     private final ServerInstance statelessServer;
 
-    AbstractServerConformanceTest(
-            AbstractConformanceServer serverFactory,
-            String conformanceVersion,
-            String baselineFileName,
-            String suiteName,
-            String protocolVersion,
-            boolean stateful) {
+    /**
+     * @param serverFactory the server under test
+     * @param ref the upstream conformance release ({@code 0.2.0-alpha.12}) or git commit/branch
+     * @param specVersion the {@code --spec-version} upstream filters scenarios by
+     * @param stateful whether scenarios run against the stateful server
+     */
+    protected AbstractServerConformanceTest(
+            AbstractConformanceServer serverFactory, String ref, String specVersion, boolean stateful) {
         this.serverFactory = serverFactory;
-        this.conformanceVersion = conformanceVersion;
-        this.baselineFileName = baselineFileName;
-        this.suiteName = suiteName;
-        this.protocolVersion = protocolVersion;
+        this.packageSpec = ConformanceRunner.packageSpec(ref);
+        this.suiteName = getClass()
+                .getPackageName()
+                .substring(getClass().getPackageName().lastIndexOf('.') + 2)
+                .replace('_', '-');
+        this.baselineFileName = "conformance-baseline-" + suiteName + ".yml";
+        this.specVersion = specVersion;
         this.stateful = stateful;
+        log.info("[conformance] suite={} spec={}", suiteName, packageSpec);
         statefulServer = startServer(true);
         statelessServer = startServer(false);
     }
@@ -77,14 +82,8 @@ abstract class AbstractServerConformanceTest {
         var expectedFailures =
                 Files.exists(baselinePath) ? ConformanceReportWriter.parseBaseline(baselinePath) : List.<String>of();
 
-        var tempRunner =
-                new ConformanceRunner("http://localhost:0/mcp", conformanceVersion, outputDir, baselineFileName);
-        var scenarios = tempRunner.listScenarios(protocolVersion);
-
-        if (scenarios.isEmpty()) {
-            System.out.println("[conformance] No scenarios match protocol version " + protocolVersion + " for suite "
-                    + suiteName + " — all tests disabled");
-        }
+        var tempRunner = new ConformanceRunner("http://localhost:0/mcp", packageSpec, outputDir, baselineFileName);
+        var scenarios = tempRunner.listScenarios(specVersion);
 
         return scenarios.stream()
                 .map(scenario ->
@@ -103,9 +102,9 @@ abstract class AbstractServerConformanceTest {
             var port = nettyServer.port();
 
             var runner = new ConformanceRunner(
-                    "http://localhost:" + port + "/mcp", conformanceVersion, outputDir, baselineFileName);
+                    "http://localhost:" + port + "/mcp", packageSpec, outputDir, baselineFileName);
 
-            var result = runner.runSuite("all", protocolVersion);
+            var result = runner.runSuite("all", specVersion);
 
             if (result.passed()) {
                 log.info("[conformance] Suite {} ran successfully", suiteName);
@@ -123,10 +122,10 @@ abstract class AbstractServerConformanceTest {
             throws Exception {
         var server = stateful ? statefulServer : statelessServer;
         var scenarioRunner = new ConformanceRunner(
-                "http://localhost:" + server.port() + "/mcp", conformanceVersion, outputDir, baselineFileName);
+                "http://localhost:" + server.port() + "/mcp", packageSpec, outputDir, baselineFileName);
 
         System.out.println("[conformance] Running: " + scenario);
-        var result = scenarioRunner.runScenario(scenario, protocolVersion);
+        var result = scenarioRunner.runScenario(scenario, specVersion);
         var outputLines = result.outputLines();
         outputLines.forEach(line -> System.out.println("[conformance] " + line));
 

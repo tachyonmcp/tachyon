@@ -2,8 +2,8 @@
 title: Testing
 tags: [module, testing, e2e, conformance]
 sources: [pom.xml, e2e/src/test/, conformance/, Makefile, reports/pom.xml, tachyon-core/src/test/, .github/workflows/build.yml, .github/workflows/release.yml]
-updated: 2026-11-12
-commit: f930ddf6
+updated: 2026-11-14
+commit: 2d54f216
 ---
 
 # ✅ Testing
@@ -55,7 +55,19 @@ Pattern: abstract contract in root, one subclass per protocol package → same b
 
 ## 📏 Conformance
 
-`conformance/src/test/java/dev/tachyonmcp/conformance/`: `DefaultConformanceServer` + `EdgeConformanceServer`, `*ServerConformanceTest`, `ConformanceRunner`, `ConformanceReportWriter`. Baselines `conformance/conformance-baseline-0.1.yml`, `-0.2.yml` (known failures).
+`conformance/src/test/java/dev/tachyonmcp/conformance/` holds the shared parts: `AbstractServerConformanceTest`, `AbstractConformanceServer`, `ConformanceRunner`, `ConformanceReportWriter`. There is one package per spec version, the e2e scheme: `ServerConformanceTest` + `ConformanceServer`.
+
+| Package | Upstream ref | `--spec-version` | Server |
+|---|---|---|---|
+| `v2025_11_25/` | npm `0.1.16` | `2025-11-25` | own, stateful |
+| `v2026_07_28/` | npm `0.2.0-alpha.12` | `2026-07-28` | own, stateless |
+| `v2027_03_30/` | upstream `main` commit SHA | `draft` | reuses `v2026_07_28.ConformanceServer` |
+
+- The ref is a literal in each `ServerConformanceTest`, so runs are deterministic from the IDE and in CI. `ConformanceRunner#packageSpec`: a version → npm `@modelcontextprotocol/conformance@<v>`; anything else (SHA, branch) → `github:modelcontextprotocol/conformance#<ref>`, which npx clones and builds via `prepare`.
+- The suite name is derived from the package (`v2026_07_28` → `2026-07-28`). It picks the baseline `conformance/conformance-baseline-<suite>.yml` (known failures).
+- Scenarios come from upstream `list --server --spec-version <v>`, so upstream owns applicability. If `list` fails or prints no `Server scenarios` header, the test fails rather than passing on zero tests (`ConformanceRunner#listScenarios`).
+- Upstream still maps `draft` to `2026-07-28`, so 2027 = the 2026 wire from `main` until upstream bumps `DRAFT_PROTOCOL_VERSION`.
+- Upstream `main` has no resource-server auth scenarios. `authorization` tests an AS, and `auth/*` scenarios target clients.
 
 ## 🏷️ Declarative result coverage
 

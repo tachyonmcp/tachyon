@@ -31,6 +31,8 @@ threads otherwise.
 
 `e2e`, `conformance` and `reports` are built by the default-active `tests` profile; pass `-DskipTestModules` to leave them out.
 
+Conformance runs one `ServerConformanceTest` per spec version (`conformance/.../v2025_11_25`, `v2026_07_28`, upcoming `v2027_03_30`). Each one pins its upstream ref as a literal: an npm release (`0.2.0-alpha.12`) or a git commit/branch of [modelcontextprotocol/conformance](https://github.com/modelcontextprotocol/conformance). To move a suite, edit that literal. Known failures live in `conformance/conformance-baseline-<version>.yml`.
+
 `lint`/`format` are Maven profiles (`-Plint`/`-Pformat`) kept out of the default
 build so `make build`/`make test` stay fast; `make ci`/`make all` wire them back
 in explicitly. Prefer the IDE MCP for building/running tests when available.

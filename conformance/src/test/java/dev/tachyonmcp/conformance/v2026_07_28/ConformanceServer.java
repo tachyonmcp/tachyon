@@ -1,5 +1,5 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
-package dev.tachyonmcp.conformance;
+package dev.tachyonmcp.conformance.v2026_07_28;
 
 import dev.tachyonmcp.api.server.domain.LoggingLevel;
 import dev.tachyonmcp.api.server.domain.PromptMessage;
@@ -7,6 +7,7 @@ import dev.tachyonmcp.api.server.features.prompts.PromptDescriptor;
 import dev.tachyonmcp.api.server.features.prompts.PromptResult;
 import dev.tachyonmcp.api.server.features.tools.ToolDescriptor;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
+import dev.tachyonmcp.conformance.AbstractConformanceServer;
 import dev.tachyonmcp.core.server.TachyonServer;
 import dev.tachyonmcp.core.server.config.SessionConfig;
 import dev.tachyonmcp.core.server.domain.MissingRequiredClientCapabilityException;
@@ -14,7 +15,7 @@ import dev.tachyonmcp.core.server.internal.ServerEngine;
 import java.util.List;
 import java.util.Map;
 
-class EdgeConformanceServer extends AbstractConformanceServer {
+public class ConformanceServer extends AbstractConformanceServer {
 
     @Override
     protected ServerEngine createServer(boolean isStateful) {

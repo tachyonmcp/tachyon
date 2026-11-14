@@ -1,12 +1,14 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
-package dev.tachyonmcp.conformance;
+package dev.tachyonmcp.conformance.v2025_11_25;
+
+import dev.tachyonmcp.conformance.AbstractServerConformanceTest;
 
 /**
- * Test against the latest stable version of MCP conformance tests
+ * MCP conformance for protocol version 2025-11-25.
  */
-class DefaultServerConformanceTest extends AbstractServerConformanceTest {
+class ServerConformanceTest extends AbstractServerConformanceTest {
 
-    DefaultServerConformanceTest() {
-        super(new DefaultConformanceServer(), "0.1.16", "conformance-baseline-0.1.yml", "default", "2025-11-25", true);
+    ServerConformanceTest() {
+        super(new ConformanceServer(), "0.1.16", "2025-11-25", true);
     }
 }
