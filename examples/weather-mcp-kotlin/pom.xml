@@ -29,7 +29,7 @@
         <kt-schema.version>0.10.0</kt-schema.version>
         <mcp-sdk.version>2.0.0</mcp-sdk.version>
         <netty.version>4.2.18.Final</netty.version>
-        <opentelemetry.version>1.65.0</opentelemetry.version>
+        <opentelemetry.version>1.68.0</opentelemetry.version>
         <slf4j.version>2.0.20</slf4j.version>
     </properties>
 
