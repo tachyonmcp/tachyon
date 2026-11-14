@@ -8,6 +8,7 @@ import dev.tachyonmcp.api.server.features.prompts.PromptResult;
 import dev.tachyonmcp.api.server.features.tools.ToolDescriptor;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
 import dev.tachyonmcp.conformance.AbstractConformanceServer;
+import dev.tachyonmcp.core.server.ServerBuilder;
 import dev.tachyonmcp.core.server.TachyonServer;
 import dev.tachyonmcp.core.server.config.SessionConfig;
 import dev.tachyonmcp.core.server.domain.MissingRequiredClientCapabilityException;
@@ -19,57 +20,61 @@ public class ConformanceServer extends AbstractConformanceServer {
 
     @Override
     protected ServerEngine createServer(boolean isStateful) {
+        return (ServerEngine) builder(isStateful).build();
+    }
+
+    /** Returns the configured server builder, for subclasses to extend before it is built. */
+    protected ServerBuilder builder(boolean isStateful) {
         final var builder = TachyonServer.builder();
         if (isStateful) {
             builder.session(SessionConfig.Builder::enabled);
         }
-        return (ServerEngine) builder.withTools(tools -> tools.register(
-                                ToolDescriptor.builder()
-                                        .name("test_missing_capability")
-                                        .description("SEP-2575 requires an explicitly declared capability")
-                                        .inputSchema(INPUT_SCHEMA_NO_ARGS)
-                                        .build(),
-                                (ctx, request) -> {
-                                    var meta = request.meta();
-                                    var capabilities = meta != null
-                                            ? meta.get("io.modelcontextprotocol/clientCapabilities")
-                                            : null;
-                                    var hasSampling = field(capabilities, "sampling") != null;
-                                    if (!hasSampling) {
-                                        throw new MissingRequiredClientCapabilityException(
-                                                "Requires the 'sampling' capability", Map.of("sampling", Map.of()));
-                                    }
-                                    return ToolResult.text("sampling capability present");
-                                })
-                        .register(
-                                ToolDescriptor.builder()
-                                        .name("test_logging_tool")
-                                        .description(
-                                                "SEP-2575 emits a log message; must be suppressed without _meta.../logLevel")
-                                        .inputSchema(INPUT_SCHEMA_NO_ARGS)
-                                        .build(),
-                                (ctx, request) -> {
-                                    ctx.notifications().log(LoggingLevel.INFO, "test", "diagnostic log message");
-                                    return ToolResult.text("logged");
-                                })
-                        .register(
-                                ToolDescriptor.builder()
-                                        .name("test_streaming_elicitation")
-                                        .description(
-                                                "SEP-2575 response stream carries only notifications, never independent requests")
-                                        .inputSchema(INPUT_SCHEMA_NO_ARGS)
-                                        .build(),
-                                (ctx, request) -> {
-                                    ctx.notifications().progress(request.progressToken(), 1, 1, "working");
-                                    return ToolResult.text("streamed");
-                                })
-                        .register(
-                                ToolDescriptor.builder()
-                                        .name("test_custom_header")
-                                        .description("SEP-2243 x-mcp-header/Mcp-Param-* custom header validation")
-                                        .inputSchema(
-                                                // language=json
-                                                """
+        return builder.withTools(tools -> tools.register(
+                        ToolDescriptor.builder()
+                                .name("test_missing_capability")
+                                .description("SEP-2575 requires an explicitly declared capability")
+                                .inputSchema(INPUT_SCHEMA_NO_ARGS)
+                                .build(),
+                        (ctx, request) -> {
+                            var meta = request.meta();
+                            var capabilities =
+                                    meta != null ? meta.get("io.modelcontextprotocol/clientCapabilities") : null;
+                            var hasSampling = field(capabilities, "sampling") != null;
+                            if (!hasSampling) {
+                                throw new MissingRequiredClientCapabilityException(
+                                        "Requires the 'sampling' capability", Map.of("sampling", Map.of()));
+                            }
+                            return ToolResult.text("sampling capability present");
+                        })
+                .register(
+                        ToolDescriptor.builder()
+                                .name("test_logging_tool")
+                                .description(
+                                        "SEP-2575 emits a log message; must be suppressed without _meta.../logLevel")
+                                .inputSchema(INPUT_SCHEMA_NO_ARGS)
+                                .build(),
+                        (ctx, request) -> {
+                            ctx.notifications().log(LoggingLevel.INFO, "test", "diagnostic log message");
+                            return ToolResult.text("logged");
+                        })
+                .register(
+                        ToolDescriptor.builder()
+                                .name("test_streaming_elicitation")
+                                .description(
+                                        "SEP-2575 response stream carries only notifications, never independent requests")
+                                .inputSchema(INPUT_SCHEMA_NO_ARGS)
+                                .build(),
+                        (ctx, request) -> {
+                            ctx.notifications().progress(request.progressToken(), 1, 1, "working");
+                            return ToolResult.text("streamed");
+                        })
+                .register(
+                        ToolDescriptor.builder()
+                                .name("test_custom_header")
+                                .description("SEP-2243 x-mcp-header/Mcp-Param-* custom header validation")
+                                .inputSchema(
+                                        // language=json
+                                        """
                             {
                               "type": "object",
                               "properties": {
@@ -79,15 +84,13 @@ public class ConformanceServer extends AbstractConformanceServer {
                               "required": ["region", "query"]
                             }
                             """)
-                                        .build(),
-                                (ctx, request) -> {
-                                    var args = request.arguments();
-                                    var region = args.stringOpt("region");
-                                    var query = args.stringOpt("query");
-                                    return ToolResult.text(
-                                            "region=" + region.orElse("") + " query=" + query.orElse(""));
-                                }))
-                .build();
+                                .build(),
+                        (ctx, request) -> {
+                            var args = request.arguments();
+                            var region = args.stringOpt("region");
+                            var query = args.stringOpt("query");
+                            return ToolResult.text("region=" + region.orElse("") + " query=" + query.orElse(""));
+                        }));
     }
 
     /**

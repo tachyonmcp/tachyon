@@ -10,6 +10,6 @@ import dev.tachyonmcp.conformance.AbstractServerConformanceTest;
 class ExtensionConformanceTest extends AbstractServerConformanceTest {
 
     ExtensionConformanceTest() {
-        super(new ConformanceServer(), LATEST_MAIN_SHA, null, false);
+        super(new ExtensionConformanceServer(), LATEST_MAIN_SHA, null, true);
     }
 }

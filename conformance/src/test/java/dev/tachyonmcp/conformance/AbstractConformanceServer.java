@@ -35,6 +35,8 @@ import org.jspecify.annotations.Nullable;
 
 public abstract class AbstractConformanceServer {
 
+    protected static final JsonSchema ANY_ARGS_SCHEMA = JsonSchema.objectSchema();
+
     // language=json
     protected static final JsonSchema INPUT_SCHEMA_NO_ARGS = parseJson("""
         {"type": "object", "properties": {}, "additionalProperties": false}

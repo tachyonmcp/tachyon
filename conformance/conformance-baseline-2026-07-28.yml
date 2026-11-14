@@ -1,12 +1,9 @@
 server:
-  # SEP-2663 (io.modelcontextprotocol/tasks): ConformanceServer registers no tasks fixtures yet
-  # (slow_compute, failing_job, confirm_delete, ...). Reached only by ExtensionConformanceTest.
-  - tasks-lifecycle
-  - tasks-capability-negotiation
-  - tasks-wire-fields
-  - tasks-request-state-removal
-  - tasks-mrtr-input
+  # SEP-2243: Mcp-Name is not mirrored to tasks/* params.taskId (McpHeaderNames#mirroredNameField),
+  # so a mismatched header on tasks/get is not rejected with -32020.
   - tasks-request-headers
-  - tasks-dispatch-and-envelope
-  - tasks-required-task-error
+  # SEP-2322 + SEP-2663: a taskSupport=required tool that answers round 1 with InputRequiredResult
+  # is rejected ("Task-producing tool returned a non-task result", ToolMethodHandlers mapResult).
   - tasks-mrtr-composition
+  # SEP-2640: skills/get omits ttlMs and cacheScope (SkillsExtension#getSkill); only skills/list carries them.
+  - sep-2640-skills-enumeration
