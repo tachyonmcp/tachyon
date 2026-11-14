@@ -585,10 +585,7 @@ public final class PostSseStream implements OutboundSseStream {
      */
     private void closeOnWriteFailure(ChannelFuture f) {
         if (f.isSuccess() || ChannelHandlerUtils.closeFailure(channel) != null) return;
-        logger.warn(
-                "POST-SSE write failed, closing channel={}: {}",
-                channel.id(),
-                f.cause().getMessage());
+        logger.debug("POST-SSE write failed, closing channel={}", channel.id(), f.cause());
         ChannelHandlerUtils.markCloseFailure(channel, f.cause());
         channel.close();
     }

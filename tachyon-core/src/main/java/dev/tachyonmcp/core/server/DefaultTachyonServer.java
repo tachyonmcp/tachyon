@@ -936,7 +936,7 @@ final class DefaultTachyonServer implements ServerEngine, ExtensionContext {
         var actualOwner = isStateless() ? channelId : sessionId;
         var matches = expectedOwner != null && actualOwner != null && expectedOwner.equals(actualOwner);
         if (!matches) {
-            logger.warn(
+            logger.debug(
                     "Pending request ownership mismatch: id={}, expectedSession={}, actualSession={}, expectedChannel={}, actualChannel={}",
                     requestId,
                     entry.sessionId(),

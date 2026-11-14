@@ -4,7 +4,9 @@ package dev.tachyonmcp.core.server.json;
 import com.networknt.schema.Schema;
 import com.networknt.schema.SchemaLocation;
 import com.networknt.schema.SchemaRegistry;
-import com.networknt.schema.SpecificationVersion;
+import com.networknt.schema.dialect.Dialect;
+import com.networknt.schema.dialect.Dialects;
+import com.networknt.schema.keyword.NonValidationKeyword;
 import dev.tachyonmcp.api.json.JsonDocument;
 import dev.tachyonmcp.api.json.JsonSchema;
 import dev.tachyonmcp.api.json.JsonSchemaValidator;
@@ -16,6 +18,10 @@ import java.util.concurrent.ConcurrentMap;
 /** JSON Schema validator backed by {@code networknt/json-schema-validator}. */
 public class NetworkntJsonSchemaValidator implements JsonSchemaValidator {
 
+    private static final Dialect MCP_DIALECT = Dialect.builder(Dialects.getDraft202012())
+            .keyword(new NonValidationKeyword("x-mcp-header"))
+            .build();
+
     private final SchemaRegistry registry;
 
     private final ConcurrentMap<String, Schema> compiledSchemas = new ConcurrentHashMap<>();
@@ -23,7 +29,7 @@ public class NetworkntJsonSchemaValidator implements JsonSchemaValidator {
     public static final NetworkntJsonSchemaValidator INSTANCE = new NetworkntJsonSchemaValidator();
 
     public NetworkntJsonSchemaValidator() {
-        this.registry = SchemaRegistry.withDefaultDialect(SpecificationVersion.DRAFT_2020_12);
+        this.registry = SchemaRegistry.withDialect(MCP_DIALECT);
     }
 
     @Override

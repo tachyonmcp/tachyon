@@ -186,7 +186,7 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
                 try {
                     session = ownedBy(server.getSession(sessionId), caller);
                 } catch (RuntimeException e) {
-                    logger.warn("Failed to resolve session: {}", sessionId, e);
+                    logger.error("Failed to resolve session: {}", sessionId, e);
                     ctx.executor()
                             .execute(() -> sendPlainTextAndClose(
                                     ctx, HttpResponseStatus.INTERNAL_SERVER_ERROR, "Session lookup failed", cors));
@@ -614,7 +614,7 @@ public class McpOperationHandler extends ChannelInboundHandlerAdapter {
             if (session.isOwnedBy(owner)) {
                 return true;
             }
-            logger.warn(
+            logger.debug(
                     "Session owner mismatch, answering as unknown session: sessionId={}",
                     Owner.truncated(session.id()));
             return false;
