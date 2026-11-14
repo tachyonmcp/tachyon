@@ -5,8 +5,11 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import org.jspecify.annotations.Nullable;
 
 class ConformanceRunner {
 
@@ -14,19 +17,10 @@ class ConformanceRunner {
 
     private static final String CONFORMANCE_REPOSITORY = "github:modelcontextprotocol/conformance";
 
-    private final String serverUrl;
-
     private final String packageSpec;
 
-    private final String outputDir;
-
-    private final String baselineFile;
-
-    ConformanceRunner(String serverUrl, String packageSpec, String outputDir, String baselineFile) {
-        this.serverUrl = serverUrl;
+    ConformanceRunner(String packageSpec) {
         this.packageSpec = packageSpec;
-        this.outputDir = outputDir;
-        this.baselineFile = baselineFile;
     }
 
     static boolean isNpxAvailable() {
@@ -49,51 +43,45 @@ class ConformanceRunner {
                 : CONFORMANCE_REPOSITORY + "#" + ref;
     }
 
-    List<String> listScenarios(String specVersion) throws IOException, InterruptedException {
-        var args = List.of("npx", "--yes", packageSpec, "list", "--server", "--spec-version", specVersion);
-        var result = exec(args, 10, TimeUnit.MINUTES);
-        var output = result.outputLines();
-        var names = output.stream()
+    /**
+     * Lists the server scenarios upstream selects for {@code specVersion} (all of them when null),
+     * each mapped to its tag: the spec versions it applies to, or {@code extension}.
+     */
+    Map<String, String> listScenarios(@Nullable String specVersion) throws IOException, InterruptedException {
+        var result = exec(specVersion, "list", "--server");
+        var scenarios = new LinkedHashMap<String, String>();
+        result.outputLines().stream()
                 .dropWhile(l -> !l.startsWith("Server scenarios"))
                 .filter(l -> l.startsWith("  - "))
-                .map(l -> {
+                .forEach(l -> {
                     var bracket = l.indexOf('[');
-                    return (bracket > 0 ? l.substring(4, bracket) : l.substring(4)).strip();
-                })
-                .toList();
-        if (!result.passed() || names.isEmpty()) {
+                    if (bracket > 0) {
+                        scenarios.put(
+                                l.substring(4, bracket).strip(), l.substring(bracket + 1, l.indexOf(']', bracket)));
+                    } else {
+                        scenarios.put(l.substring(4).strip(), "");
+                    }
+                });
+        if (!result.passed() || scenarios.isEmpty()) {
             throw new IllegalStateException("Conformance list found no server scenarios (exit " + result.exitCode()
-                    + "):\n" + String.join("\n", output));
+                    + "):\n" + String.join("\n", result.outputLines()));
         }
-        return names;
+        return scenarios;
     }
 
-    ConformanceResult runSuite(String suiteName, String protocolVersion) throws IOException, InterruptedException {
-        return run("--suite", suiteName, "--spec-version", protocolVersion);
-    }
-
-    ConformanceResult runScenario(String scenario, String protocolVersion) throws IOException, InterruptedException {
-        return run("--scenario", scenario, "--spec-version", protocolVersion);
-    }
-
-    private ConformanceResult run(String... extraArgs) throws IOException, InterruptedException {
-        var args = new ArrayList<>(List.of(
-                "npx",
-                "--yes",
-                packageSpec,
-                "server",
-                "--url",
-                serverUrl,
-                "--expected-failures",
-                baselineFile,
-                "--output-dir",
-                outputDir));
-        args.addAll(List.of(extraArgs));
-        return exec(args, 3, TimeUnit.MINUTES);
-    }
-
-    private static ConformanceResult exec(List<String> args, long timeout, TimeUnit unit)
+    /** Runs every server scenario upstream selects for {@code specVersion} (all of them when null) in one process. */
+    ConformanceResult runSuite(String serverUrl, @Nullable String specVersion, String outputDir)
             throws IOException, InterruptedException {
+        return exec(specVersion, "server", "--url", serverUrl, "--suite", "all", "--output-dir", outputDir);
+    }
+
+    private ConformanceResult exec(@Nullable String specVersion, String... command)
+            throws IOException, InterruptedException {
+        var args = new ArrayList<>(List.of("npx", "--yes", packageSpec));
+        args.addAll(List.of(command));
+        if (specVersion != null) {
+            args.addAll(List.of("--spec-version", specVersion));
+        }
         var process = new ProcessBuilder(args).redirectErrorStream(true).start();
 
         var outputLines = new ArrayList<String>();
@@ -103,14 +91,12 @@ class ConformanceRunner {
                 outputLines.add(line);
             }
         }
-
-        var finished = process.waitFor(timeout, unit);
-        return new ConformanceResult(finished, finished ? process.exitValue() : -1, outputLines);
+        return new ConformanceResult(process.waitFor(), outputLines);
     }
 
-    public record ConformanceResult(boolean finished, int exitCode, List<String> outputLines) {
-        public boolean passed() {
-            return finished && exitCode == 0;
+    record ConformanceResult(int exitCode, List<String> outputLines) {
+        boolean passed() {
+            return exitCode == 0;
         }
     }
 }

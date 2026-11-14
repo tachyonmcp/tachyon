@@ -57,17 +57,23 @@ Pattern: abstract contract in root, one subclass per protocol package → same b
 
 `conformance/src/test/java/dev/tachyonmcp/conformance/` holds the shared parts: `AbstractServerConformanceTest`, `AbstractConformanceServer`, `ConformanceRunner`, `ConformanceReportWriter`. There is one package per spec version, the e2e scheme: `ServerConformanceTest` + `ConformanceServer`.
 
-| Package | Upstream ref | `--spec-version` | Server |
-|---|---|---|---|
-| `v2025_11_25/` | npm `0.1.16` | `2025-11-25` | own, stateful |
-| `v2026_07_28/` | npm `0.2.0-alpha.12` | `2026-07-28` | own, stateless |
-| `v2027_03_30/` | upstream `main` commit SHA | `draft` | reuses `v2026_07_28.ConformanceServer` |
+| Class | Upstream ref | Run | Judges | Server |
+|---|---|---|---|---|
+| `v2025_11_25.ServerConformanceTest` | npm `0.1.16` | `--suite all --spec-version 2025-11-25` | all 32 | own, stateful |
+| `v2026_07_28.ServerConformanceTest` | npm `0.2.0-alpha.12` | `--suite all --spec-version 2026-07-28` | all 40 | own, stateless |
+| `v2026_07_28.ExtensionConformanceTest` | upstream `main` SHA | bare `--suite all` | the 13 `[extension]` scenarios | reuses 2026 |
+| `v2027_03_30.ServerConformanceTest` | upstream `main` SHA | `--spec-version 2027-03-30` | — `@Disabled`: upstream rejects the version | reuses 2026 |
 
-- The ref is a literal in each `ServerConformanceTest`, so runs are deterministic from the IDE and in CI. `ConformanceRunner#packageSpec`: a version → npm `@modelcontextprotocol/conformance@<v>`; anything else (SHA, branch) → `github:modelcontextprotocol/conformance#<ref>`, which npx clones and builds via `prepare`.
-- The suite name is derived from the package (`v2026_07_28` → `2026-07-28`). It picks the baseline `conformance/conformance-baseline-<suite>.yml` (known failures).
-- Scenarios come from upstream `list --server --spec-version <v>`, so upstream owns applicability. If `list` fails or prints no `Server scenarios` header, the test fails rather than passing on zero tests (`ConformanceRunner#listScenarios`).
-- Upstream still maps `draft` to `2026-07-28`, so 2027 = the 2026 wire from `main` until upstream bumps `DRAFT_PROTOCOL_VERSION`.
-- Upstream `main` has no resource-server auth scenarios. `authorization` tests an AS, and `auth/*` scenarios target clients.
+- One `npx … server --suite all` per class, run against one long-lived server, then one `list`. This is the TypeScript/Python SDK pattern (Python CI: legs `all@2025-11-25`, `all@2026-07-28`, bare `all`). `AbstractServerConformanceTest#serverConformance` parses the `=== SUMMARY ===` lines and emits DynamicTests:
+  - `every listed scenario ran`: executed ⊇ `list --server [--spec-version v]`.
+  - Then one test per judged scenario: failed and not in the baseline → fail, with check details from `server-<scenario>-<ts>/checks.json` (`ConformanceReportWriter#failedChecks`); failed and in the baseline → abort; passes but in the baseline → fail (stale entry).
+- The bare run is the only one that reaches the `[extension]` scenarios: `--spec-version` drops them, and upstream runs them on the 2026-07-28 wire. It also replays the timeline scenarios at upstream's default wire (non-draft → 2025-11-25). The spec-version runs already judge those, and they share the baseline file, so the bare run judges only the extension ones.
+- `conformance/conformance-baseline-<suite>.yml` holds known failures by scenario name. The 2026 file baselines 9 `tasks-*` scenarios: `ConformanceServer` has no tasks fixtures yet (`slow_compute`, `failing_job`, …). The skills scenarios pass.
+- The ref is a literal in each test class, so runs are deterministic from the IDE and in CI. `ConformanceRunner#packageSpec`: a version → npm `@modelcontextprotocol/conformance@<v>`; anything else (SHA, branch) → `github:modelcontextprotocol/conformance#<ref>`, which npx clones and builds via `prepare`.
+- The suite name is derived from the package (`v2026_07_28` → `2026-07-28`).
+- `list` failing or listing nothing fails the test, so the suite can't pass on zero tests (`ConformanceRunner#listScenarios`).
+- No upstream branch knows `2027-03-30`. `main` still has `DRAFT_PROTOCOL_VERSION = '2026-07-28'`.
+- Upstream has no resource-server auth scenarios: `authorization` tests an AS, and `auth/*` scenarios target clients. The TS SDK's `authTestServer.ts` is manual only.
 
 ## 🏷️ Declarative result coverage
 

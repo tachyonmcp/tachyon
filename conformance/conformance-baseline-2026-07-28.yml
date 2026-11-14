@@ -1,2 +1,12 @@
 server:
-  - none
+  # SEP-2663 (io.modelcontextprotocol/tasks): ConformanceServer registers no tasks fixtures yet
+  # (slow_compute, failing_job, confirm_delete, ...). Reached only by ExtensionConformanceTest.
+  - tasks-lifecycle
+  - tasks-capability-negotiation
+  - tasks-wire-fields
+  - tasks-request-state-removal
+  - tasks-mrtr-input
+  - tasks-request-headers
+  - tasks-dispatch-and-envelope
+  - tasks-required-task-error
+  - tasks-mrtr-composition

@@ -3,15 +3,16 @@ package dev.tachyonmcp.conformance.v2027_03_30;
 
 import dev.tachyonmcp.conformance.AbstractServerConformanceTest;
 import dev.tachyonmcp.conformance.v2026_07_28.ConformanceServer;
+import org.junit.jupiter.api.Disabled;
 
 /**
  * MCP conformance for the upcoming protocol version 2027-03-30, run from a pinned upstream {@code main}
- * commit. Upstream names the upcoming version {@code draft} and still maps it to 2026-07-28, so this
- * suite reuses that server until the two revisions differ.
+ * commit, reusing the 2026-07-28 server until the two revisions differ.
  */
+@Disabled("Upstream conformance does not know 2027-03-30 yet")
 class ServerConformanceTest extends AbstractServerConformanceTest {
 
     ServerConformanceTest() {
-        super(new ConformanceServer(), "96a6f9478b7f2e125cf0360a213383cf57533893", "draft", false);
+        super(new ConformanceServer(), LATEST_MAIN_SHA, "2027-03-30", false);
     }
 }
