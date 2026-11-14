@@ -175,7 +175,7 @@ public class SseManager {
                 var streamKey = hash < 0 ? null : String.valueOf(Long.parseLong(lastEventId.substring(hash + 1)));
                 return new ResumeCursor(sseId, streamKey);
             } catch (NumberFormatException e) {
-                logger.warn("Invalid Last-Event-ID: {}", lastEventId);
+                logger.debug("Invalid Last-Event-ID: {}", lastEventId);
                 return null;
             }
         }

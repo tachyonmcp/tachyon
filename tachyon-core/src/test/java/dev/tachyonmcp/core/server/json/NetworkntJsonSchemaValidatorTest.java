@@ -5,6 +5,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.tachyonmcp.api.json.JsonDocument;
 import dev.tachyonmcp.api.json.JsonSchema;
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class NetworkntJsonSchemaValidatorTest {
@@ -87,6 +91,25 @@ class NetworkntJsonSchemaValidatorTest {
 
         assertThat(validator.validate(schema1, JsonDocument.of("{}"))).hasSize(1);
         assertThat(validator.validate(schema2, JsonDocument.of("{}"))).hasSize(1);
+    }
+
+    @Test
+    void shouldCompileMcpHeaderAnnotationWithoutWarning() {
+        var saved = System.err;
+        var captured = new ByteArrayOutputStream();
+        System.setErr(new PrintStream(captured, true, StandardCharsets.UTF_8));
+        List<?> errors;
+        try {
+            errors = validator.validate(JsonSchema.unchecked("""
+                        {"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object",
+                         "properties":{"region":{"type":"string","x-mcp-header":"Region"}}}
+                        """), JsonDocument.of("{\"region\":1}"));
+        } finally {
+            System.setErr(saved);
+        }
+
+        assertThat(errors).hasSize(1);
+        assertThat(captured.toString(StandardCharsets.UTF_8)).doesNotContain("Unknown keyword");
     }
 
     @Test

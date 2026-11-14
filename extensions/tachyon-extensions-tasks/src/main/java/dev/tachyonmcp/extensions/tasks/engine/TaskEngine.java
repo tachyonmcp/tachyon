@@ -217,7 +217,7 @@ public final class TaskEngine implements Tasks {
      *
      * @param snapshot the task projection
      * @return the effective snapshot
-     * @throws IllegalStateException if {@code snapshot} names an owner other than the task's
+     * @throws TaskOwnershipException if {@code snapshot} names an owner other than the task's
      */
     @Override
     public TaskSnapshot publish(TaskSnapshot snapshot) {
@@ -288,8 +288,8 @@ public final class TaskEngine implements Tasks {
      * @param snapshot the task projection
      * @param route where push traffic goes, or {@link TaskRoute#NONE}
      * @return the effective snapshot, carrying the caller's owner key
-     * @throws IllegalStateException if the task already has a different owner, or the connector fails
-     *     to read it
+     * @throws TaskOwnershipException if the task already has a different owner
+     * @throws IllegalStateException if the connector fails to read the task
      */
     public TaskSnapshot publishAs(InteractionContext ctx, TaskSnapshot snapshot, TaskRoute route) {
         var owner = TaskSnapshot.ownerKeyOf(ctx.securityContext());
@@ -357,11 +357,11 @@ public final class TaskEngine implements Tasks {
         });
     }
 
-    private static IllegalStateException refused(TaskSnapshot snapshot) {
-        logger.warn(
+    private static TaskOwnershipException refused(TaskSnapshot snapshot) {
+        logger.debug(
                 "Refused a publish claiming task {} for a caller that does not own it",
                 Owner.truncated(snapshot.taskId()));
-        return new IllegalStateException("Task ownership conflict");
+        return new TaskOwnershipException();
     }
 
     /**

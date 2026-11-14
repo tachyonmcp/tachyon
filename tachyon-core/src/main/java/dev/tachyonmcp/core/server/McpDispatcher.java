@@ -542,8 +542,13 @@ public class McpDispatcher {
                 outcome = new OperationOutcome.HandlerFailed(
                         error, context.responseMapper().error(error).code(), exceptionDetail ? unwrapped : null);
             } else {
-                logger.warn("Handler exception: method={}, id={}: {}", method, id, unwrapped.getMessage(), unwrapped);
                 var error = ServerErrors.fromUnhandledException(unwrapped, "Internal error");
+                if (error.kind() == ServerError.Kind.INTERNAL_ERROR) {
+                    logger.warn(
+                            "Handler exception: method={}, id={}: {}", method, id, unwrapped.getMessage(), unwrapped);
+                } else {
+                    logger.debug("Request rejected: method={}, id={}: {}", method, id, unwrapped.getMessage());
+                }
                 dispatchResult = errorResult(id, error, context);
                 outcome = new OperationOutcome.HandlerFailed(
                         error, context.responseMapper().error(error).code(), exceptionDetail ? unwrapped : null);
@@ -639,10 +644,10 @@ public class McpDispatcher {
         }
         switch (method) {
             case NOTIFICATIONS_INITIALIZED -> {
-                logger.info("Client initialized notification received");
+                logger.debug("Client initialized notification received");
                 sessionOpt.ifPresent(session -> {
                     if (session.activate()) {
-                        logger.info("Session activated: {}", sessionId);
+                        logger.debug("Session activated: {}", sessionId);
                     }
                 });
                 observation.complete(new OperationOutcome.NotificationAccepted());

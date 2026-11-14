@@ -51,7 +51,7 @@ Server requires **exactly one** String-source `JsonSchemaFactory` else ISE `Defa
 
 ## ✅ Validation
 
-- Default input **and** output validator `NetworkntJsonSchemaValidator`, dialect **2020-12**, compiled-schema cache keyed by schema JSON string `NetworkntJsonSchemaValidator`.
+- Default input **and** output validator `NetworkntJsonSchemaValidator`, dialect **2020-12** plus `x-mcp-header` registered as a `NonValidationKeyword` (no unknown-keyword WARN), compiled-schema cache keyed by schema JSON string `NetworkntJsonSchemaValidator`.
 - Override via `json { inputSchemaValidator / outputSchemaValidator / schemaValidator }` `JsonConfig`. Output validator `noop()` skips output check `ToolsCallHandler#validateOutput`. A violation ⇒ `isError` tool result `Tool '<name>' returned structuredContent that violates its outputSchema: <path>: <msg>; …` + WARN log `ToolsCallHandler#prepareResult`; `SchemaValidationError#join` prefixes each message with its instance path (`SchemaValidationError#located`).
 - Registration rules (`JsonSchemaUtils`): input root must be `type: object` `JsonSchemaUtils#validateInputSchemaRoot`; output must be object `JsonSchemaUtils#validateOutputSchemaRoot`; `x-mcp-header` rules `JsonSchemaUtils` → [[protocol-versions]].
 
