@@ -11,6 +11,7 @@ import dev.tachyonmcp.e2e.mcp.AbstractStatelessMcpE2eTest;
 import dev.tachyonmcp.testkit.Mcp20260728Client;
 import dev.tachyonmcp.testkit.McpTestClients;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -55,6 +56,7 @@ class CachingHintsTest extends AbstractStatelessMcpE2eTest<Mcp20260728Client> {
     }
 
     @Test
+    @DisplayName("[SEP-2549] tools/list carries ttlMs and cacheScope")
     void toolsListIncludesCachingHints() throws Exception {
         try (var client = createModernTestClient()) {
             var response = client.post("""
@@ -66,6 +68,7 @@ class CachingHintsTest extends AbstractStatelessMcpE2eTest<Mcp20260728Client> {
     }
 
     @Test
+    @DisplayName("[SEP-2549] prompts/list carries ttlMs and cacheScope")
     void promptsListIncludesCachingHints() throws Exception {
         try (var client = createModernTestClient()) {
             var response = client.post("""
@@ -77,6 +80,7 @@ class CachingHintsTest extends AbstractStatelessMcpE2eTest<Mcp20260728Client> {
     }
 
     @Test
+    @DisplayName("[SEP-2549] resources/list carries ttlMs and cacheScope")
     void resourcesListIncludesCachingHints() throws Exception {
         try (var client = createModernTestClient()) {
             var response = client.post("""
@@ -88,6 +92,7 @@ class CachingHintsTest extends AbstractStatelessMcpE2eTest<Mcp20260728Client> {
     }
 
     @Test
+    @DisplayName("[SEP-2549] resources/templates/list carries ttlMs and cacheScope")
     void resourceTemplatesListIncludesCachingHints() throws Exception {
         try (var client = createModernTestClient()) {
             var response = client.post("""
@@ -99,6 +104,7 @@ class CachingHintsTest extends AbstractStatelessMcpE2eTest<Mcp20260728Client> {
     }
 
     @Test
+    @DisplayName("[SEP-2549] resources/read carries ttlMs and cacheScope")
     void resourceReadIncludesCachingHints() throws Exception {
         try (var client = createModernTestClient()) {
             var response = client.post("""

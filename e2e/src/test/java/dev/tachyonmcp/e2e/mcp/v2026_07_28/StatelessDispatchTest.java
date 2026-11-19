@@ -8,6 +8,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import dev.tachyonmcp.e2e.mcp.AbstractStatelessMcpE2eTest;
 import dev.tachyonmcp.testkit.Mcp20260728Client;
 import dev.tachyonmcp.testkit.McpTestClients;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -29,6 +30,7 @@ class StatelessDispatchTest extends AbstractStatelessMcpE2eTest<Mcp20260728Clien
     }
 
     @Test
+    @DisplayName("[SEP-2575] tools/call succeeds without initialize or a session")
     void toolsCallSucceedsWithNoSession() throws Exception {
         try (var client = createModernTestClient()) {
             var response = client.post("""
@@ -47,6 +49,7 @@ class StatelessDispatchTest extends AbstractStatelessMcpE2eTest<Mcp20260728Clien
     }
 
     @Test
+    @DisplayName("[SEP-2575] tools/list succeeds without initialize or a session")
     void toolsListSucceedsWithNoSession() throws Exception {
         try (var client = createModernTestClient()) {
             var response = client.post("""

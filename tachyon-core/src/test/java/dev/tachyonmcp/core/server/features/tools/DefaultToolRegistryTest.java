@@ -48,6 +48,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -210,6 +211,7 @@ class DefaultToolRegistryTest {
      */
     @ParameterizedTest
     @MethodSource("validToolNames")
+    @DisplayName("[SEP-986] accepts 1-64 character names from letters, digits, _, -, . and /")
     void shouldAcceptValidNameOnRegister(String name) {
         registry.register(tool -> tool.name(name), (ctx, request) -> ToolResult.text("ok"));
         assertThat(registry.find(name)).isPresent();
@@ -235,6 +237,7 @@ class DefaultToolRegistryTest {
 
     @ParameterizedTest
     @MethodSource("invalidToolNames")
+    @DisplayName("[SEP-986] rejects empty, over-64-character and out-of-set names")
     void shouldRejectInvalidNameOnRegister(String name) {
         assertThatThrownBy(() -> registry.register(tool -> tool.name(name), (ctx, request) -> ToolResult.text("ok")))
                 .isInstanceOf(IllegalArgumentException.class);
