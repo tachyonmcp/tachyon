@@ -161,7 +161,9 @@ public final class SkillsExtension implements ConfigurableExtension<SkillsExtens
         if (skill == null) {
             return ServerErrors.invalidParams("Unknown skill: " + uri);
         }
-        return Map.of("skill", skillEntry(skill), "resultType", "complete");
+        // SEP-2640: GetSkillResult is cacheable (SEP-2549), same attributes as skills/list.
+        return Map.of(
+                "skill", skillEntry(skill), "resultType", "complete", "ttlMs", cacheTtlMs, "cacheScope", cacheScope);
     }
 
     private Object readDirectory(InteractionContext interaction, @Nullable JsonObject params) {
@@ -277,11 +279,12 @@ public final class SkillsExtension implements ConfigurableExtension<SkillsExtens
         }
 
         /**
-         * Sets the {@code ttlMs} cache-freshness hint (SEP-2549) attached to {@code skills/list}
-         * results: how long, in milliseconds, a client MAY cache the listing before re-fetching.
+         * Sets the {@code ttlMs} cache-freshness hint (SEP-2549) attached to {@code skills/list} and
+         * {@code skills/get} results: how long, in milliseconds, a client MAY cache them before
+         * re-fetching.
          * Defaults to {@code 0} (always stale — the client MAY re-fetch every time).
          *
-         * @param cacheTtlMs milliseconds to consider the listing fresh; must be {@code >= 0}
+         * @param cacheTtlMs milliseconds to consider a result fresh; must be {@code >= 0}
          * @return this builder
          */
         public Builder cacheTtlMs(long cacheTtlMs) {
@@ -293,9 +296,9 @@ public final class SkillsExtension implements ConfigurableExtension<SkillsExtens
         }
 
         /**
-         * Sets the {@code cacheScope} (SEP-2549) attached to {@code skills/list} results:
-         * {@code "public"} when the listing may be cached and shared across authorization
-         * contexts, or {@code "private"} when it must be cached only within the same
+         * Sets the {@code cacheScope} (SEP-2549) attached to {@code skills/list} and
+         * {@code skills/get} results: {@code "public"} when a result may be cached and shared across
+         * authorization contexts, or {@code "private"} when it must be cached only within the same
          * authorization context. Defaults to {@code "public"}.
          *
          * @param cacheScope {@code "public"} or {@code "private"}

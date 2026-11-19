@@ -2,7 +2,7 @@
 title: tachyon-extensions-skills
 tags: [module, extensions, skills]
 sources: [extensions/tachyon-extensions-skills/src/main/java/dev/tachyonmcp/extensions/skills/, extensions/tachyon-extensions-skills/src/main/resources/, extensions/tachyon-extensions-skills/protocol/, extensions/tachyon-extensions-skills/pom.xml, extensions/tachyon-extensions-skills/revapi.json]
-updated: 2026-09-28
+updated: 2026-11-19
 commit: 643738d5
 ---
 
@@ -21,7 +21,7 @@ Verdict: standalone module (split out of `tachyon-extensions`) exposing `SKILL.m
 | advertise | `ALWAYS`, settings `{directoryRead: true}` | [SkillsExtension#advertiseMode](../../extensions/tachyon-extensions-skills/src/main/java/dev/tachyonmcp/extensions/skills/SkillsExtension.java), [SkillsExtension#serverSettings](../../extensions/tachyon-extensions-skills/src/main/java/dev/tachyonmcp/extensions/skills/SkillsExtension.java) |
 | negotiation | builder `negotiation(...)`, **default `OPTIONAL`** ⇒ serves undeclared clients (e.g. MCP Inspector, stateless 2025-11-25; same advertisement). `REQUIRED` opt-in ⇒ undeclared ⇒ missing required client capability: -32003 (2025-11-25), -32021 + HTTP 400 (2026-07-28); base `resources/list\|read` still served | [SkillsExtension#negotiation](../../extensions/tachyon-extensions-skills/src/main/java/dev/tachyonmcp/extensions/skills/SkillsExtension.java), [SkillsExtension.Builder#negotiation](../../extensions/tachyon-extensions-skills/src/main/java/dev/tachyonmcp/extensions/skills/SkillsExtension.java); codes in `McpResponseMapper` (v2025_11_25, v2026_07_28) |
 | bootstrap | every skill file → resource (`SKILL.md` named by frontmatter `name` + `description`); text vs blob by `MimeTypes.isText` | [SkillsExtension#bootstrap](../../extensions/tachyon-extensions-skills/src/main/java/dev/tachyonmcp/extensions/skills/SkillsExtension.java), [SkillsExtension#contents](../../extensions/tachyon-extensions-skills/src/main/java/dev/tachyonmcp/extensions/skills/SkillsExtension.java) |
-| methods | `skills/list` (no pagination; `ttlMs`, `cacheScope`), `skills/get {uri}`, `resources/directory/read {uri}` (children with `inode/directory`) | [SkillsExtension#listSkills](../../extensions/tachyon-extensions-skills/src/main/java/dev/tachyonmcp/extensions/skills/SkillsExtension.java), [SkillsExtension#getSkill](../../extensions/tachyon-extensions-skills/src/main/java/dev/tachyonmcp/extensions/skills/SkillsExtension.java), [SkillsExtension#readDirectory](../../extensions/tachyon-extensions-skills/src/main/java/dev/tachyonmcp/extensions/skills/SkillsExtension.java) |
+| methods | `skills/list` (no pagination; `ttlMs`, `cacheScope`), `skills/get {uri}` (`ttlMs`, `cacheScope`), `resources/directory/read {uri}` (children with `inode/directory`) | [SkillsExtension#listSkills](../../extensions/tachyon-extensions-skills/src/main/java/dev/tachyonmcp/extensions/skills/SkillsExtension.java), [SkillsExtension#getSkill](../../extensions/tachyon-extensions-skills/src/main/java/dev/tachyonmcp/extensions/skills/SkillsExtension.java), [SkillsExtension#readDirectory](../../extensions/tachyon-extensions-skills/src/main/java/dev/tachyonmcp/extensions/skills/SkillsExtension.java) |
 | builder | `registry(...)`, `cacheTtlMs ≥ 0`, `cacheScope public\|private` | [SkillsExtension.Builder](../../extensions/tachyon-extensions-skills/src/main/java/dev/tachyonmcp/extensions/skills/SkillsExtension.java) |
 
 Skill model `SkillsRegistry.Skill(skillPath, frontmatter, files)`, `SkillFile(relativePath, uri, mimeType, sha256 digest, size)`; `skillUri = skill://<path>/SKILL.md` `Skill`.
