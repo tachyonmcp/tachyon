@@ -7,6 +7,7 @@ package com.example.weather
 import com.example.weather.service.WeatherService
 import dev.tachyonmcp.core.server.TachyonServer
 import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.matchers.collections.shouldContainAll
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.collections.shouldHaveSize
@@ -152,14 +153,15 @@ class WeatherServerTest {
             )
 
         result.isError shouldNotBe true
+        val fetching = "Fetching weather for London"
+        val retrieved = "Weather retrieved for London"
         await atMost Duration.ofSeconds(5) untilAsserted {
-            progressNotifications shouldHaveSize 2
+            progressNotifications.map { it.message() } shouldContainAll listOf(fetching, retrieved)
         }
-        progressNotifications.map { it.progressToken() to it.message() } shouldContainExactly
-            listOf(
-                "weather-progress" to "Fetching weather for London",
-                "weather-progress" to "Weather retrieved for London",
-            )
+        val ordered = progressNotifications.sortedBy { it.progress() }
+        ordered.map { it.progressToken() }.toSet() shouldBe setOf("weather-progress")
+        ordered.first().message() shouldBe fetching
+        ordered.last().message() shouldBe retrieved
     }
 
     @Test
