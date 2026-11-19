@@ -21,6 +21,7 @@ import java.util.Base64;
 import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -105,7 +106,8 @@ class SkillsExtensionE2eTest {
     }
 
     @Test
-    void skillsListHonorsConfiguredCacheTtlAndScope() throws Exception {
+    @DisplayName("[SEP-2640][SEP-2549] skills/list and skills/get carry the configured ttlMs and cacheScope")
+    void skillsListAndGetHonorConfiguredCacheTtlAndScope() throws Exception {
         try (var server = startServer(skills -> skills.registry(classpathSkillsRegistry)
                         .cacheTtlMs(60_000)
                         .cacheScope("private"));
@@ -114,14 +116,26 @@ class SkillsExtensionE2eTest {
             var list = client.sendRpc("""
                     {"jsonrpc":"2.0","id":1,"method":"skills/list"}
                 """);
-            final var result = assertThat(list).isSuccess().result();
-            assertThat(result.path("resultType").asString()).isEqualTo("complete");
-            assertThat(result.path("ttlMs").asLong()).isEqualTo(60_000L);
-            assertThat(result.path("cacheScope").asString()).isEqualTo("private");
+            // language=JSON
+            assertThatJson(list.body()).isEqualTo("""
+                {"jsonrpc":"2.0","id":1,"result":{
+                  "skills":"${json-unit.ignore}","resultType":"complete","ttlMs":60000,"cacheScope":"private"}}
+                """);
+
+            // language=JSON
+            var get = client.sendRpc("""
+                    {"jsonrpc":"2.0","id":2,"method":"skills/get","params":{"uri":"skill://pdf-processing/SKILL.md"}}
+                """);
+            // language=JSON
+            assertThatJson(get.body()).isEqualTo("""
+                {"jsonrpc":"2.0","id":2,"result":{
+                  "skill":"${json-unit.ignore}","resultType":"complete","ttlMs":60000,"cacheScope":"private"}}
+                """);
         }
     }
 
     @Test
+    @DisplayName("[SEP-2640][SEP-2549] skills/get returns the requested skill with default cache attributes")
     void classpathSkillGetReturnsRequestedSkill() throws Exception {
         try (var server = startServer(skills -> skills.registry(classpathSkillsRegistry));
                 var client = createClient(server.port())) {
@@ -145,7 +159,9 @@ class SkillsExtensionE2eTest {
                       {"uri":"skill://pdf-processing/templates/invoice.md","digest":"sha256:cd1a5be9eb7a5a46feea259ca26620f73dbd3587cc5111da44fff6489993c643","size":43}
                     ]
                   },
-                  "resultType":"complete"
+                  "resultType":"complete",
+                  "ttlMs":0,
+                  "cacheScope":"public"
                 }
                 """);
         }
@@ -397,7 +413,9 @@ class SkillsExtensionE2eTest {
                         {"uri":"skill://team/git-workflow/references/BRANCHING.md","digest":"sha256:c23e5f309d54105cc561675ce4384fa62971e00919fe9bd297a37e443746c24e","size":68}
                       ]
                     },
-                    "resultType":"complete"
+                    "resultType":"complete",
+                    "ttlMs":0,
+                    "cacheScope":"public"
                   }
                 }
                 """);
@@ -422,7 +440,9 @@ class SkillsExtensionE2eTest {
                         {"uri":"skill://acme/git-workflow/references/BRANCHING.md","digest":"sha256:c23e5f309d54105cc561675ce4384fa62971e00919fe9bd297a37e443746c24e","size":68}
                       ]
                     },
-                    "resultType":"complete"
+                    "resultType":"complete",
+                    "ttlMs":0,
+                    "cacheScope":"public"
                   }
                 }
                 """);
@@ -851,7 +871,9 @@ class SkillsExtensionE2eTest {
                       },
                       "resources":"${json-unit.ignore}"
                     },
-                    "resultType":"complete"
+                    "resultType":"complete",
+                    "ttlMs":0,
+                    "cacheScope":"public"
                 }
                 """);
 

@@ -63,7 +63,8 @@ fun main() {
 
 `cacheTtl` defaults to zero (always stale) and must be non-negative; it is converted
 to whole milliseconds for the wire. `cacheScope` defaults to `"public"` and also
-accepts `"private"`. `negotiation` defaults to `ExtensionNegotiation.OPTIONAL`;
+accepts `"private"`. Both travel as `ttlMs` and `cacheScope` in `skills/list` and `skills/get`
+results. `negotiation` defaults to `ExtensionNegotiation.OPTIONAL`;
 set it to `ExtensionNegotiation.REQUIRED` for strict negotiation.
 Repeated `skills(...)` calls append registries and replace these settings with
 the latest block's values, including defaults.
