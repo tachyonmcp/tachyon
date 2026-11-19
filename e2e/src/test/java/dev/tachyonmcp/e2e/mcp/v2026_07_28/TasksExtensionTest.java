@@ -291,36 +291,45 @@ class TasksExtensionTest extends AbstractStatelessMcpE2eTest<McpClient> {
                                 (context, request) -> ToolResult.text("sync")));
 
         try (var client = tasksClient()) {
+            // language=JSON
             var round1 = client.sendRpc("""
                     {"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"book","arguments":{},
                       "_meta":{"io.modelcontextprotocol/clientCapabilities":{"elicitation":{}}}}}
                     """);
-            var result1 = assertThat(round1)
+            // language=JSON
+            assertThat(round1)
+                    .as("no task is minted before the final round")
                     .isSuccess()
                     .hasId(1)
-                    .hasResultType("input_required")
-                    .result();
-            assertThat(result1.has("taskId"))
-                    .as("no task is minted before the final round")
-                    .isFalse();
-            assertThat(result1.path("requestState").asString()).isEqualTo("round-1");
-            assertThat(result1.path("inputRequests").has("user_name")).isTrue();
+                    .hasResult("""
+                    {
+                      "resultType":"input_required",
+                      "inputRequests":{"user_name":{"method":"elicitation/create","params":{
+                        "message":"What is your name?","requestedSchema":{"type":"object"}}}},
+                      "requestState":"round-1"
+                    }
+                    """);
 
+            // language=JSON
             var round2 = client.sendRpc("""
                     {"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"book","arguments":{},
                       "inputResponses":{"user_name":{"action":"accept","content":{"name":"Alice"}}},
                       "requestState":"round-1",
                       "_meta":{"io.modelcontextprotocol/clientCapabilities":{"elicitation":{}}}}}
                     """);
-            var result2 = assertThat(round2)
-                    .isSuccess()
-                    .hasId(2)
-                    .hasResultType("task")
-                    .result();
-            assertThat(result2.path("taskId").asString()).isEqualTo("workflow-mrtr");
-            assertThat(result2.has("requestState")).isFalse();
-            assertThat(result2.has("inputRequests")).isFalse();
+            // language=JSON
+            assertThat(round2).isSuccess().hasId(2).hasResult("""
+                    {
+                      "taskId":"workflow-mrtr",
+                      "status":"working",
+                      "createdAt":"2026-08-27T07:00:00Z",
+                      "lastUpdatedAt":"2026-08-27T07:00:00Z",
+                      "ttlMs":null,
+                      "resultType":"task"
+                    }
+                    """);
 
+            // language=JSON
             var sync = client.sendRpc("""
                     {"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"never_a_task","arguments":{}}}
                     """);

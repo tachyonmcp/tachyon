@@ -110,9 +110,10 @@ public final class Mcp20260728Client extends McpClient {
     protected void configureRequest(HttpRequest.Builder builder, String body) {
         var request = MAPPER.readTree(body);
         var method = request.path("method").asString(null);
-        if (method != null) builder.header("Mcp-Method", method);
+        if (method == null) return;
+        builder.header("Mcp-Method", method);
 
-        var nameField = method != null ? McpHeaderNames.mirroredNameField(method) : null;
+        var nameField = McpHeaderNames.mirroredNameField(method);
         var name = nameField != null ? request.path("params").path(nameField).asString(null) : null;
         if (name != null) builder.header("Mcp-Name", name);
     }
