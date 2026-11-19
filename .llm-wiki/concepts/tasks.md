@@ -2,8 +2,8 @@
 title: Tasks
 tags: [concept, tasks, experimental]
 sources: [tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/tasks/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tasks/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tools/ToolMethodHandlers.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tools/DefaultToolRegistry.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java, extensions/tachyon-extensions-tasks/src/main/java/dev/tachyonmcp/extensions/tasks/, integrations/tachyon-tasks-temporal/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/security/Owner.java]
-updated: 2026-11-13
-commit: 1320cf00
+updated: 2026-11-19
+commit: b699b06d
 ---
 
 # ⏳ Tasks
@@ -46,7 +46,7 @@ Registration check: registering a `REQUIRED` or `OPTIONAL` tool w/o tasks extens
 | 2025-11-25 (legacy augmentation) | client sends task-augmented call; `FORBIDDEN`/absent + augmented ⇒ -32601; `REQUIRED` + plain ⇒ -32601 (§ Tool-Level Negotiation) |
 | 2026-07-28 | no augmentation flag; `REQUIRED` ⇒ tasks extension must be declared (else -32021) |
 
-Tool returns `ToolResult.task(snapshot)` ⇒ checks (not FORBIDDEN, legacy must be augmented, extension declared on modern) ⇒ `taskRuntime().publish(context, snapshot, progressToken)` ⇒ `McpTaskBinding#publish` ⇒ `TaskEngine#publishAs(context, snapshot, McpTaskRoute.of(context.sessionId(), token))` (explicit: async tools map off the dispatch thread, and the dispatch context is the request's own fixed copy) ⇒ `createTaskResult`, observation outcome `TaskHandoff`. The caller owns the task; an owner conflict ⇒ ISE ⇒ generic `Internal error`, no `TaskHandoff`. Non-task result for REQUIRED/augmented ⇒ internal error.
+Tool returns `ToolResult.task(snapshot)` ⇒ checks (not FORBIDDEN, legacy must be augmented, extension declared on modern) ⇒ `taskRuntime().publish(context, snapshot, progressToken)` ⇒ `McpTaskBinding#publish` ⇒ `TaskEngine#publishAs(context, snapshot, McpTaskRoute.of(context.sessionId(), token))` (explicit: async tools map off the dispatch thread, and the dispatch context is the request's own fixed copy) ⇒ `createTaskResult`, observation outcome `TaskHandoff`. The caller owns the task; an owner conflict ⇒ ISE ⇒ generic `Internal error`, no `TaskHandoff`. Non-task result for REQUIRED/augmented ⇒ internal error; on 2026-07-28 an `InputRequired` round is exempt (SEP-2663 + SEP-2322), on 2025-11-25 it is not `ToolsCallHandler#mapResult`.
 
 ## 🗂️ Registry semantics
 

@@ -211,9 +211,11 @@ public final class ToolMethodHandlers {
                 context.observation().markTaskHandoff(snapshot.taskId());
                 return context.responseMapper().createTaskResult(snapshot);
             }
-            // SEP-2663: a tool may gather input (SEP-2322) on earlier rounds; only its final one is a task.
-            if ((taskSupport == TaskSupport.REQUIRED || mapped.taskAugmented())
-                    && !(result instanceof ToolResult.InputRequired)) {
+            // SEP-2663: on 2026-07-28 a tool may gather input (SEP-2322) on earlier rounds; only its final one is a
+            // task. 2025-11-25 has no input rounds, so an accepted task-augmented call must return the task.
+            var inputRound = result instanceof ToolResult.InputRequired
+                    && !context.requestMapper().supportsLegacyTaskAugmentation();
+            if ((taskSupport == TaskSupport.REQUIRED || mapped.taskAugmented()) && !inputRound) {
                 return internalError("Task-producing tool returned a non-task result");
             }
             var prepared = prepareResult(mapped.request().name(), outputSchema, result);
