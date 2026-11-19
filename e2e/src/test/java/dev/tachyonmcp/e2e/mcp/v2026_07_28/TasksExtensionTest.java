@@ -2,6 +2,7 @@
 package dev.tachyonmcp.e2e.mcp.v2026_07_28;
 
 import static dev.tachyonmcp.testkit.JsonRpcResponseAssert.assertThat;
+import static dev.tachyonmcp.testkit.McpHttpResponseAssert.assertThatResponse;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.tachyonmcp.api.json.JsonSchema;
@@ -21,6 +22,7 @@ import dev.tachyonmcp.testkit.TestTaskConnector;
 import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.node.JsonNodeFactory;
 
@@ -215,6 +217,50 @@ class TasksExtensionTest extends AbstractStatelessMcpE2eTest<McpClient> {
                     {"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"book","arguments":{}}}
                     """);
             assertThat(response).isJsonRpcError();
+        }
+    }
+
+    @Test
+    @DisplayName("[SEP-2663][SEP-2243] Mcp-Name mirrors params.taskId on tasks/get, tasks/update and tasks/cancel")
+    void nameHeaderMirrorsTaskId() throws Exception {
+        var snapshot = TaskSnapshot.working("workflow-routed", Instant.parse("2026-08-27T07:00:00Z"), 1);
+        startTasksServer(new TestTaskConnector().publish(snapshot), "book", ToolResult.task(snapshot));
+        // language=JSON
+        var body = """
+                {"jsonrpc":"2.0","id":7,"method":"tasks/get","params":{
+                  "taskId":"workflow-routed",
+                  "_meta":{
+                    "io.modelcontextprotocol/protocolVersion":"2026-07-28",
+                    "io.modelcontextprotocol/clientInfo":{"name":"t","version":"1"},
+                    "io.modelcontextprotocol/clientCapabilities":{
+                      "extensions":{"io.modelcontextprotocol/tasks":{}}}}}}
+                """;
+
+        assertThatResponse(postMcpRequest(body, Map.of("Mcp-Method", "tasks/get", "Mcp-Name", "workflow-routed")))
+                .hasStatus(200)
+                .isSuccess()
+                .hasId(7);
+        assertThatResponse(postMcpRequest(body, Map.of("Mcp-Method", "tasks/get", "Mcp-Name", "another-task")))
+                .hasStatus(400)
+                .isJsonRpcError()
+                .hasId(7)
+                .hasErrorCode(-32020)
+                .hasErrorMessageContaining("Mcp-Name")
+                .hasErrorMessageContaining("does not match");
+        assertThatResponse(postMcpRequest(body, Map.of("Mcp-Method", "tasks/get")))
+                .hasStatus(400)
+                .isJsonRpcError()
+                .hasErrorCode(-32020)
+                .hasErrorMessageContaining("Mcp-Name")
+                .hasErrorMessageContaining("is required");
+        for (var method : new String[] {"tasks/update", "tasks/cancel"}) {
+            assertThatResponse(postMcpRequest(
+                            body.replace("tasks/get", method),
+                            Map.of("Mcp-Method", method, "Mcp-Name", "another-task")))
+                    .as(method)
+                    .hasStatus(400)
+                    .isJsonRpcError()
+                    .hasErrorCode(-32020);
         }
     }
 

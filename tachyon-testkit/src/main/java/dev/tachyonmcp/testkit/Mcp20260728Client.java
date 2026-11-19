@@ -1,6 +1,7 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
 package dev.tachyonmcp.testkit;
 
+import dev.tachyonmcp.core.protocol.mcp.McpHeaderNames;
 import java.net.URI;
 import java.net.http.HttpRequest;
 import java.util.Map;
@@ -111,9 +112,8 @@ public final class Mcp20260728Client extends McpClient {
         var method = request.path("method").asString(null);
         if (method != null) builder.header("Mcp-Method", method);
 
-        var params = request.path("params");
-        var name = params.path("name").asString(null);
-        if (name == null) name = params.path("uri").asString(null);
+        var nameField = method != null ? McpHeaderNames.mirroredNameField(method) : null;
+        var name = nameField != null ? request.path("params").path(nameField).asString(null) : null;
         if (name != null) builder.header("Mcp-Name", name);
     }
 
