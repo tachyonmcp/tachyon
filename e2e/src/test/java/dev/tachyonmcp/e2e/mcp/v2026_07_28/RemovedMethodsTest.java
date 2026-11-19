@@ -12,6 +12,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -35,6 +36,7 @@ class RemovedMethodsTest extends AbstractStatelessMcpE2eTest<McpClient> {
 
     @ParameterizedTest
     @ValueSource(strings = {"initialize", "ping", "logging/setLevel", "resources/subscribe", "resources/unsubscribe"})
+    @DisplayName("[SEP-2575] methods removed in 2026-07-28 answer 404 and -32601")
     void removedMethodReturns404MethodNotFound(String method) throws Exception {
         var body = "{\"jsonrpc\":\"2.0\",\"id\":42,\"method\":\"%s\",\"params\":{}}".formatted(method);
         var request = HttpRequest.newBuilder()
