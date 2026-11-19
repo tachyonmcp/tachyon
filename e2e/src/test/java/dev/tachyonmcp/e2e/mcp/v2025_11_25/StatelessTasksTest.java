@@ -6,6 +6,8 @@ import static dev.tachyonmcp.testkit.JsonRpcResponseAssert.assertThat;
 import static net.javacrumbs.jsonunit.assertj.JsonAssertions.assertThatJson;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import dev.tachyonmcp.api.json.JsonSchema;
+import dev.tachyonmcp.api.server.domain.FormInputRequest;
 import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
 import dev.tachyonmcp.api.server.features.tasks.TaskSupport;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
@@ -14,12 +16,17 @@ import dev.tachyonmcp.extensions.tasks.TasksExtension;
 import dev.tachyonmcp.testkit.Mcp20251125Client;
 import dev.tachyonmcp.testkit.TestTaskConnector;
 import java.time.Instant;
+import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /** Legacy tasks on a stateless server: no session owns a task, so no session is ever notified. */
 class StatelessTasksTest extends AbstractStatelessMcpE2eTest<Mcp20251125Client> {
 
     private static final Instant CREATED_AT = Instant.parse("2026-09-24T07:00:00Z");
+
+    private static final JsonSchema NAME_SCHEMA =
+            JsonSchema.from(Map.of("type", "object", "properties", Map.of("name", Map.of("type", "string"))));
 
     private final TestTaskConnector taskEngine = new TestTaskConnector();
 
@@ -44,7 +51,11 @@ class StatelessTasksTest extends AbstractStatelessMcpE2eTest<Mcp20251125Client> 
                                 var snapshot = TaskSnapshot.working("stateless-task", CREATED_AT, 1);
                                 taskEngine.publish(snapshot);
                                 return ToolResult.task(snapshot);
-                            });
+                            })
+                            .register(
+                                    b -> b.name("ask").taskSupport(TaskSupport.REQUIRED),
+                                    (context, request) -> ToolResult.inputRequired(
+                                            Map.of("name", FormInputRequest.of("Name?", NAME_SCHEMA)), null));
                 });
     }
 
@@ -73,6 +84,22 @@ class StatelessTasksTest extends AbstractStatelessMcpE2eTest<Mcp20251125Client> 
                     .as("a stateless server sends no session notifications for tasks")
                     .noneMatch(n -> n.method().startsWith("notifications/tasks")
                             || n.method().equals("notifications/progress"));
+        }
+    }
+
+    @Test
+    @DisplayName("[SEP-1686] accepted task-augmented call must return a task, not input_required")
+    void taskAugmentedCallAnsweredWithInputRequiredIsRejected() throws Exception {
+        try (var client = createTestClient()) {
+            client.initialize();
+
+            var response = client.post("""
+                    {"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"ask","arguments":{},"task":{}}}
+                    """);
+            // language=JSON
+            assertThatJson(response.body()).isEqualTo("""
+                    {"jsonrpc":"2.0","id":2,"error":{"code":-32603,"message":"Task-producing tool returned a non-task result"}}
+                    """);
         }
     }
 }
