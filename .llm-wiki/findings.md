@@ -2,13 +2,15 @@
 title: Findings
 tags: [meta, findings]
 sources: [tachyon-core/ts2java.py, tachyon-core/src/main/java/dev/tachyonmcp/core/, extensions/tachyon-extensions-tasks/src/main/java/dev/tachyonmcp/extensions/tasks/]
-updated: 2026-11-14
-commit: 734f9997
+updated: 2026-11-19
+commit: 12b81750
 ---
 
 # 🔎 Findings
 
 Spotted while reading code. Runtime verification noted per finding. Fixed in code ⇒ 🗑️ remove row.
+
+- 🐛 Netty 4.2.21 + io_uring: `shutdownGracefully(0, …)` sometimes hangs. The post-loop `IoUringIoHandler#prepareToDestroy` that netty#18035 added blocks in `io_uring_enter` (`SingleThreadIoEventLoop.java:239`), so `NettyServer#close` waits out the full grace period (`Event loop shutdown did not finish within PT5S`) and the loop thread lingers for up to 60s. Upstream bug; epoll, kqueue and 4.2.20 are unaffected. Linux podman repro: 2 stalls in 4 full e2e runs on 4.2.21, 0 on 4.2.20. Flakes `ServerRestartTest#shutdownEndsListenStreamGracefullyWithoutWaitingOutTheGracePeriod` (`< 2s`). Remove this row once netty ships a fix. [NettyServer#close](../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/NettyServer.java)
 
 - 🐛 ts2java nested arrays: `Array<Array<string>>` / `string[][]` model is `List<List<String>>` but the codec decodes elements via a bogus `Lis` codec. No current schema uses it. Probe-verified. [Generator#add_codec](../tachyon-core/ts2java.py)
 - 🪶 Extension close hook is unused: `Extension#onConnectionClose` has no server call site. Cleanup currently relies on `ServerExtension#shutdown` during terminal close. Static source search. [Extension#onConnectionClose](../tachyon-api/src/main/java/dev/tachyonmcp/api/runtime/Extension.java), [DefaultTachyonServer#close](../tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java).
