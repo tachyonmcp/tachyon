@@ -13,6 +13,8 @@
 
 Java 21+/Kotlin 2.2 MCP server. Java first, Kotlin adapts. Stack and its rules: [`specs/tech-stack.md`](specs/tech-stack.md).
 
+**`SEP-<num>`** = MCP specification proposal: PR `https://github.com/modelcontextprotocol/modelcontextprotocol/pull/<num>`, text `https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/docs/seps/<num>-<slug>.mdx`, indexed in [`specs/seps.md`](specs/seps.md). Cite it in code implementing it; tag tests proving it: `@DisplayName("[SEP-<num>] ...")`.
+
 ## Fast Commands
 
 Use IDE MCP for building/running tests if available. Otherwise see
