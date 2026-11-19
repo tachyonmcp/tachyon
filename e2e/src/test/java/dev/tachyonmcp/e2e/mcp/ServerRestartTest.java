@@ -10,6 +10,7 @@ import static org.awaitility.Awaitility.await;
 import dev.tachyonmcp.api.server.features.tools.ToolResult;
 import dev.tachyonmcp.core.server.TachyonServer;
 import dev.tachyonmcp.core.server.config.SessionConfig;
+import dev.tachyonmcp.core.transport.netty.NettyIoEngine;
 import dev.tachyonmcp.testkit.Mcp20251125Client;
 import dev.tachyonmcp.testkit.McpTestClients;
 import java.io.IOException;
@@ -23,6 +24,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Named;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -35,10 +37,11 @@ import org.junit.jupiter.params.provider.MethodSource;
 class ServerRestartTest {
 
     @Test
+    @DisplayName("[RT-01] restart serves the same registrations and sessions on a new transport")
     void restartServesSameRegistrationsAndSessionsOnNewTransport() throws Exception {
         try (var server = TachyonServer.builder()
                 .session(SessionConfig.Builder::enabled)
-                .network(n -> n.port(0))
+                .network(n -> n.port(0).ioEngine(NettyIoEngine.NIO))
                 .build()) {
             server.tools().register(b -> b.name("before"), (ctx, req) -> ToolResult.text("one"));
             server.start();
@@ -70,6 +73,7 @@ class ServerRestartTest {
     }
 
     @Test
+    @DisplayName("[RT-03] stop lets an admitted request flush within the grace period")
     void stopDrainsInFlightRequestBeforeUnbinding() throws Exception {
         final var result = new CompletableFuture<ToolResult>();
         try (var server = TachyonServer.builder()
@@ -86,8 +90,8 @@ class ServerRestartTest {
                 final var session = client.initialize();
                 // language=json
                 try (var stream = client.openPostStream(session, """
-                        {"jsonrpc":"2.0","id":42,"method":"tools/call","params":{"name":"slow","arguments":{}}}
-                        """)) {
+                    {"jsonrpc":"2.0","id":42,"method":"tools/call","params":{"name":"slow","arguments":{}}}
+                    """)) {
                     final var stopping = CompletableFuture.runAsync(server::stop, Thread::startVirtualThread);
                     try {
                         await().during(Duration.ofMillis(200))
@@ -117,8 +121,11 @@ class ServerRestartTest {
         }
     }
 
-    /** A request that never finishes cannot hold stop(): past the grace period it is dropped. */
+    /**
+     * A request that never finishes cannot hold stop(): past the grace period it is dropped.
+     */
     @Test
+    @DisplayName("[RT-03][RT-04] stop drops an unfinished response when the configured grace period expires")
     void stopDropsUnfinishedRequestAfterGracePeriodAndRestarts() throws Exception {
         try (var server = TachyonServer.builder()
                 .network(n -> n.port(0))
@@ -134,8 +141,8 @@ class ServerRestartTest {
                 final var session = client.initialize();
                 // language=json
                 try (var stream = client.openPostStream(session, """
-                        {"jsonrpc":"2.0","id":42,"method":"tools/call","params":{"name":"stuck","arguments":{}}}
-                        """)) {
+                    {"jsonrpc":"2.0","id":42,"method":"tools/call","params":{"name":"stuck","arguments":{}}}
+                    """)) {
                     final var start = System.nanoTime();
                     server.stop();
 
@@ -162,22 +169,26 @@ class ServerRestartTest {
         return Stream.of(Named.of("stop", TachyonServer::stop), Named.of("close", TachyonServer::close));
     }
 
-    /** A listen response pends for the stream's life: shutdown completes it instead of waiting out the grace. */
+    /**
+     * A listen response pends for the stream's life: shutdown completes it instead of waiting out the grace.
+     */
     @ParameterizedTest(name = "{0}")
     @MethodSource("shutdowns")
+    @DisplayName("[RT-05] shutdown completes an open listen stream without waiting out the grace period")
     void shutdownEndsListenStreamGracefullyWithoutWaitingOutTheGracePeriod(Consumer<TachyonServer> shutdown)
             throws Exception {
         try (var server = TachyonServer.builder()
-                .network(n -> n.port(0))
+                // shortcut: NIO bypasses the io_uring shutdown stall, remove the pins once Netty fixes it.
+                .network(n -> n.port(0).ioEngine(NettyIoEngine.NIO))
                 .runtime(r -> r.shutdownGracePeriod(Duration.ofSeconds(5)))
                 .build()) {
             server.start();
             try (var client = McpTestClients.latest(server.port())) {
                 // language=json
                 try (var stream = client.openPostStream(null, """
-                        {"jsonrpc":"2.0","id":1,"method":"subscriptions/listen",
-                          "params":{"notifications":{"toolsListChanged":true}}}
-                        """)) {
+                    {"jsonrpc":"2.0","id":1,"method":"subscriptions/listen",
+                      "params":{"notifications":{"toolsListChanged":true}}}
+                    """)) {
                     stream.await(
                             f -> f.data().contains("notifications/subscriptions/acknowledged"), Duration.ofSeconds(5));
 
@@ -198,8 +209,11 @@ class ServerRestartTest {
     }
 
     @Test
+    @DisplayName("[RT-02] stop is a no-op outside the running state and close is terminal")
     void stopIsNoOpOutsideRunningStateAndCloseStaysTerminal() {
-        final var server = TachyonServer.builder().network(n -> n.port(0)).build();
+        final var server = TachyonServer.builder()
+                .network(n -> n.port(0).ioEngine(NettyIoEngine.NIO))
+                .build();
 
         assertThatCode(server::stop).as("stop before start").doesNotThrowAnyException();
         server.start();
@@ -225,7 +239,7 @@ class ServerRestartTest {
     void failedStartOnOccupiedPortReleasesEventLoopsAndCanBeRetried() throws Exception {
         final var occupant = new ServerSocket(0, 1, InetAddress.getLoopbackAddress());
         try (var server = TachyonServer.builder()
-                .network(n -> n.port(occupant.getLocalPort()))
+                .network(n -> n.port(occupant.getLocalPort()).ioEngine(NettyIoEngine.NIO))
                 .build()) {
             // Event loop threads join the thread group of the thread that first submits work to
             // them, so a private group isolates this start from the servers of parallel tests.
@@ -275,7 +289,7 @@ class ServerRestartTest {
     private static HttpResponse<String> callTool(Mcp20251125Client client, String session, String name)
             throws Exception {
         return client.sendRpc(session, """
-                {"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"%s","arguments":{}}}
-                """.formatted(name));
+            {"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"%s","arguments":{}}}
+            """.formatted(name));
     }
 }

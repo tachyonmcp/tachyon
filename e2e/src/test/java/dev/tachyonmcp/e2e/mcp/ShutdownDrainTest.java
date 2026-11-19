@@ -19,11 +19,13 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class ShutdownDrainTest {
     /** Draining rejects new work with 503, not the 500 a genuine dispatch failure earns. */
     @Test
+    @DisplayName("[RT-03] close refuses new requests and flushes an admitted response during the drain")
     void refusesNewRequestsWithServiceUnavailableWhileDraining() throws Exception {
         final var result = new CompletableFuture<ToolResult>();
         final var server = (ServerEngine) TachyonServer.builder()
@@ -68,6 +70,7 @@ class ShutdownDrainTest {
     }
 
     @Test
+    @DisplayName("[RT-03] close waits for an admitted SSE response to flush")
     void drainsPostSseFinalizationAcrossEventLoopHop() throws Exception {
         final var channel = new AtomicReference<Channel>();
         final var result = new CompletableFuture<ToolResult>();

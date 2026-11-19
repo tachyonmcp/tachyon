@@ -21,6 +21,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
@@ -35,6 +36,7 @@ import org.junit.jupiter.api.parallel.ExecutionMode;
 class ServerShutdownGraceTest {
 
     @Test
+    @DisplayName("[RT-04] the default shutdown grace period is five seconds")
     void defaultGracePeriodIsFiveSeconds() {
         assertThat(RuntimeConfig.builder().build().shutdownGracePeriod()).isEqualTo(Duration.ofSeconds(5));
     }
@@ -159,6 +161,7 @@ class ServerShutdownGraceTest {
     }
 
     @Test
+    @DisplayName("[RT-04] close bounds the wait for an unfinished async handler")
     void closeBoundsUnfinishedAsyncHandlerAndRejectsNewRequests() throws Exception {
         final var started = new CountDownLatch(1);
         final var result = new CompletableFuture<ToolResult>();
@@ -190,6 +193,7 @@ class ServerShutdownGraceTest {
     }
 
     @Test
+    @DisplayName("[RT-04] close interrupts an unfinished handler after the configured grace period")
     void closeWaitsConfiguredGraceThenInterruptsInFlightHandler() throws Exception {
         var started = new CountDownLatch(1);
         var interrupted = new CountDownLatch(1);
