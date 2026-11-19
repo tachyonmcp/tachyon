@@ -161,7 +161,7 @@ public final class SkillsExtension implements ConfigurableExtension<SkillsExtens
         if (skill == null) {
             return ServerErrors.invalidParams("Unknown skill: " + uri);
         }
-        // SEP-2640: GetSkillResult is cacheable (SEP-2549), same attributes as skills/list.
+        // SEP-2640 leaves caching attributes on skills/get open; Tachyon mirrors skills/list.
         return Map.of(
                 "skill", skillEntry(skill), "resultType", "complete", "ttlMs", cacheTtlMs, "cacheScope", cacheScope);
     }
