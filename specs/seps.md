@@ -12,7 +12,7 @@ One bullet per SEP, in the form spec11 reads. Tests proving a SEP carry `[SEP-<n
 
 ## Tools
 
-- **SEP-986** MUST — Tool names are 1 to 128 characters from a fixed set: letters, digits, `_`, `-`, `.`. [Text](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/docs/seps/986-specify-format-for-tool-names.mdx)
+- **SEP-986** SHOULD — Tool names are 1 to 64 characters from a fixed set: letters, digits, `_`, `-`, `.`, `/`. [Text](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/docs/seps/986-specify-format-for-tool-names.mdx)
 
 ## Input and elicitation
 
@@ -22,7 +22,7 @@ One bullet per SEP, in the form spec11 reads. Tests proving a SEP carry `[SEP-<n
 
 ## Caching
 
-- **SEP-2549** MUST — Cacheable results (lists, `skills/get`) carry `ttlMs` and `cacheScope` so clients know how long and how widely to cache them. [Text](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/docs/seps/2549-TTL-for-list-results.mdx)
+- **SEP-2549** MUST — `tools/list`, `prompts/list`, `resources/list`, `resources/templates/list` and `resources/read` results carry `ttlMs` and `cacheScope` so clients know how long and how widely to cache them. [Text](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/docs/seps/2549-TTL-for-list-results.mdx)
 
 ## Tasks
 
@@ -33,7 +33,7 @@ One bullet per SEP, in the form spec11 reads. Tests proving a SEP carry `[SEP-<n
 
 - **SEP-2133** MUST — Extensions: namespaced optional capabilities, declared and negotiated under `capabilities.extensions`. [Text](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/docs/seps/2133-extensions.mdx)
 - **SEP-1865** MUST — MCP Apps: tools hand the host interactive HTML views served as `ui://` resources. [Text](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/docs/seps/1865-mcp-apps-interactive-user-interfaces-for-mcp.mdx)
-- **SEP-2640** MUST — Skills extension: `skills/list`, `skills/get` and `skill://` resources; both results carry `ttlMs` and `cacheScope`. [Text](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/docs/seps/2640-skills-extension.mdx)
+- **SEP-2640** MUST — Skills extension: `skills/list`, `skills/get` and `skill://` resources; `skills/list` carries `ttlMs` and `cacheScope`. Tachyon adds them to `skills/get` too (SEP leaves it open). [Text](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/docs/seps/2640-skills-extension.mdx)
 
 ## Deprecations
 

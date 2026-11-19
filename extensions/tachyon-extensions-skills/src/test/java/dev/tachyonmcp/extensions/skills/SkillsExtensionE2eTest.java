@@ -106,7 +106,7 @@ class SkillsExtensionE2eTest {
     }
 
     @Test
-    @DisplayName("[SEP-2640][SEP-2549] skills/list and skills/get carry the configured ttlMs and cacheScope")
+    @DisplayName("[SEP-2640] skills/list and skills/get carry the configured ttlMs and cacheScope")
     void skillsListAndGetHonorConfiguredCacheTtlAndScope() throws Exception {
         try (var server = startServer(skills -> skills.registry(classpathSkillsRegistry)
                         .cacheTtlMs(60_000)
@@ -117,9 +117,27 @@ class SkillsExtensionE2eTest {
                     {"jsonrpc":"2.0","id":1,"method":"skills/list"}
                 """);
             // language=JSON
-            assertThatJson(list.body()).isEqualTo("""
-                {"jsonrpc":"2.0","id":1,"result":{
-                  "skills":"${json-unit.ignore}","resultType":"complete","ttlMs":60000,"cacheScope":"private"}}
+            assertThat(list).isSuccess().hasId(1).hasResult("""
+                {
+                  "skills":[
+                    {
+                      "uri":"skill://pdf-processing/SKILL.md",
+                      "frontmatter":{
+                        "name":"pdf-processing",
+                        "description":"Extract, fill, and assemble PDF documents",
+                        "metadata":{"version":"2.1.0"}
+                      },
+                      "resources":[
+                        {"uri":"skill://pdf-processing/SKILL.md","digest":"sha256:da96519e26e173b406339e31ccf3adb0b0bd45c5fdfbabe335bf2ded216b2635","size":243},
+                        {"uri":"skill://pdf-processing/scripts/extract.py","digest":"sha256:f05fea0e15cb5f951049570d4cebb3a84b272fd3390c85e8be7586f84f0b68f8","size":40},
+                        {"uri":"skill://pdf-processing/templates/invoice.md","digest":"sha256:cd1a5be9eb7a5a46feea259ca26620f73dbd3587cc5111da44fff6489993c643","size":43}
+                      ]
+                    }
+                  ],
+                  "resultType":"complete",
+                  "ttlMs":60000,
+                  "cacheScope":"private"
+                }
                 """);
 
             // language=JSON
@@ -127,15 +145,31 @@ class SkillsExtensionE2eTest {
                     {"jsonrpc":"2.0","id":2,"method":"skills/get","params":{"uri":"skill://pdf-processing/SKILL.md"}}
                 """);
             // language=JSON
-            assertThatJson(get.body()).isEqualTo("""
-                {"jsonrpc":"2.0","id":2,"result":{
-                  "skill":"${json-unit.ignore}","resultType":"complete","ttlMs":60000,"cacheScope":"private"}}
+            assertThat(get).isSuccess().hasId(2).hasResult("""
+                {
+                  "skill":{
+                    "uri":"skill://pdf-processing/SKILL.md",
+                    "frontmatter":{
+                      "name":"pdf-processing",
+                      "description":"Extract, fill, and assemble PDF documents",
+                      "metadata":{"version":"2.1.0"}
+                    },
+                    "resources":[
+                      {"uri":"skill://pdf-processing/SKILL.md","digest":"sha256:da96519e26e173b406339e31ccf3adb0b0bd45c5fdfbabe335bf2ded216b2635","size":243},
+                      {"uri":"skill://pdf-processing/scripts/extract.py","digest":"sha256:f05fea0e15cb5f951049570d4cebb3a84b272fd3390c85e8be7586f84f0b68f8","size":40},
+                      {"uri":"skill://pdf-processing/templates/invoice.md","digest":"sha256:cd1a5be9eb7a5a46feea259ca26620f73dbd3587cc5111da44fff6489993c643","size":43}
+                    ]
+                  },
+                  "resultType":"complete",
+                  "ttlMs":60000,
+                  "cacheScope":"private"
+                }
                 """);
         }
     }
 
     @Test
-    @DisplayName("[SEP-2640][SEP-2549] skills/get returns the requested skill with default cache attributes")
+    @DisplayName("[SEP-2640] skills/get returns the requested skill with default cache attributes")
     void classpathSkillGetReturnsRequestedSkill() throws Exception {
         try (var server = startServer(skills -> skills.registry(classpathSkillsRegistry));
                 var client = createClient(server.port())) {
