@@ -10,6 +10,7 @@ import dev.tachyonmcp.testkit.McpClient;
 import dev.tachyonmcp.testkit.McpTestClients;
 import java.net.http.HttpResponse;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -58,11 +59,13 @@ class MetaValidationTest extends AbstractStatelessMcpE2eTest<McpClient> {
     }
 
     @Test
+    @DisplayName("[SEP-2575] request without _meta is rejected")
     void rejectsMissingMeta() throws Exception {
         assertRejected(postToolsCall(""));
     }
 
     @Test
+    @DisplayName("[SEP-2575] request without protocol version in _meta is rejected")
     void rejectsMissingProtocolVersion() throws Exception {
         assertRejected(postToolsCall("""
                 "io.modelcontextprotocol/clientInfo": {"name": "t", "version": "1"},
@@ -117,6 +120,7 @@ class MetaValidationTest extends AbstractStatelessMcpE2eTest<McpClient> {
     }
 
     @Test
+    @DisplayName("[SEP-2575] request without client capabilities in _meta is rejected")
     void rejectsMissingClientCapabilities() throws Exception {
         assertRejected(postToolsCall("""
                 "io.modelcontextprotocol/protocolVersion": "2026-07-28",
@@ -125,6 +129,7 @@ class MetaValidationTest extends AbstractStatelessMcpE2eTest<McpClient> {
     }
 
     @Test
+    @DisplayName("[SEP-2575] request carrying protocol version, client info and capabilities in _meta is served")
     void acceptsCompleteMeta() throws Exception {
         var response = postToolsCall(VALID_META);
         assertThat(response.statusCode()).as(response.body()).isEqualTo(200);

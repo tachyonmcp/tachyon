@@ -11,6 +11,7 @@ import dev.tachyonmcp.testkit.Mcp20260728Client;
 import dev.tachyonmcp.testkit.McpClient;
 import dev.tachyonmcp.testkit.McpTestClients;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -50,6 +51,7 @@ class LogLevelGatingTest extends AbstractStatelessMcpE2eTest<McpClient> {
     }
 
     @Test
+    @DisplayName("[SEP-2575] no log message for a request that set no logLevel")
     void suppressesLogWithoutRequestLogLevel() throws Exception {
         try (var client = createModernTestClient()) {
             var response = client.sendStreamingRequest(null, """
@@ -64,6 +66,7 @@ class LogLevelGatingTest extends AbstractStatelessMcpE2eTest<McpClient> {
     }
 
     @Test
+    @DisplayName("[SEP-2575][SEP-2577] deprecated logging still delivered at or above the request logLevel")
     void emitsLogWhenRequestLogLevelPermits() throws Exception {
         try (var client = createModernTestClient()) {
             var response = client.sendStreamingRequest(null, """

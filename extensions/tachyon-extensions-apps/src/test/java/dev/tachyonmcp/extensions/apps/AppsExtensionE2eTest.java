@@ -12,6 +12,7 @@ import dev.tachyonmcp.testkit.Mcp20260728Client;
 import dev.tachyonmcp.testkit.McpTestServers;
 import java.util.Map;
 import java.util.function.Consumer;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.JsonNodeFactory;
@@ -103,6 +104,7 @@ class AppsExtensionE2eTest {
     }
 
     @Test
+    @DisplayName("[SEP-1865] ui:// resources are listed with the app MIME type and _meta.ui")
     void listsUiResourcesWithMetaAndMimeType() throws Exception {
         try (var server = startServer(apps -> apps.app(DASHBOARD).app(PLAIN));
                 var client = createClient(server.port())) {
@@ -143,6 +145,7 @@ class AppsExtensionE2eTest {
     }
 
     @Test
+    @DisplayName("[SEP-1865] ui:// resource reads as HTML with _meta.ui")
     void readsUiResourceAsHtmlWithMeta() throws Exception {
         try (var server = startServer(apps -> apps.app(DASHBOARD).app(PLAIN));
                 var client = createClient(server.port())) {
@@ -184,6 +187,7 @@ class AppsExtensionE2eTest {
     }
 
     @Test
+    @DisplayName("[SEP-1865] tools link their view via _meta.ui.resourceUri")
     void toolsCarryUiMetaWithoutDeprecatedFlatKey() throws Exception {
         try (var server = startServer(apps -> apps.app(DASHBOARD));
                 var client = createClient(server.port())) {

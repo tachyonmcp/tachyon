@@ -2,6 +2,7 @@
 package dev.tachyonmcp.e2e.mcp.v2026_07_28;
 
 import static dev.tachyonmcp.testkit.JsonRpcResponseAssert.assertThat;
+import static dev.tachyonmcp.testkit.McpHttpResponseAssert.assertThatResponse;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.tachyonmcp.api.json.JsonSchema;
@@ -21,6 +22,7 @@ import dev.tachyonmcp.testkit.TestTaskConnector;
 import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.node.JsonNodeFactory;
 
@@ -215,6 +217,126 @@ class TasksExtensionTest extends AbstractStatelessMcpE2eTest<McpClient> {
                     {"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"book","arguments":{}}}
                     """);
             assertThat(response).isJsonRpcError();
+        }
+    }
+
+    @Test
+    @DisplayName("[SEP-2663][SEP-2243] Mcp-Name mirrors params.taskId on tasks/get, tasks/update and tasks/cancel")
+    void nameHeaderMirrorsTaskId() throws Exception {
+        var snapshot = TaskSnapshot.working("workflow-routed", Instant.parse("2026-08-27T07:00:00Z"), 1);
+        startTasksServer(new TestTaskConnector().publish(snapshot), "book", ToolResult.task(snapshot));
+        // language=JSON
+        var body = """
+                {"jsonrpc":"2.0","id":7,"method":"tasks/get","params":{
+                  "taskId":"workflow-routed",
+                  "_meta":{
+                    "io.modelcontextprotocol/protocolVersion":"2026-07-28",
+                    "io.modelcontextprotocol/clientInfo":{"name":"t","version":"1"},
+                    "io.modelcontextprotocol/clientCapabilities":{
+                      "extensions":{"io.modelcontextprotocol/tasks":{}}}}}}
+                """;
+
+        assertThatResponse(postMcpRequest(body, Map.of("Mcp-Method", "tasks/get", "Mcp-Name", "workflow-routed")))
+                .hasStatus(200)
+                .isSuccess()
+                .hasId(7);
+        assertThatResponse(postMcpRequest(body, Map.of("Mcp-Method", "tasks/get", "Mcp-Name", "another-task")))
+                .hasStatus(400)
+                .isJsonRpcError()
+                .hasId(7)
+                .hasErrorCode(-32020)
+                .hasErrorMessageContaining("Mcp-Name")
+                .hasErrorMessageContaining("does not match");
+        assertThatResponse(postMcpRequest(body, Map.of("Mcp-Method", "tasks/get")))
+                .hasStatus(400)
+                .isJsonRpcError()
+                .hasErrorCode(-32020)
+                .hasErrorMessageContaining("Mcp-Name")
+                .hasErrorMessageContaining("is required");
+        for (var method : new String[] {"tasks/update", "tasks/cancel"}) {
+            assertThatResponse(postMcpRequest(
+                            body.replace("tasks/get", method),
+                            Map.of("Mcp-Method", method, "Mcp-Name", "another-task")))
+                    .as(method)
+                    .hasStatus(400)
+                    .isJsonRpcError()
+                    .hasErrorCode(-32020);
+        }
+    }
+
+    @Test
+    @DisplayName("[SEP-2663][SEP-2322] a required-task tool gathers input before it creates the task")
+    void requiredTaskToolGathersInputBeforeCreatingTask() throws Exception {
+        var snapshot = TaskSnapshot.working("workflow-mrtr", Instant.parse("2026-08-27T07:00:00Z"), 1);
+        var taskEngine = new TestTaskConnector().publish(snapshot);
+        startServer(
+                builder -> builder.withExtension(TasksExtension.class, t -> t.connector(taskEngine.connector())),
+                registrar -> registrar
+                        .tools()
+                        .register(b -> b.name("book").taskSupport(TaskSupport.REQUIRED), (context, request) -> {
+                            var responses = request.inputResponses();
+                            if (responses == null || !responses.containsKey("user_name")) {
+                                return ToolResult.inputRequired(
+                                        Map.of(
+                                                "user_name",
+                                                FormInputRequest.of(
+                                                        "What is your name?",
+                                                        JsonSchema.unchecked("{\"type\":\"object\"}"))),
+                                        "round-1");
+                            }
+                            return ToolResult.task(snapshot);
+                        })
+                        .register(
+                                b -> b.name("never_a_task").taskSupport(TaskSupport.REQUIRED),
+                                (context, request) -> ToolResult.text("sync")));
+
+        try (var client = tasksClient()) {
+            // language=JSON
+            var round1 = client.sendRpc("""
+                    {"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"book","arguments":{},
+                      "_meta":{"io.modelcontextprotocol/clientCapabilities":{"elicitation":{}}}}}
+                    """);
+            // language=JSON
+            assertThat(round1)
+                    .as("no task is minted before the final round")
+                    .isSuccess()
+                    .hasId(1)
+                    .hasResult("""
+                    {
+                      "resultType":"input_required",
+                      "inputRequests":{"user_name":{"method":"elicitation/create","params":{
+                        "message":"What is your name?","requestedSchema":{"type":"object"}}}},
+                      "requestState":"round-1"
+                    }
+                    """);
+
+            // language=JSON
+            var round2 = client.sendRpc("""
+                    {"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"book","arguments":{},
+                      "inputResponses":{"user_name":{"action":"accept","content":{"name":"Alice"}}},
+                      "requestState":"round-1",
+                      "_meta":{"io.modelcontextprotocol/clientCapabilities":{"elicitation":{}}}}}
+                    """);
+            // language=JSON
+            assertThat(round2).isSuccess().hasId(2).hasResult("""
+                    {
+                      "taskId":"workflow-mrtr",
+                      "status":"working",
+                      "createdAt":"2026-08-27T07:00:00Z",
+                      "lastUpdatedAt":"2026-08-27T07:00:00Z",
+                      "ttlMs":null,
+                      "resultType":"task"
+                    }
+                    """);
+
+            // language=JSON
+            var sync = client.sendRpc("""
+                    {"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"never_a_task","arguments":{}}}
+                    """);
+            assertThat(sync)
+                    .as("a complete non-task result from a required-task tool stays an error")
+                    .isJsonRpcError()
+                    .hasErrorCode(-32603);
         }
     }
 

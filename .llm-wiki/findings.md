@@ -2,22 +2,21 @@
 title: Findings
 tags: [meta, findings]
 sources: [tachyon-core/ts2java.py, tachyon-core/src/main/java/dev/tachyonmcp/core/, extensions/tachyon-extensions-tasks/src/main/java/dev/tachyonmcp/extensions/tasks/]
-updated: 2026-11-14
-commit: 734f9997
+updated: 2026-11-19
+commit: 12b81750
 ---
 
 # 🔎 Findings
 
 Spotted while reading code. Runtime verification noted per finding. Fixed in code ⇒ 🗑️ remove row.
 
+- 🐛 Netty 4.2.21 + io_uring: `shutdownGracefully(0, …)` sometimes hangs. The post-loop `IoUringIoHandler#prepareToDestroy` that netty#18035 added blocks in `io_uring_enter` (`SingleThreadIoEventLoop.java:239`), so `NettyServer#close` waits out the full grace period (`Event loop shutdown did not finish within PT5S`) and the loop thread lingers for up to 60s. Upstream bug; epoll, kqueue and 4.2.20 are unaffected. Linux podman repro: 2 stalls in 4 full e2e runs on 4.2.21, 0 on 4.2.20. Flakes `ServerRestartTest#shutdownEndsListenStreamGracefullyWithoutWaitingOutTheGracePeriod` (`< 2s`). Remove this row once netty ships a fix. [NettyServer#close](../tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/NettyServer.java)
+
 - 🐛 ts2java nested arrays: `Array<Array<string>>` / `string[][]` model is `List<List<String>>` but the codec decodes elements via a bogus `Lis` codec. No current schema uses it. Probe-verified. [Generator#add_codec](../tachyon-core/ts2java.py)
 - 🪶 Extension close hook is unused: `Extension#onConnectionClose` has no server call site. Cleanup currently relies on `ServerExtension#shutdown` during terminal close. Static source search. [Extension#onConnectionClose](../tachyon-api/src/main/java/dev/tachyonmcp/api/runtime/Extension.java), [DefaultTachyonServer#close](../tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java).
 - ⚠️ `UnsupportedProtocolVersionHandler` encodes the rejection with `ProtocolVersionHandler#LATEST_PROTOCOL` (not `Protocols#baseline`) + HTTP 400, even for legacy-looking clients. Intentional per SEP-2575? `UnsupportedProtocolVersionHandler#channelRead`
 - ⚠️ POST-SSE budget per stream only; no global cap or connection limit. `PostSseStream#reserve`
 - ⚠️ Perf: notifications round-trip bytes → `String` → bytes. `DefaultTachyonServer#sendSerializedNotification` builds `notificationJson` as a `String`; `SseSerializer#measure` then counts its UTF-8 size (~0.7 ns/char, charAt loop, not vectorized) and `SseSerializer#encode` transcodes it back. Carry `byte[]` end to end (like the final response, `PostSseStream#writeEvent(long, byte[], Runnable)`): length is free, encode is a copy. Touches `SseEvent`, `JsonRpcCodec`, event log (stores `String`).
-- 🐛 SEP-2322 + SEP-2663: a `taskSupport=required` tool cannot answer round 1 with `InputRequiredResult`; `mapResult` rejects every non-task result of a REQUIRED tool ("Task-producing tool returned a non-task result"), so MRTR-then-task composition fails. Conformance `tasks-mrtr-composition`, baselined. [ToolMethodHandlers.ToolsCallHandler#mapResult](../tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tools/ToolMethodHandlers.java)
-- 🐛 SEP-2243: `Mcp-Name` is not mirrored to `params.taskId` for `tasks/*`, so a mismatched header on `tasks/get` is served instead of rejected with -32020. Conformance `tasks-request-headers`, baselined. [McpHeaderNames#mirroredNameField](../tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/mcp/McpHeaderNames.java)
-- 🐛 SEP-2640: `skills/get` omits `ttlMs` and `cacheScope`; only `skills/list` carries them, and the 2026-07-28 spec requires both. Conformance `sep-2640-skills-enumeration`, baselined. [SkillsExtension#getSkill](../extensions/tachyon-extensions-skills/src/main/java/dev/tachyonmcp/extensions/skills/SkillsExtension.java)
 - ⚠️ Several producers on one POST-SSE stream: a parked producer can be overtaken ⇒ wire ids out of order ⇒ `Last-Event-ID` resume may skip one. Pre-existing race, wider with parking. `PostSseStream#awaitCapacity`
 - ⚠️ Platform `ServerBuilder#threadFactory`: parked producer holds an OS thread until `writerIdleTimeout`. `DefaultServerBuilder#build`
 - ⚠️ On a server without authentication, a task nobody owns (server-published, connector returns no `ownerKey`) is left to the connector: `tasks/*` go to it, and `subscriptions/listen` task ids pass its `get` once when the stream opens ([McpTaskBinding#taskIdsTopic](../extensions/tachyon-extensions-tasks/src/main/java/dev/tachyonmcp/extensions/tasks/McpTaskBinding.java), [TaskEngine#readableTaskIds](../extensions/tachyon-extensions-tasks/src/main/java/dev/tachyonmcp/extensions/tasks/engine/TaskEngine.java)), not per event: a permission the connector revokes later keeps flowing until the stream closes. Safe only with unguessable task ids.

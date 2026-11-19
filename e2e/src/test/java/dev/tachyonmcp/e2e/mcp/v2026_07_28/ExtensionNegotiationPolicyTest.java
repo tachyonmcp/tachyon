@@ -20,6 +20,7 @@ import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -66,6 +67,7 @@ class ExtensionNegotiationPolicyTest extends AbstractStatelessMcpE2eTest<McpClie
     }
 
     @Test
+    @DisplayName("[SEP-2133] required extension method dispatches when the request declares it")
     void requiredExtensionDispatchesWhenDeclared() throws Exception {
         try (var client = createModernTestClient()) {
             var response = call(client, 1, "required/call", declaring(REQUIRED_ID));
@@ -79,6 +81,7 @@ class ExtensionNegotiationPolicyTest extends AbstractStatelessMcpE2eTest<McpClie
 
     @ParameterizedTest
     @ValueSource(strings = {UNDECLARED_REQUIRED, OTHER_EXTENSION_ONLY, NO_EXTENSIONS_MAP})
+    @DisplayName("[SEP-2133] required extension method without declaration is rejected")
     void requiredExtensionRejectsUndeclaredRequestWithoutInvokingHandler(String capabilities) throws Exception {
         try (var client = createModernTestClient()) {
             var response = call(client, 1, "required/call", capabilities);
@@ -212,6 +215,7 @@ class ExtensionNegotiationPolicyTest extends AbstractStatelessMcpE2eTest<McpClie
     }
 
     @Test
+    @DisplayName("[SEP-2133] extensions are advertised under capabilities.extensions")
     void bothPoliciesAreAdvertised() throws Exception {
         try (var client = createModernTestClient()) {
             client.discover().isSuccess().hasCapabilities("""

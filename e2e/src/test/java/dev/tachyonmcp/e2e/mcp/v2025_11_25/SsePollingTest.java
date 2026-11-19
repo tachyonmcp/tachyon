@@ -4,6 +4,7 @@ package dev.tachyonmcp.e2e.mcp.v2025_11_25;
 import static java.time.Duration.ofSeconds;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 
@@ -16,6 +17,7 @@ import org.junit.jupiter.api.TestInstance;
 class SsePollingTest extends AbstractStatefulMcpE2eTest {
 
     @Test
+    @DisplayName("[SEP-1699] SSE stream sets the retry interval for client reconnects")
     void getSseStreamIncludesRetryField() throws Exception {
         var sessionId = initializeSession();
         try (var client = createTestClient();
@@ -30,6 +32,7 @@ class SsePollingTest extends AbstractStatefulMcpE2eTest {
     }
 
     @Test
+    @DisplayName("[SEP-1699] SSE stream opens with a priming event carrying an event id")
     void getSseStreamSendsPrimingEventWithEventId() throws Exception {
         var sessionId = initializeSession();
         try (var client = createTestClient();
