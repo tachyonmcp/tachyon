@@ -30,7 +30,9 @@ public enum TaskSupport {
 
     /**
      * The tool always runs as a task. Under MCP 2025-11-25 a non task-augmented call is rejected;
-     * under MCP 2026-07-28 every call is dispatched as a task automatically.
+     * under MCP 2026-07-28 every call is dispatched as a task automatically. The tool may first
+     * answer with {@code ToolResult.inputRequired(...)} to gather input (SEP-2322); the round that
+     * completes the call must return the task (SEP-2663).
      */
     REQUIRED
 }

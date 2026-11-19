@@ -211,7 +211,9 @@ public final class ToolMethodHandlers {
                 context.observation().markTaskHandoff(snapshot.taskId());
                 return context.responseMapper().createTaskResult(snapshot);
             }
-            if (taskSupport == TaskSupport.REQUIRED || mapped.taskAugmented()) {
+            // SEP-2663: a tool may gather input (SEP-2322) on earlier rounds; only its final one is a task.
+            if ((taskSupport == TaskSupport.REQUIRED || mapped.taskAugmented())
+                    && !(result instanceof ToolResult.InputRequired)) {
                 return internalError("Task-producing tool returned a non-task result");
             }
             var prepared = prepareResult(mapped.request().name(), outputSchema, result);
