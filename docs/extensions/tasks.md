@@ -85,6 +85,11 @@ The flow is:
 
 Tachyon never runs the handler in the background and never invokes it again for `tasks/update`.
 
+A `TaskSupport.REQUIRED` tool may ask the client for input before it starts the work: it returns
+`ToolResult.inputRequired(...)`, the client retries `tools/call` with `inputResponses`, and the handler
+returns `ToolResult.task(...)` on that round. No task exists until then. Any other non-task result
+from a required-task tool is an internal error.
+
 The handler must durably create the external task before returning `ToolResult.task(...)`. Tachyon
 then caches the projection before sending the tool response. A subsequent `tasks/get` does not rely
 on that cache: it asks the connector for authoritative state.

@@ -264,6 +264,73 @@ class TasksExtensionTest extends AbstractStatelessMcpE2eTest<McpClient> {
         }
     }
 
+    @Test
+    @DisplayName("[SEP-2663][SEP-2322] a required-task tool gathers input before it creates the task")
+    void requiredTaskToolGathersInputBeforeCreatingTask() throws Exception {
+        var snapshot = TaskSnapshot.working("workflow-mrtr", Instant.parse("2026-08-27T07:00:00Z"), 1);
+        var taskEngine = new TestTaskConnector().publish(snapshot);
+        startServer(
+                builder -> builder.withExtension(TasksExtension.class, t -> t.connector(taskEngine.connector())),
+                registrar -> registrar
+                        .tools()
+                        .register(b -> b.name("book").taskSupport(TaskSupport.REQUIRED), (context, request) -> {
+                            var responses = request.inputResponses();
+                            if (responses == null || !responses.containsKey("user_name")) {
+                                return ToolResult.inputRequired(
+                                        Map.of(
+                                                "user_name",
+                                                FormInputRequest.of(
+                                                        "What is your name?",
+                                                        JsonSchema.unchecked("{\"type\":\"object\"}"))),
+                                        "round-1");
+                            }
+                            return ToolResult.task(snapshot);
+                        })
+                        .register(
+                                b -> b.name("never_a_task").taskSupport(TaskSupport.REQUIRED),
+                                (context, request) -> ToolResult.text("sync")));
+
+        try (var client = tasksClient()) {
+            var round1 = client.sendRpc("""
+                    {"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"book","arguments":{},
+                      "_meta":{"io.modelcontextprotocol/clientCapabilities":{"elicitation":{}}}}}
+                    """);
+            var result1 = assertThat(round1)
+                    .isSuccess()
+                    .hasId(1)
+                    .hasResultType("input_required")
+                    .result();
+            assertThat(result1.has("taskId"))
+                    .as("no task is minted before the final round")
+                    .isFalse();
+            assertThat(result1.path("requestState").asString()).isEqualTo("round-1");
+            assertThat(result1.path("inputRequests").has("user_name")).isTrue();
+
+            var round2 = client.sendRpc("""
+                    {"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"book","arguments":{},
+                      "inputResponses":{"user_name":{"action":"accept","content":{"name":"Alice"}}},
+                      "requestState":"round-1",
+                      "_meta":{"io.modelcontextprotocol/clientCapabilities":{"elicitation":{}}}}}
+                    """);
+            var result2 = assertThat(round2)
+                    .isSuccess()
+                    .hasId(2)
+                    .hasResultType("task")
+                    .result();
+            assertThat(result2.path("taskId").asString()).isEqualTo("workflow-mrtr");
+            assertThat(result2.has("requestState")).isFalse();
+            assertThat(result2.has("inputRequests")).isFalse();
+
+            var sync = client.sendRpc("""
+                    {"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"never_a_task","arguments":{}}}
+                    """);
+            assertThat(sync)
+                    .as("a complete non-task result from a required-task tool stays an error")
+                    .isJsonRpcError()
+                    .hasErrorCode(-32603);
+        }
+    }
+
     private AtomicInteger startTasksServer(TestTaskConnector taskEngine, String toolName, ToolResult result) {
         final var toolInvocations = new AtomicInteger();
         startServer(

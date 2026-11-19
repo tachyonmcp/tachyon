@@ -1,6 +1,3 @@
 server:
-  # SEP-2322 + SEP-2663: a taskSupport=required tool that answers round 1 with InputRequiredResult
-  # is rejected ("Task-producing tool returned a non-task result", ToolMethodHandlers mapResult).
-  - tasks-mrtr-composition
   # SEP-2640: skills/get omits ttlMs and cacheScope (SkillsExtension#getSkill); only skills/list carries them.
   - sep-2640-skills-enumeration
