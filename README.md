@@ -127,6 +127,13 @@ npx skills add tachyonmcp/tachyon --skill tachyon-mcp
 Its Java and Kotlin examples are compiled during the project build to keep them current. See the
 [agent skill guide](docs/agent-skill.md) for install options and example prompts.
 
+## Featured in
+
+- Devoxx.be 2026: [MCP 2 0 Stateless, New Auth CIMD, and Exciting Extensions by James Ward](https://www.youtube.com/watch?v=fShgG3jtkXQ)
+- [The Rest of the Story: September Edition - JVM Weekly vol. 194](https://www.jvm-weekly.com/p/the-rest-of-the-story-september-edition) by Artur Skowronski
+- [![MCPpedia Score](https://mcppedia.org/api/badge/tachyon)](https://mcppedia.org/s/tachyon)
+- [![MCPpedia Security](https://mcppedia.org/api/badge/tachyon?type=security)](https://mcppedia.org/s/tachyon)
+
 ## License
 
 **Tachyon MCP** is available under the terms of the [Apache 2.0](LICENSE).
