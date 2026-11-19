@@ -2,7 +2,7 @@
 title: Protocol versions
 tags: [concept, protocol, mcp]
 sources: [tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/, tachyon-core/src/main/java/dev/tachyonmcp/core/protocol/codec/, tachyon-core/src/main/java/dev/tachyonmcp/core/transport/netty/http/McpHeaderMatchHandler.java, tachyon-core/src/main/resources/META-INF/services/dev.tachyonmcp.core.protocol.Protocol, tachyon-core/ts2java.py, tachyon-core/test_ts2java.py, tachyon-core/protocol/, tachyon-core/pom.xml, extensions/tachyon-extensions-tasks/protocol/, extensions/tachyon-extensions-tasks/pom.xml]
-updated: 2026-10-14
+updated: 2026-11-19
 commit: d8dc6214
 ---
 
@@ -62,7 +62,7 @@ Response mapper 2026 extends 2025 one `McpResponseMapper.java`.
 Why version-free: a gateway routing on `Mcp-Method`/`Mcp-Param-Region` must never authorize an operation the body doesn't run — true whichever revision negotiated. It also lets SEP-2243's canonical example work: `Mcp-Method: initialize` on the handshake, which by construction carries no `MCP-Protocol-Version` and so negotiates a pre-SEP-2243 revision.
 
 1. `Mcp-Method` == body method, requests **and** notifications `McpHeaderMatchHandler#matchMethod`.
-2. `Mcp-Name` == `name` (tools/call, prompts/get) or `uri` (resources/read) `McpHeaderNames#mirroredNameField`, `McpHeaderMatchHandler#matchName`.
+2. `Mcp-Name` == `name` (tools/call, prompts/get), `uri` (resources/read) or `taskId` (tasks/get, tasks/update, tasks/cancel; SEP-2663) `McpHeaderNames#mirroredNameField`, `McpHeaderMatchHandler#matchName`.
 3. `Mcp-Param-*` chars: HTAB/space/visible ASCII only, checked pre-decode `McpHeaderMatchHandler#findInvalidCharacterParamHeader`.
 4. `tools/call`: each `x-mcp-header` property's header must match its argument; numbers compared by `BigDecimal` (so `42` == `42.0`), |n| ≤ 2^53-1, NaN/Infinity rejected; header with no body value behind it rejected `McpHeaderMatchHandler#matchArgument`, `MirroredArgument`.
 

@@ -36,16 +36,19 @@ public final class McpHeaderNames {
 
     /**
      * The {@code params} field {@link #MCP_NAME} mirrors for {@code method}, or {@code null} for a
-     * method that addresses no named target and therefore never carries the header (SEP-2243).
+     * method that addresses no named target and therefore never carries the header (SEP-2243,
+     * extended to the tasks methods by SEP-2663).
      *
      * @param method the JSON-RPC method name from the request body
-     * @return {@code "uri"} for {@code resources/read}, {@code "name"} for the other addressed
-     *     methods, {@code null} otherwise
+     * @return {@code "uri"} for {@code resources/read}, {@code "name"} for {@code tools/call} and
+     *     {@code prompts/get}, {@code "taskId"} for {@code tasks/get}, {@code tasks/update} and
+     *     {@code tasks/cancel}, {@code null} otherwise
      */
     public static @Nullable String mirroredNameField(String method) {
         return switch (method) {
             case "resources/read" -> "uri";
             case "tools/call", "prompts/get" -> "name";
+            case "tasks/get", "tasks/update", "tasks/cancel" -> "taskId";
             default -> null;
         };
     }

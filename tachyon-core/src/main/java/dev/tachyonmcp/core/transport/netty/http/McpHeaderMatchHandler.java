@@ -140,9 +140,10 @@ public final class McpHeaderMatchHandler extends ChannelInboundHandlerAdapter {
 
     /**
      * Compares {@code Mcp-Name} against the body field it mirrors — {@code params.uri} for
-     * {@code resources/read}, {@code params.name} for {@code tools/call} and {@code prompts/get}.
-     * A method SEP-2243 gives no mirrored field has nothing to compare the header to, so one sent
-     * anyway is left alone: it names no target a gateway could route to.
+     * {@code resources/read}, {@code params.name} for {@code tools/call} and {@code prompts/get},
+     * {@code params.taskId} for {@code tasks/get}, {@code tasks/update} and {@code tasks/cancel}
+     * (SEP-2663). A method SEP-2243 and SEP-2663 give no mirrored field has nothing to compare the
+     * header to, so one sent anyway is left alone: it names no target a gateway could route to.
      */
     private static @Nullable ServerError matchName(HttpRequest req, String method, JsonNode params) {
         var rawHeader = req.headers().get(McpHeaderNames.MCP_NAME);

@@ -177,6 +177,11 @@ authoritative, push only improves latency. Each snapshot carries a monotonically
 `revision`, and Tachyon ignores duplicate or older revisions. A completed snapshot's result travels in
 the `tasks/get` answer and in the `notifications/tasks` sent to listeners.
 
+Over HTTP on MCP 2026-07-28, `tasks/get`, `tasks/update` and `tasks/cancel` carry the task id in the
+`Mcp-Name` header next to `Mcp-Method`, so a gateway can route on it without parsing the body.
+Tachyon rejects a request whose `Mcp-Name` is missing or differs from `params.taskId` with
+`400 Bad Request` and JSON-RPC error `-32020`.
+
 A dropped connection or an ended session never cancels a task; only `tasks/cancel` does. A client that
 reconnects reads the result with `tasks/get`, as long as the connector still knows the task.
 
