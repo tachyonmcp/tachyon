@@ -281,12 +281,12 @@ rejected. See [deployment](deployment.md#3-public-hostname).
 Off by default. `liveness()` serves `/livez`; `liveness(path)` serves `path`, which follows the
 `endpointPath` rules and must differ from it.
 
-<!-- snips: ../../examples/doc-examples/parked/LivenessOptions.java#config_liveness -->
+<!-- snips: ../../examples/doc-examples/src/main/java/dev/tachyonmcp/docs/running/configuration/LivenessOptions.java#config_liveness -->
 ```java
 .network(n -> n.liveness()) // or n.liveness("/health/live")
 ```
 
-<!-- snips: ../../examples/doc-examples/parked/KotlinLiveness.kt#config_kotlin_liveness -->
+<!-- snips: ../../examples/doc-examples/src/main/kotlin/dev/tachyonmcp/docs/running/configuration/KotlinLiveness.kt#config_kotlin_liveness -->
 ```kotlin
 network { liveness() } // or liveness("/health/live")
 ```

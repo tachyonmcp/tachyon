@@ -203,7 +203,7 @@ jobs:
           path: ~/.m2/repository/dev/tachyonmcp
 
       - name: Verify examples
-        run: ./mvnw verify -f examples/pom.xml -b turbo -T1C -Dtachyon.version=1.1.0-SNAPSHOT --no-transfer-progress
+        run: ./mvnw verify -f examples/pom.xml -b turbo -T1C -Dtachyon.version=1.1.1-SNAPSHOT --no-transfer-progress
 
       - name: Publish test results
         uses: mikepenz/action-junit-report@a16be3a69023e9bd7e748ede768b3282ea7b30ce # v6

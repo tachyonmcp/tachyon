@@ -18,6 +18,7 @@
         <module>doc-examples</module>
         <module>echo-kotlin</module>
         <module>langchain4j-mcp</module>
+        <module>mcp-apps</module>
         <module>mcp-java</module>
         <module>mcp-skills</module>
         <module>temporal</module>
@@ -25,18 +26,4 @@
         <module>weather-mcp-spring-boot</module>
         <module>weather-mcp</module>
     </modules>
-    <profiles>
-        <profile>
-            <id>snapshot-examples</id>
-            <activation>
-                <property>
-                    <name>tachyon.version</name>
-                    <value>1.1.0-SNAPSHOT</value>
-                </property>
-            </activation>
-            <modules>
-                <module>mcp-apps</module>
-            </modules>
-        </profile>
-    </profiles>
 </project>

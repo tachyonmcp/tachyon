@@ -10,8 +10,7 @@ Rolls dice and renders the result as an interactive view inside the chat, using 
 - The view speaks the SEP-1865 postMessage protocol directly (`ui/initialize`,
   `ui/notifications/initialized`, `ui/notifications/tool-result`), no SDK needed.
 
-> Requires Tachyon `1.1.0` or a `1.1.0-SNAPSHOT` built from this repository
-> (`./mvnw -q install -DskipTests` at the repository root).
+> Requires Tachyon `1.1.0` or later.
 
 ## Quickstart
 

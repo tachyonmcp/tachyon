@@ -61,6 +61,15 @@ class ConfigurationDocsTest {
     }
 
     @Test
+    void livenessExampleServesTheDefaultProbe() throws Exception {
+        try (var server = LivenessOptions.withLiveness();
+                var body = java.net.URI.create("http://localhost:" + server.port() + "/livez")
+                        .toURL().openStream()) {
+            assertThat(new String(body.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8)).isEqualTo("UP");
+        }
+    }
+
+    @Test
     void allowedHostsAdmitsTheExtraAuthorityOnly() {
         try (var server = NetworkOptions.withExtraHost()) {
             assertThat(RawHttp.postStatus(server.port(), "localhost:" + server.port())).isEqualTo(200);

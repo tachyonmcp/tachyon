@@ -25,8 +25,8 @@ class SpringBootReferenceTest {
     @Configuration(proxyBeanMethods = false)
     static class Stores {
         @Bean
-        InMemorySessionStore sessionStore() {
-            return new InMemorySessionStore();
+        RedisSessionStore sessionStore() {
+            return new RedisSessionStore();
         }
     }
 
@@ -37,7 +37,7 @@ class SpringBootReferenceTest {
                 .withUserConfiguration(Stores.class, McpConfiguration.class)
                 .withPropertyValues("tachyon.port=0", "tachyon.session.session-ttl=45s")
                 .run(context -> {
-                    var store = context.getBean(InMemorySessionStore.class);
+                    var store = context.getBean(RedisSessionStore.class);
                     var server = context.getBean(TachyonServer.class);
 
                     try (var client = McpTestClients.forVersion(server.port(), "2025-11-25")) {
@@ -46,6 +46,7 @@ class SpringBootReferenceTest {
                         assertThat(store.find(sessionId))
                                 .as("the customizer's store backs the session")
                                 .isPresent();
+                        assertThat(store.created()).isEqualTo(1);
                     }
                 });
     }
