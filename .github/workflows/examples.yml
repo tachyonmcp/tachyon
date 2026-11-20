@@ -40,6 +40,7 @@ jobs:
           - doc-examples
           - echo-kotlin
           - langchain4j-mcp
+          - mcp-apps
           - mcp-java
           - mcp-skills
           - temporal

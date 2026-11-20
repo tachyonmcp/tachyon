@@ -22,8 +22,8 @@
         <jackson.version>3.2.0</jackson.version>
         <junit.version>6.1.2</junit.version>
         <kt-schema.version>0.10.0</kt-schema.version>
-        <tachyon.version>1.0.1</tachyon.version>
-<!--        <tachyon.version>1.1.0-SNAPSHOT</tachyon.version>-->
+        <tachyon.version>1.1.0</tachyon.version>
+<!--        <tachyon.version>1.1.1-SNAPSHOT</tachyon.version>-->
         <assertj.version>3.27.7</assertj.version>
         <jakarta-validation-api.version>3.1.1</jakarta-validation-api.version>
         <netty.version>4.2.18.Final</netty.version>

@@ -26,6 +26,13 @@ class KotlinConfigurationTest {
     }
 
     @Test
+    fun `liveness example serves the default probe`() {
+        TachyonServer(port = 0) { livenessProbe() }.use { server ->
+            java.net.URI("http://localhost:${server.port()}/livez").toURL().readText() shouldBe "UP"
+        }
+    }
+
+    @Test
     fun `allowedHosts plus-assign admits the extra authority`() {
         TachyonServer(port = 0) { extraHost() }.use { server ->
             RawHttp.postStatus(server.port(), "localhost:${server.port()}") shouldBe 200
