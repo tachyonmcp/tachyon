@@ -3,7 +3,6 @@ package dev.tachyonmcp.example.temporal;
 
 import io.temporal.workflow.QueryMethod;
 import io.temporal.workflow.UpdateMethod;
-import io.temporal.workflow.UpdateValidatorMethod;
 import io.temporal.workflow.WorkflowInterface;
 import io.temporal.workflow.WorkflowMethod;
 import java.util.Map;
@@ -20,11 +19,7 @@ public interface BookingWorkflow {
     @QueryMethod
     TemporalTaskStatus taskStatus();
 
-    /** Validates and durably accepts MCP task input. */
+    /** Accepts MCP task input while the booking waits for it, and ignores it otherwise. */
     @UpdateMethod
     void provideInput(Map<String, Object> input);
-
-    /** Refuses input unless the booking is waiting for it, before the input enters history. */
-    @UpdateValidatorMethod(updateName = "provideInput")
-    void validateInput(Map<String, Object> input);
 }

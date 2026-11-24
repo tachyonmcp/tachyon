@@ -139,6 +139,39 @@ class TaskMethodsE2eTest {
         }
     }
 
+    @Test
+    @DisplayName("[TASK-07] a client that did not declare the extension gets -32021 and never reaches the connector")
+    void undeclaredClientIsRefusedOnEveryModernTaskMethod() throws Exception {
+        var gets = new AtomicInteger();
+        var connector = new TestTaskConnector().publish(working("task-1"));
+        var counting = TaskConnector.builder()
+                .get((ctx, request) -> {
+                    gets.incrementAndGet();
+                    return connector.connector().get().apply(ctx, request);
+                })
+                .cancel(connector.connector().cancel())
+                .update(connector.connector().update())
+                .build();
+        try (var server = startServer(counting);
+                var undeclared = new Mcp20260728Client(server.port())) {
+            for (var method : new String[] {"tasks/get", "tasks/update", "tasks/cancel"}) {
+                var body = undeclared
+                        .post("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"" + method
+                                + "\",\"params\":{\"taskId\":\"task-1\",\"inputResponses\":{}}}")
+                        .body();
+                assertThatJson(body).as(method).inPath("$.error.code").isEqualTo(-32021);
+                assertThatJson(body)
+                        .as(method)
+                        .inPath("$.error.data.requiredCapabilities.extensions")
+                        .isEqualTo("{\"" + TasksExtension.ID + "\":{}}");
+                assertThatJson(body).as(method).node("result").isAbsent();
+            }
+            assertThat(gets).as("the ownership read never ran").hasValue(0);
+            assertThat(connector.submittedInputs()).isEmpty();
+            assertThat(connector.cancelledTaskIds()).isEmpty();
+        }
+    }
+
     // 2025-11-25 Tasks § Result Retrieval: tasks/result MUST block until the task is terminal, then
     // return exactly what the underlying request would have returned.
     @Test

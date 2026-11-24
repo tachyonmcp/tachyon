@@ -93,17 +93,19 @@ about to book is taken by someone else. Tachyon checks only that the caller may 
 hands `inputResponses` to your connector's `update(...)`. Whether the input is still usable is yours
 to decide, in two places:
 
-- **In `update(...)`**, refuse input you can tell is unusable straight away (the task is not waiting
-  for input, the answer is malformed) by throwing `TaskInputRejectedException(taskId, message)`. The
+- **In `update(...)`**, refuse input you can tell is unusable straight away (the answer is malformed,
+  the slot is already gone) by throwing `TaskInputRejectedException(taskId, message)`. The
   client gets an invalid-params error, `Failed to update task: <message>`, and the task stays as it
-  was. Keep anything the caller may not see out of the message.
+  was. Keep anything the caller may not see out of the message. Do not refuse an answer to a request
+  that is no longer outstanding (already answered, or the task has moved on): SEP-2663 asks servers
+  to ignore those, so acknowledge and drop them.
 - **In the work itself**, check the business state again right before the side effect, not when the
   input arrives: it can still change between the two. If it no longer holds, publish
   `input_required` again with a status message that says why, rather than completing on stale data.
 
 The [Temporal example](https://github.com/tachyonmcp/tachyon/tree/main/examples/temporal) does both:
-an update validator refuses input unless the Workflow is waiting for it, and an Activity asks for
-the slot again after the approval arrives.
+the Workflow ignores input it is not waiting for, and an Activity asks for the slot again after the
+approval arrives.
 
 A `TaskSupport.REQUIRED` tool may ask the client for input before it starts the work: it returns
 `ToolResult.inputRequired(...)`, the client retries `tools/call` with `inputResponses`, and the handler

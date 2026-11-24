@@ -6,8 +6,11 @@ import java.util.Objects;
 
 /**
  * Indicates that the authoritative task system refuses the input a client submitted with
- * {@code tasks/update}: the input is malformed, the task is not waiting for input, or the business
- * state the task depends on has changed since it paused. The task itself is left as it was.
+ * {@code tasks/update}: the input is malformed, or the business state the task depends on has
+ * changed since it paused. The task itself is left as it was.
+ *
+ * <p>An answer to a request that is no longer outstanding is not a reason to throw: SEP-2663 asks
+ * servers to ignore those.
  *
  * <p>The message reaches the client as an invalid-params error, so it must not carry anything the
  * caller may not see.

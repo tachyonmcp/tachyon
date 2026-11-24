@@ -67,16 +67,14 @@ public final class BookingWorkflowImpl implements BookingWorkflow {
 
     @Override
     public void provideInput(Map<String, Object> input) {
+        // SEP-2663: a server SHOULD ignore a response to a request that is not outstanding.
+        if (state != TaskState.INPUT_REQUIRED) {
+            logger.info("Booking workflow ignored input it is not waiting for");
+            return;
+        }
         logger.info("Booking workflow received input: fields={}", input.keySet());
         this.input = input;
         transitionTo(TaskState.WORKING, "Input accepted: " + input.keySet());
-    }
-
-    @Override
-    public void validateInput(Map<String, Object> input) {
-        if (state != TaskState.INPUT_REQUIRED) {
-            throw new IllegalStateException("Booking is not waiting for input");
-        }
     }
 
     private void transitionTo(TaskState nextState, String nextMessage) {

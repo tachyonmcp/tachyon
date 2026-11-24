@@ -8,7 +8,6 @@ import dev.tachyonmcp.api.server.features.tasks.TaskGetRequest;
 import dev.tachyonmcp.api.server.features.tasks.TaskState;
 import dev.tachyonmcp.api.server.features.tasks.TaskUpdateRequest;
 import dev.tachyonmcp.tasks.temporal.TemporalTaskStartRequest;
-import io.temporal.client.WorkflowUpdateException;
 import io.temporal.testing.TestWorkflowEnvironment;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -23,7 +22,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BooleanSupplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.mock;
@@ -112,8 +111,8 @@ class TemporalTaskExecutionEngineTest {
     }
 
     @Test
-    @DisplayName("[TASK-06] input is refused while the task is not waiting for it")
-    void inputIsRefusedWhileTheTaskIsNotWaitingForIt() throws Exception {
+    @DisplayName("[TASK-06] input is ignored while the task is not waiting for it")
+    void inputIsIgnoredWhileTheTaskIsNotWaitingForIt() throws Exception {
         var checking = new CountDownLatch(1);
         var release = new CountDownLatch(1);
         try (var testEnvironment = TestWorkflowEnvironment.newInstance()) {
@@ -139,22 +138,22 @@ class TemporalTaskExecutionEngineTest {
             var working = engine.refresh(CONTEXT, get("busy"));
             assertThat(working.status()).isEqualTo(TaskState.WORKING);
 
-            assertThatThrownBy(() -> engine.submitInput(
+            assertThatCode(() -> engine.submitInput(
                             CONTEXT,
                             TaskUpdateRequest.builder()
                                     .taskId("busy")
                                     .inputResponses(Map.of("approved", false))
                                     .build()))
-                    .isInstanceOf(WorkflowUpdateException.class)
-                    .hasStackTraceContaining("not waiting for input");
+                    .as("input nobody asked for is acknowledged, not an error")
+                    .doesNotThrowAnyException();
             assertThat(engine.refresh(CONTEXT, get("busy")).revision())
-                    .as("refused input changes nothing")
+                    .as("ignored input changes nothing")
                     .isEqualTo(working.revision());
 
             release.countDown();
             await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> assertThat(
                             engine.refresh(CONTEXT, get("busy")).status())
-                    .as("the refused 'approved: false' did not replace the accepted approval")
+                    .as("the ignored 'approved: false' did not replace the accepted approval")
                     .isEqualTo(TaskState.COMPLETED));
         }
     }
