@@ -45,7 +45,7 @@ public final class BookingTaskEngine {
             case REJECTED -> TaskResult.completedWithError(status.message());
             default -> null;
         };
-        var pendingInput = status.state() == TaskState.INPUT_REQUIRED ? approvalRequest() : null;
+        var pendingInput = status.state() == TaskState.INPUT_REQUIRED ? approvalRequest(status.revision()) : null;
         return TaskSnapshot.builder()
                 .taskId(taskId)
                 .status(status.state())
@@ -58,9 +58,9 @@ public final class BookingTaskEngine {
                 .build();
     }
 
-    private static InputRequestBundle approvalRequest() {
+    private static InputRequestBundle approvalRequest(long revision) {
         var schema = JsonSchema.unchecked(
                 "{\"type\":\"object\",\"properties\":{\"approved\":{\"type\":\"boolean\"}}}");
-        return new InputRequestBundle(Map.of("approval", FormInputRequest.of("Approve booking", schema)), null);
+        return new InputRequestBundle(Map.of(BookingWorkflow.approvalKey(revision), FormInputRequest.of("Approve booking", schema)), null);
     }
 }

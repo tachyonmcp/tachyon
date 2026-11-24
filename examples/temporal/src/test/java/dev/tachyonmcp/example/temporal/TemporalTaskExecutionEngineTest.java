@@ -6,6 +6,7 @@ import dev.tachyonmcp.api.runtime.InteractionContext;
 import dev.tachyonmcp.api.server.domain.TaskResult;
 import dev.tachyonmcp.api.server.features.tasks.TaskGetRequest;
 import dev.tachyonmcp.api.server.features.tasks.TaskState;
+import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
 import dev.tachyonmcp.api.server.features.tasks.TaskUpdateRequest;
 import dev.tachyonmcp.tasks.temporal.TemporalTaskStartRequest;
 import io.temporal.testing.TestWorkflowEnvironment;
@@ -53,12 +54,7 @@ class TemporalTaskExecutionEngineTest {
             assertThat(engine.refresh(CONTEXT, get("test-workflow")).lastUpdatedAt())
                     .isEqualTo(waiting.lastUpdatedAt());
 
-            engine.submitInput(
-                    CONTEXT,
-                    TaskUpdateRequest.builder()
-                            .taskId("test-workflow")
-                            .inputResponses(Map.of("approved", approved))
-                            .build());
+            engine.submitInput(CONTEXT, answer(waiting, approved));
 
             await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
                 var terminal = engine.refresh(CONTEXT, get("test-workflow"));
@@ -87,7 +83,7 @@ class TemporalTaskExecutionEngineTest {
             var firstPause = engine.refresh(CONTEXT, get("stale-slot"));
             assertThat(checks).as("nothing is checked before the caller approves").hasValue(0);
 
-            engine.submitInput(CONTEXT, approval("stale-slot"));
+            engine.submitInput(CONTEXT, answer(firstPause, true));
 
             await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
                 var secondPause = engine.refresh(CONTEXT, get("stale-slot"));
@@ -95,11 +91,20 @@ class TemporalTaskExecutionEngineTest {
                 assertThat(secondPause.statusMessage()).contains("no longer available");
                 assertThat(secondPause.revision()).isGreaterThan(firstPause.revision());
                 assertThat(secondPause.pendingInput()).isNotNull();
+                assertThat(secondPause.pendingInput().inputRequests().keySet())
+                        .as("SEP-2663: a request key is never reused after its answer was delivered")
+                        .hasSize(1)
+                        .doesNotContainAnyElementsOf(
+                                firstPause.pendingInput().inputRequests().keySet());
                 assertThat(secondPause.result()).isNull();
             });
             assertThat(checks).hasValue(1);
 
-            engine.submitInput(CONTEXT, approval("stale-slot"));
+            engine.submitInput(CONTEXT, answer(firstPause, true));
+            assertThat(engine.refresh(CONTEXT, get("stale-slot")).status())
+                    .as("an answer under the first, already answered key is ignored")
+                    .isEqualTo(TaskState.INPUT_REQUIRED);
+            engine.submitInput(CONTEXT, answer(engine.refresh(CONTEXT, get("stale-slot")), true));
 
             await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
                 var terminal = engine.refresh(CONTEXT, get("stale-slot"));
@@ -133,17 +138,13 @@ class TemporalTaskExecutionEngineTest {
             await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> assertThat(
                             engine.refresh(CONTEXT, get("busy")).status())
                     .isEqualTo(TaskState.INPUT_REQUIRED));
-            engine.submitInput(CONTEXT, approval("busy"));
+            var asked = engine.refresh(CONTEXT, get("busy"));
+            engine.submitInput(CONTEXT, answer(asked, true));
             assertThat(checking.await(5, TimeUnit.SECONDS)).isTrue();
             var working = engine.refresh(CONTEXT, get("busy"));
             assertThat(working.status()).isEqualTo(TaskState.WORKING);
 
-            assertThatCode(() -> engine.submitInput(
-                            CONTEXT,
-                            TaskUpdateRequest.builder()
-                                    .taskId("busy")
-                                    .inputResponses(Map.of("approved", false))
-                                    .build()))
+            assertThatCode(() -> engine.submitInput(CONTEXT, answer(asked, false)))
                     .as("input nobody asked for is acknowledged, not an error")
                     .doesNotThrowAnyException();
             assertThat(engine.refresh(CONTEXT, get("busy")).revision())
@@ -165,10 +166,12 @@ class TemporalTaskExecutionEngineTest {
         }
     }
 
-    private static TaskUpdateRequest approval(String taskId) {
+    /** Answers the request {@code asked} carries, in the SEP-2663 elicitation response shape. */
+    private static TaskUpdateRequest answer(TaskSnapshot asked, boolean approved) {
+        var key = asked.pendingInput().inputRequests().keySet().iterator().next();
         return TaskUpdateRequest.builder()
-                .taskId(taskId)
-                .inputResponses(Map.of("approved", true))
+                .taskId(asked.taskId())
+                .inputResponses(Map.of(key, Map.of("action", "accept", "content", Map.of("approved", approved))))
                 .build();
     }
 

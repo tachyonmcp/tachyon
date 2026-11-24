@@ -2,6 +2,7 @@
 package dev.tachyonmcp.tasks.temporal;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.awaitility.Awaitility.await;
@@ -92,6 +93,25 @@ class TemporalTaskExecutionEngineTest {
                                     .refresh(CONTEXT, get("workflow-1"))
                                     .status())
                             .isEqualTo(TaskState.COMPLETED));
+
+            // [TASK-08] late input for a finished Workflow is acknowledged and changes nothing
+            var finished = reattachedEngine.refresh(CONTEXT, get("workflow-1"));
+            assertThatCode(() -> reattachedEngine.submitInput(
+                            CONTEXT,
+                            TaskUpdateRequest.builder()
+                                    .taskId("workflow-1")
+                                    .inputResponses(Map.of("approved", false))
+                                    .build()))
+                    .doesNotThrowAnyException();
+            assertThat(reattachedEngine.refresh(CONTEXT, get("workflow-1"))).isEqualTo(finished);
+            // [TASK-08] an unknown Workflow is still not found
+            assertThatThrownBy(() -> reattachedEngine.submitInput(
+                            CONTEXT,
+                            TaskUpdateRequest.builder()
+                                    .taskId("no-such-workflow")
+                                    .inputResponses(Map.of("approved", true))
+                                    .build()))
+                    .isInstanceOf(TaskNotFoundException.class);
         }
     }
 

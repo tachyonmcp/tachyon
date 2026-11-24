@@ -25,7 +25,7 @@ public final class BookingWorkflowImpl implements BookingWorkflow {
     private TaskState state = TaskState.SUBMITTED;
     private String message = "Submitted";
     private Map<String, Object> result = Map.of();
-    private Map<String, Object> input;
+    private Map<?, ?> input;
     private long revision;
     private Instant observedAt = Instant.EPOCH;
 
@@ -41,7 +41,10 @@ public final class BookingWorkflowImpl implements BookingWorkflow {
             transitionTo(TaskState.INPUT_REQUIRED, prompt);
             logger.info("Booking workflow waiting for approval");
             Workflow.await(() -> input != null);
-            if (!Boolean.TRUE.equals(input.get("approved"))) {
+            var approved = "accept".equals(input.get("action"))
+                    && input.get("content") instanceof Map<?, ?> content
+                    && Boolean.TRUE.equals(content.get("approved"));
+            if (!approved) {
                 result = Map.of("booking", arguments, "confirmed", false);
                 transitionTo(TaskState.REJECTED, "Booking rejected");
                 logger.info("Booking workflow rejected");
@@ -66,15 +69,16 @@ public final class BookingWorkflowImpl implements BookingWorkflow {
     }
 
     @Override
-    public void provideInput(Map<String, Object> input) {
+    public void provideInput(Map<String, Object> inputResponses) {
         // SEP-2663: a server SHOULD ignore a response to a request that is not outstanding.
-        if (state != TaskState.INPUT_REQUIRED) {
-            logger.info("Booking workflow ignored input it is not waiting for");
+        if (state != TaskState.INPUT_REQUIRED
+                || !(inputResponses.get(BookingWorkflow.approvalKey(revision)) instanceof Map<?, ?> answer)) {
+            logger.info("Booking workflow ignored input it is not waiting for: keys={}", inputResponses.keySet());
             return;
         }
-        logger.info("Booking workflow received input: fields={}", input.keySet());
-        this.input = input;
-        transitionTo(TaskState.WORKING, "Input accepted: " + input.keySet());
+        logger.info("Booking workflow received the answer to its approval request");
+        this.input = answer;
+        transitionTo(TaskState.WORKING, "Input accepted");
     }
 
     private void transitionTo(TaskState nextState, String nextMessage) {

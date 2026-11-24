@@ -1,6 +1,7 @@
 /* Copyright (c) 2026 Konstantin Pavlov/IT Staff and contributors. */
 package dev.tachyonmcp.extensions.tasks;
 
+import static dev.tachyonmcp.testkit.JsonRpcResponseAssert.assertThat;
 import static net.javacrumbs.jsonunit.assertj.JsonAssertions.assertThatJson;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
@@ -28,6 +29,7 @@ import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.JsonNodeFactory;
 
 /** The {@code tasks/*} methods the extension serves, per protocol version, over the wire. */
@@ -61,10 +63,11 @@ class TaskMethodsE2eTest {
                     -32602,
                     "Failed to retrieve task: " + NOT_FOUND);
             // [TASK-01] tasks/update is not served on MCP 2025-11-25
-            assertThatJson(client.post(rpc("tasks/update", "task-1")).body())
+            assertThat(client.post(rpc("tasks/update", "task-1")))
                     .as("tasks/update is modern only")
-                    .inPath("$.error.code")
-                    .isEqualTo(-32601);
+                    .isJsonRpcError()
+                    .hasId(1)
+                    .isMethodNotFound();
         }
     }
 
@@ -83,18 +86,25 @@ class TaskMethodsE2eTest {
                       "taskId":"task-1","inputResponses":{"approval":{"approved":true}}}}
                     """);
             // [TASK-02] the input reaches the connector once and the answer is an empty result
-            assertThatJson(updated.body()).inPath("$.result").isObject();
+            // language=json
+            assertThat(updated).isSuccess().hasId(1).hasResult("""
+                    {"resultType":"complete"}
+                    """);
             assertThat(connector.submittedInputs())
                     .singleElement()
                     .satisfies(input -> assertThat(input.taskId()).isEqualTo("task-1"));
 
             // [TASK-03] an unknown task answers invalid params with a fixed message
-            assertThatJson(client.post("""
+            assertThat(client.post("""
                             {"jsonrpc":"2.0","id":1,"method":"tasks/update","params":{
                               "taskId":"missing","inputResponses":{}}}
-                            """).body())
-                    .inPath("$.error")
-                    .isEqualTo("{\"code\":-32602,\"message\":\"Failed to update task: " + NOT_FOUND + "\"}");
+                            """))
+                    .isJsonRpcError()
+                    .hasId(1)
+                    .hasErrorCode(-32602)
+                    .hasErrorMessage("Failed to update task: " + NOT_FOUND)
+                    .hasErrorDataSatisfying(
+                            data -> assertThat(data.isMissingNode()).isTrue());
             assertThatJson(client.post(rpc("tasks/cancel", "missing")).body())
                     .inPath("$.error.code")
                     .isEqualTo(-32602);
@@ -129,13 +139,26 @@ class TaskMethodsE2eTest {
                       "taskId":"task-1","inputResponses":{"approval":{"approved":true}}}}
                     """);
 
-            assertError(rejected.body(), -32602, "Failed to update task: Slot no longer available");
-            assertThatJson(rejected.body()).node("result").isAbsent();
+            // language=json
+            assertThat(rejected).isJsonRpcError().hasId(1).hasError(new ObjectMapper().readTree("""
+                    {"code":-32602,"message":"Failed to update task: Slot no longer available"}
+                    """));
             assertThat(updates).hasValue(1);
-            assertThatJson(client.post(rpc("tasks/get", "task-1")).body())
+            // language=json
+            assertThat(client.post(rpc("tasks/get", "task-1")))
                     .as("a rejected input leaves the task where it was")
-                    .inPath("$.result.status")
-                    .isEqualTo("working");
+                    .isSuccess()
+                    .hasId(1)
+                    .hasResult("""
+                            {
+                              "resultType":"complete",
+                              "taskId":"task-1",
+                              "status":"working",
+                              "createdAt":"2026-08-27T07:00:00Z",
+                              "lastUpdatedAt":"2026-08-27T07:00:00Z",
+                              "ttlMs":null
+                            }
+                            """);
         }
     }
 
@@ -154,17 +177,23 @@ class TaskMethodsE2eTest {
                 .build();
         try (var server = startServer(counting);
                 var undeclared = new Mcp20260728Client(server.port())) {
+            // language=json
+            var missingExtension = new ObjectMapper().readTree("""
+                    {
+                      "code":-32021,
+                      "message":"Requires the 'io.modelcontextprotocol/tasks' extension",
+                      "data":{"requiredCapabilities":{"extensions":{"io.modelcontextprotocol/tasks":{}}}}
+                    }
+                    """);
             for (var method : new String[] {"tasks/get", "tasks/update", "tasks/cancel"}) {
-                var body = undeclared
-                        .post("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"" + method
-                                + "\",\"params\":{\"taskId\":\"task-1\",\"inputResponses\":{}}}")
-                        .body();
-                assertThatJson(body).as(method).inPath("$.error.code").isEqualTo(-32021);
-                assertThatJson(body)
+                var response = undeclared.post("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"" + method
+                        + "\",\"params\":{\"taskId\":\"task-1\",\"inputResponses\":{}}}");
+                assertThat(response)
                         .as(method)
-                        .inPath("$.error.data.requiredCapabilities.extensions")
-                        .isEqualTo("{\"" + TasksExtension.ID + "\":{}}");
-                assertThatJson(body).as(method).node("result").isAbsent();
+                        .isJsonRpcError()
+                        .hasHttpStatusCode(400)
+                        .hasId(1)
+                        .hasError(missingExtension);
             }
             assertThat(gets).as("the ownership read never ran").hasValue(0);
             assertThat(connector.submittedInputs()).isEmpty();

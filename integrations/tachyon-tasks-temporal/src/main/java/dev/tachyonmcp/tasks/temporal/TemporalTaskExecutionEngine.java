@@ -166,21 +166,29 @@ public final class TemporalTaskExecutionEngine {
     /**
      * Submits MCP task input through the configured Temporal Update.
      *
+     * <p>Input for a Workflow that has already finished is acknowledged and dropped: nothing is
+     * waiting for it, and SEP-2663 asks servers to ignore such answers rather than refuse them.
+     *
      * @param context current MCP interaction
      * @param input submitted task input
      * @throws TaskNotFoundException when Temporal does not know the Workflow ID, or the Workflow
      *     belongs to another caller
      */
     public void submitInput(InteractionContext context, TaskUpdateRequest input) throws TaskNotFoundException {
+        final Attached owned;
         try {
-            var owned = attach(context, input.taskId());
-            logger.debug(
-                    "Submitting input to Temporal workflow: taskId={}, fields={}",
-                    input.taskId(),
-                    input.inputResponses().keySet());
-            owned.route().submitInput(owned.workflow(), input);
+            owned = attach(context, input.taskId());
         } catch (WorkflowNotFoundException e) {
             throw new TaskNotFoundException(input.taskId(), e);
+        }
+        logger.debug(
+                "Submitting input to Temporal workflow: taskId={}, fields={}",
+                input.taskId(),
+                input.inputResponses().keySet());
+        try {
+            owned.route().submitInput(owned.workflow(), input);
+        } catch (WorkflowNotFoundException e) {
+            logger.debug("Dropping input for a Temporal workflow that has finished: taskId={}", input.taskId());
         }
     }
 

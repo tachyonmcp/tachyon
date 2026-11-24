@@ -19,7 +19,22 @@ public interface BookingWorkflow {
     @QueryMethod
     TemporalTaskStatus taskStatus();
 
-    /** Accepts MCP task input while the booking waits for it, and ignores it otherwise. */
+    /**
+     * Accepts the answer to the outstanding approval request and ignores everything else.
+     *
+     * @param inputResponses the {@code tasks/update} responses, keyed by request key
+     */
     @UpdateMethod
-    void provideInput(Map<String, Object> input);
+    void provideInput(Map<String, Object> inputResponses);
+
+    /**
+     * Names the approval request the booking asked at {@code revision}. SEP-2663 forbids reusing a
+     * request key within a task, so every time the booking asks again it asks under a new key.
+     *
+     * @param revision the status revision at which the booking started waiting
+     * @return the request key
+     */
+    static String approvalKey(long revision) {
+        return "approval-" + revision;
+    }
 }

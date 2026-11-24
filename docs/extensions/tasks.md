@@ -102,6 +102,7 @@ to decide, in two places:
 - **In the work itself**, check the business state again right before the side effect, not when the
   input arrives: it can still change between the two. If it no longer holds, publish
   `input_required` again with a status message that says why, rather than completing on stale data.
+  Ask under a new request key: SEP-2663 forbids reusing a key within a task once it was answered.
 
 The [Temporal example](https://github.com/tachyonmcp/tachyon/tree/main/examples/temporal) does both:
 the Workflow ignores input it is not waiting for, and an Activity asks for the slot again after the

@@ -34,8 +34,10 @@ Temporal Run ID, so Continue-As-New preserves the logical MCP task identity.
 A healthy task is not proof that the slot is still free. `BookingWorkflowImpl` pauses in
 `input_required` for approval, and the approval may arrive much later, so the Workflow asks the
 `SlotAvailability` Activity again right before it books. If the slot is gone it returns to
-`input_required` with a message instead of completing. Input that arrives while the Workflow is not
-waiting for it is acknowledged and ignored, as SEP-2663 recommends.
+`input_required` with a message instead of completing. Each time it asks, it asks under a new request
+key (`approval-<revision>`), because SEP-2663 forbids reusing a key within a task. It accepts only
+the answer under that key; anything else, and any input that arrives while it is not waiting, is
+acknowledged and ignored, as SEP-2663 recommends.
 
 ## Test locally
 

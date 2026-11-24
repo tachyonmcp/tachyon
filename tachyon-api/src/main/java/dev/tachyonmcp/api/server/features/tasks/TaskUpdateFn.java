@@ -15,8 +15,11 @@ public interface TaskUpdateFn {
      * <p>The server checks only that the caller may reach the task. It does not know whether the
      * task is still waiting for input, or whether the business state it paused on still holds: a
      * task that reads healthy may rest on data that changed while it waited. The authoritative
-     * system re-checks that state before any side effect, and refuses input it cannot use with
-     * {@link TaskInputRejectedException}.
+     * system re-checks that state before any side effect, and refuses an unusable answer to an
+     * outstanding request with {@link TaskInputRejectedException}.
+     *
+     * <p>An answer to a request that is no longer outstanding (already answered, superseded, or the
+     * task has finished) is acknowledged and ignored, not refused: return normally.
      *
      * @param ctx current MCP interaction
      * @param request task input request
