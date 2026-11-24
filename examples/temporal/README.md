@@ -29,6 +29,14 @@ server.tools().register(
 The adapter uses the Tachyon task ID as the Temporal Workflow ID. It deliberately does not retain a
 Temporal Run ID, so Continue-As-New preserves the logical MCP task identity.
 
+## Resuming after a pause
+
+A healthy task is not proof that the slot is still free. `BookingWorkflowImpl` pauses in
+`input_required` for approval, and the approval may arrive much later, so the Workflow asks the
+`SlotAvailability` Activity again right before it books. If the slot is gone it returns to
+`input_required` with a message instead of completing. An update validator refuses input while the
+Workflow is not waiting for it.
+
 ## Test locally
 
 Run the JUnit 5 in-memory and Testcontainers tests:

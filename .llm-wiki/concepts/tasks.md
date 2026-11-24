@@ -2,8 +2,8 @@
 title: Tasks
 tags: [concept, tasks, experimental]
 sources: [tachyon-api/src/main/java/dev/tachyonmcp/api/server/features/tasks/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tasks/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tools/ToolMethodHandlers.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/features/tools/DefaultToolRegistry.java, tachyon-core/src/main/java/dev/tachyonmcp/core/server/DefaultTachyonServer.java, extensions/tachyon-extensions-tasks/src/main/java/dev/tachyonmcp/extensions/tasks/, integrations/tachyon-tasks-temporal/, tachyon-core/src/main/java/dev/tachyonmcp/core/server/security/Owner.java]
-updated: 2026-11-19
-commit: b699b06d
+updated: 2026-11-24
+commit: 0046c2a6
 ---
 
 # ⏳ Tasks
@@ -93,7 +93,7 @@ Durable ownership rides the snapshot: the connector stores `TaskSnapshot#ownerKe
 | `tasks/get` | modern: extension declared | `get`; `TaskNotFoundException` ⇒ invalid params | `getTaskResult` |
 | `tasks/cancel` | modern: extension | modern: `cancel` (fire-and-forget); legacy: `TaskEngine#cancelAndAwait` = `get` (terminal ⇒ -32602, no cancel) ⇒ `cancel` ⇒ poll `get` like `tasks/result` | modern empty / legacy `cancelled` snapshot; other terminal ⇒ -32602 "Cannot cancel task: already in terminal status", ttl ⇒ -32602 expired; no time bound (a never-settling cancel waits until `responseUndeliverable`) |
 | `tasks/result` | legacy only | `awaitResult` (blocking); unset ⇒ `get` until terminal, sleeping snapshot `pollInterval` else `resultPollInterval` (1s), each poll refreshing the cache; ttl elapsed ⇒ -32602 "Task has expired" via `TaskAwaitException`; no time bound (spec: MUST block until terminal); `InteractionContext#responseUndeliverable` ⇒ stops polling, `CancellationException` ⇒ `Cancelled` outcome, task untouched `TaskEngine#awaitResult` | tool call payload, or the task's JSON-RPC error |
-| `tasks/update` | modern only + extension | `update(inputResponses)` | empty |
+| `tasks/update` | modern only + extension | `update(inputResponses)`; `TaskNotFoundException` ⇒ invalid params "Task not found"; `TaskInputRejectedException` ⇒ invalid params "Failed to update task: " + its message (`TaskMethodsE2eTest#connectorRejectsInputWithItsOwnMessageAndTheTaskStaysAsItWas`); anything else ⇒ -32603. The engine checks reach only (`TaskEngine#guard`), never whether the task still waits for input or its business premises hold: the connector and the work re-check (`TaskUpdateFn#apply`) | empty |
 
 Gates thrown from `decode` as `RequestMappingException` `RequestMappingException`.
 

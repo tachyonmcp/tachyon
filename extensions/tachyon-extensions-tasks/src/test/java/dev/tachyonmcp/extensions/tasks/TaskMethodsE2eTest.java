@@ -10,6 +10,7 @@ import dev.tachyonmcp.api.server.domain.ServerError;
 import dev.tachyonmcp.api.server.domain.TaskResult;
 import dev.tachyonmcp.api.server.features.tasks.TaskConnector;
 import dev.tachyonmcp.api.server.features.tasks.TaskGetFn;
+import dev.tachyonmcp.api.server.features.tasks.TaskInputRejectedException;
 import dev.tachyonmcp.api.server.features.tasks.TaskNotFoundException;
 import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
 import dev.tachyonmcp.api.server.features.tasks.TaskState;
@@ -25,6 +26,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.node.JsonNodeFactory;
 
@@ -58,6 +60,7 @@ class TaskMethodsE2eTest {
                     client.post(rpc("tasks/result", "missing")).body(),
                     -32602,
                     "Failed to retrieve task: " + NOT_FOUND);
+            // [TASK-01] tasks/update is not served on MCP 2025-11-25
             assertThatJson(client.post(rpc("tasks/update", "task-1")).body())
                     .as("tasks/update is modern only")
                     .inPath("$.error.code")
@@ -79,17 +82,19 @@ class TaskMethodsE2eTest {
                     {"jsonrpc":"2.0","id":1,"method":"tasks/update","params":{
                       "taskId":"task-1","inputResponses":{"approval":{"approved":true}}}}
                     """);
+            // [TASK-02] the input reaches the connector once and the answer is an empty result
             assertThatJson(updated.body()).inPath("$.result").isObject();
             assertThat(connector.submittedInputs())
                     .singleElement()
                     .satisfies(input -> assertThat(input.taskId()).isEqualTo("task-1"));
 
+            // [TASK-03] an unknown task answers invalid params with a fixed message
             assertThatJson(client.post("""
                             {"jsonrpc":"2.0","id":1,"method":"tasks/update","params":{
                               "taskId":"missing","inputResponses":{}}}
                             """).body())
-                    .inPath("$.error.message")
-                    .isEqualTo("Failed to update task: " + NOT_FOUND);
+                    .inPath("$.error")
+                    .isEqualTo("{\"code\":-32602,\"message\":\"Failed to update task: " + NOT_FOUND + "\"}");
             assertThatJson(client.post(rpc("tasks/cancel", "missing")).body())
                     .inPath("$.error.code")
                     .isEqualTo(-32602);
@@ -101,6 +106,36 @@ class TaskMethodsE2eTest {
                     .as("tasks/result is legacy only")
                     .inPath("$.error.code")
                     .isEqualTo(-32601);
+        }
+    }
+
+    @Test
+    @DisplayName("[TASK-04] input the connector rejects answers invalid params with its message and leaves the task")
+    void connectorRejectsInputWithItsOwnMessageAndTheTaskStaysAsItWas() throws Exception {
+        var updates = new AtomicInteger();
+        var connector = TaskConnector.builder()
+                .get((ctx, request) -> working(request.taskId()))
+                .cancel((ctx, request) -> {})
+                .update((ctx, request) -> {
+                    updates.incrementAndGet();
+                    throw new TaskInputRejectedException(request.taskId(), "Slot no longer available");
+                })
+                .build();
+        try (var server = startServer(connector);
+                var client = new Mcp20260728Client(server.port())
+                        .withExtensions(Map.of(TasksExtension.ID, JsonNodeFactory.instance.objectNode()))) {
+            var rejected = client.post("""
+                    {"jsonrpc":"2.0","id":1,"method":"tasks/update","params":{
+                      "taskId":"task-1","inputResponses":{"approval":{"approved":true}}}}
+                    """);
+
+            assertError(rejected.body(), -32602, "Failed to update task: Slot no longer available");
+            assertThatJson(rejected.body()).node("result").isAbsent();
+            assertThat(updates).hasValue(1);
+            assertThatJson(client.post(rpc("tasks/get", "task-1")).body())
+                    .as("a rejected input leaves the task where it was")
+                    .inPath("$.result.status")
+                    .isEqualTo("working");
         }
     }
 

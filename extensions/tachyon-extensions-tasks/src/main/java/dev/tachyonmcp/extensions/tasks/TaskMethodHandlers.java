@@ -5,6 +5,7 @@ import dev.tachyonmcp.api.server.domain.ServerError;
 import dev.tachyonmcp.api.server.features.tasks.TaskAwaitResultRequest;
 import dev.tachyonmcp.api.server.features.tasks.TaskCancelRequest;
 import dev.tachyonmcp.api.server.features.tasks.TaskGetRequest;
+import dev.tachyonmcp.api.server.features.tasks.TaskInputRejectedException;
 import dev.tachyonmcp.api.server.features.tasks.TaskListRequest;
 import dev.tachyonmcp.api.server.features.tasks.TaskNotFoundException;
 import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
@@ -206,6 +207,8 @@ final class TaskMethodHandlers {
                 connector.update().apply(context, request);
             } catch (TaskNotFoundException e) {
                 return taskNotFound("update");
+            } catch (TaskInputRejectedException e) {
+                return ServerErrors.invalidParams("Failed to update task: " + e.getMessage());
             }
             return context.responseMapper().emptyResult();
         }

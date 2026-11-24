@@ -56,6 +56,7 @@ class TemporalTaskExecutionEngineContainerTest {
         workerFactory = WorkerFactory.newInstance(workflowClient);
         var worker = workerFactory.newWorker(TASK_QUEUE);
         worker.registerWorkflowImplementationTypes(BookingWorkflowImpl.class);
+        worker.registerActivitiesImplementations((SlotAvailability) booking -> true);
         workerFactory.start();
         engine = BookingTaskEngine.create(workflowClient, TASK_QUEUE);
     }

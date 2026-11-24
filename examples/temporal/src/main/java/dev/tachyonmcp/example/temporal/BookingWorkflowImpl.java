@@ -2,9 +2,11 @@
 package dev.tachyonmcp.example.temporal;
 
 import dev.tachyonmcp.api.server.features.tasks.TaskState;
+import io.temporal.activity.ActivityOptions;
 import io.temporal.workflow.Workflow;
 import org.slf4j.Logger;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
 
@@ -12,6 +14,12 @@ import java.util.Map;
 public final class BookingWorkflowImpl implements BookingWorkflow {
 
     private static final Logger logger = Workflow.getLogger(BookingWorkflowImpl.class);
+
+    private final SlotAvailability slots = Workflow.newActivityStub(
+            SlotAvailability.class,
+            ActivityOptions.newBuilder()
+                    .setStartToCloseTimeout(Duration.ofSeconds(10))
+                    .build());
 
     private Instant createdAt;
     private TaskState state = TaskState.SUBMITTED;
@@ -27,17 +35,28 @@ public final class BookingWorkflowImpl implements BookingWorkflow {
         observedAt = createdAt;
         logger.info("Booking workflow started: fields={}", arguments.keySet());
         transitionTo(TaskState.WORKING, "Booking appointment");
-        transitionTo(TaskState.INPUT_REQUIRED, "Approval required");
-        logger.info("Booking workflow waiting for approval");
-        Workflow.await(() -> input != null);
-        var approved = Boolean.TRUE.equals(input.get("approved"));
-        result = Map.of("booking", arguments, "confirmed", approved);
-        if (approved) {
-            transitionTo(TaskState.COMPLETED, "Appointment booked");
-            logger.info("Booking workflow completed");
-        } else {
-            transitionTo(TaskState.REJECTED, "Booking rejected");
-            logger.info("Booking workflow rejected");
+        var prompt = "Approval required";
+        while (true) {
+            input = null;
+            transitionTo(TaskState.INPUT_REQUIRED, prompt);
+            logger.info("Booking workflow waiting for approval");
+            Workflow.await(() -> input != null);
+            if (!Boolean.TRUE.equals(input.get("approved"))) {
+                result = Map.of("booking", arguments, "confirmed", false);
+                transitionTo(TaskState.REJECTED, "Booking rejected");
+                logger.info("Booking workflow rejected");
+                return;
+            }
+            // The approval may arrive hours after the pause began: the task was healthy all along,
+            // the slot may not be. Ask the calendar again right before booking.
+            if (slots.isAvailable(arguments)) {
+                result = Map.of("booking", arguments, "confirmed", true);
+                transitionTo(TaskState.COMPLETED, "Appointment booked");
+                logger.info("Booking workflow completed");
+                return;
+            }
+            logger.info("Booking workflow found the slot taken, asking again");
+            prompt = "Slot no longer available; approve to try again or decline";
         }
     }
 
@@ -51,6 +70,13 @@ public final class BookingWorkflowImpl implements BookingWorkflow {
         logger.info("Booking workflow received input: fields={}", input.keySet());
         this.input = input;
         transitionTo(TaskState.WORKING, "Input accepted: " + input.keySet());
+    }
+
+    @Override
+    public void validateInput(Map<String, Object> input) {
+        if (state != TaskState.INPUT_REQUIRED) {
+            throw new IllegalStateException("Booking is not waiting for input");
+        }
     }
 
     private void transitionTo(TaskState nextState, String nextMessage) {
