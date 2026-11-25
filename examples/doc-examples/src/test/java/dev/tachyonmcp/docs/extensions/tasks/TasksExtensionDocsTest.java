@@ -54,7 +54,7 @@ class TasksExtensionDocsTest {
             assertThat(working.path("status").asString()).isEqualTo("working");
 
             call(client, "tasks/update", """
-                    {"taskId":"%s","inputResponses":{"approval":{"approved":true}}}
+                    {"taskId":"%s","inputResponses":{"approval":{"action":"accept","content":{"approved":true}}}}
                     """.formatted(taskId));
             var completed = call(client, "tasks/get", "{\"taskId\":\"%s\"}".formatted(taskId));
             assertThat(completed.path("status").asString()).isEqualTo("completed");

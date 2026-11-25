@@ -83,7 +83,7 @@ class TaskMethodsE2eTest {
 
             var updated = client.post("""
                     {"jsonrpc":"2.0","id":1,"method":"tasks/update","params":{
-                      "taskId":"task-1","inputResponses":{"approval":{"approved":true}}}}
+                      "taskId":"task-1","inputResponses":{"approval":{"action":"accept","content":{"approved":true}}}}}
                     """);
             // [TASK-02] the input reaches the connector once and the answer is an empty result
             // language=json
@@ -136,7 +136,7 @@ class TaskMethodsE2eTest {
                         .withExtensions(Map.of(TasksExtension.ID, JsonNodeFactory.instance.objectNode()))) {
             var rejected = client.post("""
                     {"jsonrpc":"2.0","id":1,"method":"tasks/update","params":{
-                      "taskId":"task-1","inputResponses":{"approval":{"approved":true}}}}
+                      "taskId":"task-1","inputResponses":{"approval":{"action":"accept","content":{"approved":true}}}}}
                     """);
 
             // language=json

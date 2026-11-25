@@ -85,7 +85,8 @@ class TemporalTaskExecutionEngineTest {
                     CONTEXT,
                     TaskUpdateRequest.builder()
                             .taskId("workflow-1")
-                            .inputResponses(Map.of("approved", true))
+                            .inputResponses(
+                                    Map.of("approval", Map.of("action", "accept", "content", Map.of("approved", true))))
                             .build());
 
             await().atMost(Duration.ofSeconds(5))
@@ -100,7 +101,9 @@ class TemporalTaskExecutionEngineTest {
                             CONTEXT,
                             TaskUpdateRequest.builder()
                                     .taskId("workflow-1")
-                                    .inputResponses(Map.of("approved", false))
+                                    .inputResponses(Map.of(
+                                            "approval",
+                                            Map.of("action", "accept", "content", Map.of("approved", false))))
                                     .build()))
                     .doesNotThrowAnyException();
             assertThat(reattachedEngine.refresh(CONTEXT, get("workflow-1"))).isEqualTo(finished);
@@ -109,7 +112,9 @@ class TemporalTaskExecutionEngineTest {
                             CONTEXT,
                             TaskUpdateRequest.builder()
                                     .taskId("no-such-workflow")
-                                    .inputResponses(Map.of("approved", true))
+                                    .inputResponses(Map.of(
+                                            "approval",
+                                            Map.of("action", "accept", "content", Map.of("approved", true))))
                                     .build()))
                     .isInstanceOf(TaskNotFoundException.class);
         }
@@ -307,7 +312,8 @@ class TemporalTaskExecutionEngineTest {
                         ALICE,
                         TaskUpdateRequest.builder()
                                 .taskId("workflow-replaced-input")
-                                .inputResponses(Map.of("approved", true))
+                                .inputResponses(Map.of(
+                                        "approval", Map.of("action", "accept", "content", Map.of("approved", true))))
                                 .build()));
     }
 
@@ -449,7 +455,7 @@ class TemporalTaskExecutionEngineTest {
     private static TaskUpdateRequest input(String taskId) {
         return TaskUpdateRequest.builder()
                 .taskId(taskId)
-                .inputResponses(Map.of("approved", true))
+                .inputResponses(Map.of("approval", Map.of("action", "accept", "content", Map.of("approved", true))))
                 .build();
     }
 

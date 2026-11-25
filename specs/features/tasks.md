@@ -12,7 +12,7 @@
 
 ## Temporal engine
 
-- **TASK-08** MUST — `TemporalTaskExecutionEngine#submitInput` acknowledges input for a Workflow that has already finished without an error, and the task stays as it ended. A Workflow Temporal does not know, or one the caller may not reach, still answers `TaskNotFoundException`. See SEP-2663 (SHOULD ignore responses to a request that is not outstanding; unknown `taskId` SHOULD be an error).
+- **TASK-08** MUST — `TemporalTaskExecutionEngine#submitInput` acknowledges input for a Workflow that has already finished without an error, and the task stays as it ended: a finished task has no outstanding request, so every key in its input is one that is not currently outstanding. A Workflow Temporal does not know, or one the caller may not reach, still answers `TaskNotFoundException`. See SEP-2663 (SHOULD ignore responses to a request that is not outstanding; unknown `taskId` SHOULD be an error).
 
 ## Temporal booking example
 
