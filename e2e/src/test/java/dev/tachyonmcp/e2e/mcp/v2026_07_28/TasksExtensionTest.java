@@ -151,13 +151,14 @@ class TasksExtensionTest extends AbstractStatelessMcpE2eTest<McpClient> {
         try (var client = tasksClient()) {
             var response = client.post("""
                     {"jsonrpc":"2.0","id":2,"method":"tasks/update","params":{
-                      "taskId":"workflow-input","inputResponses":{"approval":{"approved":true}}}}
+                      "taskId":"workflow-input","inputResponses":{"approval":{"action":"accept","content":{"approved":true}}}}}
                     """);
 
             assertThat(response).isSuccess();
             assertThat(taskEngine.submittedInputs()).singleElement().satisfies(request -> {
                 assertThat(request.taskId()).isEqualTo("workflow-input");
-                assertThat(request.inputResponses()).isEqualTo(Map.of("approval", Map.of("approved", true)));
+                assertThat(request.inputResponses())
+                        .isEqualTo(Map.of("approval", Map.of("action", "accept", "content", Map.of("approved", true))));
                 assertThat(request.meta()).isNotNull();
             });
             assertThat(toolInvocations).hasValue(0);

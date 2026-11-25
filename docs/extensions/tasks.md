@@ -85,6 +85,29 @@ The flow is:
 
 Tachyon never runs the handler in the background and never invokes it again for `tasks/update`.
 
+### Resume a paused task
+
+A task's status says where the work is, not whether what it was waiting on is still true. A booking
+that pauses in `input_required` can wait for hours: the task stays healthy while the slot it was
+about to book is taken by someone else. Tachyon checks only that the caller may reach the task, then
+hands `inputResponses` to your connector's `update(...)`. Whether the input is still usable is yours
+to decide, in two places:
+
+- **In `update(...)`**, refuse input you can tell is unusable straight away (the answer is malformed,
+  the slot is already gone) by throwing `TaskInputRejectedException(taskId, message)`. The
+  client gets an invalid-params error, `Failed to update task: <message>`, and the task stays as it
+  was. Keep anything the caller may not see out of the message. Do not refuse an answer to a request
+  that is no longer outstanding (already answered, or the task has moved on): SEP-2663 asks servers
+  to ignore those, so acknowledge and drop them.
+- **In the work itself**, check the business state again right before the side effect, not when the
+  input arrives: it can still change between the two. If it no longer holds, publish
+  `input_required` again with a status message that says why, rather than completing on stale data.
+  Ask under a new request key: SEP-2663 forbids reusing a key within a task once it was answered.
+
+The [Temporal example](https://github.com/tachyonmcp/tachyon/tree/main/examples/temporal) does both:
+the Workflow ignores input it is not waiting for, and an Activity asks for the slot again after the
+approval arrives.
+
 A `TaskSupport.REQUIRED` tool may ask the client for input before it starts the work: it returns
 `ToolResult.inputRequired(...)`, the client retries `tools/call` with `inputResponses`, and the handler
 returns `ToolResult.task(...)` on that round. No task exists until then. Any other non-task result

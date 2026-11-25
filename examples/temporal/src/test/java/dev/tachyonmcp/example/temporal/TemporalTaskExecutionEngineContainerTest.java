@@ -56,6 +56,7 @@ class TemporalTaskExecutionEngineContainerTest {
         workerFactory = WorkerFactory.newInstance(workflowClient);
         var worker = workerFactory.newWorker(TASK_QUEUE);
         worker.registerWorkflowImplementationTypes(BookingWorkflowImpl.class);
+        worker.registerActivitiesImplementations((SlotAvailability) booking -> true);
         workerFactory.start();
         engine = BookingTaskEngine.create(workflowClient, TASK_QUEUE);
     }
@@ -79,11 +80,17 @@ class TemporalTaskExecutionEngineContainerTest {
         await().atMost(Duration.ofSeconds(20)).untilAsserted(() -> assertThat(
                         engine.refresh(CONTEXT, get(taskId)).status())
                 .isEqualTo(TaskState.INPUT_REQUIRED));
+        var key = engine.refresh(CONTEXT, get(taskId))
+                .pendingInput()
+                .inputRequests()
+                .keySet()
+                .iterator()
+                .next();
         engine.submitInput(
                 CONTEXT,
                 TaskUpdateRequest.builder()
                         .taskId(taskId)
-                        .inputResponses(Map.of("approved", true))
+                        .inputResponses(Map.of(key, Map.of("action", "accept", "content", Map.of("approved", true))))
                         .build());
         await().atMost(Duration.ofSeconds(20)).untilAsserted(() -> assertThat(
                         engine.refresh(CONTEXT, get(taskId)).status())

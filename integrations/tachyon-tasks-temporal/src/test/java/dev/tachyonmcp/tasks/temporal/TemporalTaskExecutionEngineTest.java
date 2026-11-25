@@ -2,6 +2,7 @@
 package dev.tachyonmcp.tasks.temporal;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.awaitility.Awaitility.await;
@@ -84,7 +85,8 @@ class TemporalTaskExecutionEngineTest {
                     CONTEXT,
                     TaskUpdateRequest.builder()
                             .taskId("workflow-1")
-                            .inputResponses(Map.of("approved", true))
+                            .inputResponses(
+                                    Map.of("approval", Map.of("action", "accept", "content", Map.of("approved", true))))
                             .build());
 
             await().atMost(Duration.ofSeconds(5))
@@ -92,6 +94,29 @@ class TemporalTaskExecutionEngineTest {
                                     .refresh(CONTEXT, get("workflow-1"))
                                     .status())
                             .isEqualTo(TaskState.COMPLETED));
+
+            // [TASK-08] late input for a finished Workflow is acknowledged and changes nothing
+            var finished = reattachedEngine.refresh(CONTEXT, get("workflow-1"));
+            assertThatCode(() -> reattachedEngine.submitInput(
+                            CONTEXT,
+                            TaskUpdateRequest.builder()
+                                    .taskId("workflow-1")
+                                    .inputResponses(Map.of(
+                                            "approval",
+                                            Map.of("action", "accept", "content", Map.of("approved", false))))
+                                    .build()))
+                    .doesNotThrowAnyException();
+            assertThat(reattachedEngine.refresh(CONTEXT, get("workflow-1"))).isEqualTo(finished);
+            // [TASK-08] an unknown Workflow is still not found
+            assertThatThrownBy(() -> reattachedEngine.submitInput(
+                            CONTEXT,
+                            TaskUpdateRequest.builder()
+                                    .taskId("no-such-workflow")
+                                    .inputResponses(Map.of(
+                                            "approval",
+                                            Map.of("action", "accept", "content", Map.of("approved", true))))
+                                    .build()))
+                    .isInstanceOf(TaskNotFoundException.class);
         }
     }
 
@@ -287,7 +312,8 @@ class TemporalTaskExecutionEngineTest {
                         ALICE,
                         TaskUpdateRequest.builder()
                                 .taskId("workflow-replaced-input")
-                                .inputResponses(Map.of("approved", true))
+                                .inputResponses(Map.of(
+                                        "approval", Map.of("action", "accept", "content", Map.of("approved", true))))
                                 .build()));
     }
 
@@ -401,7 +427,7 @@ class TemporalTaskExecutionEngineTest {
 
     private static InputRequestBundle pendingInput() {
         return new InputRequestBundle(
-                Map.of("field", FormInputRequest.of("test", JsonSchema.unchecked("{\"type\":\"object\"}"))), null);
+                Map.of("approval", FormInputRequest.of("test", JsonSchema.unchecked("{\"type\":\"object\"}"))), null);
     }
 
     private static TemporalTaskStartRequest request(String taskId) {
@@ -429,7 +455,7 @@ class TemporalTaskExecutionEngineTest {
     private static TaskUpdateRequest input(String taskId) {
         return TaskUpdateRequest.builder()
                 .taskId(taskId)
-                .inputResponses(Map.of("approved", true))
+                .inputResponses(Map.of("approval", Map.of("action", "accept", "content", Map.of("approved", true))))
                 .build();
     }
 
