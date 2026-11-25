@@ -8,17 +8,22 @@ import dev.tachyonmcp.api.server.features.tasks.TaskGetRequest;
 import dev.tachyonmcp.api.server.features.tasks.TaskState;
 import dev.tachyonmcp.api.server.features.tasks.TaskSnapshot;
 import dev.tachyonmcp.api.server.features.tasks.TaskUpdateRequest;
+import dev.tachyonmcp.tasks.temporal.TemporalTaskExecutionEngine;
 import dev.tachyonmcp.tasks.temporal.TemporalTaskStartRequest;
 import io.temporal.testing.TestWorkflowEnvironment;
+import io.temporal.worker.WorkerOptions;
+import io.temporal.workflow.Workflow;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BooleanSupplier;
 
@@ -156,6 +161,130 @@ class TemporalTaskExecutionEngineTest {
                             engine.refresh(CONTEXT, get("busy")).status())
                     .as("the ignored 'approved: false' did not replace the accepted approval")
                     .isEqualTo(TaskState.COMPLETED));
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void bookingFinishedBeforeKeyedAnswersStillReplays(boolean approved) throws Exception {
+        var upgraded = new AtomicBoolean();
+        try (var testEnvironment = TestWorkflowEnvironment.newInstance()) {
+            startWorker(testEnvironment, upgraded);
+            var engine = BookingTaskEngine.create(testEnvironment.getWorkflowClient(), TASK_QUEUE);
+            var expected = approved ? TaskState.COMPLETED : TaskState.REJECTED;
+            engine.start(CONTEXT, request("legacy-finished"));
+            awaitStatus(engine, "legacy-finished", TaskState.INPUT_REQUIRED);
+            engine.submitInput(
+                    CONTEXT,
+                    TaskUpdateRequest.builder()
+                            .taskId("legacy-finished")
+                            .inputResponses(Map.of("approved", approved))
+                            .build());
+            awaitStatus(engine, "legacy-finished", expected);
+            var before = engine.refresh(CONTEXT, get("legacy-finished"));
+
+            upgraded.set(true);
+
+            assertThat(engine.refresh(CONTEXT, get("legacy-finished"))).isEqualTo(before);
+        }
+    }
+
+    @Test
+    void bookingPausedBeforeKeyedAnswersTakesTheKeyedAnswerItNowAsksFor() throws Exception {
+        var upgraded = new AtomicBoolean();
+        try (var testEnvironment = TestWorkflowEnvironment.newInstance()) {
+            startWorker(testEnvironment, upgraded);
+            var engine = BookingTaskEngine.create(testEnvironment.getWorkflowClient(), TASK_QUEUE);
+            engine.start(CONTEXT, request("legacy-paused"));
+            awaitStatus(engine, "legacy-paused", TaskState.INPUT_REQUIRED);
+
+            upgraded.set(true);
+
+            var asked = engine.refresh(CONTEXT, get("legacy-paused"));
+            engine.submitInput(
+                    CONTEXT,
+                    TaskUpdateRequest.builder()
+                            .taskId("legacy-paused")
+                            .inputResponses(Map.of("approved", false))
+                            .build());
+            assertThat(engine.refresh(CONTEXT, get("legacy-paused")))
+                    .as("a flat answer sent after the upgrade answers nothing")
+                    .isEqualTo(asked);
+            engine.submitInput(CONTEXT, answer(asked, true));
+            awaitStatus(engine, "legacy-paused", TaskState.COMPLETED);
+        }
+    }
+
+    /**
+     * Starts a worker that runs the legacy Workflow until {@code upgraded} is set. It has no sticky
+     * queue, so every Workflow task and query replays the recorded history.
+     */
+    private static void startWorker(TestWorkflowEnvironment environment, AtomicBoolean upgraded) {
+        var worker = environment.newWorker(
+                TASK_QUEUE,
+                WorkerOptions.newBuilder()
+                        .setStickyQueueScheduleToStartTimeout(Duration.ZERO)
+                        .build());
+        worker.registerWorkflowImplementationFactory(
+                BookingWorkflow.class,
+                () -> upgraded.get() ? new BookingWorkflowImpl() : new LegacyBookingWorkflow());
+        worker.registerActivitiesImplementations((SlotAvailability) booking -> true);
+        environment.start();
+    }
+
+    private static void awaitStatus(TemporalTaskExecutionEngine engine, String taskId, TaskState expected) {
+        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> assertThat(
+                        engine.refresh(CONTEXT, get(taskId)).status())
+                .isEqualTo(expected));
+    }
+
+    /** The booking Workflow as released before keyed answers: flat input, no slot check. */
+    public static final class LegacyBookingWorkflow implements BookingWorkflow {
+
+        private Instant createdAt;
+        private TaskState state = TaskState.SUBMITTED;
+        private String message = "Submitted";
+        private Map<String, Object> result = Map.of();
+        private Map<String, Object> input;
+        private long revision;
+        private Instant observedAt = Instant.EPOCH;
+
+        @Override
+        public void book(Map<String, Object> arguments) {
+            createdAt = now();
+            observedAt = createdAt;
+            transitionTo(TaskState.WORKING, "Booking appointment");
+            transitionTo(TaskState.INPUT_REQUIRED, "Approval required");
+            Workflow.await(() -> input != null);
+            var approved = Boolean.TRUE.equals(input.get("approved"));
+            result = Map.of("booking", arguments, "confirmed", approved);
+            if (approved) {
+                transitionTo(TaskState.COMPLETED, "Appointment booked");
+            } else {
+                transitionTo(TaskState.REJECTED, "Booking rejected");
+            }
+        }
+
+        @Override
+        public TemporalTaskStatus taskStatus() {
+            return new TemporalTaskStatus(state, message, createdAt, observedAt, result, revision);
+        }
+
+        @Override
+        public void provideInput(Map<String, Object> input) {
+            this.input = input;
+            transitionTo(TaskState.WORKING, "Input accepted: " + input.keySet());
+        }
+
+        private void transitionTo(TaskState nextState, String nextMessage) {
+            state = nextState;
+            message = nextMessage;
+            revision++;
+            observedAt = now();
+        }
+
+        private static Instant now() {
+            return Instant.ofEpochMilli(Workflow.currentTimeMillis());
         }
     }
 

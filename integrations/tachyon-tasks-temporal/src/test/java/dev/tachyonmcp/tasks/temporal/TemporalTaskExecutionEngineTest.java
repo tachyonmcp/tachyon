@@ -427,7 +427,7 @@ class TemporalTaskExecutionEngineTest {
 
     private static InputRequestBundle pendingInput() {
         return new InputRequestBundle(
-                Map.of("field", FormInputRequest.of("test", JsonSchema.unchecked("{\"type\":\"object\"}"))), null);
+                Map.of("approval", FormInputRequest.of("test", JsonSchema.unchecked("{\"type\":\"object\"}"))), null);
     }
 
     private static TemporalTaskStartRequest request(String taskId) {
