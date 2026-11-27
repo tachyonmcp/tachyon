@@ -95,7 +95,7 @@
         <kt-schema.version>0.10.0</kt-schema.version>
         <langchain4j.version>1.24.0</langchain4j.version>
         <micrometer.version>1.18.0</micrometer.version>
-        <mockito.version>5.24.0</mockito.version>
+        <mockito.version>5.25.0</mockito.version>
         <netty.version>4.2.21.Final</netty.version>
         <slf4j.version>2.0.20</slf4j.version>
         <snakeyaml.version>2.7</snakeyaml.version>
